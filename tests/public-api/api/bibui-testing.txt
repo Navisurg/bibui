@@ -1,0 +1,70 @@
+namespace Bibui.Testing
+{
+    public sealed class BibuiPage : Bibui.Testing.IBibuiPage, System.IDisposable
+    {
+        public string Clipboard { get; set; }
+        public void Click(string id) { }
+        public void Dispose() { }
+        public void DoubleClick(string id) { }
+        public void Fill(string inputId, string value) { }
+        public Bibui.UiNode? FindById(string id) { }
+        public System.Drawing.RectangleF GetBounds(string id) { }
+        public string? GetText(string id) { }
+        public bool IsDisabled(string id) { }
+        public bool IsVisible(string id) { }
+        public void Press(Bibui.Key key, bool ctrl = false, bool shift = false) { }
+        public void PressArrowLeft() { }
+        public void PressArrowRight() { }
+        public void PressBackspace() { }
+        public void RightClick(string id) { }
+        public byte[] Screenshot() { }
+        public void TripleClick(string id) { }
+        public void TypeChar(char ch) { }
+        public void WaitFor(System.Func<bool> condition, System.TimeSpan timeout, System.TimeSpan? pollInterval = default, string? message = null) { }
+        public static Bibui.Testing.BibuiPage From(Bibui.Runtime.BibuiRuntime runtime) { }
+        public static Bibui.Testing.BibuiPage Launch(System.Func<Bibui.UiNode> build, Bibui.SurfaceOptions? surface = null, string theme = "bibui-dark") { }
+        public static Bibui.Testing.BibuiPage Launch(System.Func<Bibui.UiNode> build, Bibui.Theming.ThemeTokens theme, Bibui.SurfaceOptions? surface = null) { }
+        public static Bibui.Testing.BibuiPage Launch<T>(T initialState, System.Func<T, Bibui.Runtime.SetState<T>, Bibui.UiNode> build, Bibui.SurfaceOptions? surface = null, string theme = "bibui-dark") { }
+        public static Bibui.Testing.BibuiPage Launch<T>(T initialState, System.Func<T, Bibui.Runtime.SetState<T>, Bibui.UiNode> build, Bibui.Theming.ThemeTokens theme, Bibui.SurfaceOptions? surface = null) { }
+    }
+    public interface IBibuiPage : System.IDisposable
+    {
+        string Clipboard { get; set; }
+        void Click(string id);
+        void DoubleClick(string id);
+        void Fill(string inputId, string value);
+        Bibui.UiNode? FindById(string id);
+        System.Drawing.RectangleF GetBounds(string id);
+        string? GetText(string id);
+        bool IsDisabled(string id);
+        bool IsVisible(string id);
+        void Press(Bibui.Key key, bool ctrl = false, bool shift = false);
+        void PressArrowLeft();
+        void PressArrowRight();
+        void PressBackspace();
+        void RightClick(string id);
+        byte[] Screenshot();
+        void TripleClick(string id);
+        void TypeChar(char ch);
+        void WaitFor(System.Func<bool> condition, System.TimeSpan timeout, System.TimeSpan? pollInterval = default, string? message = null);
+    }
+    public sealed class WorkflowClient : System.IDisposable
+    {
+        public WorkflowClient(string host = "127.0.0.1", int port = 44334, string? token = null) { }
+        public void Click(string id) { }
+        public void ClickAt(float x, float y) { }
+        public void Connect(int retries = 20, int retryDelayMs = 200) { }
+        public void Dispose() { }
+        public void Fill(string id, string value) { }
+        public string? GetText(string id) { }
+        public void Hover(float x, float y) { }
+        public bool IsDisabled(string id) { }
+        public bool IsVisible(string id) { }
+        public void Ping() { }
+        public void Screenshot(string path) { }
+        public void Scroll(float x, float y, float dy) { }
+        public void StartRecording(string outputPath) { }
+        public void StopRecording() { }
+        public void WaitUntil(System.Func<Bibui.Testing.WorkflowClient, bool> condition, string? label = null, System.TimeSpan? timeout = default, System.TimeSpan? pollInterval = default) { }
+    }
+}

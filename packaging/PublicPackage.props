@@ -1,0 +1,25 @@
+<Project>
+  <!--
+    What nuget.org shows for a public bibui package. Imported at the top of
+    each public package's csproj, never from Directory.Build.props, so a package
+    that does not import it never claims the public repository.
+    Authors and Copyright come from Directory.Build.props for every package.
+
+    A package adds its own tags after the import: <PackageTags>$(PackageTags);skia</PackageTags>.
+    Its README is packaging/readme/<PackageId>.md, packed as README.md.
+  -->
+  <PropertyGroup>
+    <PackageProjectUrl>https://github.com/Navisurg/bibui</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Navisurg/bibui</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>bibui;ui;gui;native-ui;desktop;linux</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Items are evaluated after every property, so $(PackageId) is the csproj's own here. -->
+    <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)readme/$(PackageId).md" Pack="true" PackagePath="README.md" Visible="false" />
+  </ItemGroup>
+</Project>

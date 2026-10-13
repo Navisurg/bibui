@@ -1,0 +1,28 @@
+namespace Bibui;
+
+/// <summary>
+/// Per-frame transient state: the frame's own clock. Structural inputs — the UI tree, theme, and surface — stay as
+/// explicit render parameters; this record carries what changes frame to frame.
+///
+/// A frame is rendered from exactly one FrameInput, so every piece of
+/// interaction state reaches both render paths (readback and immediate-mode)
+/// by construction. To add new frame state: add a property here, capture it
+/// in BibuiRuntime.CaptureFrameInput, and apply it in the painter.
+/// </summary>
+public sealed record FrameInput
+{
+    /// <summary>Static render with no interaction — verifier specs, snapshots.</summary>
+    public static readonly FrameInput None = new();
+
+    /// <summary>
+    /// Seconds per frame for animation, from <c>BibuiRuntime.Dt</c>. Zero here
+    /// and in <see cref="None"/>, which is what keeps verification renders
+    /// deterministic — an animation asked for the first time arrives settled,
+    /// and with no time passing it never leaves.
+    ///
+    /// This is the only place a frame's dt is stored on the render path. The
+    /// drawing context holds this record and reads through it rather than
+    /// copying the value into a field of its own.
+    /// </summary>
+    public float Dt { get; init; }
+}

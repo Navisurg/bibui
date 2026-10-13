@@ -1,0 +1,134 @@
+name: ci
+
+# Builds every project in Release with warnings as errors, runs the unit tests,
+# checks that each sample renders its first frame, and publishes a test app
+# with Native AOT. release.yml calls this workflow before it packs, so a tag is
+# released only from a commit that passes it.
+#
+# Pixel verification (the fixture suite and its reference pictures) is kept by
+# the maintainers outside this repository; see CONTRIBUTING.md.
+
+"on":
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      # Deterministic builds with the runner's paths mapped to /_/
+      # (Directory.Build.props), as release.yml packs them.
+      ContinuousIntegrationBuild: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      # FreeType and HarfBuzz: the managed raster backend's text engine.
+      # clang and zlib: Native AOT links with them.
+      - name: Install system packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libfreetype6 libharfbuzz0b clang zlib1g-dev
+
+      # Every project in the repository. Each sets TreatWarningsAsErrors; it is
+      # passed here too, so a project that forgets it still fails on a warning.
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          for proj in \
+            bibui/bibui.csproj \
+            bibui-testing/bibui-testing.csproj \
+            bibui-text-freetype/Bibui.Text.FreeType.csproj \
+            bibui-raster-skia/bibui-raster-skia.csproj \
+            bibui-raster-managed/src/Bibui.Raster.Managed.csproj \
+            bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj \
+            bibui-platform-silk/bibui-platform-silk.csproj \
+            bibui-platform-wayland/bibui-platform-wayland.csproj \
+            tools/wayland-scanner/wayland-scanner.csproj \
+            bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
+            tests/bibui-runtime-tests/bibui-runtime-tests.csproj \
+            tests/text-tests/text-tests.csproj \
+            tests/png-tests/png-tests.csproj \
+            tests/wayland-tests/wayland-tests.csproj \
+            tests/public-api/public-api.csproj \
+            tests/wayland-hello/wayland-hello.csproj \
+            samples/component-gallery/component-gallery.csproj \
+            samples/bibui-app/bibui-app.csproj
+          do
+            echo "==> build $proj"
+            dotnet build "$proj" --configuration Release -p:TreatWarningsAsErrors=true
+          done
+
+      # The test programs CONTRIBUTING.md lists. Each prints what failed and
+      # exits non-zero. tests/public-api fails when a public surface differs
+      # from tests/public-api/api/*.txt. tests/wayland-tests is headless and
+      # reports SKIP for what needs a compositor or the protocol XML.
+      - name: Unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for proj in \
+            tests/bibui-runtime-tests/bibui-runtime-tests.csproj \
+            tests/text-tests/text-tests.csproj \
+            tests/png-tests/png-tests.csproj \
+            tests/wayland-tests/wayland-tests.csproj \
+            bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
+            tests/public-api/public-api.csproj
+          do
+            echo "==> test $proj"
+            dotnet run --project "$proj" --configuration Release --no-build
+          done
+
+      # Every sample renders its first frame, headless (--first-frame: mount,
+      # one Render, exit). A build function that throws, or a layout ring,
+      # fails here rather than in a window.
+      - name: Start-up check (first frame of each sample)
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_frame() {
+            echo "==> first frame: $*"
+            dotnet run --project "$1" --configuration Release --no-build -- --first-frame "${@:2}"
+          }
+          first_frame samples/bibui-app/bibui-app.csproj
+          first_frame samples/component-gallery/component-gallery.csproj
+          first_frame samples/component-gallery/component-gallery.csproj --host wayland --raster managed
+          first_frame tests/wayland-hello/wayland-hello.csproj
+
+      # An app on the raw Wayland host and the managed rasterizer publishes with
+      # Native AOT. Trim and AOT analysis (IL2xxx, IL3xxx) runs only on a
+      # publish, so the build above cannot catch a regression; this does, with
+      # every warning an error. Then the binary renders its first frame.
+      - name: Native AOT publish of wayland-hello
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish tests/wayland-hello/wayland-hello.csproj \
+            --configuration Release -r linux-x64 \
+            -p:PublishAot=true -p:TreatWarningsAsErrors=true \
+            --output aot/wayland-hello
+          ls -l aot/wayland-hello/wayland-hello
+          aot/wayland-hello/wayland-hello --first-frame

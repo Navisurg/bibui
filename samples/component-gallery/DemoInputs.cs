@@ -1,0 +1,1175 @@
+using Bibui;
+using Bibui.Runtime;
+using Bibui.TextEdit;
+
+namespace ComponentGallery;
+
+/// <summary>What the Inputs & Forms pages hold between frames. A new page's
+/// state starts at these values, and the gallery keeps it while another page is
+/// shown.</summary>
+internal sealed record InputsState
+{
+    public bool CheckboxChecked { get; init; }
+    public bool SwitchChecked { get; init; }
+    public float SliderValue { get; init; } = 40f;
+    public string RadioValue { get; init; } = "option-a";
+    public string? SelectValue { get; init; }
+    public bool SelectOpen { get; init; }
+    public string? CountryValue { get; init; }
+    public bool CountryOpen { get; init; }
+    public bool TogglePressed { get; init; }
+    public string ToggleGroupValue { get; init; } = "bold";
+    public DateOnly? DatePickerValue { get; init; }
+    public DateOnly DatePickerMonth { get; init; } = DateOnly.FromDateTime(DateTime.Today);
+    public bool DatePickerOpen { get; init; }
+    public DateOnly? CalendarSelected { get; init; }
+    public int TimePickerHour { get; init; } = 9;
+    public int TimePickerMinute { get; init; } = 30;
+    public bool TimePickerOpen { get; init; }
+    public string? ColorPickerValue { get; init; } = "#3B82F6";
+    public bool ColorPickerOpen { get; init; }
+    public int DemoButtonClickCount { get; init; }
+
+    /// <summary>The page's open state, for a page that has one.</summary>
+    internal InputsState? Opened(string route) => route switch
+    {
+        "Select" => this with { SelectOpen = true },
+        "DatePicker" => this with { DatePickerOpen = true },
+        "TimePicker" => this with { TimePickerOpen = true },
+        "ColorPicker" => this with { ColorPickerOpen = true },
+        _ => null,
+    };
+}
+
+internal static class DemoInputs
+{
+    internal static UiNode Build(BibuiRuntime runtime, string route, InputsState state, Action<InputsState> set) => route switch
+    {
+    "Button" => ButtonPage(runtime, state, set),
+
+    "Input" => InputPage(runtime),
+
+    "Textarea" => TextareaPage(runtime),
+
+    "Checkbox" => CheckboxPage(runtime, state, set),
+    "TextField" => TextFieldPage(runtime),
+
+    "Switch" => Arrange.Column(
+        Bold(runtime, U8("Toggle a setting on or off"), ComponentSize.Sm, TextColor.Secondary),
+        Arrange.Space(16f),
+        SwitchToggle(runtime, state, set),
+        Arrange.Space(16f),
+        runtime.Text(U8(state.SwitchChecked ? "Notifications enabled" : "Notifications disabled"), ComponentSize.Sm, state.SwitchChecked ? TextColor.Accent : TextColor.Secondary),
+        Arrange.Space(16f),
+        DisabledSwitch(runtime)),
+
+    "RadioGroup" => RadioGroupPage(runtime, state, set),
+
+    "Select" => SelectPage(runtime, state, set),
+
+    "Slider" => SliderPage(runtime, state, set),
+
+    "Toggle" => TogglePage(runtime, state, set),
+
+    "ToggleGroup" => ToggleGroupPage(runtime, state, set),
+
+    "DatePicker" => DatePickerPage(runtime, state, set),
+
+    "Calendar" => CalendarPage(runtime, state, set),
+
+    "TimePicker" => TimePickerPage(runtime, state, set),
+
+    "ColorPicker" => ColorPickerPage(runtime, state, set),
+
+        _ => runtime.Text(U8("Select a component from the sidebar."), textColor: TextColor.Secondary),
+    };
+
+    /// <summary>
+    /// The switch owns no state and offers no callback: it reports the press and
+    /// the caller applies it. Nothing round-trips through a local, and a record
+    /// property is no longer awkward to pass.
+    /// </summary>
+    private static UiNode SwitchToggle(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var sw = Switch.Build(runtime, "demo-switch", state.SwitchChecked, label: Str("Enable notifications"));
+        if (sw.Clicked) set(state with { SwitchChecked = !state.SwitchChecked });
+        return sw.Node;
+    }
+
+    private static UiNode DisabledSwitch(BibuiRuntime runtime)
+    {
+        return Switch.Build(runtime, "demo-switch-disabled", false, label: Str("Disabled switch"), disabled: true).Node;
+    }
+
+    private static readonly (string Label, string Value, bool Disabled)[] Fruits =
+    [
+        ("Apple", "apple", false),
+        ("Banana", "banana", true),
+        ("Cherry", "cherry", false),
+        ("Mango", "mango", false),
+    ];
+
+    // A select, and one that is disabled. The rows of the dropdown are the
+    // page's to build; these are plain Select.Item rows.
+    private static UiNode SliderPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Drag to select a value in a range");
+            var volume = Slider.Build(runtime, "demo-slider", state.SliderValue, 0f, 100f, 5f, Str("Volume"));
+            volume.Node.Px(width: 380f);
+            if (volume.Value != state.SliderValue) set(state with { SliderValue = volume.Value });
+
+            Arrange.Gap(page, 16f);
+            runtime.Text(U8($"Value: {volume.Value:0}"), ComponentSize.Sm, TextColor.Accent);
+
+            Arrange.Gap(page, 16f);
+            Slider.Build(runtime, "demo-slider-disabled", 30f, 0f, 100f, label: Str("Disabled"), disabled: true).Node.Px(width: 380f);
+        }
+        return page;
+    }
+
+    private static UiNode SelectPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Choose one from a list");
+            var chosen = Fruits.FirstOrDefault(f => f.Value == state.SelectValue);
+            var select = Select.Begin(runtime, "demo-select", Str(chosen.Label ?? "Pick a fruit…"), state.SelectOpen);
+            string? picked = null;
+            if (select.Open)
+                foreach (var fruit in Fruits)
+                    if (Select.Item(runtime, $"demo-select-option-{fruit.Value}", Str(fruit.Label),
+                            fruit.Value == state.SelectValue, fruit.Disabled).Clicked)
+                        picked = fruit.Value;
+            var result = select.End();
+            if (picked is not null) set(state with { SelectValue = picked, SelectOpen = false });
+            else if (result.Toggled) set(state with { SelectOpen = !state.SelectOpen });
+
+            Arrange.Gap(page, 16f);
+            runtime.Text(U8(state.SelectValue is null ? "Nothing selected" : $"Selected: {state.SelectValue}"), ComponentSize.Sm, state.SelectValue is null ? TextColor.Secondary : TextColor.Accent);
+
+            Arrange.Gap(page, 24f);
+            CountrySelect(runtime, state, set);
+
+            Arrange.Gap(page, 24f);
+            Heading(runtime, "Disabled");
+            Select.Begin(runtime, "demo-select-disabled", Str("Choose a plan"), open: false, disabled: true).End();
+        }
+        return page;
+    }
+
+    private static void Heading(BibuiRuntime runtime, string text)
+    {
+        Text heading = Bold(runtime, U8(text), ComponentSize.Sm, TextColor.Secondary);
+        Arrange.Gap((UiNode)heading.Parent!, 16f);
+    }
+
+    private static UiNode CheckboxPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Interactive checkbox");
+            if (Checkbox.Build(runtime, "demo-checkbox", state.CheckboxChecked, Str("Accept terms and conditions")).Clicked)
+                set(state with { CheckboxChecked = !state.CheckboxChecked });
+            Arrange.Gap(page, 16f);
+            Badge.Build(runtime, Str(state.CheckboxChecked ? "Accepted" : "Not accepted"),
+                state.CheckboxChecked ? BadgeVariant.Success : BadgeVariant.Default);
+            Arrange.Gap(page, 16f);
+            Checkbox.Build(runtime, "demo-checkbox-disabled", false, Str("Disabled (unchecked)"), disabled: true);
+            Arrange.Gap(page, 16f);
+            Checkbox.Build(runtime, "demo-checkbox-disabled-checked", true, Str("Disabled (checked)"), disabled: true);
+            Arrange.Gap(page, 24f);
+            Heading(runtime, "Indeterminate");
+            Checkbox.Build(runtime, "demo-checkbox-mixed", false, Str("Select all (mixed)"), indeterminate: true);
+            Arrange.Gap(page, 16f);
+            runtime.Text(U8("Tri-state — dash instead of checkmark. Typical for \"some items selected\"."), ComponentSize.Sm, TextColor.Secondary);
+        }
+        return page;
+    }
+
+    private static UiNode ToggleGroupPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Group of toggles (single-select)");
+            var group = ToggleGroup.Build(runtime, "demo-toggle-group",
+                [new ToggleOption(Str("Bold"), "bold"), new ToggleOption(Str("Italic"), "italic"), new ToggleOption(Str("Underline"), "underline")],
+                state.ToggleGroupValue);
+            if (group.Picked is { } picked) set(state with { ToggleGroupValue = picked });
+            Arrange.Gap(page, 16f);
+            runtime.Text(U8($"Active: {state.ToggleGroupValue}"), ComponentSize.Sm, TextColor.Accent);
+        }
+        return page;
+    }
+
+    // ── TextField experiment (TextField.cs) ─────────────────────────────────
+    // Each field is shown in one fixed state: a buffer, and where its caret
+    // and mark are, in bytes — what an application holds and edits.
+    private static UiNode TextFieldPage(BibuiRuntime runtime)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Live: press to focus, then type");
+            LiveField(runtime, "demo-textfield", LiveText, LiveEdit, Str("Type here"));
+            Arrange.Gap(page, 8f);
+            runtime.Text(U8(
+                $"\"{System.Text.Encoding.UTF8.GetString(LiveText.Str)}\" — cursor {LiveEdit.Cursor}, mark {LiveEdit.Mark}, "
+                + $"{LiveText.Length} bytes, focus {Focused ?? "none"}"), ComponentSize.Sm, TextColor.Secondary);
+            Arrange.Gap(page, 8f);
+            LiveField(runtime, "demo-textfield-2", SecondText, SecondEdit, Str("A second field"));
+            Arrange.Gap(page, 8f);
+            LiveField(runtime, "demo-textfield-multi", MultiText, MultiEdit, Str("Several lines"), lines: true, rows: 3);
+            Arrange.Gap(page, 8f);
+            using (runtime.PushParent(InputBox(runtime, "demo-textfield-readonly", Focused == "demo-textfield-readonly", lines: true)))
+            using (runtime.PushFontSize(ComponentSize.Sm))
+            using (runtime.PushSizeY(TextField.Rows(runtime, 2)))
+            {
+                var field = TextField.Multiline(runtime, "demo-textfield-readonly", ReadOnlyText, ReadOnlyEdit,
+                    focused: Focused == "demo-textfield-readonly", events: TextField.MultiLineReadOnlyEvents,
+                    textColor: TextColor.Secondary);
+                if (field.Pressed) Focused = "demo-textfield-readonly";
+            }
+
+            EndEditing(runtime);
+            Arrange.Gap(page, 24f);
+
+            Heading(runtime, "Drawn states");
+            Heading(runtime, "Not focused");
+            DrawnState(runtime, "demo-textfield-state-1", Sample(), At(0, 0), focused: false);
+            Arrange.Gap(page, 16f);
+            Heading(runtime, "Caret after \"quick\"");
+            DrawnState(runtime, "demo-textfield-state-2", Sample(), At(9, 9), focused: true);
+            Arrange.Gap(page, 16f);
+            Heading(runtime, "\"quick brown\" selected, caret at its end");
+            DrawnState(runtime, "demo-textfield-state-3", Sample(), At(15, 4), focused: true);
+            Arrange.Gap(page, 16f);
+            Heading(runtime, "Selected backwards, caret at its start");
+            DrawnState(runtime, "demo-textfield-state-4", Sample(), At(4, 15), focused: true);
+            Arrange.Gap(page, 16f);
+            Heading(runtime, "Caret at the start and at the end");
+            DrawnState(runtime, "demo-textfield-state-5", Sample(), At(0, 0), focused: true);
+            Arrange.Gap(page, 8f);
+            DrawnState(runtime, "demo-textfield-state-6", Sample(), At(SampleBytes.Length, SampleBytes.Length), focused: true);
+            Arrange.Gap(page, 16f);
+            Heading(runtime, "Empty, with a placeholder");
+            DrawnState(runtime, "demo-textfield-state-7", new BibuiStr(16), At(0, 0), focused: false, placeholder: Str("Search cases"));
+            Arrange.Gap(page, 8f);
+            DrawnState(runtime, "demo-textfield-state-8", new BibuiStr(16), At(0, 0), focused: true, placeholder: Str("Search cases"));
+        }
+        return page;
+    }
+
+    // A field shown in one state: a single line in its frame, never focused by a press.
+    private static void DrawnState(BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit,
+        bool focused, BibuiStr? placeholder = null)
+    {
+        using (runtime.PushParent(InputBox(runtime, id, focused)))
+            TextField.SingleLine(runtime, id, text, edit, focused, placeholder: placeholder);
+    }
+
+    // The live fields' state: what an application would hold for them.
+    private static readonly BibuiStr LiveText = BibuiStr.FromStrLit("Hello"u8);
+    private static readonly TextEditState LiveEdit = new();
+    private static string? Focused;      // which live field is being edited
+    private static readonly BibuiStr SecondText = new(16);
+    private static readonly BibuiStr MultiText = BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes(
+        "A field that wraps by itself: type past the edge and the words move down a line. "
+        + "It is three lines tall, and this text runs to more than that, so the lines past the "
+        + "third are below its edge: scroll the wheel over it to bring them into view."));
+    private static readonly TextEditState MultiEdit = new();
+    private static readonly BibuiStr ReadOnlyText = BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes(
+        "A read-only field: press, drag and double-click to select, arrow keys to move, but typing changes nothing."));
+    private static readonly TextEditState ReadOnlyEdit = new();
+    private static readonly TextEditState SecondEdit = new();
+
+    // The box a field named id sits in, in the input look: 320 px wide; a
+    // single line 40 px tall, lines as tall as the field, which takes the
+    // height pushed for it. The field takes its own presses, under its id; a
+    // disabled box swallows them instead, so they do not fall through to what
+    // is beneath, which needs a retained box of its own.
+    private static Box InputBox(BibuiRuntime runtime, string id, bool focused, float width = 320f,
+        bool lines = false, bool error = false, bool disabled = false)
+    {
+        Box box = disabled ? runtime.BoxFromId(id + "-frame", InteractionKinds.Disabled) : runtime.Box();
+        if (disabled) runtime.InteractionsFor(box);
+        TextField.InputStyle(runtime, box, focused, error, disabled);
+        box.SizeX = SemanticSize.Pixels(width);
+        box.SizeY = lines ? SemanticSize.ChildrenSum() : SemanticSize.Pixels(40f);
+        return box;
+    }
+
+    // A framed field the page keeps focus for: a press focuses it.
+    private static void LiveField(BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit,
+        BibuiStr? placeholder = null, bool lines = false, int rows = 3, float width = 320f)
+    {
+        bool focused = Focused == id;
+        BibuiWidget field;
+        using (runtime.PushParent(InputBox(runtime, id, focused, width, lines)))
+        {
+            if (lines)
+            {
+                using (runtime.PushSizeY(TextField.Rows(runtime, rows)))
+                    field = TextField.Multiline(runtime, id, text, edit, focused, placeholder: placeholder);
+            }
+            else field = TextField.SingleLine(runtime, id, text, edit, focused, placeholder: placeholder);
+        }
+        if (field.Pressed) Focused = id;
+    }
+
+    /// <summary>
+    /// A framed single-line field that is never focused, as a node to place in
+    /// a layout expression — for pages that show an input rather than use one.
+    /// </summary>
+    // What names a field: a small semibold text.
+    internal static Text FieldLabel(BibuiRuntime runtime, string text)
+        => Bold(runtime, U8(text), ComponentSize.Sm);
+
+    internal static UiNode StaticInput(BibuiRuntime runtime, string id, string placeholder, float width = 320f)
+    {
+        Box box = InputBox(runtime, id, focused: false, width);
+        using (runtime.PushParent(box))
+            TextField.SingleLine(runtime, id, new BibuiStr(16), new TextEditState(), focused: false, placeholder: Str(placeholder));
+        return box;
+    }
+
+    // Escape and Submit (Enter) are the page's to read: they end editing. A
+    // multi-line field takes Submit itself, to end a line. After the fields.
+    private static void EndEditing(BibuiRuntime runtime)
+    {
+        if (Focused is null) return;
+        foreach (var handle in runtime.UnconsumedEvents)
+            if (handle.Event is { Kind: BibUiEventKind.Press, Key: Bibui.Key.Escape } or { Kind: BibUiEventKind.Submit })
+            {
+                Focused = null;
+                handle.Eat();
+            }
+    }
+
+    private static BibuiStr Utf8(string text) => BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes(text));
+
+    // ── Input and Textarea: fields in the input look ────────────────────────
+
+    private static readonly BibuiStr InputText = new(32);
+    private static readonly TextEditState InputEdit = new();
+    private static readonly BibuiStr TextareaText = new(64);
+    private static readonly TextEditState TextareaEdit = new();
+    private static readonly BibuiStr TextareaLog = Utf8(
+        "input dir:  /tmp/job-42/in\noutput dir: /tmp/job-42/out\n--- stdout ---\nframes processed: 128\n"
+        + "frames dropped:   0\nelapsed:          1.42s\n--- stderr ---\n(empty)");
+    private static readonly TextEditState TextareaLogEdit = new();
+
+    private static UiNode InputPage(BibuiRuntime runtime)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Basic input");
+            LiveField(runtime, "demo-input", InputText, InputEdit, Str("Enter text…"));
+            Arrange.Gap(page, 16f);
+            string value = System.Text.Encoding.UTF8.GetString(InputText.Str);
+            runtime.Text(U8(value.Length > 0 ? $"Value: \"{value}\"" : "Start typing above"), ComponentSize.Sm, value.Length > 0 ? TextColor.Accent : TextColor.Secondary);
+            Arrange.Gap(page, 24f);
+
+            Heading(runtime, "Disabled");
+            // Disabled: it shows its placeholder and takes nothing, so a press is swallowed, not answered.
+            using (runtime.PushParent(InputBox(runtime, "demo-input-disabled", focused: false, disabled: true)))
+                TextField.SingleLine(runtime, "demo-input-disabled", new BibuiStr(16), new TextEditState(), focused: false,
+                    events: 0, textColor: TextColor.Disabled, placeholder: Str("Disabled input"));
+            Arrange.Gap(page, 24f);
+
+            Heading(runtime, "Error");
+            using (runtime.PushParent(InputBox(runtime, "demo-input-error", focused: false, error: true)))
+                TextField.SingleLine(runtime, "demo-input-error", Utf8("not-an-email"), new TextEditState(), focused: false);
+            Arrange.Gap(page, 16f);
+            runtime.Text(U8("Destructive border signals validation failure."), ComponentSize.Sm, TextColor.Secondary);
+
+            EndEditing(runtime);
+        }
+        return page;
+    }
+
+    private static UiNode TextareaPage(BibuiRuntime runtime)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Multi-line text input");
+            LiveField(runtime, "demo-textarea", TextareaText, TextareaEdit, Str("Write something…"), lines: true, rows: 4, width: 400f);
+            Arrange.Gap(page, 16f);
+            runtime.Text(U8($"{System.Text.Encoding.UTF8.GetCharCount(TextareaText.Str)} characters"), ComponentSize.Sm, TextColor.Secondary);
+            Arrange.Gap(page, 24f);
+
+            Heading(runtime, "Error");
+            using (runtime.PushParent(InputBox(runtime, "demo-textarea-error", focused: false, width: 400f, lines: true, error: true)))
+            using (runtime.PushSizeY(TextField.Rows(runtime, 3)))
+                TextField.Multiline(runtime, "demo-textarea-error", Utf8("too short"), new TextEditState(), focused: false,
+                    placeholder: Str("Describe the issue"));
+            Arrange.Gap(page, 24f);
+
+            Heading(runtime, "Multi-line content (press and drag across rows to select)");
+            LiveField(runtime, "demo-textarea-multiline", TextareaLog, TextareaLogEdit, lines: true, rows: 9, width: 400f);
+
+            EndEditing(runtime);
+        }
+        return page;
+    }
+
+    private static readonly byte[] SampleBytes = "The quick brown fox jumps"u8.ToArray();
+    private static BibuiStr Sample() => BibuiStr.FromStrLit(SampleBytes);
+    private static TextEditState At(int cursor, int mark) => new() { Cursor = cursor, Mark = mark };
+
+    // ── Shared: centring in a row of fixed height ───────────────────────────
+
+    // A column as tall as the row it is in and as wide as what it holds, pushed:
+    // what is built into it between two springs sits centred down the row.
+    private static BibuiRuntime.ParentScope CentredCell(BibuiRuntime runtime)
+    {
+        Box cell = runtime.Box();
+        cell.ChildLayoutAxis = LayoutAxis.Y;
+        cell.SizeX = SemanticSize.ChildrenSum();
+        cell.SizeY = SemanticSize.ParentPct(1f);
+        return runtime.PushParent(cell);
+    }
+
+    private static Text CentredText(BibuiRuntime runtime, ReadOnlyMemory<byte> text, ComponentSize? size = null,
+        UiColor? color = null, FontWeight weight = FontWeight.Regular)
+    {
+        using (CentredCell(runtime))
+        using (runtime.PushFontFace(weight: weight))
+        {
+            Arrange.Spring(runtime.ParentInScope);
+            Text t = runtime.Text(text, size, color);
+            Arrange.Spring(runtime.ParentInScope);
+            return t;
+        }
+    }
+
+    private static void CentredIcon(BibuiRuntime runtime, string name, float size, UiColor color)
+    {
+        using (CentredCell(runtime))
+        {
+            Arrange.Spring(runtime.ParentInScope);
+            runtime.Icon(name, size).Color = color;
+            Arrange.Spring(runtime.ParentInScope);
+        }
+    }
+
+    // A row laid out along X, as large as what it holds.
+    private static Box Row(BibuiRuntime runtime)
+    {
+        Box row = runtime.Box();
+        row.ChildLayoutAxis = LayoutAxis.X;
+        row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
+        return row;
+    }
+
+    // ── Button ───────────────────────────────────────────────────────────────
+
+    private enum Look { Primary, Secondary }
+
+    // A caption above a row of buttons, 12 px above it.
+    private static void Caption(BibuiRuntime runtime, string text, bool accent = false)
+    {
+        using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8(text), ComponentSize.Sm, accent ? TextColor.Accent : TextColor.Secondary);
+        runtime.Gap(12f);
+    }
+
+    private static UiNode ButtonPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Caption(runtime, "Variants");
+            using (runtime.PushParent(Row(runtime)))
+            {
+                DemoButton(runtime, "demo-btn-primary", "Primary", Look.Primary);
+                runtime.Gap(10f);
+                Tall(runtime, Button.Build(runtime, "demo-btn-secondary", Str("Secondary")));
+                runtime.Gap(10f);
+                Tall(runtime, Button.Build(runtime, "demo-btn-ghost", Str("Ghost"), ghost: true));
+                runtime.Gap(10f);
+                Tall(runtime, Button.Build(runtime, "demo-btn-disabled", Str("Disabled"), disabled: true));
+            }
+            runtime.Gap(12f);
+
+            Caption(runtime, "Sizes");
+            using (runtime.PushParent(Row(runtime)))
+            {
+                Tall(runtime, Button.Build(runtime, "demo-btn-sm", Str("Small"), size: ComponentSize.Sm), ComponentSize.Sm);
+                runtime.Gap(10f);
+                Tall(runtime, Button.Build(runtime, "demo-btn-md", Str("Medium"), size: ComponentSize.Md));
+                runtime.Gap(10f);
+                Tall(runtime, Button.Build(runtime, "demo-btn-lg", Str("Large"), size: ComponentSize.Lg), ComponentSize.Lg);
+            }
+            runtime.Gap(12f);
+
+            Caption(runtime, "With icon");
+            using (runtime.PushParent(Row(runtime)))
+            {
+                DemoButton(runtime, "demo-btn-add", "Add item", Look.Primary, icon: "plus");
+                runtime.Gap(10f);
+                DemoButton(runtime, "demo-btn-delete", "Delete", Look.Secondary, icon: "trash");
+            }
+            runtime.Gap(12f);
+
+            Caption(runtime, "Custom colors");
+            using (runtime.PushParent(Row(runtime)))
+            {
+                DemoButton(runtime, "demo-btn-red", "Red", Look.Primary, fill: UiColor.Hex("#DC2626"));
+                runtime.Gap(8f);
+                DemoButton(runtime, "demo-btn-green", "Green", Look.Primary, fill: UiColor.Hex("#059669"));
+                runtime.Gap(8f);
+                DemoButton(runtime, "demo-btn-blue", "Blue", Look.Primary, fill: UiColor.Hex("#2563EB"));
+                runtime.Gap(8f);
+                DemoButton(runtime, "demo-btn-purple", "Purple", Look.Primary, fill: UiColor.Hex("#7C3AED"));
+                runtime.Gap(8f);
+                DemoButton(runtime, "demo-btn-border", "Custom border", Look.Secondary, border: UiColor.Hex("#3B82F6"));
+            }
+            runtime.Gap(12f);
+
+            Caption(runtime, "Loading (new)", accent: true);
+            using (runtime.PushParent(Row(runtime)))
+            {
+                DemoButton(runtime, "demo-btn-saving", "Saving…", Look.Secondary, loading: true);
+                runtime.Gap(10f);
+                DemoButton(runtime, "demo-btn-uploading", "Uploading", Look.Secondary, loading: true);
+                runtime.Gap(10f);
+                DemoButton(runtime, "demo-btn-loading-icon", "With icon", Look.Secondary, icon: "plus", loading: true);
+            }
+            runtime.Gap(12f);
+
+            Caption(runtime, "Interactive (clicks do something)", accent: true);
+            using (runtime.PushParent(Row(runtime)))
+            {
+                if (DemoButton(runtime, "demo-click-btn", $"Clicked {state.DemoButtonClickCount}×", Look.Primary).Clicked)
+                    set(state with { DemoButtonClickCount = state.DemoButtonClickCount + 1 });
+                runtime.Gap(10f);
+                runtime.Text(U8("Press, hold, release — watch the label count up and the fill darken while pressed."),
+                    ComponentSize.Sm, TextColor.Secondary);
+            }
+        }
+        return page;
+    }
+
+    // A Button.Build as tall as the reference button of its size — 32, 40 or 48 —
+    // said by the caller: a height, and the padding that centres the label in it.
+    private static void Tall(BibuiRuntime runtime, BibuiWidget button, ComponentSize size = ComponentSize.Md)
+    {
+        float height = size switch { ComponentSize.Sm => 32f, ComponentSize.Lg => 48f, _ => 40f };
+        Tall(runtime, button.Node, height, size);
+    }
+
+    // A box holding one line of text, made height tall with the line centred
+    // down it: the box's own padding, said by the caller.
+    private static void Tall(BibuiRuntime runtime, UiNode node, float height, ComponentSize size = ComponentSize.Md)
+    {
+        float line = runtime.Fonts.LineHeight(runtime.FontInScope(size));
+        node.SizeY = SemanticSize.Pixels(height);
+        var pad = node.Style.Padding;
+        node.Style.Padding = new EdgeInsets((height - line) / 2f, pad.Right, 0f, pad.Left);
+    }
+
+    // What Button.Build does not draw — the primary fill, an icon, a colour of
+    // the page's own, a spinner while loading — composed here: 40 px tall, the
+    // label and icon centred down it. Loading keeps the label's width and shows
+    // a spinner in its place.
+    private static BibuiWidget DemoButton(BibuiRuntime runtime, string id, string label, Look look,
+        string? icon = null, UiColor? fill = null, UiColor? border = null, bool loading = false)
+    {
+        Box box = runtime.BoxFromId(id, loading ? InteractionKinds.Disabled : InteractionKinds.LeftPress);
+        Interaction interaction = runtime.InteractionsFor(box);
+        box.ChildLayoutAxis = LayoutAxis.X;
+        box.SizeY = SemanticSize.Pixels(40f);
+        Style style = box.Style;
+        style.CornerRadius = 8f;
+        style.Padding = EdgeInsets.Symmetric(horizontal: 16f, vertical: 0f);
+
+        UiColor ink;
+        if (fill is { } f)
+        {
+            style.BackgroundColor = f;
+            style.Draw = DrawFlags.HotEffects | DrawFlags.ActiveEffects;
+            ink = UiColor.Hex("#FFFFFF");
+        }
+        else if (look == Look.Primary)
+        {
+            style.BackgroundColor = UiColor.Accent;
+            style.HoverBackgroundColor = UiColor.AccentHover;
+            ink = UiColor.AccentForeground;
+        }
+        else
+        {
+            style.Draw = DrawFlags.Border | DrawFlags.Background | DrawFlags.HotEffects | DrawFlags.ActiveEffects;
+            if (border is { } b) style.BorderColor = b;
+            ink = UiColor.TextPrimary;
+        }
+
+        ReadOnlyMemory<byte> text = U8(label);
+        if (loading)
+        {
+            // As wide as icon and label would be, the spinner centred across it.
+            float width = runtime.Fonts.Measure(text.Span, runtime.FontInScope(ComponentSize.Md)) + 32f;
+            if (icon is not null) width += 24f;
+            box.SizeX = SemanticSize.Pixels(width);
+            using (runtime.PushParent(box))
+            {
+                Arrange.Spring(box);
+                using (CentredCell(runtime))
+                {
+                    Arrange.Spring(runtime.ParentInScope);
+                    runtime.Spinner(16f);
+                    Arrange.Spring(runtime.ParentInScope);
+                }
+                Arrange.Spring(box);
+            }
+            return new BibuiWidget(box, interaction);
+        }
+
+        box.SizeX = SemanticSize.ChildrenSum();
+        using (runtime.PushParent(box))
+        {
+            if (icon is not null)
+            {
+                CentredIcon(runtime, icon, 16f, ink);
+                runtime.Gap(8f);
+            }
+            CentredText(runtime, text, color: ink);
+        }
+        return new BibuiWidget(box, interaction);
+    }
+
+    // ── RadioGroup ───────────────────────────────────────────────────────────
+
+    private static readonly RadioOption[] RadioOptions =
+    [
+        new(Str("Option A"), "option-a"),
+        new(Str("Option B"), "option-b"),
+        new(Str("Option C"), "option-c"),
+        new(Str("Disabled"), "option-d", Disabled: true),
+    ];
+
+    private static UiNode RadioGroupPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Select one option");
+            if (RadioGroup.Build(runtime, "demo-radio", RadioOptions, state.RadioValue).Picked is { } picked)
+                set(state with { RadioValue = picked });
+            runtime.Gap(16f);
+            runtime.Text(U8($"Selected: {state.RadioValue}"), ComponentSize.Sm, TextColor.Accent);
+        }
+        return page;
+    }
+
+    // ── Select, sized by the page ────────────────────────────────────────────
+
+    private static readonly (string Label, string Value)[] Countries =
+        [("Denmark", "dk"), ("Germany", "de"), ("Japan", "jp"), ("United States", "us")];
+
+    // The same Select, its trigger and rows sized by the page: a fixed width,
+    // and taller rows and trigger.
+    private static void CountrySelect(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        Heading(runtime, "A set width, and taller rows");
+        var chosen = Countries.FirstOrDefault(c => c.Value == state.CountryValue);
+        var select = Select.Begin(runtime, "demo-select-country", Str(chosen.Label ?? "Choose a country…"),
+            state.CountryOpen, width: 240f);
+        string? picked = null;
+        if (select.Open)
+            foreach (var country in Countries)
+            {
+                var item = Select.Item(runtime, $"demo-select-country-{country.Value}", Str(country.Label),
+                    country.Value == state.CountryValue);
+                Tall(runtime, item.Node, 36f);
+                if (item.Clicked) picked = country.Value;
+            }
+        var result = select.End();
+        Tall(runtime, result.Node, TriggerHeight);
+        if (picked is not null) set(state with { CountryValue = picked, CountryOpen = false });
+        else if (result.Toggled) set(state with { CountryOpen = !state.CountryOpen });
+
+        runtime.Gap(16f);
+        runtime.Text(U8(state.CountryValue is null ? "No country selected" : $"Country: {state.CountryValue}"),
+            ComponentSize.Sm, state.CountryValue is null ? TextColor.Secondary : TextColor.Accent);
+    }
+
+    // ── Toggle ───────────────────────────────────────────────────────────────
+
+    private static UiNode TogglePage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Pressable toggle button");
+            Box row = Row(runtime);
+            row.SizeY = SemanticSize.Pixels(40f);
+            using (runtime.PushParent(row))
+            {
+                using (CentredCell(runtime))
+                {
+                    Arrange.Spring(runtime.ParentInScope);
+                    if (Toggle.Build(runtime, "demo-toggle", state.TogglePressed, Str("Star"), icon: "star").Clicked)
+                        set(state with { TogglePressed = !state.TogglePressed });
+                    Arrange.Spring(runtime.ParentInScope);
+                }
+                runtime.Gap(10f);
+                CentredText(runtime, U8(state.TogglePressed ? "Pressed" : "Not pressed"), ComponentSize.Sm,
+                    state.TogglePressed ? TextColor.Accent : TextColor.Secondary);
+            }
+            runtime.Gap(16f);
+            Toggle.Build(runtime, "demo-toggle-disabled", false, Str("Disabled"), disabled: true);
+        }
+        return page;
+    }
+
+    // ── Pickers: a trigger, and a popup opened as a dropdown under it ───────
+
+    private const float TriggerHeight = 40f;
+
+    // A trigger in the input look, width wide, that takes its press unless
+    // disabled; its contents are the caller's, built into it with it pushed.
+    private static Box PickerTrigger(BibuiRuntime runtime, string id, float width, bool disabled, out bool clicked)
+    {
+        Box trigger = runtime.BoxFromId(id, disabled ? InteractionKinds.Disabled : InteractionKinds.LeftPress);
+        clicked = runtime.InteractionsFor(trigger).Clicked;
+        trigger.ChildLayoutAxis = LayoutAxis.X;
+        trigger.SizeX = SemanticSize.Pixels(width);
+        trigger.SizeY = SemanticSize.Pixels(TriggerHeight);
+        Style style = trigger.Style;
+        style.Padding = EdgeInsets.Symmetric(horizontal: 12f, vertical: 0f);
+        style.CornerRadius = 6f;
+        style.BorderWidth = 1f;
+        style.BorderColor = UiColor.Border;
+        style.BackgroundColor = disabled ? UiColor.SurfaceRaised : UiColor.Surface;
+        if (!disabled) style.HoverBorderColor = UiColor.BorderHover;
+        return trigger;
+    }
+
+    // The popup named id, open this frame, 4 px under where trigger was drawn
+    // last frame, as large as what is built into it.
+    private static Box OpenPopup(BibuiRuntime runtime, string id, Box trigger, float padding)
+    {
+        Box popup = runtime.OpenDropDown(id);
+        popup.SizeX = popup.SizeY = SemanticSize.ChildrenSum();
+        // Under the trigger; above it when the window has no room below, and
+        // against the window's bottom edge when it has none above either. Its
+        // size is last frame's: unknown on the first, when it opens below.
+        float x = trigger.Rect.X, y = trigger.Rect.Y + trigger.Extent.Y + 4f;
+        var size = popup.Extent;
+        if (y + size.Y > runtime.SurfaceHeight)
+        {
+            float above = trigger.Rect.Y - 4f - size.Y;
+            y = above >= 0f ? above : MathF.Max(0f, runtime.SurfaceHeight - size.Y);
+        }
+        x = MathF.Max(0f, MathF.Min(x, runtime.SurfaceWidth - size.X));
+        popup.At(x, y);
+        popup.Style.Padding = EdgeInsets.All(padding);
+        popup.Style.CornerRadius = 6f;
+        popup.Style.BorderWidth = 1f;
+        popup.Style.BorderColor = UiColor.Border;
+        popup.Style.BackgroundColor = UiColor.SurfaceRaised;
+        return popup;
+    }
+
+    // After its contents have asked: a press on the popup's padding stops there
+    // rather than reaching what is beneath.
+    private static void ClosePopup(BibuiRuntime runtime, Box popup)
+    {
+        popup.Claims = InteractionKinds.Press;
+        runtime.InteractionsFor(popup);
+    }
+
+    // ── Calendar ─────────────────────────────────────────────────────────────
+
+    private const float DayCell = 36f;
+    private const float CalendarRowGap = 4f;
+    private static readonly string[] Weekdays = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+    /// <summary>What a month view reported: a day picked, or a step to the month before or after.</summary>
+    private readonly record struct MonthResult(DateOnly? Picked, int Step);
+
+    // A month view of month, selected marked, built under the parent in scope:
+    // a caption row with a step either side — across the parent when fill, or
+    // the grid's width — then the weekdays and the weeks, Sunday first, 36 px cells.
+    private static MonthResult MonthView(BibuiRuntime runtime, string id, DateOnly month, DateOnly? selected,
+        bool fill = false)
+    {
+        int step = 0;
+        DateOnly? picked = null;
+
+        Box view = runtime.Box();
+        view.ChildLayoutAxis = LayoutAxis.Y;
+        view.SizeX = fill ? SemanticSize.ParentPct(1f) : SemanticSize.ChildrenSum();
+        view.SizeY = SemanticSize.ChildrenSum();
+        using (runtime.PushParent(view))
+        {
+            Box caption = Row(runtime);
+            caption.SizeX = fill ? SemanticSize.ParentPct(1f) : SemanticSize.Pixels(7 * DayCell);
+            caption.SizeY = SemanticSize.Pixels(DayCell);
+            using (runtime.PushParent(caption))
+            {
+                if (NavButton(runtime, id + "-prev", "chevron-left")) step = -1;
+                Arrange.Spring(caption);
+                CentredText(runtime, U8($"{month:MMMM yyyy}"), weight: FontWeight.Bold);
+                Arrange.Spring(caption);
+                if (NavButton(runtime, id + "-next", "chevron-right")) step = 1;
+            }
+            runtime.Gap(CalendarRowGap);
+
+            Box weekdays = Row(runtime);
+            weekdays.SizeY = SemanticSize.Pixels(DayCell);
+            using (runtime.PushParent(weekdays))
+                foreach (var day in Weekdays)
+                    DayBox(runtime, runtime.Box(), U8(day), TextColor.Primary);
+
+            var first = new DateOnly(month.Year, month.Month, 1);
+            int lead = (int)first.DayOfWeek;
+            int days = DateTime.DaysInMonth(month.Year, month.Month);
+            for (int week = 0; week * 7 - lead < days; week++)
+            {
+                runtime.Gap(CalendarRowGap);
+                Box row = Row(runtime);
+                row.SizeY = SemanticSize.Pixels(DayCell);
+                using (runtime.PushParent(row))
+                    for (int col = 0; col < 7; col++)
+                    {
+                        int d = week * 7 + col - lead + 1;
+                        if (d < 1 || d > days)
+                        {
+                            DayBox(runtime, runtime.Box(), default, TextColor.Primary);
+                            continue;
+                        }
+                        var date = new DateOnly(month.Year, month.Month, d);
+                        bool isSelected = date == selected;
+                        Box cell = runtime.BoxFromId($"{id}-day-{d}", InteractionKinds.LeftPress);
+                        if (runtime.InteractionsFor(cell).Clicked) picked = date;
+                        DayBox(runtime, cell, U8($"{d}"), isSelected ? TextColor.AccentForeground : TextColor.Primary);
+                        cell.Style.CornerRadius = 6f;
+                        if (isSelected) cell.Style.BackgroundColor = UiColor.Accent;
+                        else cell.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
+                    }
+            }
+        }
+        return new MonthResult(picked, step);
+    }
+
+    // A 36 px cell, text centred in it.
+    private static Box DayBox(BibuiRuntime runtime, Box box, ReadOnlyMemory<byte> text, UiColor color)
+    {
+        box.ChildLayoutAxis = LayoutAxis.X;
+        box.Px(DayCell, DayCell);
+        if (text.IsEmpty) return box;
+        using (runtime.PushParent(box))
+        {
+            Arrange.Spring(box);
+            CentredText(runtime, text, color: color);
+            Arrange.Spring(box);
+        }
+        return box;
+    }
+
+    private static bool NavButton(BibuiRuntime runtime, string id, string icon)
+    {
+        using (CentredCell(runtime))
+        {
+            Arrange.Spring(runtime.ParentInScope);
+            Box button = runtime.BoxFromId(id, InteractionKinds.LeftPress);
+            bool clicked = runtime.InteractionsFor(button).Clicked;
+            button.ChildLayoutAxis = LayoutAxis.X;
+            button.Px(28f, 28f);
+            button.Style.CornerRadius = 6f;
+            button.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
+            button.Style.Padding = EdgeInsets.All(7f);
+            using (runtime.PushParent(button)) runtime.Icon(icon, 14f).Color = UiColor.TextPrimary;
+            Arrange.Spring(runtime.ParentInScope);
+            return clicked;
+        }
+    }
+
+    // The month the standalone calendar shows: the page's own, so it can step
+    // through months whether or not a day is selected.
+    private static DateOnly? CalendarMonth;
+
+    private static UiNode CalendarPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = Arrange.Column().FillX();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Standalone calendar picker");
+            DateOnly month = CalendarMonth ?? state.CalendarSelected ?? DateOnly.FromDateTime(DateTime.Today);
+            Box frame = runtime.Box();
+            frame.ChildLayoutAxis = LayoutAxis.Y;
+            frame.SizeX = SemanticSize.ParentPct(1f);
+            frame.SizeY = SemanticSize.ChildrenSum();
+            frame.Style.Padding = EdgeInsets.All(12f);
+            MonthResult result;
+            // The caption runs the width of the page; the weeks keep their cells.
+            using (runtime.PushParent(frame))
+                result = MonthView(runtime, "demo-calendar", month, state.CalendarSelected, fill: true);
+            if (result.Step != 0) CalendarMonth = month.AddMonths(result.Step);
+            if (result.Picked is { } day) set(state with { CalendarSelected = day });
+
+            runtime.Gap(16f);
+            runtime.Text(U8(state.CalendarSelected is null ? "No date selected" : $"Selected: {state.CalendarSelected:MMMM d, yyyy}"),
+                ComponentSize.Sm, state.CalendarSelected is null ? TextColor.Secondary : TextColor.Accent);
+        }
+        return page;
+    }
+
+    // ── DatePicker ───────────────────────────────────────────────────────────
+
+    private static UiNode DatePickerPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Pick a date from a popover calendar");
+            Box trigger = PickerTrigger(runtime, "demo-datepicker", 240f, disabled: false, out bool toggled);
+            using (runtime.PushParent(trigger))
+            {
+                CentredIcon(runtime, "calendar", 16f, UiColor.TextSecondary);
+                runtime.Gap(8f);
+                CentredText(runtime, U8(state.DatePickerValue is { } v ? $"{v:MMMM d, yyyy}" : "Pick a date"),
+                    color: state.DatePickerValue is null ? TextColor.Secondary : TextColor.Primary);
+            }
+
+            if (state.DatePickerOpen)
+            {
+                Box popup = OpenPopup(runtime, "demo-datepicker-popup", trigger, padding: 12f);
+                MonthResult result;
+                using (runtime.PushParent(popup))
+                    result = MonthView(runtime, "demo-datepicker", state.DatePickerMonth, state.DatePickerValue);
+                ClosePopup(runtime, popup);
+                if (result.Picked is { } day)
+                    set(state with { DatePickerValue = day, DatePickerOpen = false, DatePickerMonth = day });
+                else if (result.Step != 0)
+                    set(state with { DatePickerMonth = state.DatePickerMonth.AddMonths(result.Step) });
+                else if (toggled) set(state with { DatePickerOpen = false });
+            }
+            else if (toggled) set(state with { DatePickerOpen = true });
+
+            runtime.Gap(16f);
+            runtime.Text(U8(state.DatePickerValue is null ? "No date selected" : $"Selected: {state.DatePickerValue:yyyy-MM-dd}"),
+                ComponentSize.Sm, state.DatePickerValue is null ? TextColor.Secondary : TextColor.Accent);
+        }
+        return page;
+    }
+
+    // ── TimePicker ───────────────────────────────────────────────────────────
+
+    private static UiNode TimePickerPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Select a time");
+            int hour = state.TimePickerHour, minute = state.TimePickerMinute;
+            Box trigger = TimeTrigger(runtime, "demo-timepicker", $"{hour:D2}:{minute:D2}", disabled: false, out bool toggled);
+            if (state.TimePickerOpen)
+            {
+                Box popup = OpenPopup(runtime, "demo-timepicker-popup", trigger, padding: 0f);
+                popup.SizeX = SemanticSize.Pixels(200f);
+                using (runtime.PushParent(popup))
+                {
+                    Box columns = Row(runtime);
+                    columns.SizeX = SemanticSize.ParentPct(1f);
+                    using (runtime.PushParent(columns))
+                    {
+                        hour = Spinner(runtime, "demo-timepicker-hour", "Hour", hour, 24, 1);
+                        Box divider = runtime.Box();
+                        divider.SizeX = SemanticSize.Pixels(1f);
+                        divider.SizeY = SemanticSize.Pixels(SpinnerHeight);
+                        divider.Style.BackgroundColor = UiColor.Border;
+                        minute = Spinner(runtime, "demo-timepicker-minute", "Min", minute, 60, 5);
+                    }
+                }
+                ClosePopup(runtime, popup);
+            }
+            if (hour != state.TimePickerHour || minute != state.TimePickerMinute)
+                set(state with { TimePickerHour = hour, TimePickerMinute = minute });
+            else if (toggled) set(state with { TimePickerOpen = !state.TimePickerOpen });
+
+            runtime.Gap(16f);
+            runtime.Text(U8($"Selected: {state.TimePickerHour:D2}:{state.TimePickerMinute:D2}"), ComponentSize.Sm, TextColor.Accent);
+            runtime.Gap(16f);
+            Heading(runtime, "12-hour format");
+            int h12 = state.TimePickerHour % 12 == 0 ? 12 : state.TimePickerHour % 12;
+            TimeTrigger(runtime, "demo-timepicker-12h", $"{h12}:{state.TimePickerMinute:D2} {(state.TimePickerHour < 12 ? "AM" : "PM")}",
+                disabled: false, out _);
+            runtime.Gap(16f);
+            TimeTrigger(runtime, "demo-timepicker-disabled", "Disabled", disabled: true, out _);
+        }
+        return page;
+    }
+
+    private static Box TimeTrigger(BibuiRuntime runtime, string id, string text, bool disabled, out bool clicked)
+    {
+        Box trigger = PickerTrigger(runtime, id, 200f, disabled, out clicked);
+        using (runtime.PushParent(trigger))
+        {
+            CentredIcon(runtime, "clock", 16f, disabled ? UiColor.TextDisabled : UiColor.TextSecondary);
+            runtime.Gap(8f);
+            CentredText(runtime, U8(text), color: disabled ? TextColor.Disabled : TextColor.Primary);
+        }
+        return trigger;
+    }
+
+    private const float SpinnerHeight = 180f;
+
+    // One column of the time popup: its name, and value between a step up and
+    // a step down, wrapping at count. Returns the value after this frame's steps.
+    private static int Spinner(BibuiRuntime runtime, string id, string name, int value, int count, int step)
+    {
+        Box column = runtime.Box();
+        column.ChildLayoutAxis = LayoutAxis.Y;
+        column.SizeX = SemanticSize.ParentPct(1f);
+        column.SizeY = SemanticSize.Pixels(SpinnerHeight);
+        column.Style.Padding = EdgeInsets.Symmetric(horizontal: 0f, vertical: 8f);
+        using (runtime.PushParent(column))
+        {
+            Box row = CentredRow(runtime);
+            using (runtime.PushParent(row))
+            {
+                Arrange.Spring(row);
+                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8(name), ComponentSize.Sm, TextColor.Secondary);
+                Arrange.Spring(row);
+            }
+            runtime.Gap(12f);
+            row = CentredRow(runtime, 28f);
+            using (runtime.PushParent(row))
+            {
+                Arrange.Spring(row);
+                if (NavButton(runtime, id + "-up", "chevron-up")) value = (value + step) % count;
+                Arrange.Spring(row);
+            }
+            runtime.Gap(8f);
+            row = CentredRow(runtime);
+            using (runtime.PushParent(row))
+            {
+                Arrange.Spring(row);
+                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8($"{value:D2}"), ComponentSize.Lg);
+                Arrange.Spring(row);
+            }
+            runtime.Gap(8f);
+            row = CentredRow(runtime, 28f);
+            using (runtime.PushParent(row))
+            {
+                Arrange.Spring(row);
+                if (NavButton(runtime, id + "-down", "chevron-down")) value = (value - step + count) % count;
+                Arrange.Spring(row);
+            }
+        }
+        return value;
+    }
+
+    // A row across the column, which centres what it holds with a spring either side.
+    private static Box CentredRow(BibuiRuntime runtime, float? height = null)
+    {
+        Box row = runtime.Box();
+        row.ChildLayoutAxis = LayoutAxis.X;
+        row.SizeX = SemanticSize.ParentPct(1f);
+        row.SizeY = height is { } h ? SemanticSize.Pixels(h) : SemanticSize.ChildrenSum();
+        return row;
+    }
+
+    // ── ColorPicker ──────────────────────────────────────────────────────────
+
+    private static readonly string[] DefaultPalette =
+    [
+        "#EF4444", "#F97316", "#EAB308", "#22C55E", "#06B6D4", "#3B82F6",
+        "#6366F1", "#8B5CF6", "#EC4899", "#F43F5E", "#64748B", "#18181B",
+    ];
+
+    private static readonly string[] CustomPalette = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD"];
+
+    // The custom-palette picker's own state, which the gallery state has no field for.
+    private static string CustomColor = "#FF6B6B";
+    private static bool CustomColorOpen;
+
+    private static UiNode ColorPickerPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Heading(runtime, "Pick a color from a palette");
+            var main = ColorPicker(runtime, "demo-colorpicker", state.ColorPickerValue, DefaultPalette, state.ColorPickerOpen);
+            if (main.Picked is { } color) set(state with { ColorPickerValue = color, ColorPickerOpen = false });
+            else if (main.Toggled) set(state with { ColorPickerOpen = !state.ColorPickerOpen });
+
+            runtime.Gap(16f);
+            runtime.Text(U8(state.ColorPickerValue is null ? "No color selected" : $"Color: {state.ColorPickerValue}"),
+                ComponentSize.Sm, state.ColorPickerValue is null ? TextColor.Secondary : TextColor.Accent);
+            runtime.Gap(16f);
+            Heading(runtime, "Custom palette");
+            var custom = ColorPicker(runtime, "demo-colorpicker-custom", CustomColor, CustomPalette, CustomColorOpen);
+            if (custom.Picked is { } c) (CustomColor, CustomColorOpen) = (c, false);
+            else if (custom.Toggled) CustomColorOpen = !CustomColorOpen;
+            runtime.Gap(16f);
+            ColorPicker(runtime, "demo-colorpicker-disabled", "#3B82F6", DefaultPalette, open: false, disabled: true);
+        }
+        return page;
+    }
+
+    private readonly record struct ColorPickerResult(bool Toggled, string? Picked);
+
+    // A trigger showing value as a swatch and its hex, and — when open — a
+    // popup of the palette, six to a row, under it.
+    private static ColorPickerResult ColorPicker(BibuiRuntime runtime, string id, string? value,
+        IReadOnlyList<string> palette, bool open, bool disabled = false)
+    {
+        Box trigger = PickerTrigger(runtime, id, 220f, disabled, out bool toggled);
+        using (runtime.PushParent(trigger))
+        {
+            using (CentredCell(runtime))
+            {
+                Arrange.Spring(runtime.ParentInScope);
+                Box swatch = runtime.Box().Px(20f, 20f);
+                swatch.Style.CornerRadius = 4f;
+                swatch.Style.BackgroundColor = value is null ? UiColor.SurfaceRaised : UiColor.Hex(value);
+                if (value is null) swatch.Style.BorderColor = UiColor.Border;
+                Arrange.Spring(runtime.ParentInScope);
+            }
+            runtime.Gap(8f);
+            CentredText(runtime, U8(value ?? "Pick a color"),
+                color: disabled ? TextColor.Disabled : value is null ? TextColor.Secondary : TextColor.Primary);
+            Arrange.Spring(trigger);
+            CentredIcon(runtime, "chevron-down", 14f, UiColor.TextSecondary);
+        }
+
+        string? picked = null;
+        if (open && !disabled)
+        {
+            Box popup = OpenPopup(runtime, id + "-popup", trigger, padding: 12f);
+            using (runtime.PushParent(popup))
+            {
+                for (int start = 0; start < palette.Count; start += 6)
+                {
+                    if (start > 0) runtime.Gap(6f);
+                    using (runtime.PushParent(Row(runtime)))
+                        for (int i = start; i < Math.Min(start + 6, palette.Count); i++)
+                        {
+                            if (i > start) runtime.Gap(6f);
+                            string hex = palette[i];
+                            bool chosen = string.Equals(hex, value, StringComparison.OrdinalIgnoreCase);
+                            Box swatch = runtime.BoxFromId($"{id}-swatch-{i}", InteractionKinds.LeftPress);
+                            if (runtime.InteractionsFor(swatch).Clicked) picked = hex;
+                            swatch.Px(28f, 28f);
+                            swatch.Style.CornerRadius = 4f;
+                            swatch.Style.BackgroundColor = UiColor.Hex(hex);
+                            swatch.Style.BorderWidth = chosen ? 2f : 1f;
+                            swatch.Style.BorderColor = chosen ? UiColor.TextPrimary : UiColor.Border;
+                        }
+                }
+            }
+            ClosePopup(runtime, popup);
+        }
+        return new ColorPickerResult(toggled, picked);
+    }
+}

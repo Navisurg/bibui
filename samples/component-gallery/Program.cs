@@ -1,0 +1,426 @@
+using Bibui;
+using Bibui.Runtime;
+using Bibui.TextEdit;
+using ComponentGallery;
+
+// ── Component Gallery ─────────────────────────────────────────────────────────
+// A page for each of bibui's components, and for the patterns an application
+// composes from them. The sidebar lists the pages by group; the panel to its
+// right shows the chosen one, working: every demo is built from runtime pieces
+// the way an application builds it.
+// The window is resizable: the sidebar narrows, then folds behind a menu
+// bar (ShellLayout), and the page scrolls.
+//
+// Usage (GalleryOptions.Usage has the whole list):
+//   dotnet run             → opens interactive window (Silk host + Skia)
+//   dotnet run -- reference → renders every page, and its open state, to reference/
+//   dotnet run -- check    → lays every page out at several window sizes and
+//                            reports anything cut, spilling, or off the window
+//   dotnet run -- --host wayland --raster managed
+//                          → raw Wayland host + managed rasterizer with FreeType/HarfBuzz text
+//   dotnet run -- --accent "#E11D48" --mode light
+//                          → the same gallery in a theme generated from one seed
+//   dotnet run -- --first-frame
+//                          → renders the first frame headless and exits (CI's start-up check)
+//   dotnet run -- --host wayland --raster managed --dry-run
+//                          → prints the choice and exits, without opening a window
+
+if (GalleryOptions.Parse(args, out string? error) is not { } options)
+{
+    Console.Error.WriteLine(error);
+    Console.Error.WriteLine();
+    Console.Error.WriteLine(GalleryOptions.Usage);
+    Environment.Exit(2);
+    return;
+}
+foreach (var notice in options.Notices)
+    Console.Error.WriteLine(notice);
+
+if (options.Help)
+{
+    Console.WriteLine(GalleryOptions.Usage);
+    return;
+}
+
+if (options.DryRun)
+{
+    Console.WriteLine(options.Describe());
+    return;
+}
+
+if (options.Reference)
+{
+    WriteReferences(options);
+    return;
+}
+
+if (options.Check)
+{
+    Environment.Exit(CheckLayouts(options));
+    return;
+}
+
+BibuiRuntime runtime = options.Raster == GalleryRaster.Managed
+    ? new(new Bibui.Raster.Managed.Backend.ManagedRasterBackend())
+    : new();
+HotReloadListener.Register(runtime.RequestFrame);
+
+runtime.MountStateful(
+    initialState: InitialState(),
+
+    build: (state, setState) => BuildGallery(runtime, state, setState),
+    theme: options.Theme(),
+    surface: Surface());
+
+// CI's start-up check: one frame headless, then exit; a throw fails it.
+if (options.FirstFrame)
+{
+    runtime.Render();
+    return;
+}
+
+// Off unless asked for: BIBUI_TEST_SERVER=1 (test_all_pages.sh says how).
+using var testServer = BibuiTestServer.StartIfEnabled(runtime, options.Port);
+
+var window = options.Host == GalleryHost.Wayland
+    ? new BibuiWindow(runtime, new Bibui.Platform.Wayland.WaylandPlatformHost(
+        new Bibui.Platform.Wayland.WaylandHostOptions
+        {
+            AppId = "bibui-component-gallery",
+            MinWidth = ShellLayout.MinWidth,
+            MinHeight = ShellLayout.MinHeight,
+        }))
+    : new BibuiWindow(runtime, new Bibui.Runtime.Platform.SilkPlatformHost());
+window.Run("Component Gallery");
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+
+static (string Group, string[] Routes)[] NavGroups() => new[]
+    {
+        ("Inputs & Forms", new[] { "Button", "Input", "Textarea", "TextField", "Checkbox", "Switch", "RadioGroup",
+            "Select", "Slider", "Toggle",
+            "ToggleGroup", "DatePicker", "Calendar", "TimePicker", "ColorPicker" }),
+        ("Display", new[] { "Text", "Badge", "Avatar", "Card", "Alert", "Separator", "Label",
+            "Progress", "Skeleton", "Spinner", "RatioBox", "KeyboardShortcut", "Table", "Markdown",
+            "PagedTable", "FormField", "ListItem", "EmptyState", "Toast" }),
+        ("Overlays", new[] { "Dialog", "AlertDialog", "Popover", "HoverPreview", "Tooltip",
+            "Drawer", "DropdownMenu", "ContextMenu", "CommandPalette" }),
+        ("Navigation", new[] { "Tabs", "Accordion", "Expander", "NavBar", "Sidebar",
+            "Breadcrumb", "Pagination", "MenuBar" }),
+        ("Layout", new[] { "SplitPane", "Carousel", "ButtonStrip", "Stack", "InteractiveBox", "Section", "Scrollbar" }),
+    };
+
+// Beside the page at its width, or, folded (width 0), the whole window under
+// the menu bar, which carries the title instead.
+static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState, float width)
+{
+    var groups = NavGroups();
+    bool folded = width == 0f;
+
+    UiNode? title = null, rule = null;
+    if (!folded)
+    {
+        // Logo / title
+        title = Arrange.Column(Bold(runtime, U8("Gallery"), ComponentSize.Lg, TextColor.Primary))
+            .Padded(new EdgeInsets(16, 20, 12, 20));
+        rule = Separator.Build(runtime);
+    }
+
+    // The list and its bar side by side. Entries are acquired under the list,
+    // so they lay out along its axis and are clipped to it; the list asks
+    // after them.
+    var nav = runtime.BoxFromId("sidebar-nav");
+    var list = runtime.BoxFromId("sidebar-scroll",
+        InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, nav);
+    list.ChildLayoutAxis = LayoutAxis.Y;
+
+    bool Entry(string id, string label, float height, bool raised)
+    {
+        var entry = Bibui.Runtime.Button.Build(runtime, id, Str(label), ghost: true);
+        (entry.Node.SizeX, entry.Node.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.Pixels(height));
+        var style = entry.Node.Style;
+        if (raised) style.Draw = DrawFlags.Background;
+        style.CornerRadius = 6f;
+        float padY = (height - runtime.Fonts.LineHeight(runtime.FontInScope())) / 2f;
+        style.Padding = new EdgeInsets(padY, 8, padY, 8);
+        return entry.Clicked;
+    }
+
+    using (runtime.PushParent(list))
+    {
+        foreach (var (groupLabel, components) in groups)
+        {
+            bool groupOpen = state.OpenSidebarGroup == groupLabel;
+            if (Entry($"nav-group-{GalleryHelpers.Slug(groupLabel)}",
+                    groupOpen ? $"{groupLabel} -" : $"{groupLabel} +",
+                    36f, groupOpen))
+                setState.Set(state with { OpenSidebarGroup = groupOpen ? null : groupLabel });
+
+            if (!groupOpen) continue;
+            foreach (var comp in components)
+            {
+                if (Entry($"nav-{comp}", comp, 32f, state.Route == comp))
+                    setState.Set(state with { Route = comp, OpenSidebarGroup = groupLabel, MenuOpen = false });
+            }
+        }
+    }
+
+    using (runtime.PushParent(nav))
+        Scrollbar.Build(runtime, "sidebar-bar", list);
+
+    runtime.InteractionsFor(list);
+    (list.SizeX, list.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
+    list.AllowOverflowY = true;
+    list.Style.Padding = folded ? new EdgeInsets(8, 0, 12, 8) : new EdgeInsets(0, 0, 12, 12);
+
+    var sidebar = folded
+        ? Arrange.Column("sidebar", nav.FillX().FillY()).FillX()
+        : Arrange.Column("sidebar", title!.FillX(), rule!.FillX(), nav.FillX().FillY()).Px(width: width);
+    return sidebar
+        .Styled(new Style
+        {
+            BackgroundColor = UiColor.Background,
+            BorderColor = UiColor.Border,
+            BorderWidth = 1f,
+        }).FillY();
+}
+
+// The bar across the top of a window too narrow for the sidebar: the title, and
+// the button that shows the sidebar in place of the page, or the page again.
+static UiNode BuildMenuBar(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState)
+{
+    var toggle = Bibui.Runtime.Button.Build(runtime, "nav-menu",
+        Str(state.MenuOpen ? "Close" : "Components"), ghost: true, size: ComponentSize.Sm);
+    if (toggle.Clicked) setState.Set(state with { MenuOpen = !state.MenuOpen });
+
+    return Arrange.Row("menu-bar",
+            Arrange.CentredY(Bold(runtime, U8("Gallery"), ComponentSize.Lg, TextColor.Primary)),
+            Arrange.Spring(),
+            Arrange.CentredY(toggle.Node))
+        .Styled(new Style
+        {
+            Padding = new EdgeInsets(10, 12, 10, 16),
+            BackgroundColor = UiColor.Background,
+            BorderColor = UiColor.Border,
+            BorderWidth = 1f,
+        }).FillX().Px(height: ShellLayout.BarHeight);
+}
+
+// ── Content panel ─────────────────────────────────────────────────────────────
+// The page scrolls in a view with its bar beside it, so a page taller than the
+// window is all there; its text wraps at the width the window leaves it.
+
+static UiNode BuildContentPanel(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState, ShellLayout shell)
+{
+    var panel = runtime.BoxFromId("content");
+    var view = runtime.BoxFromId("content-scroll",
+        InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, panel);
+
+    var demoNode = BuildDemo(runtime, state, setState);
+    float width = ShellLayout.PageWidth(runtime);
+
+    var page = Arrange.Column(
+        // Page title
+        Arrange.Row("page-title", Bold(runtime, U8(state.Route), ComponentSize.Xxl, TextColor.Primary)).FillX(),
+        Arrange.Space(24f),
+        Wrapped(runtime, GalleryHelpers.ComponentDescription(state.Route), width, ComponentSize.Sm, TextColor.Secondary),
+        Arrange.Space(24f),
+        Separator.Build(runtime),
+        Arrange.Space(24f),
+        // Demo content
+        demoNode.FillX()).FillX();
+    UiNode.PushIntoParent(view, page);
+
+    using (runtime.PushParent(panel))
+        Scrollbar.Build(runtime, "content-bar", view);
+    runtime.InteractionsFor(view);
+
+    view.ChildLayoutAxis = LayoutAxis.Y;
+    (view.SizeX, view.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
+    view.AllowOverflowY = true;
+    var p = shell.Padding;
+    view.Style.Padding = new EdgeInsets(p.Top, p.Right, p.Bottom, p.Left);
+    panel.Style.BackgroundColor = UiColor.Background;
+    return panel.FillX().FillY();
+}
+
+// Text in lines no wider than width, broken between words.
+static UiNode Wrapped(BibuiRuntime runtime, string text, float width, ComponentSize size, TextColor color)
+{
+    var bytes = U8(text);
+    var lines = Arrange.Column().FillX();
+    var line = runtime.Fonts.Wrap(bytes.Span, runtime.FontInScope(size), width);
+    if (line is null)   // nothing to say still takes its line
+        UiNode.PushIntoParent(lines, runtime.Text(bytes, size, color));
+    for (; line is not null; line = line.Next)
+        UiNode.PushIntoParent(lines, runtime.Text(bytes[line.Start..line.End], size, color));
+    return lines;
+}
+
+// ── Per-component demos (delegated to per-category classes) ──────────────────
+
+static UiNode BuildDemo(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState) => state.Route switch
+{
+    "Button" or "Input" or "Textarea" or "TextField" or "Checkbox" or "Switch" or "RadioGroup"
+        or "Select" or "Slider" or "Toggle" or "ToggleGroup" or "DatePicker" or "Calendar"
+        or "TimePicker" or "ColorPicker"
+            => DemoInputs.Build(runtime, state.Route, state.Inputs, s => setState.Set(state with { Inputs = s })),
+    "Text" or "Badge" or "Avatar" or "Card" or "Alert" or "Separator" or "Label"
+        or "Progress" or "Skeleton" or "Spinner" or "RatioBox"
+        or "KeyboardShortcut" or "Table" or "Markdown" or "PagedTable" or "FormField" or "ListItem" or "EmptyState"
+        or "Toast"
+            => DemoDisplay.Build(runtime, state.Route, state.Display, s => setState.Set(state with { Display = s })),
+    "Dialog" or "AlertDialog" or "Popover" or "HoverPreview" or "Tooltip"
+        or "Drawer" or "DropdownMenu" or "ContextMenu" or "CommandPalette"
+            => DemoOverlays.Build(runtime, state.Route, state.Overlays, s => setState.Set(state with { Overlays = s })),
+    "Tabs" or "Accordion" or "Expander" or "NavBar" or "Sidebar"
+        or "Breadcrumb" or "Pagination" or "MenuBar"
+            => DemoNavigation.Build(runtime, state.Route, state.Navigation, s => setState.Set(state with { Navigation = s })),
+    "Scrollbar" => DemoScrollbar.Build(runtime),
+    "SplitPane" or "Carousel" or "ButtonStrip" or "Stack" or "InteractiveBox" or "Section"
+            => DemoLayout.Build(runtime, state.Route, state.Layout, s => setState.Set(state with { Layout = s })),
+    _ => runtime.Text(U8("Select a component from the sidebar."), textColor: TextColor.Secondary),
+};
+
+// ── The whole window ──────────────────────────────────────────────────────────
+
+// The size the window opens at. Only that: the window is resizable, and the
+// shell lays itself out for whatever size it is given (ShellLayout).
+static SurfaceOptions Surface() => new() { Width = 1100, Height = 820 };
+
+// Wide, the sidebar sits beside the page; narrow, it folds behind a menu bar and
+// takes the page's place while it is open.
+static UiNode BuildGallery(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState)
+{
+    var shell = ShellLayout.For(runtime.SurfaceWidth);
+    var style = new Style { BackgroundColor = UiColor.Background };
+    if (!shell.Folded)
+    {
+        var sidebar = BuildSidebar(runtime, state, setState, shell.SidebarWidth);
+        var content = BuildContentPanel(runtime, state, setState, shell);
+        return Arrange.Row("gallery", sidebar.FillY(), content.FillY()).FillX().FillY().Styled(style);
+    }
+
+    var bar = BuildMenuBar(runtime, state, setState);
+    var body = state.MenuOpen
+        ? BuildSidebar(runtime, state, setState, 0f)
+        : BuildContentPanel(runtime, state, setState, shell);
+    return Arrange.Column("gallery", bar, body.FillY()).FillX().FillY().Styled(style);
+}
+
+static GalleryState InitialState() => new(Route: "Button", OpenSidebarGroup: "Inputs & Forms");
+
+// ── Reference pictures ────────────────────────────────────────────────────────
+// Every page as the window shows it, rendered headlessly — and, where the page
+// has an open state, opened too — to reference/: what the rebuilt gallery is
+// compared with.
+
+static void WriteReferences(GalleryOptions options)
+{
+    // A generated theme's pictures go beside the checked-in ones, not over them.
+    var outDir = Path.GetFullPath(options.OutDir ?? Path.Combine(AppContext.BaseDirectory, "..", "..", "..",
+        options.Accent is null ? "reference" : "reference-seed"));
+    var theme = options.Theme();
+    var sizes = options.Sizes.Count > 0 ? options.Sizes : [(Surface().Width, Surface().Height)];
+    foreach (var (width, height) in sizes)
+    {
+        // One size writes straight into the directory; several, a folder each.
+        var dir = sizes.Count == 1 ? outDir : Path.Combine(outDir, $"{width}x{height}");
+        Directory.CreateDirectory(dir);
+        foreach (var (name, state) in Pages())
+            WriteReference(dir, name, state, theme, new SurfaceOptions { Width = width, Height = height });
+    }
+    Console.WriteLine($"Done — references in {outDir}");
+}
+
+// Every page, and its open state where it has one, as the sidebar opens it.
+static IEnumerable<(string Name, GalleryState State)> Pages()
+{
+    foreach (var (group, routes) in NavGroups())
+        foreach (var route in routes)
+        {
+            var state = InitialState() with { Route = route, OpenSidebarGroup = group };
+            yield return (route, state);
+            if (Opened(state) is { } open) yield return (route + "-open", open);
+        }
+}
+
+// A page that cannot be rendered — a layout ring, say — leaves what it threw
+// instead of a picture, and the rest go on.
+static void WriteReference(string outDir, string name, GalleryState state, Bibui.Theming.ThemeTokens theme,
+    SurfaceOptions surface)
+{
+    var runtime = new BibuiRuntime();
+    runtime.MountStateful(state, (s, set) => BuildGallery(runtime, s, set), theme, surface);
+    try
+    {
+        File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime));
+        Console.WriteLine($"  wrote {name}.png");
+    }
+    catch (Exception e)
+    {
+        File.WriteAllText(Path.Combine(outDir, $"{name}.error.txt"), $"{e.GetType().Name}: {e.Message}\n");
+        Console.WriteLine($"  {name}: {e.GetType().Name}: {e.Message}");
+    }
+}
+
+// Three frames: laid out, and wrapped at that width.
+static byte[] RenderSettled(BibuiRuntime runtime)
+{
+    byte[] png = [];
+    for (int i = 0; i < 3; i++) png = runtime.Render().PngBytes;
+    return png;
+}
+
+// ── Layout check ──────────────────────────────────────────────────────────────
+// Every page at every size, headless: what is cut, spills out of its box, or is
+// off the surface (LayoutCheck). The exit code is the number of pages at fault,
+// capped at 1.
+
+static int CheckLayouts(GalleryOptions options)
+{
+    var sizes = options.Sizes.Count > 0
+        ? options.Sizes
+        : [(ShellLayout.MinWidth, ShellLayout.MinHeight), (840, 600), (900, 700), (1100, 820), (1600, 1000)];
+    int pages = 0, faulty = 0;
+    foreach (var (width, height) in sizes)
+    {
+        string? dir = options.OutDir is { } o ? Path.Combine(Path.GetFullPath(o), $"{width}x{height}") : null;
+        if (dir is not null) Directory.CreateDirectory(dir);
+        // And the sidebar on its own, as the menu shows it in a narrow window.
+        var menu = ("menu-open", InitialState() with { MenuOpen = true });
+        foreach (var (name, state) in Pages().Append(menu))
+        {
+            pages++;
+            var runtime = new BibuiRuntime();
+            runtime.MountStateful(state, (s, set) => BuildGallery(runtime, s, set), options.Theme(),
+                new SurfaceOptions { Width = width, Height = height });
+            List<LayoutCheck.Fault> faults;
+            try
+            {
+                byte[] png = RenderSettled(runtime);
+                if (dir is not null) File.WriteAllBytes(Path.Combine(dir, $"{name}.png"), png);
+                faults = LayoutCheck.Check(runtime, runtime.FindById("gallery")!, width, height);
+            }
+            catch (Exception e)
+            {
+                faults = [new("throws", name, $"{e.GetType().Name}: {e.Message}")];
+            }
+            if (faults.Count == 0) continue;
+            faulty++;
+            Console.WriteLine($"{width}x{height} {name}: {faults.Count} fault(s)");
+            foreach (var f in faults.Take(8)) Console.WriteLine($"    {f}");
+        }
+    }
+    Console.WriteLine($"{pages - faulty}/{pages} pages laid out whole at {string.Join(", ", sizes.Select(s => $"{s.Width}x{s.Height}"))}");
+    return faulty == 0 ? 0 : 1;
+}
+
+// The page's open state, for a page that has one.
+static GalleryState? Opened(GalleryState state) =>
+    state.Inputs.Opened(state.Route) is { } inputs ? state with { Inputs = inputs }
+    : state.Display.Opened(state.Route) is { } display ? state with { Display = display }
+    : state.Overlays.Opened(state.Route) is { } overlays ? state with { Overlays = overlays }
+    : state.Navigation.Opened(state.Route) is { } navigation ? state with { Navigation = navigation }
+    : state.Layout.Opened(state.Route) is { } layout ? state with { Layout = layout }
+    : null;

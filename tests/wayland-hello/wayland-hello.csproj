@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A bibui app on the raw Wayland host. Publishes with Native AOT:
+       dotnet publish tests/wayland-hello -c Release -r linux-x64 -p:PublishAot=true -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>wayland-hello</AssemblyName>
+    <RootNamespace>WaylandHello</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui-platform-wayland/bibui-platform-wayland.csproj" />
+    <!-- The host brings no rasterizer: the managed one, with FreeType/HarfBuzz text. -->
+    <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
+    <!-- Comes in with the backend anyway; named here only to alias it:
+         its namespace Bibui.Text.FreeType collides with the type Bibui.Text. -->
+    <ProjectReference Include="../../bibui-text-freetype/Bibui.Text.FreeType.csproj" Aliases="freetype" />
+  </ItemGroup>
+</Project>

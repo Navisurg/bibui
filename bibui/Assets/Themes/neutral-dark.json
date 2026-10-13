@@ -1,0 +1,39 @@
+{
+  "name": "neutral-dark",
+  "colors": {
+    "mode": "dark",
+    "ramps": {
+      "neutral": ["#FAFAFA", "#F4F4F5", "#E4E4E7", "#D4D4D8", "#A1A1AA", "#71717A",
+                  "#52525B", "#3F3F46", "#27272A", "#18181B", "#09090B"]
+    },
+    "background": "neutral-950",
+    "surface": "neutral-950",
+    "surfaceRaised": "neutral-900",
+    "surfaceRaisedHover": "neutral-800",
+    "surfaceRaisedActive": "neutral-700",
+    "border": "neutral-800",
+    "borderHover": "neutral-600",
+    "borderFocus": "neutral-300",
+    "textPrimary": "neutral-50",
+    "textSecondary": "neutral-400",
+    "textDisabled": "neutral-500",
+    "accent": "neutral-50",
+    "accentForeground": "neutral-900",
+    "accentHover": "neutral-200",
+    "accentActive": "neutral-300",
+    "destructive": "#7F1D1D",
+    "destructiveForeground": "#FEE2E2",
+    "success": "#22C55E",
+    "successForeground": "#052E16",
+    "successBg": "#0E2A17",
+    "warning": "#EAB308",
+    "warningForeground": "#1F1500",
+    "warningBg": "#2A210E",
+    "info": "#3B82F6",
+    "infoForeground": "#0B1A33",
+    "infoBg": "#0E1A2A"
+  },
+  "spacing": { "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 24 },
+  "typography": { "sizeSm": 12, "sizeMd": 14, "sizeLg": 16, "sizeXl": 20, "size2Xl": 24, "weightNormal": 400 },
+  "radii": { "sm": 4, "md": 6, "lg": 8, "full": 9999 }
+}

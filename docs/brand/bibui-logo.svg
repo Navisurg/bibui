@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1102 442" width="1102" height="442" role="img" aria-label="bibui">
+  <title>bibui</title>
+  <g transform="translate(0 0)">
+    <rect x="0" y="0" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="0" y="114" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="0" y="228" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="0" y="342" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="120" y="114" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="120" y="228" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="120" y="342" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="270" y="0" width="106" height="100" rx="14" fill="#1E2024"/>
+    <rect x="270" y="114" width="106" height="100" rx="14" fill="#1E2024"/>
+    <rect x="270" y="228" width="106" height="100" rx="14" fill="#1E2024"/>
+    <rect x="270" y="342" width="106" height="100" rx="14" fill="#1E2024"/>
+    <rect x="420" y="0" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="420" y="114" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="420" y="228" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="420" y="342" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="540" y="114" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="540" y="228" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="540" y="342" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="690" y="114" width="106" height="100" rx="14" fill="#1E2024"/>
+    <rect x="690" y="228" width="106" height="100" rx="14" fill="#1E2024"/>
+    <rect x="846" y="114" width="106" height="100" rx="14" fill="#1E2024"/>
+    <rect x="846" y="228" width="106" height="100" rx="14" fill="#1E2024"/>
+    <rect x="690" y="342" width="262" height="100" rx="14" fill="#1E2024"/>
+    <rect x="996" y="0" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect x="996" y="114" width="106" height="100" rx="14" fill="#1E2024"/>
+    <rect x="996" y="228" width="106" height="100" rx="14" fill="#1E2024"/>
+    <rect x="996" y="342" width="106" height="100" rx="14" fill="#1E2024"/>
+  </g>
+</svg>

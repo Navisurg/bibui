@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1102 442" width="1102" height="442" role="img" aria-label="bibui">
+  <title>bibui</title>
+  <style>
+    .c { transform-box: fill-box; transform-origin: 50% 100%; opacity: 0;
+         animation: drop 520ms cubic-bezier(.2,.9,.25,1.15) forwards; }
+    @keyframes drop { 0% { opacity: 0; transform: translateY(-60%) scale(.6); }
+                      60% { opacity: 1; }
+                      100% { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .c { animation: none; opacity: 1; } }
+  </style>
+  <g transform="translate(0 0)">
+    <rect class="c" style="animation-delay:165ms" x="0" y="0" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:110ms" x="0" y="114" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:55ms" x="0" y="228" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:0ms" x="0" y="342" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:180ms" x="120" y="114" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:125ms" x="120" y="228" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:70ms" x="120" y="342" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:305ms" x="270" y="0" width="106" height="100" rx="14" fill="#E9EAEC"/>
+    <rect class="c" style="animation-delay:250ms" x="270" y="114" width="106" height="100" rx="14" fill="#E9EAEC"/>
+    <rect class="c" style="animation-delay:195ms" x="270" y="228" width="106" height="100" rx="14" fill="#E9EAEC"/>
+    <rect class="c" style="animation-delay:140ms" x="270" y="342" width="106" height="100" rx="14" fill="#E9EAEC"/>
+    <rect class="c" style="animation-delay:375ms" x="420" y="0" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:320ms" x="420" y="114" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:265ms" x="420" y="228" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:210ms" x="420" y="342" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:390ms" x="540" y="114" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:335ms" x="540" y="228" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:280ms" x="540" y="342" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:460ms" x="690" y="114" width="106" height="100" rx="14" fill="#E9EAEC"/>
+    <rect class="c" style="animation-delay:405ms" x="690" y="228" width="106" height="100" rx="14" fill="#E9EAEC"/>
+    <rect class="c" style="animation-delay:530ms" x="846" y="114" width="106" height="100" rx="14" fill="#E9EAEC"/>
+    <rect class="c" style="animation-delay:475ms" x="846" y="228" width="106" height="100" rx="14" fill="#E9EAEC"/>
+    <rect class="c" style="animation-delay:420ms" x="690" y="342" width="262" height="100" rx="14" fill="#E9EAEC"/>
+    <rect class="c" style="animation-delay:915ms" x="996" y="0" width="106" height="100" rx="14" fill="#03A48C"/>
+    <rect class="c" style="animation-delay:600ms" x="996" y="114" width="106" height="100" rx="14" fill="#E9EAEC"/>
+    <rect class="c" style="animation-delay:545ms" x="996" y="228" width="106" height="100" rx="14" fill="#E9EAEC"/>
+    <rect class="c" style="animation-delay:490ms" x="996" y="342" width="106" height="100" rx="14" fill="#E9EAEC"/>
+  </g>
+</svg>

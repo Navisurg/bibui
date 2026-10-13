@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Headless tests for the Wayland route: the generator and the
+       host's logic. Nothing here opens a window. Tests that need the
+       installed protocol XML, libwayland-client or python3 report SKIP when
+       the machine has none. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>bibui-wayland-tests</AssemblyName>
+    <RootNamespace>Bibui.WaylandTests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Skia: what the parameterless new BibuiRuntime()/BibuiRenderer() draw with. -->
+    <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
+    <ProjectReference Include="../../bibui-platform-wayland/bibui-platform-wayland.csproj" />
+    <ProjectReference Include="../../tools/wayland-scanner/wayland-scanner.csproj" />
+  </ItemGroup>
+</Project>

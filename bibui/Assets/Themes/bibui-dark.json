@@ -1,0 +1,38 @@
+{
+  "name": "bibui-dark",
+  "colors": {
+    "mode": "dark",
+    "ramps": {
+      "neutral": ["#FCFAF7", "#F6F4F0", "#E7E4E0", "#D7D4CF", "#A49F99", "#777169",
+                 "#57524C", "#433F3A", "#2A2723", "#1A1815", "#0B0907"],
+      "accent": ["#EBF8FB", "#D6EFF4", "#BBE0E8", "#97C8D3", "#6AA8B5", "#418F9F",
+                 "#007A8C", "#0C6877", "#0F5662", "#164852", "#0A2F35"]
+    },
+    "background": "neutral-950",
+    "surface": "neutral-950",
+    "surfaceRaised": "neutral-900",
+    "surfaceRaisedHover": "neutral-800",
+    "surfaceRaisedActive": "neutral-700",
+    "border": "neutral-800",
+    "borderHover": "neutral-600",
+    "borderFocus": "accent-400",
+    "textPrimary": "neutral-50",
+    "textSecondary": "neutral-400",
+    "textDisabled": "neutral-500",
+    "accent": "accent-400",
+    "accentForeground": "neutral-950",
+    "accentHover": "accent-300",
+    "accentActive": "accent-200",
+    "destructive": "#E97065",
+    "destructiveForeground": "neutral-950",
+    "success": "#61B57C",
+    "successForeground": "neutral-950",
+    "successBg": "#093219",
+    "warning": "#D99A1E",
+    "warningForeground": "neutral-950",
+    "warningBg": "#392500",
+    "info": "#79A2EF",
+    "infoForeground": "neutral-950",
+    "infoBg": "#13274F"
+  }
+}

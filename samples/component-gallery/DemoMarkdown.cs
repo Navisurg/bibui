@@ -1,0 +1,104 @@
+using Bibui;
+using Bibui.Runtime;
+using Bibui.TextEdit;
+
+namespace ComponentGallery;
+
+/// <summary>
+/// The Markdown page: the source in a field on the left, edited when pressed,
+/// and the viewer on the right drawing it as it is typed. A link clicked in the
+/// viewer is reported under it; a task box clicked ticks the item in the source.
+/// </summary>
+internal static class DemoMarkdown
+{
+    private const float FieldWidth = 320f;
+    private const float ViewerWidth = 420f;
+
+    private static readonly BibuiStr Source = BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes(
+        "# Markdown\n"
+        + "\n"
+        + "A **native** viewer: `inline code`, ~~struck text~~ and [links](https://commonmark.org) wrap as one paragraph.\n"
+        + "\n"
+        + "## Lists\n"
+        + "\n"
+        + "- Bullets, and\n"
+        + "  1. numbered items\n"
+        + "  2. that nest with hanging indents\n"
+        + "- [x] task items: click a box\n"
+        + "- [ ] to tick it in the source\n"
+        + "\n"
+        + "> Quotes get a rule on their left.\n"
+        + "\n"
+        + "| Option | Cost | Notes |\n"
+        + "|:--|--:|:-:|\n"
+        + "| **Fold** | 57 files | one package |\n"
+        + "| **Keep split** | none | two packages to version |\n"
+        + "\n"
+        + "```\n"
+        + "Markdown.Build(runtime, \"doc\", source);\n"
+        + "```\n"));
+
+    private static readonly TextEditState Edit = new();
+    private static bool _focused;
+    private static string? _lastLink;
+
+    internal static UiNode Page(BibuiRuntime runtime)
+    {
+        var page = Arrange.Column();
+        using (runtime.PushParent(page))
+        {
+            Bold(runtime, U8("Edit the source on the left; the viewer draws it as you type. Escape stops editing."),
+                ComponentSize.Sm, TextColor.Secondary);
+            runtime.Gap(16f);
+
+            // Side by side where they fit, the viewer under the source where they do not.
+            Box row = runtime.Box();
+            bool sideBySide = ShellLayout.PageWidth(runtime) >= FieldWidth + 24f + ViewerWidth;
+            row.ChildLayoutAxis = sideBySide ? LayoutAxis.X : LayoutAxis.Y;
+            row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
+            using (runtime.PushParent(row))
+            {
+                Box frame = runtime.Box();
+                TextField.InputStyle(runtime, frame, _focused);
+                frame.SizeX = SemanticSize.Pixels(FieldWidth);
+                frame.SizeY = SemanticSize.ChildrenSum();
+                BibuiWidget field;
+                using (runtime.PushParent(frame))
+                using (runtime.PushSizeY(TextField.Rows(runtime, 26)))
+                using (runtime.PushFontSize(ComponentSize.Sm))
+                    field = TextField.Multiline(runtime, "demo-markdown-source", Source, Edit, _focused);
+                if (field.Pressed) _focused = true;
+
+                runtime.Gap(24f);
+
+                Box surface = runtime.Box();
+                surface.ChildLayoutAxis = LayoutAxis.Y;
+                surface.SizeX = SemanticSize.Pixels(ViewerWidth);
+                surface.SizeY = SemanticSize.ChildrenSum();
+                surface.Style.Padding = EdgeInsets.All(16f);
+                surface.Style.BorderColor = UiColor.Border;
+                surface.Style.BorderWidth = 1f;
+                surface.Style.CornerRadius = 8f;
+                using (runtime.PushParent(surface))
+                {
+                    var viewer = Markdown.Build(runtime, "demo-markdown", Source, width: ViewerWidth - 32f);
+                    if (viewer.LinkClicked) _lastLink = viewer.ClickedLink;
+                    if (viewer.TaskClicked) Markdown.ToggleTask(Source, viewer.ToggledTask);
+                }
+            }
+
+            runtime.Gap(16f);
+            runtime.Text(U8(_lastLink is null ? "Click a link in the viewer." : $"Clicked: {_lastLink}"),
+                ComponentSize.Sm, TextColor.Secondary);
+        }
+
+        if (_focused)
+            foreach (var handle in runtime.UnconsumedEvents)
+                if (handle.Event is { Kind: BibUiEventKind.Press, Key: Bibui.Key.Escape })
+                {
+                    _focused = false;
+                    handle.Eat();
+                }
+        return page;
+    }
+}

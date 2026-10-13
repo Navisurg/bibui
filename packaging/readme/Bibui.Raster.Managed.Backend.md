@@ -1,0 +1,15 @@
+# Bibui.Raster.Managed.Backend
+
+bibui's raster backend with no SkiaSharp: shapes, clips, layers, images and PNG
+through the managed rasterizer (`Bibui.Raster.Managed`), and text through
+FreeType and HarfBuzz (`Bibui.Text.FreeType`).
+
+```csharp
+var runtime = new BibuiRuntime(new ManagedRasterBackend());
+```
+
+With `Bibui.Platform.Wayland` this is bibui's Native AOT route: an app that
+ships no libSkiaSharp. It needs FreeType and HarfBuzz on the machine.
+
+Part of bibui, a code-first native UI library for .NET:
+<https://github.com/Navisurg/bibui>. Licensed under Apache-2.0.

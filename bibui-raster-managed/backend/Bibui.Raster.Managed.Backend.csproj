@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../../packaging/PublicPackage.props" />
+
+  <!--
+    bibui's IRasterBackend on the managed rasterizer core, with
+    text from the FreeType/HarfBuzz engine. It references bibui for the
+    interface, which brings no SkiaSharp with it, and it calls
+    no Skia: shapes, clips, layers, images, PNG and text all go through
+    Bibui.Raster.Managed and Bibui.Text.FreeType.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Raster.Managed.Backend</AssemblyName>
+    <RootNamespace>Bibui.Raster.Managed.Backend</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NuGetAudit>false</NuGetAudit>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>Bibui.Raster.Managed.Backend</PackageId>
+    <Description>bibui's IRasterBackend on the managed rasterizer, with text from Bibui.Text.FreeType: draws with no SkiaSharp.</Description>
+    <PackageTags>$(PackageTags);rasterizer;rendering;aot</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../src/Bibui.Raster.Managed.csproj" />
+    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <!-- Aliased: its namespace Bibui.Text.FreeType collides with the type Bibui.Text in bibui (CS0434). -->
+    <ProjectReference Include="../../bibui-text-freetype/Bibui.Text.FreeType.csproj" Aliases="freetype" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+</Project>

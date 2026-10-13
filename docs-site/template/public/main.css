@@ -1,0 +1,10 @@
+/* The bibui wordmark in the top bar: sized to the bar, and its light-on-dark
+   variant when the site is dark. */
+#logo {
+  height: 28px;
+  width: auto;
+}
+
+[data-bs-theme="dark"] #logo {
+  content: url("../docs/brand/bibui-logo-on-dark.svg");
+}

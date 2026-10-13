@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>bibui-runtime-tests</AssemblyName>
+    <RootNamespace>Bibui.RuntimeTests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui-testing/bibui-testing.csproj" />
+    <!-- Silk.NET.Input, to pin Bibui.Key to it, and the default-host registration. -->
+    <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+  </ItemGroup>
+</Project>

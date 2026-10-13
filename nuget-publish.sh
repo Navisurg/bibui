@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Pack and publish all Bibui library packages to the local NuGet feed.
+# Usage: ./nuget-publish.sh [--version 1.2.3]
+
+set -euo pipefail
+
+# NUGET_FEED=DIR packs into another directory instead (a dry run that leaves the feed alone).
+FEED="${NUGET_FEED:-$HOME/.nuget/local-packages}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+VERSION=""
+
+# Derive worktree suffix from the directory name (e.g. "sharp-camels-peel-8s4")
+# This becomes a NuGet prerelease tag so each worktree gets a unique version.
+WORKTREE_NAME="$(basename "$SCRIPT_DIR")"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version) VERSION="$2"; shift 2 ;;
+    *) echo "Unknown argument: $1"; exit 1 ;;
+  esac
+done
+
+# If no explicit version, build one from the csproj Version + worktree name
+if [[ -z "$VERSION" ]]; then
+  BASE_VERSION="$(grep -oPm1 '(?<=<Version>)[^<]+' "$SCRIPT_DIR/Directory.Build.props")"
+  VERSION="${BASE_VERSION:-0.9.0}-${WORKTREE_NAME}"
+fi
+
+PROJECTS=(
+  "bibui/bibui.csproj"
+  "bibui-raster-skia/bibui-raster-skia.csproj"
+  "bibui-platform-silk/bibui-platform-silk.csproj"
+  "bibui-testing/bibui-testing.csproj"
+  # The raw Wayland host and the managed raster backend
+  # with its FreeType/HarfBuzz text — an app on these ships no Skia or Silk.
+  "bibui-text-freetype/Bibui.Text.FreeType.csproj"
+  "bibui-raster-managed/src/Bibui.Raster.Managed.csproj"
+  "bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj"
+  "bibui-platform-wayland/bibui-platform-wayland.csproj"
+)
+
+# A layer kept in its own top-level directory lists its packages in
+# <dir>/nuget-projects, one project path per line relative to this script, so
+# this script names none of them and works the same when the directory is gone.
+for list in "$SCRIPT_DIR"/*/nuget-projects; do
+  [[ -f "$list" ]] || continue
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    PROJECTS+=("$line")
+  done < "$list"
+done
+
+for proj in "${PROJECTS[@]}"; do
+  echo "==> Packing $proj"
+  args=("dotnet" "pack" "$SCRIPT_DIR/$proj" "--configuration" "Release" "--output" "$FEED")
+  if [[ -n "$VERSION" ]]; then
+    args+=("/p:Version=$VERSION")
+  fi
+  "${args[@]}"
+done
+
+echo ""
+echo "Packages published to: $FEED"
+echo ""
+echo "To use in another project, add:"
+echo '  <PackageReference Include="Bibui" Version="0.9.0" />'
+echo "  plus Bibui.Platform.Silk for a cross-platform window: new BibuiWindow(runtime, new SilkPlatformHost())"
+echo "  (it brings Bibui.Raster.Skia, which new BibuiRuntime() then draws with)"
+echo "  (or Bibui.Platform.Wayland for the raw Wayland host; Bibui.Testing for headless tests)"

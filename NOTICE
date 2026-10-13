@@ -1,0 +1,284 @@
+bibui
+Copyright 2026 Navisurg ApS
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It includes or is derived from the third-party material listed below. Each
+entry says what bibui takes, where it is, and under what licence; the licence
+texts that must travel with the material follow at the end of this file.
+
+-------------------------------------------------------------------------------
+1. Lucide icons (and the Feather icons Lucide derives from)
+-------------------------------------------------------------------------------
+What:     SVG path data for a subset of the Lucide icon set.
+Where:    bibui/src/Renderer/IconRegistry.cs (compiled into Bibui).
+Licence:  ISC (Lucide); MIT for the icons Lucide derives from Feather.
+          Copyright (c) Lucide Icons and Contributors
+          Copyright (c) 2013-present Cole Bemis (Feather)
+Source:   https://lucide.dev
+
+-------------------------------------------------------------------------------
+2. Inter typeface
+-------------------------------------------------------------------------------
+What:     Inter-Regular.ttf and Inter-SemiBold.ttf, embedded as resources.
+Where:    bibui/Assets/Fonts/ (embedded in Bibui and Bibui.Text.FreeType).
+Licence:  SIL Open Font License 1.1. The full licence is in
+          bibui/Assets/Fonts/Inter-LICENSE.txt and is packed into the
+          licenses/ folder of each package that embeds the fonts.
+          Copyright (c) 2016 The Inter Project Authors
+Source:   https://github.com/rsms/inter
+
+-------------------------------------------------------------------------------
+3. Skia
+-------------------------------------------------------------------------------
+What:     The managed rasterizer and the FreeType text engine port or
+          reproduce Skia m88 (as shipped in SkiaSharp 2.88) so that they
+          draw exactly what the Skia backend draws: the stroker, dasher,
+          contour measure and curve maths (SkStroke, SkStrokerPriv,
+          SkDashPath, SkContourMeasure, SkGeometry); path builders; the
+          hairline and supersampling scan converters and edge builders;
+          mask, image and rect blurs and nine-patch shadows; N32 blend
+          arithmetic and A8 mask blits; gradients; unpremultiply; and the
+          text mask gamma (SkMaskGamma).
+Where:    bibui-raster-managed/ (Bibui.Raster.Managed,
+          Bibui.Raster.Managed.Backend) and bibui-text-freetype/
+          (Bibui.Text.FreeType). Each type that does so names the Skia
+          source it follows.
+Licence:  BSD 3-Clause.
+          Copyright (c) 2011 Google Inc. All rights reserved.
+Source:   https://skia.org
+
+-------------------------------------------------------------------------------
+4. font-rs
+-------------------------------------------------------------------------------
+What:     The signed-area accumulation of a line into coverage cells
+          (draw_line), used by the managed rasterizer's scanline core.
+Where:    bibui-raster-managed/src/Rasterizer.cs (Bibui.Raster.Managed).
+Licence:  Apache License 2.0 (the same text as LICENSE).
+          Copyright 2015 Google Inc.
+Source:   https://github.com/raphlinus/font-rs
+
+-------------------------------------------------------------------------------
+5. Tailwind CSS colour palette, and shadcn/ui
+-------------------------------------------------------------------------------
+What:     Colour values. ColorRamp's default ramps and the ramps pinned by
+          the built-in themes are Tailwind CSS's zinc and violet palettes;
+          some status colours are Tailwind palette steps. The neutral-dark
+          theme, and the shadow and focus-ring scales of the default
+          theme tokens, follow shadcn/ui's.
+          The OKLCH lightness of each step a seeded theme's ramps are
+          drawn at (Theme.cs) follows Tailwind's: the neutral steps are
+          zinc's, and the lighter accent steps match its palette.
+Where:    bibui/src/Theming/ColorRamp.cs, bibui/src/Theming/ThemeTokens.cs,
+          bibui/src/Theming/Theme.cs, bibui/Assets/Themes/*.json (compiled
+          into or embedded in Bibui).
+Licence:  MIT.
+          Copyright (c) Tailwind Labs, Inc.
+          Copyright (c) 2023 shadcn
+Source:   https://tailwindcss.com, https://ui.shadcn.com
+
+-------------------------------------------------------------------------------
+6. Wayland protocol definitions
+-------------------------------------------------------------------------------
+What:     C# bindings generated from the Wayland protocol XML (wayland.xml
+          and, from wayland-protocols: xdg-shell, xdg-decoration,
+          fractional-scale, viewporter, cursor-shape, presentation-time),
+          including interface names, signatures and summaries taken from it.
+Where:    bibui-platform-wayland/Protocol/Generated/ (Bibui.Platform.Wayland).
+Licence:  MIT (the X11/Expat form used by Wayland), per protocol file.
+          Copyright © 2008-2013 Kristian Høgsberg
+          Copyright © 2010-2013 Intel Corporation
+          Copyright © 2012-2016 Collabora, Ltd.
+          Copyright © 2013 Rafael Antognolli
+          Copyright © 2013 Jasper St. Pierre
+          Copyright © 2015-2017 Samsung Electronics Co., Ltd
+          Copyright © 2015-2017 Red Hat Inc.
+          Copyright © 2018, 2023 Simon Ser
+          Copyright 2018 The Chromium Authors
+          Copyright © 2022 Kenny Levinsen
+Source:   https://gitlab.freedesktop.org/wayland
+
+-------------------------------------------------------------------------------
+7. OKLab
+-------------------------------------------------------------------------------
+What:     The sRGB to OKLab conversion matrices, as published by Björn
+          Ottosson, used to draw theme ramps from seed colours.
+Where:    bibui/src/Theming/Oklch.cs (compiled into Bibui).
+Licence:  The published reference implementation is public domain, or MIT
+          where that is not recognised; credited here as a courtesy.
+          Copyright (c) 2020 Björn Ottosson
+Source:   https://bottosson.github.io/posts/oklab/
+
+-------------------------------------------------------------------------------
+8. Colormaps: viridis, inferno, magma, plasma; Turbo
+-------------------------------------------------------------------------------
+What:     Five colour stops sampled from each colormap, for gradient
+          previews.
+Where:    bibui/src/Theming/Colormaps.cs (compiled into Bibui).
+Licence:  viridis, inferno, magma and plasma: CC0 1.0 (public domain
+          dedication), by Nathaniel J. Smith, Stefan van der Walt and
+          (viridis) Eric Firing, as published in matplotlib; credited here
+          as a courtesy.
+          Turbo: Apache License 2.0 (the same text as LICENSE).
+          Copyright 2019 Google LLC (author: Anton Mikhailov)
+Source:   https://github.com/BIDS/colormap,
+          https://github.com/matplotlib/matplotlib (_cm_listed.py),
+          https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/
+
+-------------------------------------------------------------------------------
+9. GLFW key codes and Silk.NET.Input names
+-------------------------------------------------------------------------------
+What:     The Key and MouseButton enums take their member names from
+          Silk.NET.Input and their values from GLFW's key and button codes;
+          the Wayland host's evdev-to-key table is GLFW's table for Wayland,
+          so both hosts report the same key.
+Where:    bibui/src/Public/InputCodes.cs (Bibui);
+          bibui-platform-wayland/KeyTable.cs (Bibui.Platform.Wayland).
+Licence:  Silk.NET: MIT.
+          Copyright (c) .NET Foundation and Contributors
+          GLFW: zlib/libpng licence.
+          Copyright (c) 2002-2006 Marcus Geelnard
+          Copyright (c) 2006-2019 Camilla Löwy
+Source:   https://github.com/dotnet/Silk.NET, https://www.glfw.org
+
+-------------------------------------------------------------------------------
+Not redistributed by bibui
+-------------------------------------------------------------------------------
+These are used at run time but are not part of bibui's source or packages;
+they reach an application through its own package references or its system,
+with their own licences:
+
+- SkiaSharp and its native Skia (MIT / BSD-3-Clause), referenced by
+  Bibui.Raster.Skia as NuGet packages.
+- Silk.NET (MIT) and GLFW (zlib), referenced by Bibui.Platform.Silk.
+- TextCopy (MIT), referenced by Bibui.Platform.Silk.
+- System.IO.Hashing (MIT), referenced by Bibui.
+- FreeType (FTL or GPLv2) and HarfBuzz (MIT-style "Old MIT"), loaded from
+  the system by Bibui.Text.FreeType; libwayland-client and libxkbcommon
+  (MIT), loaded from the system by Bibui.Platform.Wayland.
+
+===============================================================================
+Licence texts
+===============================================================================
+
+--- ISC License (Lucide) ------------------------------------------------------
+
+Copyright (c) Lucide Icons and Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+--- MIT License (Feather; Tailwind CSS; shadcn/ui; Silk.NET) ------------------
+
+Copyright (c) 2013-present Cole Bemis
+Copyright (c) Tailwind Labs, Inc.
+Copyright (c) 2023 shadcn
+Copyright (c) .NET Foundation and Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--- BSD 3-Clause License (Skia) -----------------------------------------------
+
+Copyright (c) 2011 Google Inc. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in
+    the documentation and/or other materials provided with the
+    distribution.
+
+  * Neither the name of the copyright holder nor the names of its
+    contributors may be used to endorse or promote products derived
+    from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--- MIT License, X11/Expat form (Wayland protocols) ---------------------------
+
+The copyright holders are listed in section 6 above.
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software,
+and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice (including the
+next paragraph) shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--- zlib/libpng License (GLFW) ------------------------------------------------
+
+Copyright (c) 2002-2006 Marcus Geelnard
+Copyright (c) 2006-2019 Camilla Löwy
+
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would
+   be appreciated but is not required.
+
+2. Altered source versions must be plainly marked as such, and must not
+   be misrepresented as being the original software.
+
+3. This notice may not be removed or altered from any source
+   distribution.

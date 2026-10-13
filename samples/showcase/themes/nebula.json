@@ -1,0 +1,23 @@
+{
+  // A theme file lists only what it changes from the theme it extends.
+  "name": "nebula",
+  "extends": "default-dark",
+  "colors": {
+    "ramps": {
+      "accent": ["#FDF2FF", "#FAE3FF", "#F5C6FF", "#EE9BFF", "#E266FB", "#CB3BE8", "#A923C4", "#87199E", "#6D1A7F", "#5A1A68", "#3A0545"]
+    },
+    "accent": "accent-400",
+    "accentHover": "accent-300",
+    "accentActive": "accent-500",
+    "accentForeground": "#1A0420",
+    "background": "#0B0614",
+    "surface": "#120A1F",
+    "surfaceRaised": "#1B1130",
+    "surfaceRaisedHover": "#251842",
+    "surfaceRaisedActive": "#2F1F52",
+    "border": "#2A1D45",
+    "borderHover": "#3D2B63",
+    "textSecondary": "#A99CC4",
+  },
+  "radii": { "sm": 6, "md": 10, "lg": 14 },
+}

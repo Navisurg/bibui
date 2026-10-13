@@ -1,0 +1,15 @@
+# The sidebar of the docs site (docs-site/). GitHub ignores this file.
+# A folder of pages gets its own toc.yml and an entry here:
+#   - name: Components
+#     href: components/
+items:
+- name: Getting started
+  href: getting-started.md
+- name: Concepts
+  href: concepts.md
+- name: Theming
+  href: theming.md
+- name: Native AOT
+  href: aot.md
+- name: Versions and compatibility
+  href: versioning.md

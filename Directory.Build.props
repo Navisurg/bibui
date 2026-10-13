@@ -1,0 +1,31 @@
+<Project>
+  <PropertyGroup>
+    <!-- The next release. 0.9.0 is the first public version (see
+         docs/versioning.md). -->
+    <Version>0.9.0</Version>
+    <!-- Package metadata every bibui package shares. -->
+    <Authors>Navisurg ApS</Authors>
+    <Copyright>Copyright 2026 Navisurg ApS</Copyright>
+  </PropertyGroup>
+
+  <!--
+    Release packs are reproducible and name no machine: the same commit packs
+    to the same DLLs wherever it is checked out, and no absolute path of the
+    machine that built it (the PDB path in the DLL's debug directory, a source
+    path in a stack trace) gets into a package.
+
+    CI passes ContinuousIntegrationBuild=true to its pack steps. In a git
+    checkout the SDK's built-in SourceLink then maps the repository root to /_/
+    and stamps the commit (AssemblyInformationalVersion 1.0.0+<sha>, the
+    nuspec's repository commit): the public repo's commit when the public repo
+    packs. The PathMap below maps the same root to /_/ without a git checkout,
+    so the mapping never depends on one. Neither is set for an ordinary build:
+    a local build keeps real paths for the debugger and [CallerFilePath].
+  -->
+  <PropertyGroup>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(ContinuousIntegrationBuild)' == 'true'">
+    <PathMap>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)'))=/_/,$(PathMap)</PathMap>
+  </PropertyGroup>
+</Project>

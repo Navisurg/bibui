@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>bibui-app</AssemblyName>
+    <RootNamespace>BibuiApp</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <!-- The cross-platform host (GLFW + GL): new BibuiWindow(runtime) opens on it. -->
+    <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+  </ItemGroup>
+</Project>

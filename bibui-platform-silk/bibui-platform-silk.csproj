@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+  <!-- The cross-platform window host — GLFW through Silk.NET, presenting
+       with OpenGL (Skia GPU, or a CPU-raster texture), clipboard through TextCopy
+       and wl-clipboard. bibui names no host of its own:
+       an app opens a window on it with new BibuiWindow(runtime, new SilkPlatformHost()). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Platform.Silk</AssemblyName>
+    <RootNamespace>Bibui.Runtime.Platform</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>Bibui.Platform.Silk</PackageId>
+    <Description>Bibui cross-platform window host: GLFW + OpenGL through Silk.NET, clipboard through TextCopy. new BibuiWindow(runtime, new SilkPlatformHost()).</Description>
+    <PackageTags>$(PackageTags);window;glfw;opengl;silk.net</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../bibui/bibui.csproj" />
+    <!-- The GPU path presents through Skia (GRContext, SKSurface over the framebuffer). -->
+    <ProjectReference Include="../bibui-raster-skia/bibui-raster-skia.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.Input.Glfw" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />
+    <PackageReference Include="TextCopy" Version="6.2.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- SilkPlatformHost.LoadBundledGlfw, which the tests check. -->
+    <InternalsVisibleTo Include="bibui-runtime-tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+</Project>

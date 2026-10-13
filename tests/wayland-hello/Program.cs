@@ -1,0 +1,161 @@
+// wayland-hello: a bibui app on the raw Wayland host.
+//
+//   dotnet run --project tests/wayland-hello -c Release            # animates: a frame per compositor callback
+//   dotnet run --project tests/wayland-hello -c Release -- --still # draws once, then idles at 0% CPU
+//   BIBUI_PROFILE_FRAMES=600 dotnet run --project tests/wayland-hello -c Release
+//                                                                    # 600 frames, prints the frame profile, closes
+//   dotnet run --project tests/wayland-hello -c Release -- --first-frame
+//                                                                    # headless: one frame, then exits (CI's start-up check)
+//
+// No GLFW, no GL: libwayland-client, an xdg-shell toplevel, and frames drawn on
+// the CPU by the managed rasterizer straight into wl_shm buffers. Input
+// is live: the switch, the button and the text field take the pointer and
+// keyboard, and the pad at the bottom shows what the host delivered — pointer
+// position, buttons, wheel travel, and the modifiers the last event carried. HiDPI and cursors are
+// handled too. It closes from the compositor (Super+W, or whatever closes a window).
+//
+// Native AOT: dotnet publish tests/wayland-hello -c Release -r linux-x64 -p:PublishAot=true
+
+using Bibui;
+using Bibui.Platform.Wayland;
+using Bibui.Raster.Managed.Backend;
+using Bibui.Runtime;
+using Bibui.TextEdit;
+using static Bibui.Arrange;
+using Button = Bibui.Runtime.Button;
+
+bool animate = !args.Contains("--still");
+int clicks = 0;
+var typed = new BibuiStr(64);
+var typedEdit = new TextEditState();
+bool typing = false;
+float wheelX = 0f, wheelY = 0f;
+string lastButton = "none yet";
+KeyModifiers lastModifiers = KeyModifiers.None;
+
+// The backend is named: the Wayland host brings none, and Native AOT keeps only what is named.
+var runtime = new BibuiRuntime(new ManagedRasterBackend());
+long frame = 0;
+
+runtime.Mount(() =>
+{
+    frame++;
+    // Keep asking while animating: one request per frame keeps the loop
+    // going, and the compositor's frame callbacks set the pace.
+    if (animate) runtime.RequestFrame();
+    float t = (MathF.Sin(frame / 40f) + 1f) / 2f;
+
+    // ── Ask, innermost and topmost first ────────────────────────────────────
+    var toggle = Switch.Build(runtime, "anim", animate, label: S(animate ? "Animating (click to stop)" : "Still (click to animate)"));
+    if (toggle.Clicked) { animate = !animate; runtime.RequestFrame(); }
+
+    var hello = Button.Build(runtime, "hello", S(clicks == 0 ? "Click me" : $"Clicked {clicks}×"));
+    if (hello.Clicked) clicks++;
+
+    // A press focuses the field; Escape or Enter lets it go.
+    Box field = runtime.Box();
+    TextField.InputStyle(runtime, field, typing);
+    field.FillX().Px(height: 40f);
+    BibuiWidget line;
+    using (runtime.PushParent(field))
+        line = TextField.SingleLine(runtime, "typed", typed, typedEdit, typing,
+            placeholder: S("Type here: dead keys, AltGr, held keys repeat, Ctrl+A, Ctrl+Left"));
+    if (line.Pressed) typing = true;
+    foreach (var handle in runtime.UnconsumedEvents)
+        if (typing && handle.Event is { Kind: BibUiEventKind.Press, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
+        {
+            typing = false;
+            handle.Eat();
+        }
+
+    // The pad takes every button and the wheel, and shows what arrived.
+    Box pad = runtime.BoxFromId("pad", InteractionKinds.All);
+    Interaction p = runtime.InteractionsFor(pad);
+    wheelX += p.ScrollX;
+    wheelY += p.ScrollY;
+    if (p.Pressed) lastButton = "left";
+    else if (p.RightPressed) lastButton = "right";
+    else if (p.MiddlePressed) lastButton = "middle";
+    if (p.Hovering) lastModifiers = p.Modifiers;
+
+    // ── Describe ────────────────────────────────────────────────────────────
+    pad.FillX().Px(height: 96f);
+    pad.ChildLayoutAxis = LayoutAxis.Y;
+    pad.Style.CornerRadius = 10f;
+    pad.Style.Padding = EdgeInsets.All(12f);
+    pad.Style.BorderWidth = 1f;
+    pad.Style.BorderColor = p.Hovering ? UiColor.Accent : UiColor.Border;
+    pad.Style.BackgroundColor = UiColor.SurfaceRaised;
+    using (runtime.PushParent(pad))
+    {
+        runtime.Text(U8(p.Hovering ? $"pointer at {p.X:0.#}, {p.Y:0.#}" : "Move over this pad, press any button, scroll (Shift+wheel too)"),
+            ComponentSize.Sm);
+        runtime.Gap(6f);
+        runtime.Text(U8($"last press: {lastButton}    wheel total: x {wheelX:0.#} px, y {wheelY:0.#} px (a notch is 32 px)"),
+            ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(6f);
+        runtime.Text(U8($"modifiers with the last event: {lastModifiers}"), ComponentSize.Sm, TextColor.Secondary);
+    }
+
+    // The bar a frame moves: a groove and a fill inside it.
+    Box groove = runtime.Box().FillX().Px(height: 14f);
+    groove.Style.CornerRadius = 7f;
+    groove.Style.BackgroundColor = UiColor.SurfaceRaised;
+    groove.Style.BorderColor = UiColor.Border;
+    groove.Style.Padding = EdgeInsets.All(1f);
+    using (runtime.PushParent(groove))
+    {
+        Box fill = runtime.Box().Px(24f + t * 420f, 12f);
+        fill.Style.CornerRadius = 6f;
+        fill.Style.BackgroundColor = UiColor.Accent;
+    }
+
+    return Column(
+            Bold(runtime, U8("Hello from raw Wayland"), ComponentSize.Xxl, TextColor.Primary),
+            Space(16f),
+            runtime.Text(U8("wl_shm buffers, CPU raster, frame-callback pacing, xkbcommon input. No GLFW, no GL."),
+                textColor: TextColor.Secondary),
+            Space(16f),
+            toggle.Node,
+            Space(16f),
+            hello.Node,
+            Space(16f),
+            field,
+            Space(16f),
+            groove,
+            Space(16f),
+            pad,
+            Space(16f),
+            runtime.Text(U8($"frame {frame} · {runtime.SurfaceWidth}×{runtime.SurfaceHeight} at {runtime.ScaleFactor:0.###}×"),
+                ComponentSize.Sm, TextColor.Secondary))
+        .FillX().FillY()
+        .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(28f) });
+}, new SurfaceOptions { Width = 760, Height = 560, ScaleFactor = 1f });
+
+if (args.Contains("--first-frame"))
+{
+    runtime.Render();
+    return 0;
+}
+
+if (!WaylandPlatformHost.IsSupported)
+{
+    Console.Error.WriteLine("wayland-hello needs a Wayland session (WAYLAND_DISPLAY) and libwayland-client.");
+    return 1;
+}
+
+new BibuiWindow(runtime, new WaylandPlatformHost(new WaylandHostOptions { AppId = "bibui-wayland-hello" }))
+    .Run("bibui — wayland-hello");
+return 0;
+
+// A text holds UTF-8 bytes; formatted per frame, encoded per frame.
+static ReadOnlyMemory<byte> U8(string s) => System.Text.Encoding.UTF8.GetBytes(s);
+
+// A text at the bold weight, where a PushFontFace scope cannot go: inside an expression.
+static Text Bold(BibuiRuntime runtime, ReadOnlyMemory<byte> text, FontSize? fontSize = null, UiColor? textColor = null)
+{
+    using (runtime.PushFontFace(weight: FontWeight.Bold))
+        return runtime.Text(text, fontSize, textColor);
+}
+// A component's label.
+static BibuiStr S(string s) => BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes(s));

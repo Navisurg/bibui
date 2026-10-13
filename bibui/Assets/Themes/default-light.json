@@ -1,0 +1,39 @@
+{
+  "name": "default-light",
+  "colors": {
+    "mode": "light",
+    "ramps": {
+      "accent": ["#F5F3FF", "#EDE9FE", "#DDD6FE", "#C4B5FD", "#A78BFA", "#8B5CF6",
+                 "#7C3AED", "#6D28D9", "#5B21B6", "#4C1D95", "#2E1065"]
+    },
+    "background": "#F8F8FF",
+    "surface": "#FFFFFF",
+    "surfaceRaised": "#F0F0FA",
+    "surfaceRaisedHover": "#E4E4F4",
+    "surfaceRaisedActive": "#D8D8EC",
+    "border": "#D0D0E0",
+    "borderHover": "#B0B0D0",
+    "borderFocus": "accent-600",
+    "textPrimary": "#0D0D14",
+    "textSecondary": "#5A5A7A",
+    "textDisabled": "#A0A0C0",
+    "accent": "accent-600",
+    "accentForeground": "#FFFFFF",
+    "accentHover": "accent-700",
+    "accentActive": "accent-800",
+    "destructive": "#DC2626",
+    "destructiveForeground": "#FFFFFF",
+    "success": "#16A34A",
+    "successForeground": "#F0FDF4",
+    "successBg": "#DCFCE7",
+    "warning": "#CA8A04",
+    "warningForeground": "#FEFCE8",
+    "warningBg": "#FEF9C3",
+    "info": "#2563EB",
+    "infoForeground": "#EFF6FF",
+    "infoBg": "#DBEAFE"
+  },
+  "spacing": { "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 24 },
+  "typography": { "sizeSm": 12, "sizeMd": 14, "sizeLg": 16, "sizeXl": 20, "size2Xl": 24, "weightNormal": 400 },
+  "radii": { "sm": 4, "md": 6, "lg": 8, "full": 9999 }
+}

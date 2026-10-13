@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>bibui</AssemblyName>
+    <RootNamespace>Bibui</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- RgbaImage hands out pointers into its pixels. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NuGetAudit>false</NuGetAudit>
+    <UseAppHost>false</UseAppHost>
+    <PackageId>Bibui</PackageId>
+    <Description>Bibui, a code-first native UI library: nodes, layout, the painter and BibuiRenderer over an IRasterBackend, text, theming, the runtime (BibuiRuntime, BibuiWindow and the platform-host seam) and the components. Add Bibui.Platform.Silk (GLFW + OpenGL, cross-platform) or Bibui.Platform.Wayland for a window, and Bibui.Raster.Skia (SkiaSharp) or another backend to draw.</Description>
+    <PackageTags>$(PackageTags);layout;components;theming;aot</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Hashing" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- LayoutSolver is tested directly (internal, it is not API), and so is
+         Fold, the window's pointer bookkeeping and the only part of the input
+         path that is pure enough to test directly. -->
+    <InternalsVisibleTo Include="bibui-runtime-tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Text is part of the render, so the face it is drawn with cannot be
+         whatever the machine happens to have installed. Embedded here, in the
+         assembly FontProvider reads (Assembly.GetExecutingAssembly()). -->
+    <EmbeddedResource Include="Assets/Fonts/Inter-Regular.ttf" LogicalName="Bibui.Assets.Fonts.Inter-Regular.ttf" />
+    <EmbeddedResource Include="Assets/Fonts/Inter-SemiBold.ttf" LogicalName="Bibui.Assets.Fonts.Inter-SemiBold.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- bibui's own themes, written as theme files and read through ThemeFile
+         like anyone else's (ThemeRegistry registers them by name). -->
+    <EmbeddedResource Include="Assets/Themes/*.json" LogicalName="Bibui.Assets.Themes.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence, the third-party notices and the embedded fonts' licence travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="Assets/Fonts/Inter-LICENSE.txt" Pack="true" PackagePath="licenses/" Visible="false" />
+  </ItemGroup>
+
+</Project>

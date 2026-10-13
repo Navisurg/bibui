@@ -1,0 +1,6 @@
+# The top bar. Paths are relative to this file, so the guides are ../docs/.
+items:
+- name: Docs
+  href: ../docs/
+- name: API
+  href: api/

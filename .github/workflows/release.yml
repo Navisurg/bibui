@@ -1,0 +1,210 @@
+name: release
+
+# A version tag (v2.0.0, v2.1.0-preview.1) publishes the packages to nuget.org
+# and makes a GitHub release with them attached.
+#
+#   ci       the whole of ci.yml, on the tagged commit
+#   pack     packs the public packages with the tag's version
+#   publish  pushes them to nuget.org through Trusted Publishing: NuGet/login
+#            trades the job's OIDC token for a short-lived API key. No key is
+#            stored anywhere. nuget.org's policy names this repository, this
+#            file (release.yml) and the environment `release`, so neither may
+#            be renamed without changing the policy.
+#   github   creates the GitHub release with the packages attached
+#
+# Only `publish` can mint an OIDC token, and it builds nothing: it pushes the
+# files `pack` made. Only `github` can write to the repository.
+#
+# Third-party code that runs with publishing rights is pinned to a commit SHA
+# (the version it was taken at is in the comment); update both together.
+
+"on":
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  pack:
+    needs: ci
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+
+      # v2.0.0 -> 2.0.0. Refuses a tag that is not a NuGet SemVer 2.0 version.
+      - name: Version from the tag
+        id: version
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::tag $TAG is not v<major>.<minor>.<patch>[-<prerelease>]"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Packing version $version"
+
+      - name: Pack
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          projects=(
+            bibui/bibui.csproj
+            bibui-testing/bibui-testing.csproj
+            bibui-text-freetype/Bibui.Text.FreeType.csproj
+            bibui-raster-skia/bibui-raster-skia.csproj
+            bibui-raster-managed/src/Bibui.Raster.Managed.csproj
+            bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj
+            bibui-platform-silk/bibui-platform-silk.csproj
+            bibui-platform-wayland/bibui-platform-wayland.csproj
+          )
+          mkdir -p nupkgs
+          for proj in "${projects[@]}"; do
+            echo "==> pack $proj @ $VERSION"
+            dotnet pack "$proj" --configuration Release --output nupkgs \
+              -p:Version="$VERSION" -p:TreatWarningsAsErrors=true \
+              -p:ContinuousIntegrationBuild=true
+          done
+          ls -l nupkgs
+          # One package per project, every one at the tag's version.
+          count=$(find nupkgs -name "*.$VERSION.nupkg" | wc -l)
+          if [[ $count -ne ${#projects[@]} ]]; then
+            echo "::error::expected ${#projects[@]} packages at $VERSION, found $count"
+            exit 1
+          fi
+
+      # Nothing of the build machine and nothing of another repository in a
+      # package: no absolute home path anywhere (ContinuousIntegrationBuild maps
+      # them to /_/), and the commit stamped into each nuspec and DLL is this
+      # repository's tagged commit.
+      - name: Check the packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad=0
+          for pkg in nupkgs/*.nupkg; do
+            dir="unpacked/$(basename "$pkg" .nupkg)"
+            mkdir -p "$dir" && unzip -q "$pkg" -d "$dir"
+            if grep -rlaE '/home/|/Users/|[A-Za-z]:\\Users\\' "$dir"; then
+              echo "::error::$pkg holds an absolute path of the build machine (files above)"; bad=1
+            fi
+            repo=$(grep -o '<repository [^>]*>' "$dir"/*.nuspec || true)
+            if [[ ${repo,,} != *"url=\"https://github.com/${GITHUB_REPOSITORY,,}\""* || $repo != *"commit=\"$GITHUB_SHA\""* ]]; then
+              echo "::error::$pkg: nuspec $repo does not name https://github.com/$GITHUB_REPOSITORY at $GITHUB_SHA"; bad=1
+            fi
+            for dll in "$dir"/lib/*/*.dll; do
+              if ! grep -qaF "+$GITHUB_SHA" "$dll"; then
+                echo "::error::$dll: its informational version is not stamped with $GITHUB_SHA"; bad=1
+              fi
+            done
+          done
+          exit $bad
+
+      - name: Upload packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nupkgs
+          path: |
+            nupkgs/*.nupkg
+            nupkgs/*.snupkg
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: pack
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nupkgs
+          path: nupkgs
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: NuGet login (Trusted Publishing)
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: navisurg
+
+      # --skip-duplicate: a re-run after a partial push publishes the rest
+      # instead of failing on the packages already up. A .snupkg beside a
+      # .nupkg is pushed with it.
+      - name: Push to nuget.org
+        shell: bash
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          dotnet nuget push "nupkgs/*.nupkg" \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
+
+  github:
+    needs: [pack, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nupkgs
+          path: nupkgs
+
+      # A version with a pre-release part (2.1.0-preview.1) is marked as a
+      # pre-release on GitHub too.
+      - name: Create the GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.pack.outputs.version }}
+        run: |
+          set -euo pipefail
+          prerelease=()
+          [[ $VERSION == *-* ]] && prerelease=(--prerelease)
+          gh release create "$TAG" nupkgs/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "bibui $VERSION" \
+            --generate-notes \
+            --verify-tag \
+            "${prerelease[@]}"

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+
+  <!--
+    bibui's text engine on the system FreeType + HarfBuzz, for the managed
+    rasterizer. No SkiaSharp here: the only native code is libfreetype.so.6 and
+    libharfbuzz.so.0, reached through LibraryImport (source-generated, AOT-safe,
+    no delegates, no reflection). The comparison with Skia's text is a test
+    suite of its own, which is allowed to reference SkiaSharp.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Text.FreeType</AssemblyName>
+    <RootNamespace>Bibui.Text.FreeType</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <NuGetAudit>false</NuGetAudit>
+    <UseAppHost>false</UseAppHost>
+    <PackageId>Bibui.Text.FreeType</PackageId>
+    <Description>bibui text on the system FreeType and HarfBuzz: shaping, exact subpixel measuring, a glyph coverage cache and gamma-correct compositing.</Description>
+    <PackageTags>$(PackageTags);text;freetype;harfbuzz;shaping;aot</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The same bytes bibui embeds: parity with today's text starts with the same face. -->
+    <EmbeddedResource Include="../bibui/Assets/Fonts/Inter-Regular.ttf" LogicalName="Bibui.Text.FreeType.Inter-Regular.ttf" />
+    <EmbeddedResource Include="../bibui/Assets/Fonts/Inter-SemiBold.ttf" LogicalName="Bibui.Text.FreeType.Inter-SemiBold.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence, the third-party notices and the embedded fonts' licence travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../bibui/Assets/Fonts/Inter-LICENSE.txt" Pack="true" PackagePath="licenses/" Visible="false" />
+  </ItemGroup>
+
+</Project>

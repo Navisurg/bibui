@@ -1,0 +1,45 @@
+namespace Bibui.Runtime.Platform
+{
+    public interface ISkiaGpuPlatformHost : Bibui.Runtime.Platform.IPlatformHost
+    {
+        long GpuResourceCacheLimit { get; set; }
+        SkiaSharp.GRContext? GraphicsContext { get; }
+    }
+    public sealed class SilkPlatformHost : Bibui.Runtime.Platform.IPlatformHost, Bibui.Runtime.Platform.ISkiaGpuPlatformHost
+    {
+        public SilkPlatformHost() { }
+        public int FramebufferHeight { get; }
+        public int FramebufferWidth { get; }
+        public long GpuResourceCacheLimit { get; set; }
+        public SkiaSharp.GRContext? GraphicsContext { get; }
+        public Bibui.KeyModifiers HeldModifiers { get; }
+        public bool IsClosing { get; }
+        public bool PacesFrames { get; }
+        public Bibui.Runtime.Platform.HostPresentation Presentation { get; }
+        public float Scale { get; }
+        public void Close() { }
+        public string? GetClipboardText() { }
+        public void Open(Bibui.Runtime.BibuiRuntime runtime, Bibui.Runtime.Platform.PlatformWindowOptions options) { }
+        public Bibui.Runtime.Platform.PresentTimings Present(Bibui.Runtime.BibuiRuntime runtime) { }
+        public void Run(System.Action iteration) { }
+        public void SetClipboardText(string text) { }
+        public void SetCursor(Bibui.Runtime.Platform.CursorShape shape) { }
+        public void Shutdown() { }
+        public void WaitEvents(System.Collections.Generic.List<Bibui.Runtime.Platform.WindowEvent> into) { }
+        public void Wake() { }
+    }
+}
+namespace Bibui.Runtime
+{
+    public static class SkiaGpuExtensions
+    {
+        public static void RenderTo(this Bibui.Runtime.BibuiRuntime runtime, SkiaSharp.SKSurface target, bool retained = false) { }
+        public static void set_GpuResourceCacheLimit(Bibui.Runtime.BibuiWindow window, long value) { }
+        extension(Bibui.Runtime.BibuiWindow window)
+        {
+            public SkiaSharp.GRContext? GraphicsContext { get; }
+            public long GpuResourceCacheLimit { get; set; }
+            public SkiaSharp.SKSurface CreateOffscreenSurface(SkiaSharp.SKImageInfo info) { }
+        }
+    }
+}

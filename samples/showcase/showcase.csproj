@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Zenith, an observatory console, the showcase of what bibui can do.
+       One app, two setups, chosen at start-up: Silk host + Skia, or the raw Wayland
+       host + managed raster (see Program.cs for the commands). The Wayland + managed
+       build publishes with Native AOT; the property ShowcaseRoute=wayland leaves
+       Silk and Skia out of that binary, so only the managed route ships. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>showcase</AssemblyName>
+    <RootNamespace>Showcase</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ShowcaseRoute Condition="'$(ShowcaseRoute)' == ''">all</ShowcaseRoute>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(ShowcaseRoute)' == 'wayland'">
+    <DefineConstants>$(DefineConstants);WAYLAND_ONLY</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <!-- Linux, pure managed: raw Wayland host + managed raster with FreeType/HarfBuzz text.
+         The alias keeps the namespace Bibui.Text.FreeType from colliding with the type Bibui.Text. -->
+    <ProjectReference Include="../../bibui-platform-wayland/bibui-platform-wayland.csproj" />
+    <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
+    <ProjectReference Include="../../bibui-text-freetype/Bibui.Text.FreeType.csproj" Aliases="freetype" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(ShowcaseRoute)' != 'wayland'">
+    <!-- Cross-platform: GLFW + GL host, which brings Skia. -->
+    <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Theme files the Appearance sheet offers, beside the binary. -->
+    <None Include="themes/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" LinkBase="themes" />
+  </ItemGroup>
+</Project>

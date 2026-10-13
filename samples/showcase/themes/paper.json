@@ -1,0 +1,21 @@
+{
+  // A warm light theme, for reading the night's log by day.
+  "name": "paper",
+  "extends": "default-light",
+  "colors": {
+    "ramps": {
+      "accent": { "500": "#B45309", "600": "#92400E", "700": "#78350F" }
+    },
+    "accent": "accent-600",
+    "accentHover": "accent-700",
+    "background": "#F6F1E7",
+    "surface": "#FBF8F1",
+    "surfaceRaised": "#F1EADC",
+    "surfaceRaisedHover": "#E9DFCB",
+    "border": "#E2D6BF",
+    "textPrimary": "#2A2117",
+    "textSecondary": "#6B5B45",
+  },
+  "radii": { "sm": 2, "md": 4, "lg": 6 },
+  "density": { "mode": "compact" },
+}

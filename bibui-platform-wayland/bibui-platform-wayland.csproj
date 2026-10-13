@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+  <!-- A window host on raw Wayland through libwayland-client,
+       with no GLFW, no GL and no Silk.NET windowing of its own. Linux only. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Platform.Wayland</AssemblyName>
+    <RootNamespace>Bibui.Platform.Wayland</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>Bibui.Platform.Wayland</PackageId>
+    <Description>Bibui window host for Wayland compositors: xdg-shell toplevel, wl_shm buffers, frame-callback pacing.</Description>
+    <PackageTags>$(PackageTags);window;wayland;aot</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- IPlatformHost, BibuiRuntime and WindowEvent. The host itself uses no
+         Silk.NET and no SkiaSharp type: it draws through the runtime's raster
+         backend (IRasterBackend.CreateSurface over shm memory). -->
+    <ProjectReference Include="../bibui/bibui.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="bibui-wayland-tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+</Project>

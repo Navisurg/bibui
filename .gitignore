@@ -1,0 +1,31 @@
+# .NET build output
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+*.DotSettings
+
+# Artifacts from verification runs (generated, not committed)
+artifacts/*/
+samples/artifacts/
+samples/samples/
+samples/*/artifacts/
+tests/*/artifacts/
+
+# macOS
+.DS_Store
+._*
+
+# Editor
+*.swp
+*~
+
+# Component gallery pictures in a generated theme (reference --accent)
+samples/component-gallery/reference-seed/
+
+# Component gallery pictures, rendered on demand and not committed:
+# test_all_pages.sh's screenshots and `component-gallery -- reference`'s pages.
+samples/component-gallery/gallery-test-screenshots/
+samples/component-gallery/reference/

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Generates bibui-platform-wayland/Protocol/Generated from protocol XML.
+       A build-time tool, not shipped: run it when a protocol is added or the
+       installed wayland-protocols change, and check the output in. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>wayland-scanner</AssemblyName>
+    <RootNamespace>Bibui.WaylandScanner</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+</Project>

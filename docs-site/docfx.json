@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dotnet/docfx/main/schemas/docfx.schema.json",
+  "metadata": [
+    {
+      "src": [
+        {
+          "src": "..",
+          "files": [
+            "bibui/bibui.csproj",
+            "bibui-raster-skia/bibui-raster-skia.csproj",
+            "bibui-platform-silk/bibui-platform-silk.csproj",
+            "bibui-testing/bibui-testing.csproj"
+          ]
+        }
+      ],
+      "dest": "api",
+      "properties": { "Configuration": "Release" },
+      "namespaceLayout": "flattened",
+      "enumSortOrder": "declaringOrder"
+    }
+  ],
+  "build": {
+    "content": [
+      { "files": [ "index.md", "toc.yml", "api/**.yml" ] },
+      {
+        "src": "..",
+        "files": [ "docs/**.md", "docs/**/toc.yml" ],
+        "exclude": [ "docs/performance.md" ]
+      }
+    ],
+    "resource": [
+      { "src": "..", "files": [ "docs/**.png", "docs/**.svg", "samples/showcase/screenshots/*.png" ] }
+    ],
+    "output": "_site",
+    "template": [ "default", "modern", "template" ],
+    "globalMetadata": {
+      "_appName": "",
+      "_appTitle": "bibui",
+      "_appLogoPath": "docs/brand/bibui-logo.svg",
+      "_appFooter": "bibui is licensed under Apache-2.0.",
+      "_enableSearch": true,
+      "_disableContribution": true
+    }
+  }
+}

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Coverage-correctness tests for Bibui.Raster.Managed. No Skia: the reference is the geometry itself, supersampled. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Raster.Managed.Tests</AssemblyName>
+    <RootNamespace>Bibui.Raster.Managed.Tests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../src/Bibui.Raster.Managed.csproj" />
+  </ItemGroup>
+</Project>

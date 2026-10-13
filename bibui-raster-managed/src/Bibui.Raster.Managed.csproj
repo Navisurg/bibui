@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../../packaging/PublicPackage.props" />
+
+  <!--
+    bibui's managed CPU rasterizer core. No native dependencies and, in
+    particular, no SkiaSharp: this is what the raw Wayland host draws with. The
+    Skia comparisons live in ../bench, which may reference SkiaSharp.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Raster.Managed</AssemblyName>
+    <RootNamespace>Bibui.Raster.Managed</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>Bibui.Raster.Managed</PackageId>
+    <Description>A deterministic managed CPU rasterizer for bibui: analytic-coverage path fill, clips, layers and hairlines over premultiplied 32-bit pixels.</Description>
+    <PackageTags>$(PackageTags);rasterizer;2d;rendering;aot</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Bibui.Raster.Managed.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+</Project>

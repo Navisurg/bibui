@@ -1,0 +1,166 @@
+namespace Bibui.Text.FreeType
+{
+    public sealed class Font
+    {
+        public Bibui.Text.FreeType.FontData Data { get; }
+        public string Family { get; }
+        public int GlyphCount { get; }
+        public int UnitsPerEm { get; }
+        public int Weight { get; }
+        public uint GlyphIndex(int codepoint) { }
+        public bool HasGlyph(int codepoint) { }
+        public override string ToString() { }
+    }
+    public sealed class FontData
+    {
+        public FontData(System.ReadOnlySpan<byte> fontFile, string name = "") { }
+        public int Length { get; }
+        public string Name { get; }
+        public static Bibui.Text.FreeType.FontData InterRegular { get; }
+        public static Bibui.Text.FreeType.FontData InterSemiBold { get; }
+        protected override void Finalize() { }
+        public override string ToString() { }
+        public static Bibui.Text.FreeType.FontData FromEmbeddedResource(System.Reflection.Assembly assembly, string resourceName) { }
+    }
+    public readonly struct FontFeature : System.IEquatable<Bibui.Text.FreeType.FontFeature>
+    {
+        public FontFeature(string Tag, uint Value) { }
+        public string Tag { get; init; }
+        public uint Value { get; init; }
+    }
+    public readonly struct FontMetrics : System.IEquatable<Bibui.Text.FreeType.FontMetrics>
+    {
+        public FontMetrics(float Ascent, float Descent, float Leading) { }
+        public float Ascent { get; init; }
+        public float Descent { get; init; }
+        public float Leading { get; init; }
+    }
+    public sealed class FontStrike
+    {
+        public int CachedMaskCount { get; }
+        public Bibui.Text.FreeType.Font Font { get; }
+        public Bibui.Text.FreeType.FontMetrics Metrics { get; }
+        public float Size { get; }
+        public float Advance(uint glyph) { }
+        public void ClearMasks() { }
+        public Bibui.Text.FreeType.GlyphMask GetMask(uint glyph, int subpixelX) { }
+        public float Measure(System.ReadOnlySpan<char> text) { }
+        public float Measure(System.ReadOnlySpan<char> text, Bibui.Text.FreeType.ShapeOptions options) { }
+        public int Place(Bibui.Text.FreeType.GlyphRun run, float originX, float baselineY, System.Span<Bibui.Text.FreeType.PlacedGlyph> into) { }
+        public int Place(System.ReadOnlySpan<ushort> glyphs, System.ReadOnlySpan<System.Numerics.Vector2> positions, float originX, float baselineY, System.Span<Bibui.Text.FreeType.PlacedGlyph> into) { }
+        public Bibui.Text.FreeType.PlacedGlyph PlaceGlyph(uint glyph, float x, float y) { }
+        public void Shape(System.ReadOnlySpan<char> text, Bibui.Text.FreeType.GlyphRun into, Bibui.Text.FreeType.ShapeOptions? options = null) { }
+        public override string ToString() { }
+    }
+    public sealed class GlyphMask
+    {
+        public System.ReadOnlySpan<byte> Coverage { get; }
+        public int Height { get; }
+        public bool IsEmpty { get; }
+        public int Left { get; }
+        public int Top { get; }
+        public int Width { get; }
+    }
+    public sealed class GlyphRun
+    {
+        public GlyphRun() { }
+        public System.ReadOnlySpan<float> Advances { get; }
+        public System.ReadOnlySpan<int> Clusters { get; }
+        public int Count { get; }
+        public System.ReadOnlySpan<uint> Glyphs { get; }
+        public Bibui.Text.FreeType.FontStrike? Strike { get; }
+        public float Width { get; }
+        public System.ReadOnlySpan<float> XOffsets { get; }
+        public System.ReadOnlySpan<float> YOffsets { get; }
+        public void Clear() { }
+        public void GetPositions(float originX, float baselineY, System.Span<float> xs, System.Span<float> ys) { }
+    }
+    public enum MaskBlend
+    {
+        RasterPipeline = 0,
+        LegacyN32 = 1,
+    }
+    public static class MaskGamma
+    {
+        public const float Contrast = 0.5019608F;
+        public static System.ReadOnlySpan<byte> Table(Bibui.Text.FreeType.TextColor color) { }
+        public static System.ReadOnlySpan<byte> Table(byte r, byte g, byte b) { }
+    }
+    public readonly struct PixelClip : System.IEquatable<Bibui.Text.FreeType.PixelClip>
+    {
+        public PixelClip(int Left, int Top, int Right, int Bottom) { }
+        public int Bottom { get; init; }
+        public int Left { get; init; }
+        public int Right { get; init; }
+        public int Top { get; init; }
+        public Bibui.Text.FreeType.PixelClip Intersect(Bibui.Text.FreeType.PixelClip o) { }
+        public static Bibui.Text.FreeType.PixelClip Of(int width, int height) { }
+    }
+    public enum PixelOrder
+    {
+        Rgba = 0,
+        Bgra = 1,
+    }
+    public readonly ref struct PixelTarget
+    {
+        public readonly int Height;
+        public readonly Bibui.Text.FreeType.PixelOrder Order;
+        public readonly System.Span<byte> Pixels;
+        public readonly int Stride;
+        public readonly int Width;
+        public PixelTarget(System.Span<byte> pixels, int width, int height, int stride, Bibui.Text.FreeType.PixelOrder order = 0) { }
+    }
+    public readonly struct PlacedGlyph : System.IEquatable<Bibui.Text.FreeType.PlacedGlyph>
+    {
+        public PlacedGlyph(Bibui.Text.FreeType.GlyphMask Mask, int X, int Y) { }
+        public Bibui.Text.FreeType.GlyphMask Mask { get; init; }
+        public int X { get; init; }
+        public int Y { get; init; }
+    }
+    public sealed class ShapeOptions : System.IEquatable<Bibui.Text.FreeType.ShapeOptions>
+    {
+        public static readonly System.Collections.Generic.IReadOnlyList<Bibui.Text.FreeType.FontFeature> BaselineCompatibleFeatures;
+        public static readonly Bibui.Text.FreeType.ShapeOptions HarfBuzzBaselineCompatible;
+        public static readonly Bibui.Text.FreeType.ShapeOptions HarfBuzzDefault;
+        public static readonly Bibui.Text.FreeType.ShapeOptions Nominal;
+        public ShapeOptions(Bibui.Text.FreeType.ShapingMode Mode, System.Collections.Generic.IReadOnlyList<Bibui.Text.FreeType.FontFeature> Features) { }
+        public System.Collections.Generic.IReadOnlyList<Bibui.Text.FreeType.FontFeature> Features { get; init; }
+        public Bibui.Text.FreeType.ShapingMode Mode { get; init; }
+    }
+    public enum ShapingMode
+    {
+        Nominal = 0,
+        HarfBuzz = 1,
+    }
+    public readonly struct TextColor : System.IEquatable<Bibui.Text.FreeType.TextColor>
+    {
+        public TextColor(byte R, byte G, byte B, byte A = 255) { }
+        public byte A { get; init; }
+        public byte B { get; init; }
+        public byte G { get; init; }
+        public byte R { get; init; }
+        public static Bibui.Text.FreeType.TextColor FromArgb(uint argb) { }
+        public static Bibui.Text.FreeType.TextColor FromRgb(uint rgb) { }
+    }
+    public sealed class TextEngine : System.IDisposable
+    {
+        public TextEngine() { }
+        public Bibui.Text.FreeType.Font DefaultRegular { get; }
+        public Bibui.Text.FreeType.Font DefaultSemiBold { get; }
+        public string NativeVersions { get; }
+        public System.Collections.Generic.IReadOnlyCollection<Bibui.Text.FreeType.FontStrike> Strikes { get; }
+        public void ClearMasks() { }
+        public void Dispose() { }
+        public void DrawGlyphs(in Bibui.Text.FreeType.PixelTarget dst, Bibui.Text.FreeType.FontStrike strike, System.ReadOnlySpan<ushort> glyphs, System.ReadOnlySpan<System.Numerics.Vector2> positions, float x, float baselineY, Bibui.Text.FreeType.TextColor color, Bibui.Text.FreeType.PixelClip? clip = default, Bibui.Text.FreeType.MaskBlend blend = 1) { }
+        public void DrawRun(in Bibui.Text.FreeType.PixelTarget dst, Bibui.Text.FreeType.GlyphRun run, float x, float baselineY, Bibui.Text.FreeType.TextColor color, Bibui.Text.FreeType.PixelClip? clip = default, Bibui.Text.FreeType.MaskBlend blend = 1) { }
+        public float DrawText(in Bibui.Text.FreeType.PixelTarget dst, Bibui.Text.FreeType.FontStrike strike, System.ReadOnlySpan<char> text, float x, float baselineY, Bibui.Text.FreeType.TextColor color, Bibui.Text.FreeType.PixelClip? clip = default, Bibui.Text.FreeType.MaskBlend blend = 1, Bibui.Text.FreeType.ShapeOptions? options = null) { }
+        public Bibui.Text.FreeType.Font Load(Bibui.Text.FreeType.FontData data) { }
+        public Bibui.Text.FreeType.Font? Load(System.ReadOnlySpan<byte> fontFile) { }
+        public float Measure(Bibui.Text.FreeType.FontStrike strike, System.ReadOnlySpan<char> text) { }
+        public Bibui.Text.FreeType.FontMetrics Metrics(Bibui.Text.FreeType.FontStrike strike) { }
+        public Bibui.Text.FreeType.Font Register(string family, int weight, Bibui.Text.FreeType.FontData data) { }
+        public Bibui.Text.FreeType.Font Resolve(string? family, int weight) { }
+        public Bibui.Text.FreeType.FontStrike Strike(Bibui.Text.FreeType.Font font, float sizePx) { }
+        public Bibui.Text.FreeType.FontStrike Strike(string? family, int weight, float sizePx) { }
+    }
+}

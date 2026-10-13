@@ -1,0 +1,34 @@
+namespace Bibui.Platform.Wayland
+{
+    public sealed class WaylandHostOptions : System.IEquatable<Bibui.Platform.Wayland.WaylandHostOptions>
+    {
+        public WaylandHostOptions() { }
+        public string AppId { get; init; }
+        public int Buffers { get; init; }
+        public System.TimeSpan FrameWait { get; init; }
+        public int MinHeight { get; init; }
+        public int MinWidth { get; init; }
+    }
+    public sealed class WaylandPlatformHost : Bibui.Runtime.Platform.IPlatformHost
+    {
+        public WaylandPlatformHost(Bibui.Platform.Wayland.WaylandHostOptions? options = null) { }
+        public int FramebufferHeight { get; }
+        public int FramebufferWidth { get; }
+        public Bibui.KeyModifiers HeldModifiers { get; }
+        public bool IsClosing { get; }
+        public bool PacesFrames { get; }
+        public Bibui.Runtime.Platform.HostPresentation Presentation { get; }
+        public float Scale { get; }
+        public static bool IsSupported { get; }
+        public void Close() { }
+        public string? GetClipboardText() { }
+        public void Open(Bibui.Runtime.BibuiRuntime runtime, Bibui.Runtime.Platform.PlatformWindowOptions options) { }
+        public Bibui.Runtime.Platform.PresentTimings Present(Bibui.Runtime.BibuiRuntime runtime) { }
+        public void Run(System.Action iteration) { }
+        public void SetClipboardText(string text) { }
+        public void SetCursor(Bibui.Runtime.Platform.CursorShape shape) { }
+        public void Shutdown() { }
+        public void WaitEvents(System.Collections.Generic.List<Bibui.Runtime.Platform.WindowEvent> into) { }
+        public void Wake() { }
+    }
+}

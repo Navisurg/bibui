@@ -1,0 +1,1831 @@
+namespace Bibui
+{
+    public static class Arrange
+    {
+        public static T At<T>(this T node, float x, float y)
+            where T : Bibui.UiNode { }
+        public static void Centred(Bibui.UiNode parent, Bibui.UiNode node) { }
+        public static Bibui.Box CentredX(Bibui.UiNode node) { }
+        public static Bibui.Box CentredY(Bibui.UiNode node) { }
+        public static Bibui.Box Clipped(this Bibui.Box box) { }
+        public static Bibui.Box Column([System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<Bibui.Arrange.Item> items) { }
+        public static Bibui.Box Column(string? id, [System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<Bibui.Arrange.Item> items) { }
+        public static T FillX<T>(this T node, float share = 1)
+            where T : Bibui.UiNode { }
+        public static T FillY<T>(this T node, float share = 1)
+            where T : Bibui.UiNode { }
+        public static Bibui.Box Gap(Bibui.UiNode parent, float pixels) { }
+        public static T Padded<T>(this T node, Bibui.EdgeInsets padding)
+            where T : Bibui.UiNode { }
+        public static T Px<T>(this T node, float? width = default, float? height = default)
+            where T : Bibui.UiNode { }
+        public static Bibui.Box Row([System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<Bibui.Arrange.Item> items) { }
+        public static Bibui.Box Row(string? id, [System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<Bibui.Arrange.Item> items) { }
+        public static Bibui.Arrange.Item Space(float pixels) { }
+        public static Bibui.Arrange.Item Spring() { }
+        public static Bibui.Box Spring(Bibui.UiNode parent) { }
+        public static T Styled<T>(this T node, Bibui.Style style)
+            where T : Bibui.UiNode { }
+        public readonly struct Item
+        {
+            public static Bibui.Arrange.Item op_Implicit(Bibui.BibuiWidget widget) { }
+            public static Bibui.Arrange.Item op_Implicit(Bibui.UiNode node) { }
+        }
+    }
+    public enum BadgeVariant
+    {
+        Default = 0,
+        Primary = 1,
+        Success = 2,
+        Destructive = 3,
+        Outline = 4,
+    }
+    public sealed class BibuiRenderer
+    {
+        [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode(@"The default raster backend is loaded by name (Bibui.Raster.Skia), which trimming and Native AOT do not keep unless the app names one of its types. Pass the backend instead: new BibuiRuntime(new SkiaRasterBackend()) / new BibuiRenderer(new SkiaRasterBackend()).")]
+        public BibuiRenderer() { }
+        public BibuiRenderer(Bibui.Raster.IRasterBackend raster) { }
+        public bool IsAnimating { get; }
+        public Bibui.Raster.IRasterBackend Raster { get; }
+        public void Layout(Bibui.UiNode root, Bibui.SurfaceOptions surface, Bibui.Theming.ThemeTokens theme) { }
+        public void Record(Bibui.FrameRecord into, Bibui.UiNode root, Bibui.SurfaceOptions surface, Bibui.Theming.ThemeTokens theme, Bibui.FrameInput? input = null, Bibui.Raster.IRasterCanvas? paintTo = null) { }
+        public Bibui.Renderer.RenderOutput Render(Bibui.UiNode root, Bibui.SurfaceOptions surface, Bibui.Theming.ThemeTokens theme, Bibui.FrameInput? input = null) { }
+        public void RenderTo(Bibui.Raster.IRasterSurface target, Bibui.UiNode root, Bibui.SurfaceOptions surface, Bibui.Theming.ThemeTokens theme, Bibui.FrameInput? input = null) { }
+    }
+    public sealed class BibuiStr
+    {
+        public BibuiStr(int capacity) { }
+        public long Capacity { get; }
+        public long Length { get; }
+        public System.Span<byte> Str { get; }
+        public void AlignedResize(long newSize) { }
+        public System.ReadOnlyMemory<byte> AsMemory() { }
+        public void Grow() { }
+        public void ReplaceRange(System.ValueTuple<int, int> range, System.ReadOnlySpan<byte> replace) { }
+        public void Resize(long newSize) { }
+        public void Shrink() { }
+        public static Bibui.BibuiStr FromStrLit(System.ReadOnlySpan<byte> strLit) { }
+    }
+    public readonly struct BibuiWidget : System.IEquatable<Bibui.BibuiWidget>
+    {
+        public BibuiWidget(Bibui.UiNode Node, Bibui.Interaction Interaction) { }
+        public bool Clicked { get; }
+        public bool Hovering { get; }
+        public Bibui.Interaction Interaction { get; init; }
+        public Bibui.UiNode Node { get; init; }
+        public bool Pressed { get; }
+        public static Bibui.UiNode op_Implicit(Bibui.BibuiWidget widget) { }
+    }
+    public enum BorderLineStyle
+    {
+        Solid = 0,
+        Dashed = 1,
+    }
+    public sealed class Box : Bibui.UiNode
+    {
+        public Box() { }
+        public float ActiveT { get; }
+        public Bibui.InteractionKinds Claims { get; set; }
+        public Bibui.DrawCallback? Draw { get; init; }
+        public float HotT { get; }
+    }
+    public sealed class BoxShadow
+    {
+        public BoxShadow() { }
+        public float Blur { get; init; }
+        public Bibui.UiColor Color { get; init; }
+        public float OffsetX { get; init; }
+        public float OffsetY { get; init; }
+        public float Spread { get; init; }
+        public static Bibui.BoxShadow Elevation(float y = 10, float blur = 30, string color = "#00000073") { }
+        public static Bibui.BoxShadow Glow(Bibui.UiColor color, float blur = 40, float spread = 2) { }
+    }
+    public readonly struct CacheKey : System.IEquatable<Bibui.CacheKey>
+    {
+        public CacheKey(System.UInt128 Hash) { }
+        public System.UInt128 Hash { get; init; }
+        public static int Bits(float v) { }
+        public static Bibui.CacheKey Of([System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<int> parts, Bibui.CacheKey sub = default) { }
+        public static Bibui.CacheKey OfSpec(in Bibui.PaintSpec s, Bibui.CacheKey shader, Bibui.CacheKey mask, Bibui.CacheKey imageFilter, Bibui.CacheKey pathEffect) { }
+        public static Bibui.CacheKey OfString(string? s) { }
+    }
+    public readonly struct ColorStop : System.IEquatable<Bibui.ColorStop>
+    {
+        public ColorStop(float Offset, Bibui.UiColor Color) { }
+        public Bibui.UiColor Color { get; init; }
+        public float Offset { get; init; }
+    }
+    public enum ComponentSize
+    {
+        Sm = 0,
+        Md = 1,
+        Lg = 2,
+        Xl = 3,
+        Xxl = 4,
+    }
+    public delegate void DrawCallback(Bibui.DrawContext ctx);
+    public readonly ref struct DrawContext
+    {
+        public Bibui.Raster.IRasterBackend Backend { get; }
+        public Bibui.Raster.IRasterCanvas Canvas { get; }
+        public float Dt { get; }
+        public Bibui.RectF Logical { get; }
+        public Bibui.RectF Rect { get; }
+        public float Scale { get; }
+        public float Animate(Bibui.Renderer.AnimKey key, float target, float speed = 12, float epsilon = 0.01) { }
+        public float BlockHeight(int lines, float fontSize, string? family = null, int weight = 400) { }
+        public void BlurBackdrop(float x, float y, float w, float h, float sigma) { }
+        public void DrawArc(float cx, float cy, float radius, float strokeWidth, Bibui.Rgba color, float startAngle = -90, float sweepAngle = 270) { }
+        public void DrawArc(float cx, float cy, float radius, float strokeWidth, System.ReadOnlySpan<char> color, float startAngle = -90, float sweepAngle = 270) { }
+        public void DrawBitmap(byte[] rgbaBytes, int srcWidth, int srcHeight, float destX, float destY, float destW, float destH) { }
+        public void DrawCheckMark(float x, float y, float width, float height, Bibui.Rgba strokeColor, float strokeWidth) { }
+        public void DrawCheckMark(float x, float y, float width, float height, System.ReadOnlySpan<char> strokeColor, float strokeWidth) { }
+        public void DrawEdge(float x1, float y1, float x2, float y2, float width, Bibui.Rgba color, bool dashed = false) { }
+        public void DrawEdge(float x1, float y1, float x2, float y2, float width, System.ReadOnlySpan<char> color, bool dashed = false) { }
+        public void DrawFilledPath([System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ReadOnlySpan<System.ValueTuple<float, float>> points, float baselineY, Bibui.Rgba fillColor) { }
+        public void DrawFilledPath([System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ReadOnlySpan<System.ValueTuple<float, float>> points, float baselineY, System.ReadOnlySpan<char> fillColor) { }
+        public void DrawFilledPathGradient([System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ReadOnlySpan<System.ValueTuple<float, float>> points, float plotTopY, float baselineY, Bibui.Rgba color) { }
+        public void DrawFilledPathGradient([System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ReadOnlySpan<System.ValueTuple<float, float>> points, float plotTopY, float baselineY, System.ReadOnlySpan<char> color) { }
+        public void DrawIcon(string? iconName, float cx, float cy, float size, Bibui.Rgba color) { }
+        public void DrawIcon(string? iconName, float cx, float cy, float size, System.ReadOnlySpan<char> color) { }
+        public void DrawImage(Bibui.Raster.RasterImage image, Bibui.RectF dest, in Bibui.Raster.RasterPaint paint) { }
+        public void DrawLine(float x1, float y1, float x2, float y2, in Bibui.Raster.RasterPaint paint) { }
+        public void DrawPath(Bibui.Raster.RasterPath path, in Bibui.Raster.RasterPaint paint) { }
+        public void DrawPoints(Bibui.Raster.PointMode mode, System.ReadOnlySpan<System.Numerics.Vector2> points, in Bibui.Raster.RasterPaint paint) { }
+        public void DrawPolyline([System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ReadOnlySpan<System.ValueTuple<float, float>> points, Bibui.Rgba color, float strokeWidth) { }
+        public void DrawPolyline([System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ReadOnlySpan<System.ValueTuple<float, float>> points, System.ReadOnlySpan<char> color, float strokeWidth) { }
+        public void DrawRRect(float x, float y, float w, float h, float radius, Bibui.Rgba? fillColor, Bibui.Rgba? strokeColor, float? strokeWidth) { }
+        public void DrawRRect(float x, float y, float w, float h, float radius, System.ReadOnlySpan<char> fillColor = default, System.ReadOnlySpan<char> strokeColor = default, float? strokeWidth = default) { }
+        public void DrawRRectGradient(float x, float y, float w, float h, float radius, [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "Stop",
+                "Color"})] System.Collections.Generic.IReadOnlyList<System.ValueTuple<float, string>> stops, [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ValueTuple<float, float> start, [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ValueTuple<float, float> end, Bibui.Rgba? strokeColor, float? strokeWidth, Bibui.GradientType type) { }
+        public void DrawRRectGradient(float x, float y, float w, float h, float radius, [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "Stop",
+                "Color"})] System.Collections.Generic.IReadOnlyList<System.ValueTuple<float, string>> stops, [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ValueTuple<float, float> start, [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ValueTuple<float, float> end, System.ReadOnlySpan<char> strokeColor = default, float? strokeWidth = default, Bibui.GradientType type = 0) { }
+        public void DrawRoundRect(Bibui.RectF rect, float radius, Bibui.Raster.RasterPaint? fill = default, Bibui.Raster.RasterPaint? stroke = default) { }
+        public void DrawShadow(float x, float y, float w, float h, float radius, float offsetX, float offsetY, float blur, float spread, Bibui.Rgba color) { }
+        public void DrawShadow(float x, float y, float w, float h, float radius, float offsetX, float offsetY, float blur, float spread, System.ReadOnlySpan<char> color) { }
+        public void DrawVerticalLine(float x, float y1, float y2, Bibui.Rgba color, float strokeWidth = 1) { }
+        public void DrawVerticalLine(float x, float y1, float y2, System.ReadOnlySpan<char> color, float strokeWidth = 1) { }
+        public Bibui.Raster.RasterPaint Fill(Bibui.Rgba color) { }
+        public Bibui.TextMetrics FontMetrics(float size, string? family = null, int weight = 400) { }
+        public float LineBox(float fontSize, string? family = null, int weight = 400) { }
+        public Bibui.Raster.RasterShader LinearGradient(System.Numerics.Vector2 start, System.Numerics.Vector2 end, System.ReadOnlySpan<Bibui.Rgba> colors, System.ReadOnlySpan<float> stops) { }
+        public Bibui.Raster.RasterPaint Paint(in Bibui.PaintSpec spec, Bibui.Raster.RasterShader? shader = null, float blurSigma = 0, float imageBlurSigma = 0, Bibui.Raster.DashPattern? dash = default) { }
+        public Bibui.Raster.RasterPath Path(Bibui.CacheKey key, System.Action<Bibui.Raster.RasterPath> build) { }
+        public Bibui.Raster.RasterPath Path<TArg>(Bibui.CacheKey key, TArg arg, System.Action<TArg, Bibui.Raster.RasterPath> build) { }
+        public Bibui.RectF Physical(float x, float y, float w, float h) { }
+        public void PopClip() { }
+        public void PopOpacityLayer() { }
+        public void PopScale() { }
+        public void PopTranslation() { }
+        public void PushClip(Bibui.RectF rect) { }
+        public void PushClip(float x, float y, float w, float h) { }
+        public void PushOpacityLayer(float opacity) { }
+        public void PushScale(float originX, float originY, float scale) { }
+        public void PushTranslation(float dx, float dy) { }
+        public Bibui.Raster.RasterShader RadialGradient(System.Numerics.Vector2 centre, float radius, System.ReadOnlySpan<Bibui.Rgba> colors, System.ReadOnlySpan<float> stops) { }
+        public float Sawtooth(Bibui.Renderer.AnimKey key, float periodSeconds = 1) { }
+        public Bibui.Raster.RasterPaint Stroke(Bibui.Rgba color, float width) { }
+        public static Bibui.Rgba Color(System.ReadOnlySpan<char> hex) { }
+        public static float LineAdvance(float fontSize) { }
+    }
+    [System.Flags]
+    public enum DrawFlags
+    {
+        None = 0,
+        Border = 1,
+        HotEffects = 2,
+        ActiveEffects = 4,
+        Background = 8,
+    }
+    public sealed class EdgeBorder
+    {
+        public EdgeBorder() { }
+        public EdgeBorder(float width, Bibui.UiColor color, Bibui.BorderLineStyle lineStyle = 0) { }
+        public Bibui.UiColor Color { get; init; }
+        public Bibui.BorderLineStyle LineStyle { get; init; }
+        public float Width { get; init; }
+    }
+    public readonly struct EdgeInsets : System.IEquatable<Bibui.EdgeInsets>
+    {
+        public EdgeInsets(float Top, float Right, float Bottom, float Left) { }
+        public float Bottom { get; init; }
+        public float Left { get; init; }
+        public float Right { get; init; }
+        public float Top { get; init; }
+        public static Bibui.EdgeInsets Zero { get; }
+        public static Bibui.EdgeInsets All(float value) { }
+        public static Bibui.EdgeInsets Symmetric(float horizontal, float vertical) { }
+    }
+    public enum FilterQuality
+    {
+        None = 0,
+        Low = 1,
+        Medium = 2,
+        High = 3,
+    }
+    public readonly struct Font : System.IEquatable<Bibui.Font>
+    {
+        public Font(float Size, string? Family, int Weight, float Scale) { }
+        public string? Family { get; init; }
+        public float Scale { get; init; }
+        public float Size { get; init; }
+        public int Weight { get; init; }
+    }
+    public readonly struct FontSize : System.IEquatable<Bibui.FontSize>
+    {
+        public Bibui.FontSize Times(float factor, Bibui.Theming.ThemeTokens theme) { }
+        public static Bibui.FontSize Px(float pixels) { }
+        public static Bibui.FontSize op_Implicit(Bibui.ComponentSize step) { }
+    }
+    public enum FontSlot
+    {
+        Body = 0,
+        Display = 1,
+        Heading = 2,
+        Mono = 3,
+    }
+    public enum FontWeight
+    {
+        Regular = 0,
+        Bold = 1,
+    }
+    public sealed class Fonts : System.IDisposable
+    {
+        public void Dispose() { }
+        public float LineAdvance(in Bibui.Font font) { }
+        public float LineHeight(in Bibui.Font font) { }
+        public float Measure(System.ReadOnlySpan<byte> utf8, in Bibui.Font font) { }
+        public int OffsetAt(System.ReadOnlySpan<byte> utf8, in Bibui.Font font, float x) { }
+        public Bibui.TextLine? Wrap(System.ReadOnlySpan<byte> utf8, in Bibui.Font font, float width, Bibui.TextWrap wrap = 0) { }
+    }
+    public sealed class FrameInput : System.IEquatable<Bibui.FrameInput>
+    {
+        public static readonly Bibui.FrameInput None;
+        public FrameInput() { }
+        public float Dt { get; init; }
+    }
+    public sealed class FrameRecord
+    {
+        public FrameRecord() { }
+        public Bibui.Rgba Background { get; }
+        public int Height { get; }
+        public bool Unsigned { get; }
+        public int Width { get; }
+        public void Replay(Bibui.Raster.IRasterSurface target, System.Collections.Generic.IReadOnlyList<Bibui.Raster.PixelRect>? rects) { }
+        public void Settle(System.Collections.Generic.List<Bibui.Raster.PixelRect> rects, int maxRects = 8) { }
+        public static long AreaOf(System.Collections.Generic.IReadOnlyList<Bibui.Raster.PixelRect> rects) { }
+    }
+    public sealed class Gradient
+    {
+        public Gradient() { }
+        [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})]
+        public System.ValueTuple<float, float> End { get; init; }
+        [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})]
+        public System.ValueTuple<float, float> Start { get; init; }
+        public System.Collections.Generic.IReadOnlyList<Bibui.ColorStop> Stops { get; init; }
+        public Bibui.GradientType Type { get; init; }
+        public static Bibui.Gradient Diagonal(params Bibui.ColorStop[] stops) { }
+        public static Bibui.Gradient Horizontal(params Bibui.ColorStop[] stops) { }
+        public static Bibui.Gradient Linear(Bibui.UiColor from, Bibui.UiColor to) { }
+        public static Bibui.Gradient Radial([System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ValueTuple<float, float> center, [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "X",
+                "Y"})] System.ValueTuple<float, float> edge, params Bibui.ColorStop[] stops) { }
+        public static Bibui.Gradient Vertical(params Bibui.ColorStop[] stops) { }
+    }
+    public enum GradientType
+    {
+        Linear = 0,
+        Radial = 1,
+    }
+    public sealed class Icon : Bibui.UiComponent
+    {
+        public Icon() { }
+        public Bibui.UiColor? Color { get; set; }
+        public string Name { get; set; }
+        public Bibui.FontSize Size { get; set; }
+        public static bool IsKnown(string? name) { }
+    }
+    public struct Interaction : System.IEquatable<Bibui.Interaction>
+    {
+        public int ClickCount { get; set; }
+        public bool Clicked { get; }
+        public float DragDeltaX { get; set; }
+        public float DragDeltaY { get; set; }
+        public float DragStartX { get; set; }
+        public float DragStartY { get; set; }
+        public bool Dragging { get; set; }
+        public bool Hovering { get; set; }
+        public bool MiddleDragging { get; set; }
+        public bool MiddlePressed { get; set; }
+        public bool MiddleReleased { get; set; }
+        public Bibui.KeyModifiers Modifiers { get; set; }
+        public bool None { get; }
+        public int PressCount { get; set; }
+        public bool Pressed { get; set; }
+        public bool Released { get; set; }
+        public bool RightDragging { get; set; }
+        public bool RightPressed { get; set; }
+        public bool RightReleased { get; set; }
+        public float ScrollX { get; set; }
+        public float ScrollY { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
+    }
+    [System.Flags]
+    public enum InteractionKinds
+    {
+        None = 0,
+        LeftPress = 1,
+        RightPress = 2,
+        MiddlePress = 4,
+        ViewScrollX = 8,
+        ViewScrollY = 16,
+        Disabled = 32,
+        ClampX = 64,
+        ClampY = 128,
+        Clip = 256,
+        Scroll = 512,
+        Press = 7,
+        ViewScroll = 24,
+        Clamp = 192,
+        All = 543,
+    }
+    public enum Key
+    {
+        Unknown = -1,
+        Space = 32,
+        Apostrophe = 39,
+        Comma = 44,
+        Minus = 45,
+        Period = 46,
+        Slash = 47,
+        Number0 = 48,
+        D0 = 48,
+        Number1 = 49,
+        Number2 = 50,
+        Number3 = 51,
+        Number4 = 52,
+        Number5 = 53,
+        Number6 = 54,
+        Number7 = 55,
+        Number8 = 56,
+        Number9 = 57,
+        Semicolon = 59,
+        Equal = 61,
+        A = 65,
+        B = 66,
+        C = 67,
+        D = 68,
+        E = 69,
+        F = 70,
+        G = 71,
+        H = 72,
+        I = 73,
+        J = 74,
+        K = 75,
+        L = 76,
+        M = 77,
+        N = 78,
+        O = 79,
+        P = 80,
+        Q = 81,
+        R = 82,
+        S = 83,
+        T = 84,
+        U = 85,
+        V = 86,
+        W = 87,
+        X = 88,
+        Y = 89,
+        Z = 90,
+        LeftBracket = 91,
+        BackSlash = 92,
+        RightBracket = 93,
+        GraveAccent = 96,
+        World1 = 161,
+        World2 = 162,
+        Escape = 256,
+        Enter = 257,
+        Tab = 258,
+        Backspace = 259,
+        Insert = 260,
+        Delete = 261,
+        Right = 262,
+        Left = 263,
+        Down = 264,
+        Up = 265,
+        PageUp = 266,
+        PageDown = 267,
+        Home = 268,
+        End = 269,
+        CapsLock = 280,
+        ScrollLock = 281,
+        NumLock = 282,
+        PrintScreen = 283,
+        Pause = 284,
+        F1 = 290,
+        F2 = 291,
+        F3 = 292,
+        F4 = 293,
+        F5 = 294,
+        F6 = 295,
+        F7 = 296,
+        F8 = 297,
+        F9 = 298,
+        F10 = 299,
+        F11 = 300,
+        F12 = 301,
+        F13 = 302,
+        F14 = 303,
+        F15 = 304,
+        F16 = 305,
+        F17 = 306,
+        F18 = 307,
+        F19 = 308,
+        F20 = 309,
+        F21 = 310,
+        F22 = 311,
+        F23 = 312,
+        F24 = 313,
+        F25 = 314,
+        Keypad0 = 320,
+        Keypad1 = 321,
+        Keypad2 = 322,
+        Keypad3 = 323,
+        Keypad4 = 324,
+        Keypad5 = 325,
+        Keypad6 = 326,
+        Keypad7 = 327,
+        Keypad8 = 328,
+        Keypad9 = 329,
+        KeypadDecimal = 330,
+        KeypadDivide = 331,
+        KeypadMultiply = 332,
+        KeypadSubtract = 333,
+        KeypadAdd = 334,
+        KeypadEnter = 335,
+        KeypadEqual = 336,
+        ShiftLeft = 340,
+        ControlLeft = 341,
+        AltLeft = 342,
+        SuperLeft = 343,
+        ShiftRight = 344,
+        ControlRight = 345,
+        AltRight = 346,
+        SuperRight = 347,
+        Menu = 348,
+    }
+    [System.Flags]
+    public enum KeyModifiers
+    {
+        None = 0,
+        Shift = 1,
+        Ctrl = 2,
+        Alt = 4,
+        Super = 8,
+    }
+    public enum LayoutAxis
+    {
+        X = 0,
+        Y = 1,
+    }
+    public sealed class LayoutException : System.Exception
+    {
+        public LayoutException(string message) { }
+    }
+    public enum MouseButton
+    {
+        Unknown = -1,
+        Left = 0,
+        Right = 1,
+        Middle = 2,
+        Button4 = 3,
+        Button5 = 4,
+        Button6 = 5,
+        Button7 = 6,
+        Button8 = 7,
+        Button9 = 8,
+        Button10 = 9,
+        Button11 = 10,
+        Button12 = 11,
+    }
+    public readonly struct PaintSpec : System.IEquatable<Bibui.PaintSpec>
+    {
+        public Bibui.Rgba Color { get; init; }
+        public Bibui.FilterQuality FilterQuality { get; init; }
+        public bool IsAntialias { get; init; }
+        public Bibui.StrokeCap StrokeCap { get; init; }
+        public Bibui.StrokeJoin StrokeJoin { get; init; }
+        public float StrokeWidth { get; init; }
+        public Bibui.PaintStyle Style { get; init; }
+        public static Bibui.PaintSpec Fill(Bibui.Rgba color) { }
+        public static Bibui.PaintSpec Stroke(Bibui.Rgba color, float width) { }
+    }
+    public enum PaintStyle
+    {
+        Fill = 0,
+        Stroke = 1,
+        StrokeAndFill = 2,
+    }
+    public readonly struct RectF : System.IEquatable<Bibui.RectF>
+    {
+        public RectF(float Left, float Top, float Right, float Bottom) { }
+        public float Bottom { get; init; }
+        public float Height { get; }
+        public float Left { get; init; }
+        public float MidX { get; }
+        public float MidY { get; }
+        public float Right { get; init; }
+        public float Top { get; init; }
+        public float Width { get; }
+        public static Bibui.RectF FromXywh(float x, float y, float width, float height) { }
+    }
+    public readonly struct Rgba : System.IEquatable<Bibui.Rgba>
+    {
+        public Rgba(uint argb) { }
+        public Rgba(byte r, byte g, byte b, byte a = 255) { }
+        public byte A { get; }
+        public uint Argb { get; }
+        public byte B { get; }
+        public byte G { get; }
+        public byte R { get; }
+        public static Bibui.Rgba Black { get; }
+        public static Bibui.Rgba Transparent { get; }
+        public static Bibui.Rgba White { get; }
+        public override string ToString() { }
+        public Bibui.Rgba WithAlpha(byte a) { }
+        public static Bibui.Rgba Parse(System.ReadOnlySpan<char> hex) { }
+    }
+    public readonly struct SemanticSize : System.IEquatable<Bibui.SemanticSize>
+    {
+        public SemanticSize(Bibui.SizeKind Kind, float Value, float Strictness) { }
+        public Bibui.SizeKind Kind { get; init; }
+        public float Strictness { get; init; }
+        public float Value { get; init; }
+        public static Bibui.SemanticSize ChildrenSum(float strictness = 1) { }
+        public static Bibui.SemanticSize ParentPct(float fraction, float strictness = 0) { }
+        public static Bibui.SemanticSize Pixels(float value, float strictness = 1) { }
+        public static Bibui.SemanticSize Text(float padding = 0, float strictness = 1) { }
+    }
+    public enum SizeKind
+    {
+        Null = 0,
+        Pixels = 1,
+        Text = 2,
+        ParentPct = 3,
+        ChildrenSum = 4,
+    }
+    public sealed class Spinner : Bibui.UiComponent
+    {
+        public Spinner() { }
+        public Bibui.UiColor? Color { get; set; }
+        public float? Diameter { get; set; }
+        public Bibui.ComponentSize Size { get; set; }
+        public float? StrokeWidth { get; set; }
+        public Bibui.UiColor? TrackColor { get; set; }
+    }
+    public enum StrokeCap
+    {
+        Butt = 0,
+        Round = 1,
+        Square = 2,
+    }
+    public enum StrokeJoin
+    {
+        Miter = 0,
+        Round = 1,
+        Bevel = 2,
+    }
+    public sealed class Style
+    {
+        public Style() { }
+        public float? BackdropBlur { get; set; }
+        public Bibui.UiColor? BackgroundColor { get; set; }
+        public Bibui.Gradient? BackgroundGradient { get; set; }
+        public Bibui.EdgeBorder? BorderBottom { get; set; }
+        public Bibui.UiColor? BorderColor { get; set; }
+        public Bibui.EdgeBorder? BorderLeft { get; set; }
+        public Bibui.EdgeBorder? BorderRight { get; set; }
+        public Bibui.EdgeBorder? BorderTop { get; set; }
+        public float BorderWidth { get; set; }
+        public float CornerRadius { get; set; }
+        public Bibui.DrawFlags Draw { get; set; }
+        public Bibui.UiColor? HoverBackgroundColor { get; set; }
+        public Bibui.UiColor? HoverBorderColor { get; set; }
+        public float Opacity { get; set; }
+        public Bibui.EdgeInsets Padding { get; set; }
+        public Bibui.BoxShadow? Shadow { get; set; }
+        public void Clear() { }
+    }
+    public sealed class SurfaceOptions
+    {
+        public SurfaceOptions() { }
+        public int Height { get; init; }
+        public float ScaleFactor { get; init; }
+        public int Width { get; init; }
+        public static int LogicalSize(int physical, float scale) { }
+        public static int PhysicalSize(int logical, float scale) { }
+    }
+    public sealed class Text : Bibui.UiComponent
+    {
+        public Bibui.UiColor? Color { get; }
+        public System.ReadOnlyMemory<byte> Content { get; }
+        public Bibui.FontSlot Family { get; }
+        public Bibui.FontSize Size { get; set; }
+        public Bibui.FontWeight Weight { get; }
+    }
+    public enum TextColor
+    {
+        Primary = 0,
+        Secondary = 1,
+        Disabled = 2,
+        Accent = 3,
+        AccentForeground = 4,
+    }
+    public sealed class TextLine
+    {
+        public int End { get; }
+        public Bibui.TextLine? Next { get; }
+        public Bibui.TextLine? Prev { get; }
+        public int Start { get; }
+    }
+    public readonly struct TextMetrics : System.IEquatable<Bibui.TextMetrics>
+    {
+        public TextMetrics(float Ascent, float Descent, float Leading) { }
+        public float Ascent { get; init; }
+        public float Descent { get; init; }
+        public float Leading { get; init; }
+    }
+    public enum TextWrap
+    {
+        Words = 0,
+        Characters = 1,
+    }
+    public readonly struct UiColor : System.IEquatable<Bibui.UiColor>
+    {
+        public static Bibui.UiColor Accent { get; }
+        public static Bibui.UiColor AccentActive { get; }
+        public static Bibui.UiColor AccentForeground { get; }
+        public static Bibui.UiColor AccentHover { get; }
+        public static Bibui.UiColor Background { get; }
+        public static Bibui.UiColor Border { get; }
+        public static Bibui.UiColor BorderFocus { get; }
+        public static Bibui.UiColor BorderHover { get; }
+        public static Bibui.UiColor Destructive { get; }
+        public static Bibui.UiColor DestructiveForeground { get; }
+        public static Bibui.UiColor Success { get; }
+        public static Bibui.UiColor SuccessBg { get; }
+        public static Bibui.UiColor SuccessForeground { get; }
+        public static Bibui.UiColor Surface { get; }
+        public static Bibui.UiColor SurfaceRaised { get; }
+        public static Bibui.UiColor SurfaceRaisedActive { get; }
+        public static Bibui.UiColor SurfaceRaisedHover { get; }
+        public static Bibui.UiColor TextDisabled { get; }
+        public static Bibui.UiColor TextPrimary { get; }
+        public static Bibui.UiColor TextSecondary { get; }
+        public bool Equals(Bibui.UiColor other) { }
+        public override bool Equals(object? obj) { }
+        public override int GetHashCode() { }
+        public string Resolve(Bibui.Theming.ColorTokens colors) { }
+        [return: System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "R",
+                "G",
+                "B",
+                "A"})]
+        public System.ValueTuple<byte, byte, byte, byte> ResolveColor(Bibui.Theming.ColorTokens colors) { }
+        public Bibui.UiColor WithAlpha(float a) { }
+        public static Bibui.UiColor Hex(string hex) { }
+        public static Bibui.UiColor Rgb(byte r, byte g, byte b) { }
+        public static Bibui.UiColor Rgba(byte r, byte g, byte b, byte a = 255) { }
+        public static Bibui.UiColor Token(System.Func<Bibui.Theming.ColorTokens, string> selector) { }
+        public static Bibui.UiColor op_Implicit(Bibui.TextColor role) { }
+        public static Bibui.UiColor op_Implicit(string hex) { }
+    }
+    public abstract class UiComponent : Bibui.UiNode
+    {
+        protected UiComponent() { }
+    }
+    public abstract class UiNode
+    {
+        protected UiNode() { }
+        public bool AllowOverflowX { get; set; }
+        public bool AllowOverflowY { get; set; }
+        public Bibui.LayoutAxis ChildLayoutAxis { get; set; }
+        public System.Numerics.Vector2 ContentSize { get; set; }
+        public System.Numerics.Vector2 Extent { get; set; }
+        public Bibui.UiNode? FirstChild { get; }
+        public System.Numerics.Vector2 FixedPosition { get; set; }
+        public System.Numerics.Vector2 FixedSize { get; }
+        public bool FloatingX { get; set; }
+        public bool FloatingY { get; set; }
+        public string? Id { get; init; }
+        public Bibui.UiNode? LastChild { get; }
+        public Bibui.UiNode? Next { get; }
+        public Bibui.UiNode? Parent { get; }
+        public Bibui.UiNode? Prev { get; }
+        public System.Numerics.Vector2 Rect { get; set; }
+        public Bibui.SemanticSize SizeX { get; set; }
+        public Bibui.SemanticSize SizeY { get; set; }
+        public Bibui.Style Style { get; set; }
+        public System.Numerics.Vector2 TargetViewOffset { get; set; }
+        public System.Numerics.Vector2 ViewOffset { get; set; }
+        public static void PushIntoParent(Bibui.UiNode parent, Bibui.UiNode child) { }
+    }
+}
+namespace Bibui.Imaging
+{
+    public enum AlphaMode
+    {
+        Straight = 0,
+        Premultiplied = 1,
+    }
+    public enum ChannelOrder
+    {
+        Rgba = 0,
+        Bgra = 1,
+    }
+    public static class Png
+    {
+        public static Bibui.Imaging.RgbaImage Decode(System.ReadOnlySpan<byte> png) { }
+        public static Bibui.Imaging.RgbaImage DecodeFile(string path) { }
+        public static byte[] Encode(Bibui.Imaging.RgbaImage image) { }
+        public static void Encode(Bibui.Imaging.RgbaImage image, System.IO.Stream output) { }
+        public static byte[] Encode(System.ReadOnlySpan<byte> pixels, int width, int height, int stride, Bibui.Imaging.ChannelOrder order, Bibui.Imaging.AlphaMode alpha) { }
+        public static void Encode(System.ReadOnlySpan<byte> pixels, int width, int height, int stride, Bibui.Imaging.ChannelOrder order, Bibui.Imaging.AlphaMode alpha, System.IO.Stream output) { }
+        public static void EncodeFile(Bibui.Imaging.RgbaImage image, string path) { }
+        public static bool IsPng(System.ReadOnlySpan<byte> data) { }
+    }
+    public sealed class PngException : System.FormatException
+    {
+        public PngException(string message) { }
+    }
+    public sealed class RgbaImage
+    {
+        public const int BytesPerPixel = 4;
+        public RgbaImage(int width, int height, Bibui.Imaging.AlphaMode alpha = 0) { }
+        public RgbaImage(System.Memory<byte> pixels, int width, int height, int stride, Bibui.Imaging.AlphaMode alpha = 0) { }
+        public Bibui.Imaging.AlphaMode Alpha { get; }
+        public int Height { get; }
+        public System.Memory<byte> Memory { get; }
+        public System.Span<byte> Pixels { get; }
+        public int Stride { get; }
+        public int Width { get; }
+        public Bibui.Imaging.RgbaImage Clone() { }
+        public System.Span<byte> Row(int y) { }
+        public Bibui.Imaging.RgbaImage View(int x, int y, int width, int height) { }
+        public static Bibui.Imaging.RgbaImage Wrap(nint pixels, int width, int height, int stride, Bibui.Imaging.AlphaMode alpha) { }
+    }
+}
+namespace Bibui.Raster
+{
+    public readonly struct DashPattern : System.IEquatable<Bibui.Raster.DashPattern>
+    {
+        public DashPattern(float On, float Off, float Phase = 0) { }
+        public float Off { get; init; }
+        public float On { get; init; }
+        public float Phase { get; init; }
+    }
+    public interface IPathBuilder
+    {
+        void AddArc(Bibui.RectF oval, float startAngle, float sweepAngle);
+        void ArcTo(float rx, float ry, float xAxisRotate, bool largeArc, bool sweep, float x, float y);
+        void Close();
+        void CubicTo(float x1, float y1, float x2, float y2, float x3, float y3);
+        void LineTo(float x, float y);
+        void MoveTo(float x, float y);
+        void QuadTo(float x1, float y1, float x2, float y2);
+    }
+    public interface IRasterBackend : System.IDisposable
+    {
+        Bibui.Raster.RasterTypeface DefaultTypeface { get; }
+        string Name { get; }
+        Bibui.Raster.RasterImage CreateImage(System.ReadOnlySpan<byte> rgba, int width, int height);
+        Bibui.Raster.RasterPath CreatePath();
+        Bibui.Raster.IRasterSurface CreateSurface(in Bibui.Raster.RasterPixels pixels);
+        Bibui.Raster.IRasterSurface CreateSurface(int width, int height);
+        Bibui.Raster.RasterImage? DecodeImage(System.ReadOnlySpan<byte> encoded);
+        byte[] EncodePng(System.ReadOnlySpan<byte> bgraPremul, int width, int height);
+        void EndFrame();
+        Bibui.TextMetrics GetMetrics(in Bibui.Raster.RasterFont font);
+        Bibui.Raster.RasterTypeface? LoadTypeface(System.ReadOnlySpan<byte> data);
+        Bibui.Raster.RasterTypeface? MatchCharacter(int codepoint, int weight);
+        Bibui.Raster.RasterTypeface? MatchFamily(string family, int weight);
+        float MeasureText(in Bibui.Raster.RasterFont font, System.ReadOnlySpan<byte> utf8);
+        float MeasureText(in Bibui.Raster.RasterFont font, string text);
+        Bibui.Raster.ShapedRun ShapeText(in Bibui.Raster.RasterFont font, string text);
+    }
+    public interface IRasterCanvas
+    {
+        System.Numerics.Matrix3x2 TotalMatrix { get; }
+        void Clear(Bibui.Rgba color);
+        void ClipRect(Bibui.RectF rect);
+        void DrawBackdropBlur(Bibui.Raster.PixelRect region, Bibui.RectF clip, float sigma);
+        void DrawGlyphRun(System.ReadOnlySpan<ushort> glyphs, System.ReadOnlySpan<System.Numerics.Vector2> positions, float x, float baselineY, in Bibui.Raster.RasterFont font, Bibui.Rgba color);
+        void DrawImage(Bibui.Raster.RasterImage image, Bibui.RectF dest, in Bibui.Raster.RasterPaint paint);
+        void DrawLine(float x0, float y0, float x1, float y1, in Bibui.Raster.RasterPaint paint);
+        void DrawPath(Bibui.Raster.RasterPath path, in Bibui.Raster.RasterPaint paint);
+        void DrawPixels(System.ReadOnlySpan<byte> rgba, int width, int height, Bibui.RectF dest, in Bibui.Raster.RasterPaint paint);
+        void DrawPoints(Bibui.Raster.PointMode mode, System.ReadOnlySpan<System.Numerics.Vector2> points, in Bibui.Raster.RasterPaint paint);
+        void DrawRoundRect(Bibui.RectF rect, float rx, float ry, in Bibui.Raster.RasterPaint paint);
+        float DrawText(System.ReadOnlySpan<byte> utf8, float x, float baselineY, in Bibui.Raster.RasterFont font, Bibui.Rgba color);
+        float DrawText(string text, float x, float baselineY, in Bibui.Raster.RasterFont font, Bibui.Rgba color);
+        void Restore();
+        void Save();
+        void SaveLayerAlpha(byte alpha);
+        void Scale(float sx, float sy);
+        void SetMatrix(in System.Numerics.Matrix3x2 matrix);
+        void Translate(float dx, float dy);
+    }
+    public interface IRasterSurface : System.IDisposable
+    {
+        Bibui.Raster.IRasterCanvas Canvas { get; }
+        int Height { get; }
+        int Width { get; }
+        bool ReadPixels(System.Span<byte> bgraPremul, int width, int height);
+    }
+    public interface IRecordingCanvas : Bibui.Raster.IRasterCanvas
+    {
+        void Defer(System.Action<Bibui.Raster.IRasterCanvas> draw);
+    }
+    public readonly struct PixelRect : System.IEquatable<Bibui.Raster.PixelRect>
+    {
+        public PixelRect(int Left, int Top, int Right, int Bottom) { }
+        public int Bottom { get; init; }
+        public int Height { get; }
+        public int Left { get; init; }
+        public int Right { get; init; }
+        public int Top { get; init; }
+        public int Width { get; }
+    }
+    public enum PointMode
+    {
+        Points = 0,
+        Lines = 1,
+        Polygon = 2,
+    }
+    public static class RasterBackends
+    {
+        public const string DefaultProvider = "Bibui.Raster.Skia";
+        [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode(@"The default raster backend is loaded by name (Bibui.Raster.Skia), which trimming and Native AOT do not keep unless the app names one of its types. Pass the backend instead: new BibuiRuntime(new SkiaRasterBackend()) / new BibuiRenderer(new SkiaRasterBackend()).")]
+        public static Bibui.Raster.IRasterBackend CreateDefault() { }
+        public static void SetDefault(System.Func<Bibui.Raster.IRasterBackend> factory) { }
+    }
+    public readonly struct RasterFont : System.IEquatable<Bibui.Raster.RasterFont>
+    {
+        public RasterFont(Bibui.Raster.RasterTypeface Typeface, float Size) { }
+        public float Size { get; init; }
+        public Bibui.Raster.RasterTypeface Typeface { get; init; }
+    }
+    public abstract class RasterImage : System.IDisposable
+    {
+        protected RasterImage() { }
+        public abstract int Height { get; }
+        public abstract int Width { get; }
+        public void Dispose() { }
+        protected virtual void Dispose(bool disposing) { }
+    }
+    public readonly struct RasterPaint : System.IEquatable<Bibui.Raster.RasterPaint>
+    {
+        public RasterPaint(in Bibui.PaintSpec spec) { }
+        public Bibui.Raster.DashPattern? Dash { get; init; }
+        public float ImageBlurSigma { get; init; }
+        public float MaskBlurSigma { get; init; }
+        public Bibui.Raster.RasterShader? Shader { get; init; }
+        public Bibui.PaintSpec Spec { get; init; }
+        public static Bibui.Raster.RasterPaint op_Implicit(in Bibui.PaintSpec spec) { }
+    }
+    public abstract class RasterPath : Bibui.Raster.IPathBuilder, System.IDisposable
+    {
+        protected RasterPath() { }
+        public abstract bool IsEmpty { get; }
+        public abstract void AddArc(Bibui.RectF oval, float startAngle, float sweepAngle);
+        public abstract void AddPath(Bibui.Raster.RasterPath source, in System.Numerics.Matrix3x2 transform);
+        public abstract void ArcTo(float rx, float ry, float xAxisRotate, bool largeArc, bool sweep, float x, float y);
+        public abstract void Close();
+        public abstract void CubicTo(float x1, float y1, float x2, float y2, float x3, float y3);
+        public void Dispose() { }
+        protected virtual void Dispose(bool disposing) { }
+        public abstract void LineTo(float x, float y);
+        public abstract void MoveTo(float x, float y);
+        public abstract void QuadTo(float x1, float y1, float x2, float y2);
+        public abstract void Rewind();
+    }
+    public readonly struct RasterPixels : System.IEquatable<Bibui.Raster.RasterPixels>
+    {
+        public RasterPixels(nint Address, int Width, int Height, int RowBytes) { }
+        public System.IntPtr Address { get; init; }
+        public int Height { get; init; }
+        public int RowBytes { get; init; }
+        public int Width { get; init; }
+    }
+    public sealed class RasterShader
+    {
+        public Bibui.Rgba[] Colors { get; }
+        public System.Numerics.Vector2 End { get; }
+        public Bibui.CacheKey Key { get; }
+        public float Radius { get; }
+        public System.Numerics.Vector2 Start { get; }
+        public float[]? Stops { get; }
+        public Bibui.GradientType Type { get; }
+        public static Bibui.Raster.RasterShader Linear(System.Numerics.Vector2 start, System.Numerics.Vector2 end, System.ReadOnlySpan<Bibui.Rgba> colors, System.ReadOnlySpan<float> stops) { }
+        public static Bibui.Raster.RasterShader Radial(System.Numerics.Vector2 centre, float radius, System.ReadOnlySpan<Bibui.Rgba> colors, System.ReadOnlySpan<float> stops) { }
+    }
+    public abstract class RasterTypeface : System.IDisposable
+    {
+        protected RasterTypeface() { }
+        public abstract string FamilyName { get; }
+        public int Id { get; }
+        public void Dispose() { }
+        protected virtual void Dispose(bool disposing) { }
+        public abstract bool HasGlyph(int codepoint);
+    }
+    public readonly struct ShapedRun : System.IEquatable<Bibui.Raster.ShapedRun>
+    {
+        public ShapedRun(ushort[] Glyphs, float[] Advances) { }
+        public float[] Advances { get; init; }
+        public ushort[] Glyphs { get; init; }
+        public float Width { get; }
+        public System.Numerics.Vector2[] Positions() { }
+    }
+}
+namespace Bibui.Renderer
+{
+    public readonly struct AnimKey : System.IEquatable<Bibui.Renderer.AnimKey>
+    {
+        public AnimKey(System.UInt128 Hash) { }
+        public System.UInt128 Hash { get; init; }
+        public static Bibui.Renderer.AnimKey For(string? id, string property) { }
+    }
+    public static class FontRegistry
+    {
+        public static void Clear() { }
+        public static bool IsRegistered(string family, int weight) { }
+        public static void Register(string family, int weight, byte[] fontData) { }
+        public static void RegisterFromEmbeddedResource(string family, int weight, System.Reflection.Assembly assembly, string resourceName) { }
+    }
+    public sealed class RenderOutput
+    {
+        public RenderOutput() { }
+        public bool HasPixels { get; }
+        public required int Height { get; init; }
+        public byte[] PngBytes { get; }
+        public required System.Func<byte[]> PngFactory { init; }
+        public required byte[] RawBgraBytes { get; init; }
+        public required int Width { get; init; }
+    }
+    public sealed class ResourceCache<TKey, TValue> : System.IDisposable
+        where TKey :  notnull
+    {
+        public readonly System.Collections.Generic.Dictionary<TKey, Bibui.Renderer.ResourceCache<TKey, TValue>.Entry> Entries;
+        public ResourceCache(ulong keepFrames = 60) { }
+        public int Count { get; }
+        public ulong Frame { get; }
+        public TValue Add(TKey key, TValue value) { }
+        public void Dispose() { }
+        public void EndFrame() { }
+        public TValue FromKey<TParams>(TKey key, TParams p, System.Func<TParams, TValue> produce) { }
+        public bool TryGet(TKey key, out TValue value) { }
+        public struct Entry
+        {
+            public ulong Touched;
+            public TValue Value;
+        }
+    }
+}
+namespace Bibui.Runtime
+{
+    public static class Avatar
+    {
+        public const float DefaultSize = 40F;
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, Bibui.BibuiStr initials, float size = 40, Bibui.UiColor? fill = default, Bibui.UiColor? ink = default, Bibui.ComponentSize fontSize = 2) { }
+    }
+    public static class Badge
+    {
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, Bibui.BibuiStr label, Bibui.BadgeVariant variant = 0, bool leadingDot = false) { }
+    }
+    public sealed class BibUiEventHandle
+    {
+        public bool Consumed { get; }
+        public Bibui.TextEdit.BibUiEvent Event { get; }
+        public void Eat() { }
+    }
+    public sealed class BibuiRuntime
+    {
+        [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode(@"The default raster backend is loaded by name (Bibui.Raster.Skia), which trimming and Native AOT do not keep unless the app names one of its types. Pass the backend instead: new BibuiRuntime(new SkiaRasterBackend()) / new BibuiRenderer(new SkiaRasterBackend()).")]
+        public BibuiRuntime() { }
+        public BibuiRuntime(Bibui.Raster.IRasterBackend raster) { }
+        public bool CapturePixels { get; set; }
+        public System.Func<string?> ClipboardGet { get; set; }
+        public System.Action<string> ClipboardSet { get; set; }
+        public float DamageFullRepaintThreshold { get; set; }
+        public bool DamageTracking { get; set; }
+        public float Dt { get; }
+        public Bibui.Fonts Fonts { get; }
+        public int FramesRequested { get; }
+        public System.Collections.Generic.IReadOnlyList<Bibui.Raster.PixelRect>? LastDamage { get; }
+        public string? LastFullRepaintReason { get; }
+        public Bibui.Renderer.RenderOutput? LastOutput { get; }
+        public System.Collections.Generic.IReadOnlyList<Bibui.Raster.PixelRect>? LastRepaint { get; }
+        public System.Action<string>? OnUnhandledKey { get; set; }
+        public Bibui.UiNode ParentInScope { get; }
+        public Bibui.Raster.IRasterBackend Raster { get; }
+        public float ScaleFactor { get; }
+        public int SurfaceHeight { get; }
+        public int SurfaceWidth { get; }
+        public float TargetHz { get; set; }
+        public Bibui.Theming.ThemeTokens Theme { get; }
+        public System.Collections.Generic.IEnumerable<Bibui.Runtime.BibUiEventHandle> UnconsumedEvents { get; }
+        public System.Action? WakeUp { get; set; }
+        public float Animate(string id, string property, float target, float? speed = default, float epsilon = 0.001) { }
+        public Bibui.Box Box() { }
+        public Bibui.Box BoxFromId(string id, Bibui.InteractionKinds claims = 0, Bibui.UiNode? parent = null) { }
+        public void ConsumeFrame() { }
+        public void DefaultToolTipOffset(Bibui.Box box) { }
+        public void DispatchClick(string id) { }
+        public void DispatchFill(string id, string newValue) { }
+        public Bibui.UiNode? FindById(string id) { }
+        public Bibui.Font FontInScope(Bibui.FontSize? size = default, Bibui.FontSlot? family = default) { }
+        public Bibui.Box Gap(float pixels) { }
+        public Bibui.Icon Icon(string name, float? size = default) { }
+        public Bibui.Interaction InteractionsFor(Bibui.Box box) { }
+        public void Mount(System.Func<Bibui.UiNode> build, Bibui.SurfaceOptions? surface = null, string theme = "bibui-dark") { }
+        public void Mount(System.Func<Bibui.UiNode> build, Bibui.Theming.ThemeTokens theme, Bibui.SurfaceOptions? surface = null) { }
+        public void MountStateful<T>(T initialState, System.Func<T, Bibui.Runtime.SetState<T>, Bibui.UiNode> build, Bibui.SurfaceOptions? surface = null, string theme = "bibui-dark") { }
+        public void MountStateful<T>(T initialState, System.Func<T, Bibui.Runtime.SetState<T>, Bibui.UiNode> build, Bibui.Theming.ThemeTokens theme, Bibui.SurfaceOptions? surface = null) { }
+        public Bibui.Box OpenDropDown(string id) { }
+        public Bibui.Box OpenToolTip() { }
+        public void ProcessEvent(Bibui.TextEdit.BibUiEvent ev) { }
+        public void ProcessEvents(System.Collections.Generic.IReadOnlyList<Bibui.TextEdit.BibUiEvent> events) { }
+        public Bibui.Runtime.BibuiRuntime.AxisScope PushAxis(Bibui.LayoutAxis axis) { }
+        public Bibui.Runtime.BibuiRuntime.FontFaceScope PushFontFace(Bibui.FontSlot? family = default, Bibui.FontWeight? weight = default) { }
+        public Bibui.Runtime.BibuiRuntime.FontSizeScope PushFontSize(Bibui.FontSize size) { }
+        public Bibui.Runtime.BibuiRuntime.ParentScope PushParent(Bibui.UiNode box) { }
+        public Bibui.Runtime.BibuiRuntime.SizeScope PushSizeX(Bibui.SemanticSize size) { }
+        public Bibui.Runtime.BibuiRuntime.SizeScope PushSizeY(Bibui.SemanticSize size) { }
+        public Bibui.Renderer.RenderOutput Render() { }
+        public void RenderTo(Bibui.Raster.IRasterSurface target) { }
+        public void RenderTo(Bibui.Raster.IRasterSurface target, bool retained) { }
+        public void RequestFrame() { }
+        public void ResizeSurface(int physicalWidth, int physicalHeight, float? scaleOverride = default) { }
+        public void SetTheme(Bibui.Theming.ThemeTokens theme) { }
+        public Bibui.Spinner Spinner(float diameter = 24) { }
+        public Bibui.Text Text(System.ReadOnlyMemory<byte> text, Bibui.FontSize? fontSize = default, Bibui.UiColor? textColor = default, Bibui.FontSlot? family = default) { }
+        public Bibui.Text TextFromId(string id, System.ReadOnlyMemory<byte> text, Bibui.FontSize? fontSize = default, Bibui.UiColor? textColor = default, Bibui.FontSlot? family = default) { }
+        public readonly struct AxisScope : System.IDisposable
+        {
+            public void Dispose() { }
+        }
+        public readonly struct FontFaceScope : System.IDisposable
+        {
+            public void Dispose() { }
+        }
+        public readonly struct FontSizeScope : System.IDisposable
+        {
+            public void Dispose() { }
+        }
+        public readonly struct ParentScope : System.IDisposable
+        {
+            public void Dispose() { }
+        }
+        public readonly struct SizeScope : System.IDisposable
+        {
+            public void Dispose() { }
+        }
+    }
+    public sealed class BibuiTestServer : System.IDisposable
+    {
+        public const int DefaultPort = 44334;
+        public const string EnableVariable = "BIBUI_TEST_SERVER";
+        public const string OutputVariable = "BIBUI_TEST_SERVER_OUT";
+        public BibuiTestServer(Bibui.Runtime.BibuiRuntime runtime, string outputDirectory, int port = 44334, string? token = null, bool writeTokenFile = true) { }
+        public string OutputDirectory { get; }
+        public int Port { get; }
+        public string Token { get; }
+        public string TokenFile { get; }
+        public static bool IsEnabled { get; }
+        public void Dispose() { }
+        public void Start() { }
+        public void Stop() { }
+        public static Bibui.Runtime.BibuiTestServer? StartIfEnabled(Bibui.Runtime.BibuiRuntime runtime, int port = 44334) { }
+        public static string TokenFilePath(int port = 44334) { }
+    }
+    public sealed class BibuiWindow
+    {
+        public BibuiWindow(Bibui.Runtime.BibuiRuntime runtime, Bibui.Runtime.Platform.IPlatformHost host) { }
+        public Bibui.Runtime.Platform.IPlatformHost Host { get; }
+        public void Run(string title = "bibui") { }
+        public static Bibui.TextEdit.BibUiEvent BibUiEventFromKey(Bibui.Key key, bool ctrl, bool shift, System.Func<string?>? clipboard = null) { }
+    }
+    public static class Button
+    {
+        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr label, bool ghost = false, bool disabled = false, Bibui.ComponentSize size = 1) { }
+    }
+    public static class Checkbox
+    {
+        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, bool on, Bibui.BibuiStr? label = null, bool disabled = false, bool indeterminate = false) { }
+    }
+    public static class Dialog
+    {
+        public static Bibui.Runtime.DialogScope Begin(Bibui.Runtime.BibuiRuntime runtime, string id, float shown, Bibui.Runtime.DialogSide side = 0, float width = 460) { }
+    }
+    public readonly struct DialogScope
+    {
+        public Bibui.Runtime.DialogWidget End() { }
+    }
+    public enum DialogSide
+    {
+        Center = 0,
+        Left = 1,
+        Right = 2,
+        Top = 3,
+        Bottom = 4,
+    }
+    public readonly struct DialogWidget : System.IEquatable<Bibui.Runtime.DialogWidget>
+    {
+        public DialogWidget(Bibui.Box Panel, bool Dismissed) { }
+        public bool Dismissed { get; init; }
+        public Bibui.Box Panel { get; init; }
+        public static Bibui.UiNode op_Implicit(Bibui.Runtime.DialogWidget widget) { }
+        public static Bibui.Arrange.Item op_Implicit(Bibui.Runtime.DialogWidget widget) { }
+    }
+    public static class Expander
+    {
+        public const float HeaderHeight = 44F;
+        public static Bibui.Runtime.ExpanderWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr title, bool open) { }
+    }
+    public readonly struct ExpanderWidget : System.IEquatable<Bibui.Runtime.ExpanderWidget>
+    {
+        public ExpanderWidget(Bibui.Box Node, Bibui.Box? Body, Bibui.Interaction Interaction) { }
+        public Bibui.Box? Body { get; init; }
+        public Bibui.Interaction Interaction { get; init; }
+        public Bibui.Box Node { get; init; }
+        public bool Toggled { get; }
+        public static Bibui.UiNode op_Implicit(Bibui.Runtime.ExpanderWidget widget) { }
+        public static Bibui.Arrange.Item op_Implicit(Bibui.Runtime.ExpanderWidget widget) { }
+    }
+    public static class HotReloadListener
+    {
+        public static void Register(System.Action onUpdate) { }
+    }
+    public static class KeyboardShortcut
+    {
+        public const float KeyHeight = 24F;
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, [System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<Bibui.BibuiStr> keys) { }
+    }
+    public static class Markdown
+    {
+        public static Bibui.Runtime.MarkdownWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr source, float? width = default, Bibui.ComponentSize textSize = 1) { }
+        public static Bibui.Runtime.MarkdownWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.Runtime.MarkdownDocument document, float? width = default, Bibui.ComponentSize textSize = 1) { }
+        public static void ToggleTask(Bibui.BibuiStr source, int offset) { }
+    }
+    public enum MarkdownAlign : byte
+    {
+        None = 0,
+        Left = 1,
+        Center = 2,
+        Right = 3,
+    }
+    public sealed class MarkdownBlock
+    {
+        public System.Collections.Generic.IReadOnlyList<Bibui.Runtime.MarkdownAlign> Aligns { get; }
+        public System.Collections.Generic.IReadOnlyList<Bibui.Runtime.MarkdownBlock> Children { get; }
+        public string? Info { get; }
+        public Bibui.Runtime.MarkdownBlockKind Kind { get; }
+        public int Level { get; }
+        public bool Ordered { get; }
+        public int RunCount { get; }
+        public int RunStart { get; }
+        public Bibui.Runtime.MarkdownTask Task { get; }
+        public int TaskOffset { get; }
+        public int TextLength { get; }
+        public int TextStart { get; }
+        public bool Tight { get; }
+    }
+    public enum MarkdownBlockKind
+    {
+        Document = 0,
+        Paragraph = 1,
+        Heading = 2,
+        CodeBlock = 3,
+        Quote = 4,
+        List = 5,
+        ListItem = 6,
+        Table = 7,
+        TableRow = 8,
+        TableCell = 9,
+        ThematicBreak = 10,
+    }
+    public sealed class MarkdownDocument
+    {
+        public System.Collections.Generic.IReadOnlyList<string> Links { get; }
+        public Bibui.Runtime.MarkdownBlock Root { get; }
+        public System.ReadOnlySpan<Bibui.Runtime.MarkdownRun> Runs { get; }
+        public System.ReadOnlyMemory<byte> Text { get; }
+        public System.ReadOnlyMemory<byte> CodeOf(Bibui.Runtime.MarkdownBlock block) { }
+        public string PlainText(Bibui.Runtime.MarkdownBlock block) { }
+        public System.ReadOnlySpan<Bibui.Runtime.MarkdownRun> RunsOf(Bibui.Runtime.MarkdownBlock block) { }
+        public System.ReadOnlyMemory<byte> TextOf(in Bibui.Runtime.MarkdownRun run) { }
+        public static Bibui.Runtime.MarkdownDocument Parse(System.ReadOnlySpan<byte> utf8) { }
+        public static Bibui.Runtime.MarkdownDocument Parse(string markdown) { }
+    }
+    public readonly struct MarkdownRun : System.IEquatable<Bibui.Runtime.MarkdownRun>
+    {
+        public MarkdownRun(int Start, int Length, Bibui.Runtime.MarkdownStyle Style, int Link) { }
+        public int Length { get; init; }
+        public int Link { get; init; }
+        public int Start { get; init; }
+        public Bibui.Runtime.MarkdownStyle Style { get; init; }
+    }
+    [System.Flags]
+    public enum MarkdownStyle : byte
+    {
+        None = 0,
+        Strong = 1,
+        Emphasis = 2,
+        Code = 4,
+        Strike = 8,
+        Link = 16,
+        Image = 32,
+        LineBreak = 64,
+    }
+    public enum MarkdownTask : byte
+    {
+        None = 0,
+        Unchecked = 1,
+        Checked = 2,
+    }
+    public readonly struct MarkdownWidget : System.IEquatable<Bibui.Runtime.MarkdownWidget>
+    {
+        public MarkdownWidget(Bibui.Box Node, string? ClickedLink, int ToggledTask) { }
+        public string? ClickedLink { get; init; }
+        public bool LinkClicked { get; }
+        public Bibui.Box Node { get; init; }
+        public bool TaskClicked { get; }
+        public int ToggledTask { get; init; }
+        public static Bibui.UiNode op_Implicit(Bibui.Runtime.MarkdownWidget widget) { }
+        public static Bibui.Arrange.Item op_Implicit(Bibui.Runtime.MarkdownWidget widget) { }
+    }
+    public static class Menu
+    {
+        public static Bibui.Runtime.MenuScope Begin(Bibui.Runtime.BibuiRuntime runtime, string id, float x, float y, float width = 220) { }
+        public static Bibui.Runtime.MenuScope BeginBelow(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.Box anchor, float width = 220, float gap = 4) { }
+        public static Bibui.BibuiWidget Item(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr label, string? icon = null, Bibui.BibuiStr? shortcut = null, bool disabled = false) { }
+        public static Bibui.Box Label(Bibui.Runtime.BibuiRuntime runtime, Bibui.BibuiStr text) { }
+        public static Bibui.Box Separator(Bibui.Runtime.BibuiRuntime runtime) { }
+    }
+    public readonly struct MenuScope
+    {
+        public Bibui.BibuiWidget End() { }
+    }
+    public static class Popover
+    {
+        public static Bibui.Runtime.PopoverScope Begin(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.Box anchor, float width = 280) { }
+    }
+    public readonly struct PopoverScope
+    {
+        public Bibui.BibuiWidget End() { }
+    }
+    public static class Progress
+    {
+        public const float DefaultThickness = 8F;
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, float value, float max = 100, Bibui.BibuiStr? label = null, float thickness = 8, Bibui.UiColor? fill = default, Bibui.UiColor? track = default) { }
+    }
+    public static class RadioGroup
+    {
+        public static Bibui.Runtime.RadioGroupWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, System.Collections.Generic.IReadOnlyList<Bibui.Runtime.RadioOption> items, string? value, bool disabled = false) { }
+    }
+    public readonly struct RadioGroupWidget : System.IEquatable<Bibui.Runtime.RadioGroupWidget>
+    {
+        public RadioGroupWidget(Bibui.Box Node, string? Picked) { }
+        public Bibui.Box Node { get; init; }
+        public string? Picked { get; init; }
+    }
+    public readonly struct RadioOption : System.IEquatable<Bibui.Runtime.RadioOption>
+    {
+        public RadioOption(Bibui.BibuiStr Label, string Value, bool Disabled = false) { }
+        public bool Disabled { get; init; }
+        public Bibui.BibuiStr Label { get; init; }
+        public string Value { get; init; }
+    }
+    public static class Scrollbar
+    {
+        public const float Lane = 12F;
+        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.Box view, Bibui.LayoutAxis axis = 1) { }
+    }
+    public static class Section
+    {
+        public const float Spacing = 12F;
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, Bibui.BibuiStr caption) { }
+    }
+    public static class Select
+    {
+        public static Bibui.Runtime.SelectScope Begin(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, bool open, float width = 220, bool disabled = false) { }
+        public static Bibui.BibuiWidget Item(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr label, bool selected = false, bool disabled = false) { }
+    }
+    public readonly struct SelectResult : System.IEquatable<Bibui.Runtime.SelectResult>
+    {
+        public SelectResult(Bibui.Box Node, bool Toggled) { }
+        public Bibui.Box Node { get; init; }
+        public bool Toggled { get; init; }
+    }
+    public readonly struct SelectScope
+    {
+        public bool Open { get; }
+        public Bibui.Runtime.SelectResult End() { }
+    }
+    public static class Separator
+    {
+        public const float Thickness = 1F;
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, bool vertical = false) { }
+    }
+    public sealed class SetState<T>
+    {
+        public void Set(T newState) { }
+        public void Update(System.Func<T, T> updater) { }
+    }
+    public static class Slider
+    {
+        public const float Height = 16F;
+        public static Bibui.Runtime.SliderWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, float value, float min = 0, float max = 1, float step = 0, Bibui.BibuiStr? label = null, bool disabled = false) { }
+    }
+    public readonly struct SliderWidget : System.IEquatable<Bibui.Runtime.SliderWidget>
+    {
+        public SliderWidget(Bibui.UiNode Node, float Value, Bibui.Interaction Interaction) { }
+        public Bibui.Interaction Interaction { get; init; }
+        public Bibui.UiNode Node { get; init; }
+        public float Value { get; init; }
+        public static Bibui.UiNode op_Implicit(Bibui.Runtime.SliderWidget widget) { }
+        public static Bibui.Arrange.Item op_Implicit(Bibui.Runtime.SliderWidget widget) { }
+    }
+    public static class Switch
+    {
+        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, bool on, Bibui.BibuiStr? label = null, bool disabled = false, float height = 24) { }
+    }
+    public readonly struct TabOption : System.IEquatable<Bibui.Runtime.TabOption>
+    {
+        public TabOption(Bibui.BibuiStr Label, string Value) { }
+        public Bibui.BibuiStr Label { get; init; }
+        public string Value { get; init; }
+    }
+    public static class Tabs
+    {
+        public const float Height = 36F;
+        public const float PanelGap = 8F;
+        public static Bibui.Runtime.TabsWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, System.Collections.Generic.IReadOnlyList<Bibui.Runtime.TabOption> items, string? value) { }
+        public static Bibui.Box Panel(Bibui.Runtime.BibuiRuntime runtime) { }
+    }
+    public readonly struct TabsWidget : System.IEquatable<Bibui.Runtime.TabsWidget>
+    {
+        public TabsWidget(Bibui.Box Node, string? Picked) { }
+        public Bibui.Box Node { get; init; }
+        public string? Picked { get; init; }
+        public static Bibui.UiNode op_Implicit(Bibui.Runtime.TabsWidget widget) { }
+        public static Bibui.Arrange.Item op_Implicit(Bibui.Runtime.TabsWidget widget) { }
+    }
+    public static class TextField
+    {
+        public const uint MultiLineEvents = 3100u;
+        public const uint MultiLineReadOnlyEvents = 2056u;
+        public const uint SingleLineEvents = 2076u;
+        public const uint SingleLineReadOnlyEvents = 2056u;
+        public static Bibui.BibuiWidget Ellipsis(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, Bibui.TextEdit.TextEditState edit, bool focused, uint events = 0, Bibui.TextColor textColor = 0, Bibui.BibuiStr? placeholder = null) { }
+        [System.Obsolete("Pass the runtime, so the theme\'s border width, focus ring and density reach the f" +
+            "ield: InputStyle(runtime, box, ...).")]
+        public static void InputStyle(Bibui.Box box, bool focused, bool error = false, bool disabled = false) { }
+        public static void InputStyle(Bibui.Runtime.BibuiRuntime runtime, Bibui.Box box, bool focused, bool error = false, bool disabled = false) { }
+        public static Bibui.BibuiWidget Multiline(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, Bibui.TextEdit.TextEditState edit, bool focused, uint events = 3100, Bibui.TextColor textColor = 0, Bibui.BibuiStr? placeholder = null, Bibui.TextWrap wrap = 0) { }
+        public static Bibui.SemanticSize Rows(Bibui.Runtime.BibuiRuntime runtime, int rows) { }
+        public static Bibui.BibuiWidget SingleLine(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, Bibui.TextEdit.TextEditState edit, bool focused, uint events = 2076, Bibui.TextColor textColor = 0, Bibui.BibuiStr? placeholder = null) { }
+    }
+    public static class Toggle
+    {
+        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, bool on, Bibui.BibuiStr? label = null, string? icon = null, bool disabled = false) { }
+    }
+    public static class ToggleGroup
+    {
+        public static Bibui.Runtime.ToggleGroupWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, System.Collections.Generic.IReadOnlyList<Bibui.Runtime.ToggleOption> items, string? value) { }
+    }
+    public readonly struct ToggleGroupWidget : System.IEquatable<Bibui.Runtime.ToggleGroupWidget>
+    {
+        public ToggleGroupWidget(Bibui.Box Node, string? Picked) { }
+        public Bibui.Box Node { get; init; }
+        public string? Picked { get; init; }
+    }
+    public readonly struct ToggleOption : System.IEquatable<Bibui.Runtime.ToggleOption>
+    {
+        public ToggleOption(Bibui.BibuiStr Label, string Value) { }
+        public Bibui.BibuiStr Label { get; init; }
+        public string Value { get; init; }
+    }
+    public static class Tooltip
+    {
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, Bibui.BibuiStr text, Bibui.Box? anchor = null) { }
+    }
+}
+namespace Bibui.Runtime.Platform
+{
+    public enum CursorShape
+    {
+        Default = 0,
+        Pointer = 1,
+        Text = 2,
+        Crosshair = 3,
+        ResizeHorizontal = 4,
+        ResizeVertical = 5,
+        ResizeAll = 6,
+        NotAllowed = 7,
+        Wait = 8,
+    }
+    public enum HostPresentation
+    {
+        CpuPixels = 0,
+        GpuSurface = 1,
+    }
+    public interface IPlatformHost
+    {
+        int FramebufferHeight { get; }
+        int FramebufferWidth { get; }
+        Bibui.KeyModifiers HeldModifiers { get; }
+        bool IsClosing { get; }
+        bool PacesFrames { get; }
+        Bibui.Runtime.Platform.HostPresentation Presentation { get; }
+        float Scale { get; }
+        void Close();
+        string? GetClipboardText();
+        void Open(Bibui.Runtime.BibuiRuntime runtime, Bibui.Runtime.Platform.PlatformWindowOptions options);
+        Bibui.Runtime.Platform.PresentTimings Present(Bibui.Runtime.BibuiRuntime runtime);
+        void Run(System.Action iteration);
+        void SetClipboardText(string text);
+        void SetCursor(Bibui.Runtime.Platform.CursorShape shape);
+        void Shutdown();
+        void WaitEvents(System.Collections.Generic.List<Bibui.Runtime.Platform.WindowEvent> into);
+        void Wake();
+    }
+    public readonly struct PlatformWindowOptions : System.IEquatable<Bibui.Runtime.Platform.PlatformWindowOptions>
+    {
+        public PlatformWindowOptions(string Title, int Width, int Height) { }
+        public int Height { get; init; }
+        public string Title { get; init; }
+        public int Width { get; init; }
+    }
+    public readonly struct PresentTimings : System.IEquatable<Bibui.Runtime.Platform.PresentTimings>
+    {
+        public PresentTimings(double RenderMs, double SubmitMs) { }
+        public double RenderMs { get; init; }
+        public double SubmitMs { get; init; }
+    }
+    public readonly struct WindowEvent
+    {
+        public Bibui.MouseButton Button { get; }
+        public char Char { get; }
+        public Bibui.Key Key { get; }
+        public Bibui.Runtime.Platform.WindowEventKind Kind { get; }
+        public float ScrollX { get; }
+        public float ScrollY { get; }
+        public float X { get; }
+        public float Y { get; }
+        public static Bibui.Runtime.Platform.WindowEvent FocusLost() { }
+        public static Bibui.Runtime.Platform.WindowEvent KeyPress(Bibui.Key key) { }
+        public static Bibui.Runtime.Platform.WindowEvent KeyRelease(Bibui.Key key) { }
+        public static Bibui.Runtime.Platform.WindowEvent Mouse(Bibui.Runtime.Platform.WindowEventKind kind, float x, float y, Bibui.MouseButton button) { }
+        public static Bibui.Runtime.Platform.WindowEvent Text(char ch) { }
+        public static Bibui.Runtime.Platform.WindowEvent Wheel(float x, float y, float scrollX, float scrollY) { }
+    }
+    public enum WindowEventKind
+    {
+        MouseDown = 0,
+        MouseUp = 1,
+        MouseMove = 2,
+        Scroll = 3,
+        KeyDown = 4,
+        KeyUp = 5,
+        KeyChar = 6,
+        FocusLost = 7,
+    }
+}
+namespace Bibui.TextEdit
+{
+    public sealed class BibUiEvent
+    {
+        public BibUiEvent() { }
+        public Bibui.MouseButton Button { get; set; }
+        public char? Char { get; set; }
+        public int ClickCount { get; set; }
+        public uint CodePoint { get; set; }
+        public bool Ctrl { get; set; }
+        public int Delta { get; set; }
+        public int DeltaY { get; set; }
+        public Bibui.TextEdit.TextActionFlags Flags { get; set; }
+        public Bibui.Key Key { get; set; }
+        public Bibui.TextEdit.BibUiEventKind Kind { get; set; }
+        public Bibui.KeyModifiers Modifiers { get; set; }
+        public byte[]? PasteData { get; set; }
+        public float ScrollX { get; set; }
+        public float ScrollY { get; set; }
+        public bool Shift { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
+        public void Copy() { }
+        public void Paste(string? clipboardText) { }
+        public void SelectAll() { }
+    }
+    public enum BibUiEventKind
+    {
+        Null = 0,
+        Press = 1,
+        Text = 2,
+        Navigate = 3,
+        Edit = 4,
+        MouseDown = 5,
+        MouseUp = 6,
+        MouseMove = 7,
+        Release = 8,
+        Scroll = 9,
+        Submit = 10,
+        Copy = 11,
+    }
+    public enum TextActionFlags : uint
+    {
+        KeepMark = 1u,
+        Delete = 2u,
+        Copy = 4u,
+        Paste = 8u,
+        NoNavigationWithSelection = 16u,
+        WordScan = 32u,
+        LineScan = 64u,
+        SelectAll = 128u,
+    }
+    public sealed class TextEditState
+    {
+        public int Cursor;
+        public int Mark;
+        public TextEditState() { }
+    }
+    public ref struct TextOp
+    {
+        public System.ReadOnlySpan<byte> CopyString;
+        public int NewCursor;
+        public int NewMark;
+        public System.ValueTuple<int, int> Range;
+        public System.ReadOnlySpan<byte> ReplaceString;
+        public static int MaxCodePointSize;
+        public TextOp() { }
+        public static Bibui.TextEdit.TextOp FromStateAndEvent(Bibui.BibuiStr str, Bibui.TextEdit.TextEditState state, Bibui.TextEdit.BibUiEvent ev, System.Span<byte> buf) { }
+        public static int ScanCodePoint(System.ReadOnlySpan<byte> str, int cursor, int delta) { }
+        public static int WordScan(System.ReadOnlySpan<byte> str, int cursor, int delta) { }
+    }
+}
+namespace Bibui.Theming
+{
+    public sealed class BorderTokens
+    {
+        public BorderTokens() { }
+        public float Strong { get; init; }
+        public float Width { get; init; }
+    }
+    public sealed class ColorRamp : System.IEquatable<Bibui.Theming.ColorRamp>
+    {
+        public ColorRamp(params string[] hex) { }
+        public string this[int step] { get; }
+        public static Bibui.Theming.ColorRamp DefaultAccent { get; }
+        public static Bibui.Theming.ColorRamp DefaultNeutral { get; }
+        public static System.Collections.Generic.IReadOnlyList<int> Steps { get; }
+        public bool Equals(Bibui.Theming.ColorRamp? other) { }
+        public override bool Equals(object? obj) { }
+        public override int GetHashCode() { }
+        public Bibui.Theming.ColorRamp With(int step, string hex) { }
+    }
+    public sealed class ColorRamps : System.IEquatable<Bibui.Theming.ColorRamps>
+    {
+        public ColorRamps() { }
+        public Bibui.Theming.ColorRamp Accent { get; init; }
+        public Bibui.Theming.ColorRamp Neutral { get; init; }
+    }
+    public sealed class ColorTokens : System.IEquatable<Bibui.Theming.ColorTokens>
+    {
+        public ColorTokens() { }
+        public string Accent { get; init; }
+        public string AccentActive { get; init; }
+        public string AccentForeground { get; init; }
+        public string AccentHover { get; init; }
+        public string Background { get; init; }
+        public string Border { get; init; }
+        public string BorderFocus { get; init; }
+        public string BorderHover { get; init; }
+        public string Destructive { get; init; }
+        public string DestructiveForeground { get; init; }
+        public System.Collections.Generic.Dictionary<string, string> Extra { get; init; }
+        public string Info { get; init; }
+        public string InfoBg { get; init; }
+        public string InfoForeground { get; init; }
+        public Bibui.Theming.ThemeMode Mode { get; init; }
+        public Bibui.Theming.ColorRamps Ramps { get; init; }
+        public string Success { get; init; }
+        public string SuccessBg { get; init; }
+        public string SuccessForeground { get; init; }
+        public string Surface { get; init; }
+        public string SurfaceRaised { get; init; }
+        public string SurfaceRaisedActive { get; init; }
+        public string SurfaceRaisedHover { get; init; }
+        public string TextDisabled { get; init; }
+        public string TextPrimary { get; init; }
+        public string TextSecondary { get; init; }
+        public string Warning { get; init; }
+        public string WarningBg { get; init; }
+        public string WarningForeground { get; init; }
+    }
+    public static class Colormaps
+    {
+        [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "Stop",
+                "Color"})]
+        public static readonly System.Collections.Generic.IReadOnlyList<System.ValueTuple<float, string>> Inferno;
+        [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "Stop",
+                "Color"})]
+        public static readonly System.Collections.Generic.IReadOnlyList<System.ValueTuple<float, string>> Magma;
+        [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "Stop",
+                "Color"})]
+        public static readonly System.Collections.Generic.IReadOnlyList<System.ValueTuple<float, string>> Plasma;
+        [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "Stop",
+                "Color"})]
+        public static readonly System.Collections.Generic.IReadOnlyList<System.ValueTuple<float, string>> Turbo;
+        [System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "Stop",
+                "Color"})]
+        public static readonly System.Collections.Generic.IReadOnlyList<System.ValueTuple<float, string>> Viridis;
+        public static System.Collections.Generic.IReadOnlyList<string> Names { get; }
+        [return: System.Runtime.CompilerServices.TupleElementNames(new string?[]?[] {
+                "Stop",
+                "Color"})]
+        public static System.Collections.Generic.IReadOnlyList<System.ValueTuple<float, string>>? Get(string? name) { }
+    }
+    public enum Density
+    {
+        Compact = 0,
+        Default = 1,
+        Comfortable = 2,
+    }
+    public sealed class DensityTokens
+    {
+        public DensityTokens() { }
+        public float ComfortableScale { get; init; }
+        public float CompactScale { get; init; }
+        public Bibui.Theming.Density Mode { get; init; }
+        public float Scale { get; }
+        public float Of(float pixels) { }
+    }
+    public sealed class ElevationTokens
+    {
+        public const int Modal = 4;
+        public const int Overlay = 2;
+        public const int Tooltip = 3;
+        public ElevationTokens() { }
+        public Bibui.BoxShadow? Level0 { get; }
+        public Bibui.BoxShadow? Level1 { get; init; }
+        public Bibui.BoxShadow? Level2 { get; init; }
+        public Bibui.BoxShadow? Level3 { get; init; }
+        public Bibui.BoxShadow? Level4 { get; init; }
+        public static Bibui.Theming.ElevationTokens Soft { get; }
+        public Bibui.BoxShadow? Level(int level) { }
+    }
+    public sealed class FocusRingTokens
+    {
+        public FocusRingTokens() { }
+        public Bibui.UiColor Color { get; init; }
+        public float Offset { get; init; }
+        public float Width { get; init; }
+    }
+    public enum MotionEasing
+    {
+        Exponential = 0,
+        None = 1,
+    }
+    public sealed class MotionTokens
+    {
+        public MotionTokens() { }
+        public float Caret { get; init; }
+        public float Default { get; init; }
+        public Bibui.Theming.MotionEasing Easing { get; init; }
+        public float Hover { get; init; }
+        public float Toggle { get; init; }
+    }
+    public sealed class RadiiTokens
+    {
+        public RadiiTokens() { }
+        public float Full { get; init; }
+        public float Lg { get; init; }
+        public float Md { get; init; }
+        public float Sm { get; init; }
+    }
+    public sealed class SpacingTokens
+    {
+        public SpacingTokens() { }
+        public float Lg { get; init; }
+        public float Md { get; init; }
+        public float Sm { get; init; }
+        public float Xl { get; init; }
+        public float Xs { get; init; }
+    }
+    public static class Theme
+    {
+        public const string DefaultNeutralSeed = "#71717A";
+        public const double MinTextContrast = 4.5D;
+        public static Bibui.Theming.ColorRamp AccentRamp(string seed) { }
+        public static double Contrast(string foreground, string background) { }
+        public static Bibui.Theming.ThemeTokens FromSeed(string accent, string? neutral = null, float radius = 6, Bibui.Theming.Density density = 1, Bibui.Theming.ThemeMode mode = 0, string? name = null) { }
+        public static Bibui.Theming.ColorRamp NeutralRamp(string seed) { }
+    }
+    public sealed class ThemeFile
+    {
+        public string? Extends { get; }
+        public string Name { get; }
+        public string Source { get; }
+        public Bibui.Theming.ThemeTokens Resolve() { }
+        public static Bibui.Theming.ThemeFile Load(string path) { }
+        public static Bibui.Theming.ThemeFile Parse(System.ReadOnlySpan<byte> utf8, string sourceName) { }
+    }
+    public static class ThemeLoader
+    {
+        public static Bibui.Theming.ThemeTokens BibuiDark() { }
+        public static Bibui.Theming.ThemeTokens BibuiLight() { }
+        public static Bibui.Theming.ThemeTokens DefaultDark() { }
+        public static Bibui.Theming.ThemeTokens DefaultLight() { }
+        public static Bibui.Theming.ThemeTokens Load(string name) { }
+        public static Bibui.Theming.ThemeTokens NeutralDark() { }
+    }
+    public enum ThemeMode
+    {
+        Dark = 0,
+        Light = 1,
+    }
+    public static class ThemeRegistry
+    {
+        public static System.Collections.Generic.IReadOnlyList<string> BuiltInNames { get; }
+        public static System.Collections.Generic.IReadOnlyList<string> Names { get; }
+        public static bool Contains(string name) { }
+        public static Bibui.Theming.ThemeTokens Load(string name) { }
+        public static void Register(Bibui.Theming.ThemeFile file) { }
+        public static void Register(string name, System.Func<Bibui.Theming.ThemeTokens> factory) { }
+        public static string RegisterFile(string path) { }
+    }
+    public sealed class ThemeTokens : System.IEquatable<Bibui.Theming.ThemeTokens>
+    {
+        public ThemeTokens() { }
+        public Bibui.Theming.BorderTokens Borders { get; init; }
+        public Bibui.Theming.ColorTokens Colors { get; init; }
+        public Bibui.Theming.DensityTokens Density { get; init; }
+        public Bibui.Theming.ElevationTokens Elevation { get; init; }
+        public Bibui.Theming.FocusRingTokens FocusRing { get; init; }
+        public Bibui.Theming.MotionTokens Motion { get; init; }
+        public string Name { get; init; }
+        public Bibui.Theming.RadiiTokens Radii { get; init; }
+        public Bibui.Theming.SpacingTokens Spacing { get; init; }
+        public Bibui.Theming.TypographyTokens Typography { get; init; }
+    }
+    public sealed class TypographyTokens
+    {
+        public TypographyTokens() { }
+        public string? FontFamilyBody { get; init; }
+        public string? FontFamilyDisplay { get; init; }
+        public string? FontFamilyHeading { get; init; }
+        public string? FontFamilyMono { get; init; }
+        public float Size2Xl { get; init; }
+        public float SizeLg { get; init; }
+        public float SizeMd { get; init; }
+        public float SizeSm { get; init; }
+        public float SizeXl { get; init; }
+        public int WeightNormal { get; init; }
+        public int WeightSemiBold { get; init; }
+    }
+}
