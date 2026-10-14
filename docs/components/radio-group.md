@@ -20,7 +20,7 @@ public static RadioGroupWidget Build(
     string? value,
     bool disabled = false)
 
-public readonly record struct RadioOption(BibuiStr Label, string Value, bool Disabled = false);
+public readonly record struct RadioOption(string Label, string Value, bool Disabled = false);
 public readonly record struct RadioGroupWidget(Box Node, string? Picked);
 ```
 
@@ -62,9 +62,9 @@ sealed class ShippingChoice
 {
     static readonly RadioOption[] Options =
     [
-        new(BibuiStr.FromStrLit("Standard"u8), "standard"),
-        new(BibuiStr.FromStrLit("Express"u8), "express"),
-        new(BibuiStr.FromStrLit("Same day (sold out)"u8), "same-day", Disabled: true),
+        new("Standard", "standard"),
+        new("Express", "express"),
+        new("Same day (sold out)", "same-day", Disabled: true),
     ];
 
     string _shipping = "standard";   // the caller's state

@@ -21,14 +21,14 @@ Fixtures: `select-default`, `select-with-value`, `select-disabled`,
 public static SelectScope Begin(
     BibuiRuntime runtime,
     string id,
-    BibuiStr text,
+    ReadOnlySpan<char> text,
     float width = 220f,
     bool disabled = false)
 
 public static BibuiWidget Item(
     BibuiRuntime runtime,
     string id,
-    BibuiStr label,
+    ReadOnlySpan<char> label,
     bool selected = false,
     bool disabled = false)
 
@@ -86,19 +86,19 @@ using Bibui.Runtime;
 
 sealed class FruitPicker
 {
-    static readonly BibuiStr Placeholder = BibuiStr.FromStrLit("Select a fruit…"u8);
-    static readonly (BibuiStr Label, string Value)[] Fruits =
+    const string Placeholder = "Select a fruit…";
+    static readonly (string Label, string Value)[] Fruits =
     [
-        (BibuiStr.FromStrLit("Apple"u8), "apple"),
-        (BibuiStr.FromStrLit("Banana"u8), "banana"),
-        (BibuiStr.FromStrLit("Cherry"u8), "cherry"),
+        ("Apple", "apple"),
+        ("Banana", "banana"),
+        ("Cherry", "cherry"),
     ];
 
     string? _fruit;        // the caller's state
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        BibuiStr shown = Placeholder;
+        string shown = Placeholder;
         foreach (var (label, value) in Fruits)
             if (value == _fruit) shown = label;
 

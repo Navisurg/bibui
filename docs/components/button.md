@@ -18,7 +18,7 @@ button draws only its label at rest. `tooltip-above`, `popover-open` and
 public static BibuiWidget Build(
     BibuiRuntime runtime,
     string id,
-    BibuiStr label,
+    ReadOnlySpan<char> label,
     bool ghost = false,
     bool disabled = false,
     ComponentSize size = ComponentSize.Md)
@@ -62,9 +62,9 @@ using Bibui.Runtime;
 
 sealed class Counter
 {
-    static readonly BibuiStr Minus = BibuiStr.FromStrLit("−"u8);
-    static readonly BibuiStr Plus = BibuiStr.FromStrLit("+"u8);
-    static readonly BibuiStr Reset = BibuiStr.FromStrLit("Reset"u8);
+    const string Minus = "−";
+    const string Plus = "+";
+    const string Reset = "Reset";
 
     int _count;   // the caller's state
 

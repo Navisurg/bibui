@@ -15,7 +15,7 @@ Fixtures: `badge-default`, `badge-primary`, `badge-success-dot`,
 ```cs
 public static Box Build(
     BibuiRuntime runtime,
-    BibuiStr label,
+    ReadOnlySpan<char> label,
     BadgeVariant variant = BadgeVariant.Default,
     bool leadingDot = false)
 
@@ -54,8 +54,8 @@ using Bibui.Runtime;
 
 sealed class SyncStatus
 {
-    static readonly BibuiStr InSync = BibuiStr.FromStrLit("In sync"u8);
-    static readonly BibuiStr Failed = BibuiStr.FromStrLit("Sync failed"u8);
+    const string InSync = "In sync";
+    const string Failed = "Sync failed";
 
     public bool Failing { get; set; }   // the caller's state, shown
 

@@ -43,14 +43,13 @@ using Bibui.Runtime.Platform;
 using static Bibui.Arrange;
 
 var runtime = new BibuiRuntime(new SkiaRasterBackend());
-var label = BibuiStr.FromStrLit("Add one"u8);
 int count = 0;
 
 runtime.Mount(() =>
 {
-    var add = Button.Build(runtime, "add", label);
+    var add = Button.Build(runtime, "add", "Add one");
     if (add.Clicked) count++;
-    var text = runtime.Text(System.Text.Encoding.UTF8.GetBytes($"Clicked {count} times"));
+    var text = runtime.Text($"Clicked {count} times");
     return Column(text, Space(12f), add).FillX().FillY().Padded(EdgeInsets.All(24f));
 });
 
@@ -63,7 +62,7 @@ dotnet run
 
 The build function runs every frame. `Button.Build` reports whether the
 button was clicked, so the app changes its own state right there. There are no
-callbacks. Labels are UTF-8 (`"Add one"u8`), and the window is cleared to the
+callbacks. Labels and texts are plain strings, and the window is cleared to the
 theme's background colour before each frame is painted.
 
 ## Two routes

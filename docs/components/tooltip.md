@@ -11,7 +11,7 @@ Fixture: `tooltip-above`.
 ## Build
 
 ```cs
-public static Box Build(BibuiRuntime runtime, BibuiStr text, Box? anchor = null)
+public static Box Build(BibuiRuntime runtime, ReadOnlySpan<char> text, Box? anchor = null)
 ```
 
 | Parameter | Meaning |
@@ -41,8 +41,8 @@ using Bibui.Runtime;
 
 sealed class CopyButton
 {
-    static readonly BibuiStr Copy = BibuiStr.FromStrLit("Copy"u8);
-    static readonly BibuiStr Tip = BibuiStr.FromStrLit("Copy to clipboard"u8);
+    const string Copy = "Copy";
+    const string Tip = "Copy to clipboard";
 
     public UiNode Build(BibuiRuntime runtime)
     {

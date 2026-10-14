@@ -48,7 +48,7 @@ using Bibui.Runtime.Platform;
 using static Bibui.Arrange;
 
 var runtime = new BibuiRuntime(new SkiaRasterBackend());
-var hello = "Hello, bibui"u8.ToArray();
+var hello = "Hello, bibui";
 
 runtime.Mount(() =>
     Column(runtime.Text(hello)).FillX().FillY().Padded(EdgeInsets.All(24f)));
@@ -66,7 +66,7 @@ new BibuiWindow(runtime, new SilkPlatformHost()).Run("Stepper");
   `FillX()` and `FillY()` make it fill its parent, the window.
 - Every node has a size on each axis: in pixels (`.Px(...)`), a share of its
   parent (`.FillX()`), or the size of its content. Text is sized by its words.
-- Text is UTF-8 bytes. `"..."u8` gives you a literal's bytes.
+- Text is a plain `string`, or any `ReadOnlySpan<char>`.
 - Every frame starts cleared to the theme's background colour, so the root
   needs no background of its own. Colours are theme tokens such as
   `UiColor.Accent`, resolved when the frame is painted, so a theme change
@@ -81,7 +81,6 @@ does not change yours: the app decides what a press means.
 Add `Stepper.cs`, a number with a minus and a plus button:
 
 ```csharp
-using System.Text;
 using Bibui;
 using Bibui.Runtime;
 using static Bibui.Arrange;
@@ -91,8 +90,8 @@ public readonly record struct StepperWidget(Box Node, int Value);
 
 public static class Stepper
 {
-    static readonly BibuiStr Minus = BibuiStr.FromStrLit("-"u8);
-    static readonly BibuiStr Plus = BibuiStr.FromStrLit("+"u8);
+    const string Minus = "-";
+    const string Plus = "+";
 
     public static StepperWidget Build(BibuiRuntime runtime, string id, int value)
     {
@@ -101,7 +100,9 @@ public static class Stepper
         if (down.Clicked) value--;
         if (up.Clicked) value++;
 
-        var text = runtime.TextFromId(id + "-value", Encoding.UTF8.GetBytes(value.ToString()), ComponentSize.Lg);
+        Span<char> digits = stackalloc char[11];
+        value.TryFormat(digits, out int length);
+        var text = runtime.TextFromId(id + "-value", digits[..length], ComponentSize.Lg);
         Box row = Row(CentredY(down), Space(12f), CentredY(text), Space(12f), CentredY(up));
         return new(row.Px(height: 40f), value);
     }
@@ -110,8 +111,9 @@ public static class Stepper
 
 Two things to notice:
 
-- Button labels are `BibuiStr`, kept in `static readonly` fields so they are
-  encoded once, not every frame.
+- Button labels are plain strings; a `const` costs nothing per frame. The
+  value is formatted into a stack buffer rather than a new string each frame:
+  the text copies it, so the buffer can go when the call returns.
 - The row is given a height (`Px(height: 40f)`) because its items are centred
   in it. Centring fills the parent's height, so that height cannot come from
   the same items. A fill inside a parent sized by its children is the usual
@@ -130,7 +132,7 @@ public record AppState(int Count);
 
 public static class App
 {
-    static readonly BibuiStr ResetLabel = BibuiStr.FromStrLit("Reset"u8);
+    const string ResetLabel = "Reset";
 
     public static void Mount(BibuiRuntime runtime, string theme = "default-dark") =>
         runtime.MountStateful(new AppState(0), (state, setState) =>
@@ -149,7 +151,7 @@ public static class App
             reset.Style.Padding = EdgeInsets.All(8f);
             reset.Style.BackgroundColor = press.Hovering ? UiColor.Accent : UiColor.SurfaceRaised;
             using (runtime.PushParent(reset))
-                runtime.Text(ResetLabel.AsMemory(), textColor: press.Hovering ? TextColor.AccentForeground : TextColor.Primary);
+                runtime.Text(ResetLabel, textColor: press.Hovering ? TextColor.AccentForeground : TextColor.Primary);
 
             return Column(stepper.Node, Space(16f), reset)
                 .FillX().FillY()

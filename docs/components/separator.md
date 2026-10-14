@@ -41,9 +41,9 @@ using Bibui.Runtime;
 
 sealed class Toolbar
 {
-    static readonly BibuiStr Cut = BibuiStr.FromStrLit("Cut"u8);
-    static readonly BibuiStr Copy = BibuiStr.FromStrLit("Copy"u8);
-    static readonly BibuiStr Help = BibuiStr.FromStrLit("Help"u8);
+    const string Cut = "Cut";
+    const string Copy = "Copy";
+    const string Help = "Help";
 
     public UiNode Build(BibuiRuntime runtime)
     {

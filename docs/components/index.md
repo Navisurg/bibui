@@ -24,9 +24,9 @@ you most of what a component does.
 - **Your state goes in by value, and what happened comes back.** A checkbox is
   given `on` and reports `Clicked`. It never flips `on` itself; you do that.
   Nothing is a callback.
-- **Labels are `BibuiStr`, not `string`.** Text is UTF-8 from start to end.
-  Encode a fixed label once and keep it:
-  `static readonly BibuiStr Save = BibuiStr.FromStrLit("Save"u8);`
+- **Labels are `ReadOnlySpan<char>`.** Pass a `string`, a slice, or text
+  formatted into a stack buffer: the label is copied, so it may change as soon
+  as the call returns. A `BibuiStr` is only for text the user edits.
 - **Disabled is a claim.** A disabled control still takes the press but reports
   nothing, so the press does not fall through to whatever is beneath it.
 - **Ask order is z-order.** A component asks about its boxes when you call it.

@@ -20,12 +20,12 @@ public static MenuScope? BeginBelow(BibuiRuntime runtime, string id, UiNode anch
 public static BibuiWidget Item(
     BibuiRuntime runtime,
     string id,
-    BibuiStr label,
+    ReadOnlySpan<char> label,
     string? icon = null,
-    BibuiStr? shortcut = null,
+    ReadOnlySpan<char> shortcut = default,
     bool disabled = false)
 public static Box Separator(BibuiRuntime runtime)
-public static Box Label(BibuiRuntime runtime, BibuiStr text)
+public static Box Label(BibuiRuntime runtime, ReadOnlySpan<char> text)
 
 // MenuScope
 public BibuiWidget End();
@@ -86,12 +86,12 @@ using Bibui.Runtime;
 
 sealed class AccountMenu
 {
-    static readonly BibuiStr Trigger = BibuiStr.FromStrLit("My Account"u8);
-    static readonly BibuiStr Account = BibuiStr.FromStrLit("Account"u8);
-    static readonly BibuiStr Profile = BibuiStr.FromStrLit("Profile"u8);
-    static readonly BibuiStr Settings = BibuiStr.FromStrLit("Settings"u8);
-    static readonly BibuiStr SettingsKey = BibuiStr.FromStrLit("⌘S"u8);
-    static readonly BibuiStr LogOut = BibuiStr.FromStrLit("Log out"u8);
+    const string Trigger = "My Account";
+    const string Account = "Account";
+    const string Profile = "Profile";
+    const string Settings = "Settings";
+    const string SettingsKey = "⌘S";
+    const string LogOut = "Log out";
 
     public UiNode Build(BibuiRuntime runtime)
     {
@@ -124,8 +124,8 @@ using Bibui.Runtime;
 
 sealed class FileContextMenu
 {
-    static readonly BibuiStr Rename = BibuiStr.FromStrLit("Rename"u8);
-    static readonly BibuiStr Delete = BibuiStr.FromStrLit("Delete"u8);
+    const string Rename = "Rename";
+    const string Delete = "Delete";
 
     (float X, float Y) _at;   // the caller's state: where it opens
 

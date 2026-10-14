@@ -118,7 +118,7 @@ A component is a plain static function, not a renderer or a class with
 state. `Switch.Build` (`bibui/src/Runtime/Switch.cs`) is the pattern:
 
 ```csharp
-public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, BibuiStr? label = null, bool disabled = false)
+public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default, bool disabled = false)
 ```
 
 - Compose it from `runtime.Box()` (pooled, keyless), `runtime.BoxFromId(id,
@@ -126,7 +126,8 @@ public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, BibuiS
   `runtime.Icon`, `runtime.Gap` and `runtime.PushParent`.
 - Every node states its size on both axes (`.Px()`, `.FillX()`, a share of
   its parent, or the sum of its children). There is no default size.
-- Text is UTF-8: labels are `BibuiStr`, never `string`.
+- Text is UTF-16. A read-only label is a `ReadOnlySpan<char>` (a `string` converts to it);
+  a `BibuiStr` is only for text the user edits, such as a `TextField`'s buffer.
 - Colours are theme tokens (`UiColor.Accent`, `UiColor.Border`) resolved at
   paint time, so a component takes no theme parameter. Line widths, focus
   ring, shadows, density and motion are read from `runtime.Theme`; do not

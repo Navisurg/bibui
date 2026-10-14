@@ -43,7 +43,7 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
 | Parameter | Meaning |
 |---|---|
 | `id` | The viewer's retained root. Its links, task boxes and wide tables are retained boxes under it. |
-| `source` | UTF-8 Markdown. It is parsed once and cached per runtime and id until the bytes change, so a frame costs one comparison and the build. |
+| `source` | The Markdown, in a buffer you own. It is parsed once and cached per runtime and id until the text changes, so a frame costs one comparison and the build. |
 | `document` | A document you parsed with `MarkdownDocument.Parse` and keep yourself. This skips the comparison. |
 | `width` | The viewer's width. With null, it is as wide as its parent, which must then have a width of its own. It is as tall as the document. |
 | `textSize` | Body text size. Headings use the steps above it. |
@@ -90,7 +90,7 @@ sealed class ReleaseNotes
 
         - [x] Tag the build
         - [ ] Publish the [notes](https://example.com/notes)
-        """u8);
+        """);
 
     public string? OpenedLink { get; private set; }
 
