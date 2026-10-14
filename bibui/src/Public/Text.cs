@@ -3,26 +3,26 @@ namespace Bibui.TextEdit;
 public ref struct TextOp
 {
     public System.ValueTuple<int, int> Range = (0, 0);
-    public ReadOnlySpan<byte> ReplaceString = default;
-    public ReadOnlySpan<byte> CopyString = default;
+    public ReadOnlySpan<char> ReplaceString = default;
+    public ReadOnlySpan<char> CopyString = default;
     public int NewCursor = 0;  // Cursor after applying op
     public int NewMark = 0;  // Mark after op
 
-    public static int MaxCodePointSize = 4;    
+    public static int MaxCodePointSize = 2; // chars: a surrogate pair    
 
     public TextOp() { }
 
-    public static int ScanCodePoint(ReadOnlySpan<byte> str, int cursor, int delta)
+    public static int ScanCodePoint(ReadOnlySpan<char> str, int cursor, int delta)
     {
-        int deltaBytes;
+        int deltaChars;
         System.Buffers.OperationStatus result;
         if (delta < 0)
         {
-            result = System.Text.Rune.DecodeLastFromUtf8(str[..cursor], out _, out deltaBytes);
+            result = System.Text.Rune.DecodeLastFromUtf16(str[..cursor], out _, out deltaChars);
         }
         else
         {
-            result = System.Text.Rune.DecodeFromUtf8(str[cursor..], out _, out deltaBytes);
+            result = System.Text.Rune.DecodeFromUtf16(str[cursor..], out _, out deltaChars);
         }
 
         // TODO(k): What should we do with NeedMoreData - for now we just ignore it
@@ -30,19 +30,19 @@ public ref struct TextOp
         {
             throw new NotImplementedException("Can't handle these strings");
         }
-        return deltaBytes * delta; // Convert to negative or positive delta
+        return deltaChars * delta; // Convert to negative or positive delta
     }
 
     /// <summary>
     /// Scan to the next word boundary in the direction of <paramref name="delta"/>
-    /// (sign only; magnitude ignored). Returns the byte offset from <paramref name="cursor"/>
+    /// (sign only; magnitude ignored). Returns the char offset from <paramref name="cursor"/>
     /// to the boundary — negative going left, positive going right, 0 at the edge.
     ///
-    /// A "word" is a run of non-whitespace bytes (punctuation included). Going forward
+    /// A "word" is a run of non-whitespace chars (punctuation included). Going forward
     /// from inside whitespace skips the whitespace and then the next word; going forward
     /// from inside a word skips the rest of the word — the usual Ctrl+Arrow behaviour.
     /// </summary>
-    public static int WordScan(ReadOnlySpan<byte> str, int cursor, int delta)
+    public static int WordScan(ReadOnlySpan<char> str, int cursor, int delta)
     {
         if (delta == 0 || str.Length == 0) return 0;
 
@@ -68,26 +68,26 @@ public ref struct TextOp
     /// the next one — so in a single-line buffer, to its start or its end.
     /// Returns an offset from the cursor, like the other scans.
     /// </summary>
-    internal static int LineScan(ReadOnlySpan<byte> str, int cursor, int delta)
+    internal static int LineScan(ReadOnlySpan<char> str, int cursor, int delta)
     {
         if (delta == 0) return 0;
 
         if (delta > 0)
         {
             int i = cursor;
-            while (i < str.Length && str[i] != (byte)'\n') i++;
+            while (i < str.Length && str[i] != '\n') i++;
             return i - cursor;
         }
         else
         {
             int i = cursor;
-            while (i > 0 && str[i - 1] != (byte)'\n') i--;
+            while (i > 0 && str[i - 1] != '\n') i--;
             return i - cursor;                                    // negative
         }
     }
 
-    private static bool IsSpace(byte b) =>
-        b == (byte)' ' || b == (byte)'\t' || b == (byte)'\n' || b == (byte)'\r';
+    private static bool IsSpace(char c) =>
+        c == ' ' || c == '\t' || c == '\n' || c == '\r';
 
     /// <summary>
     /// What <paramref name="ev"/> does to <paramref name="str"/> with its
@@ -99,7 +99,7 @@ public ref struct TextOp
     public static TextOp FromStateAndEvent(BibuiStr str,
                                            TextEditState state,
                                            BibUiEvent ev,
-                                           Span<byte> buf)
+                                           Span<char> buf)
     {
         TextOp op = new();
         op.NewMark = state.Mark;
@@ -110,7 +110,7 @@ public ref struct TextOp
         if (ev.Kind == BibUiEventKind.Submit)
         {
             op.Range         = (state.Cursor, state.Cursor);
-            op.ReplaceString = "\n"u8;
+            op.ReplaceString = "\n";
             op.NewCursor     = state.Cursor + 1;
             op.NewMark       = op.NewCursor;
             return op;
@@ -124,7 +124,7 @@ public ref struct TextOp
             return op;
         }
 
-        int bytesDelta =
+        int charsDelta =
               ev.Flags.HasFlag(TextActionFlags.WordScan) ? WordScan(str.Str, state.Cursor, ev.Delta)
             : ev.Flags.HasFlag(TextActionFlags.LineScan) ? LineScan(str.Str, state.Cursor, ev.Delta)
             : ScanCodePoint(str.Str, state.Cursor, ev.Delta);
@@ -135,11 +135,11 @@ public ref struct TextOp
         if (state.Cursor != state.Mark
             && ev.Flags.HasFlag(TextActionFlags.NoNavigationWithSelection))
         {
-            bytesDelta = 0;
+            charsDelta = 0;
         }
 
         // Apply the delta
-        op.NewCursor = state.Cursor + bytesDelta;
+        op.NewCursor = state.Cursor + charsDelta;
 
         // For selections we would keep mark, but otherwise
         // we set the mark to be the new cursor position.
@@ -179,7 +179,7 @@ public ref struct TextOp
         if (ev.CodePoint != 0)
         {
             var rune = new System.Text.Rune(ev.CodePoint);
-            int written = rune.EncodeToUtf8(buf);
+            int written = rune.EncodeToUtf16(buf);
             op.ReplaceString = buf[..written];
 
             // Only matters if we replace during a selection
@@ -195,13 +195,13 @@ public ref struct TextOp
 
         // paste — splice ev.PasteData over the (optional) selection. Same shape
         // as a CodePoint insert; the clipboard was read at the WM boundary.
-        if ((ev.Flags & TextActionFlags.Paste) != 0 && ev.PasteData is { Length: > 0 } bytes)
+        if ((ev.Flags & TextActionFlags.Paste) != 0 && ev.PasteData is { Length: > 0 } pasted)
         {
             int min = Math.Min(state.Cursor, state.Mark);
             int max = Math.Max(state.Cursor, state.Mark);
             op.Range         = (min, max);
-            op.ReplaceString = bytes;
-            op.NewCursor     = min + bytes.Length;
+            op.ReplaceString = pasted;
+            op.NewCursor     = min + pasted.Length;
             op.NewMark       = op.NewCursor;
         }
 

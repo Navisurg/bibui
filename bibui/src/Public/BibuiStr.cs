@@ -1,8 +1,9 @@
 namespace Bibui;
 
 /// <summary>
-/// A UTF-8 string bibui can edit in place: every label a component takes, and
-/// the buffer a <c>TextField</c> edits. In <c>Bibui</c> rather than
+/// A UTF-16 string bibui can edit in place: the buffer a <c>TextField</c>
+/// edits, which the caller owns, and what a <see cref="Text"/> keeps its copy
+/// of the text in. In <c>Bibui</c> rather than
 /// <c>Bibui.TextEdit</c> so that writing a label needs no extra <c>using</c>.
 /// </summary>
 public sealed class BibuiStr
@@ -15,25 +16,25 @@ public sealed class BibuiStr
     public long Capacity => _memory.Length;    
     public long Length { get; private set; }
 
-    private byte[] _memory;
+    private char[] _memory;
 
     public BibuiStr(int capacity)
     {
         // Align to multiple of 2
         int alignedCapacity = ((capacity + 1) / 2) * 2;
-        _memory = new byte[alignedCapacity];
+        _memory = new char[alignedCapacity];
         Length = 0;
     }
 
 
-    public static BibuiStr FromStrLit(ReadOnlySpan<byte> strLit)
+    public static BibuiStr FromStrLit(ReadOnlySpan<char> strLit)
     {
         BibuiStr str = new BibuiStr(strLit.Length);
         str.ReplaceRange((0, 0), strLit);
         return str;
     }
 
-    public void ReplaceRange(System.ValueTuple<int, int> range, ReadOnlySpan<byte> replace)
+    public void ReplaceRange(System.ValueTuple<int, int> range, ReadOnlySpan<char> replace)
     {
         var oldLen = Length;
         //           Head          replace          tail
@@ -59,14 +60,17 @@ public sealed class BibuiStr
         Length = newLen;
     }
    
-    public Span<byte> Str => _memory.AsSpan(0, (int)Length);    
+    public Span<char> Str => _memory.AsSpan(0, (int)Length);    
 
     /// <summary>
-    /// The text as it stands, as memory a node can hold past this call: what a
-    /// <see cref="Text"/> is given. A view, not a copy — an edit that grows the
-    /// buffer moves it, and a view taken before still reads the text before.
+    /// The text as it stands, as memory that can be held past this call. A
+    /// view, not a copy — an edit that grows the buffer moves it, and a view
+    /// taken before still reads the text before.
     /// </summary>
-    public ReadOnlyMemory<byte> AsMemory() => _memory.AsMemory(0, (int)Length);
+    public ReadOnlyMemory<char> AsMemory() => _memory.AsMemory(0, (int)Length);
+
+    /// <summary>The text as it stands, as a new string.</summary>
+    public override string ToString() => new(Str);
 
     public void Grow() => Resize(Capacity << GrowFactor);
     public void Shrink() => Resize(Capacity >> ShrinkFactor);
@@ -79,7 +83,7 @@ public sealed class BibuiStr
 
     public void Resize(long newSize)
     {
-        Array.Resize<byte>(ref _memory, (int)newSize);
+        Array.Resize<char>(ref _memory, (int)newSize);
     }       
 }
 

@@ -5,19 +5,25 @@ public abstract class UiComponent : UiNode
 }
 
 /// <summary>
-/// A text: the UTF-8 bytes in <see cref="Content"/>, drawn as they stand on one
-/// line in one font. Built with <c>runtime.Text</c>, which says everything
+/// A text: the UTF-16 <see cref="Content"/>, drawn as it stands on one line in
+/// one font. Built with <c>runtime.Text</c>, which says everything
 /// about it in the call; only its <see cref="Size"/> may be changed afterwards.
 /// </summary>
 public sealed class Text : UiComponent
 {
     internal Text() { }
 
+    // Its own copy of what it shows: a pooled text keeps the buffer from frame
+    // to frame, so it is allocated again only for a longer text.
+    private readonly BibuiStr _content = new(0);
+
     /// <summary>
-    /// What it shows. The caller's memory, not a copy: the caller keeps it as
-    /// it is until the frame is painted.
+    /// What it shows: a copy of the text it was built with, so what the
+    /// caller passed may change as soon as the call returns.
     /// </summary>
-    public ReadOnlyMemory<byte> Content { get; internal set; }
+    public ReadOnlySpan<char> Content => _content.Str;
+
+    internal void SetContent(ReadOnlySpan<char> text) => _content.ReplaceRange((0, (int)_content.Length), text);
 
     /// <summary>
     /// Its size, always said: what it was built with, or the size pushed with
