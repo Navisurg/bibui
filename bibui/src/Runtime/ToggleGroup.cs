@@ -4,7 +4,7 @@ using Bibui.TextEdit;
 namespace Bibui.Runtime;
 
 /// <summary>One item of a <see cref="ToggleGroup"/>: what it reads, and the value it stands for.</summary>
-public readonly record struct ToggleOption(BibuiStr Label, string Value);
+public readonly record struct ToggleOption(string Label, string Value);
 
 /// <summary>What a <see cref="ToggleGroup"/> built: its box, and the value picked this frame, if any.</summary>
 public readonly record struct ToggleGroupWidget(Box Node, string? Picked);
@@ -72,7 +72,7 @@ public static class ToggleGroup
                 using (runtime.PushParent(item))
                 {
                     Arrange.Spring(item);
-                    runtime.Text(items[i].Label.AsMemory(), textColor: active ? TextColor.Primary : TextColor.Secondary);
+                    runtime.Text(items[i].Label, textColor: active ? TextColor.Primary : TextColor.Secondary);
                     Arrange.Spring(item);
                 }
             }

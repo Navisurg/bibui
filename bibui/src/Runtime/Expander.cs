@@ -43,11 +43,10 @@ public static class Expander
     /// as wide as the frame and as tall as what is built into it: push it to
     /// build the content, and size it to fix the height.
     /// </summary>
-    public static ExpanderWidget Build(BibuiRuntime runtime, string id, BibuiStr title, bool open)
+    public static ExpanderWidget Build(BibuiRuntime runtime, string id, ReadOnlySpan<char> title, bool open)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
-        ArgumentNullException.ThrowIfNull(title);
 
         var theme = runtime.Theme;
         Box frame = runtime.Box();
@@ -75,7 +74,7 @@ public static class Expander
                 using (runtime.PushParent(titleCell))
                 {
                     Arrange.Spring(titleCell);
-                    using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title.AsMemory(), textColor: TextColor.Primary);
+                    using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, textColor: TextColor.Primary);
                     Arrange.Spring(titleCell);
                 }
                 Arrange.Spring(header);

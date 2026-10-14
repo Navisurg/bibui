@@ -38,7 +38,7 @@ public static class Switch
     /// <paramref name="height"/> is the track's height in pixels, and the
     /// height of the row with its label; every other size is a fraction of it.
     /// </summary>
-    public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, BibuiStr? label = null, bool disabled = false,
+    public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default, bool disabled = false,
         float height = 24f)
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -46,7 +46,7 @@ public static class Switch
 
         // With a label, the row is the outer box: acquired first, so the track
         // and the label are acquired under it.
-        Box? row = label is { Length: > 0 } ? runtime.BoxFromId("row" + id) : null;
+        Box? row = !label.IsEmpty ? runtime.BoxFromId("row" + id) : null;
         using var inRow = row is not null ? runtime.PushParent(row) : default;
         if (row is not null)
         {
@@ -118,7 +118,7 @@ public static class Switch
         using (runtime.PushParent(cell))
         {
             Arrange.Spring(cell);
-            runtime.Text(label?.AsMemory() ?? default, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
+            runtime.Text(label, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
             Arrange.Spring(cell);
         }
         return new BibuiWidget(row, interaction);

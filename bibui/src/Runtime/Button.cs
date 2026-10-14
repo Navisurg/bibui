@@ -42,14 +42,13 @@ public static class Button
     public static BibuiWidget Build(
         BibuiRuntime runtime,
         string id,
-        BibuiStr label,
+        ReadOnlySpan<char> label,
         bool ghost = false,
         bool disabled = false,
         ComponentSize size = ComponentSize.Md)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
-        ArgumentNullException.ThrowIfNull(label);
 
         Box box = runtime.BoxFromId(
             id, disabled ? InteractionKinds.Disabled : InteractionKinds.LeftPress);
@@ -85,7 +84,7 @@ public static class Button
         box.ChildLayoutAxis = LayoutAxis.X;
         box.SizeX = box.SizeY = SemanticSize.ChildrenSum();
         using (runtime.PushParent(box))
-            runtime.Text(label.AsMemory(), size, disabled ? TextColor.Disabled : TextColor.Primary);
+            runtime.Text(label, size, disabled ? TextColor.Disabled : TextColor.Primary);
 
         return new BibuiWidget(box, interaction);
     }

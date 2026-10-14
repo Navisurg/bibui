@@ -15,18 +15,17 @@ public static class Badge
     private const float PadX = 12f;
     private const float PadY = 4f;
     private const float DotGap = 6f;
-    private static readonly byte[] Bullet = "\u2022"u8.ToArray();
+    private const string Bullet = "\u2022";
 
     /// <summary>
     /// Builds a badge reading <paramref name="label"/> under the parent in
     /// scope and returns its box. A leading dot is a bullet glyph in the
     /// variant's accent, set in the label's own font so the two share a line.
     /// </summary>
-    public static Box Build(BibuiRuntime runtime, BibuiStr label,
+    public static Box Build(BibuiRuntime runtime, ReadOnlySpan<char> label,
         BadgeVariant variant = BadgeVariant.Default, bool leadingDot = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
-        ArgumentNullException.ThrowIfNull(label);
 
         var (fill, ink, edge, dot) = Colours(variant);
 
@@ -50,7 +49,7 @@ public static class Badge
                 runtime.Text(Bullet, ComponentSize.Sm, dot);
                 runtime.Gap(DotGap);
             }
-            runtime.Text(label.AsMemory(), ComponentSize.Sm, ink);
+            runtime.Text(label, ComponentSize.Sm, ink);
         }
         return pill;
     }

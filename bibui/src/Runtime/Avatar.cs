@@ -18,11 +18,10 @@ public static class Avatar
     /// <paramref name="fill"/> and <paramref name="ink"/> are the circle and
     /// the initials, the accent and the text on it unless said otherwise.
     /// </summary>
-    public static Box Build(BibuiRuntime runtime, BibuiStr initials, float size = DefaultSize,
+    public static Box Build(BibuiRuntime runtime, ReadOnlySpan<char> initials, float size = DefaultSize,
         UiColor? fill = null, UiColor? ink = null, ComponentSize fontSize = ComponentSize.Lg)
     {
         ArgumentNullException.ThrowIfNull(runtime);
-        ArgumentNullException.ThrowIfNull(initials);
 
         Box circle = runtime.Box();
         circle.ChildLayoutAxis = LayoutAxis.X;
@@ -42,7 +41,7 @@ public static class Avatar
             using (runtime.PushParent(column))
             {
                 Arrange.Spring(column);
-                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(initials.AsMemory(), fontSize, ink ?? UiColor.AccentForeground);
+                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(initials, fontSize, ink ?? UiColor.AccentForeground);
                 Arrange.Spring(column);
             }
             Arrange.Spring(circle);

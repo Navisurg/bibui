@@ -4,7 +4,7 @@ using Bibui.TextEdit;
 namespace Bibui.Runtime;
 
 /// <summary>One tab of a <see cref="Tabs"/> strip: what it reads, and the value it stands for.</summary>
-public readonly record struct TabOption(BibuiStr Label, string Value);
+public readonly record struct TabOption(string Label, string Value);
 
 /// <summary>What <see cref="Tabs.Build"/> built: the strip, and the value of the tab clicked this frame, if any.</summary>
 public readonly record struct TabsWidget(Box Node, string? Picked)
@@ -79,7 +79,7 @@ public static class Tabs
                 using (runtime.PushParent(tab))
                 {
                     Arrange.Spring(tab);
-                    runtime.Text(items[i].Label.AsMemory(), textColor: active ? TextColor.Primary : TextColor.Secondary);
+                    runtime.Text(items[i].Label, textColor: active ? TextColor.Primary : TextColor.Secondary);
                     Arrange.Spring(tab);
                 }
             }
