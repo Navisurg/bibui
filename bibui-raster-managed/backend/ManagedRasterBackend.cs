@@ -160,22 +160,7 @@ public sealed class ManagedRasterBackend : IRasterBackend
 
     // ── Text ─────────────────────────────────────────────────────────────────
 
-    public float MeasureText(in RasterFont font, string text) => Strike(font).Measure(text);
-
-    public float MeasureText(in RasterFont font, ReadOnlySpan<byte> utf8) => Strike(font).Measure(Utf16(utf8));
-
-    // The text engine shapes UTF-16, so UTF-8 is transcoded into a buffer kept
-    // for the next call rather than into a string per call. Valid until the next
-    // call: the backend is single-threaded, like the renderer that owns it.
-    private char[] _utf16 = new char[256];
-
-    internal ReadOnlySpan<char> Utf16(ReadOnlySpan<byte> utf8)
-    {
-        int max = System.Text.Encoding.UTF8.GetMaxCharCount(utf8.Length);
-        if (_utf16.Length < max) _utf16 = new char[Math.Max(max, _utf16.Length * 2)];
-        int n = System.Text.Encoding.UTF8.GetChars(utf8, _utf16);
-        return _utf16.AsSpan(0, n);
-    }
+    public float MeasureText(in RasterFont font, ReadOnlySpan<char> text) => Strike(font).Measure(text);
 
     public TextMetrics GetMetrics(in RasterFont font)
     {
@@ -183,7 +168,7 @@ public sealed class ManagedRasterBackend : IRasterBackend
         return new TextMetrics(m.Ascent, m.Descent, m.Leading);
     }
 
-    public ShapedRun ShapeText(in RasterFont font, string text)
+    public ShapedRun ShapeText(in RasterFont font, ReadOnlySpan<char> text)
     {
         var run = ScratchRun;
         Strike(font).Shape(text, run);
@@ -567,27 +552,17 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
 
     // ── Text ─────────────────────────────────────────────────────────────────
 
-    public float DrawText(string text, float x, float baselineY, in RasterFont font, Rgba color)
+    public float DrawText(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color)
     {
         if (_rec is { } r)
         {
             if (!r.Tee) return r.DrawText(text, x, baselineY, font, color, drawn: null);
-            return r.DrawText(text, x, baselineY, font, color, DrawText(text.AsSpan(), x, baselineY, font, color));
+            return r.DrawText(text, x, baselineY, font, color, DrawRun(text, x, baselineY, font, color));
         }
-        return DrawText(text.AsSpan(), x, baselineY, font, color);
+        return DrawRun(text, x, baselineY, font, color);
     }
 
-    public float DrawText(ReadOnlySpan<byte> utf8, float x, float baselineY, in RasterFont font, Rgba color)
-    {
-        if (_rec is { } r)
-        {
-            if (!r.Tee) return r.DrawText(utf8, x, baselineY, font, color, drawn: null);
-            return r.DrawText(utf8, x, baselineY, font, color, DrawText(_backend.Utf16(utf8), x, baselineY, font, color));
-        }
-        return DrawText(_backend.Utf16(utf8), x, baselineY, font, color);
-    }
-
-    private float DrawText(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color)
+    private float DrawRun(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color)
     {
         var run = _backend.ScratchRun;
         var strike = _backend.Strike(font);

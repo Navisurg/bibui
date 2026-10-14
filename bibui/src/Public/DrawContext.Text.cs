@@ -14,7 +14,7 @@ namespace Bibui;
 public readonly ref partial struct DrawContext
 {
     /// <summary>
-    /// Draws one line of UTF-8 <paramref name="utf8"/> with its baseline at
+    /// Draws one line of <paramref name="text"/> with its baseline at
     /// <paramref name="baselineY"/>. Position is physical; <paramref name="size"/>
     /// is logical, as everywhere a font size is named.
     ///
@@ -22,12 +22,12 @@ public readonly ref partial struct DrawContext
     /// paint: a font without a glyph falls back, so the run split decides how
     /// many typefaces this draw needs.
     /// </summary>
-    private void DrawRuns(ReadOnlySpan<byte> utf8, float x, float baselineY,
+    private void DrawRuns(ReadOnlySpan<char> text, float x, float baselineY,
         float size, Rgba color, string? family, int weight)
     {
         float cursor = x;
-        for (var run = Fonts.SplitRuns(utf8, family, weight); run is not null; run = run.Next)
-            cursor += Canvas.DrawText(utf8[run.Start..run.End], cursor, baselineY, _ctx.Font(run.Typeface, size), color);
+        for (var run = Fonts.SplitRuns(text, family, weight); run is not null; run = run.Next)
+            cursor += Canvas.DrawText(text[run.Start..run.End], cursor, baselineY, _ctx.Font(run.Typeface, size), color);
     }
 
     /// <summary>Ascent and descent of the base font — one baseline for every run.</summary>
@@ -56,29 +56,29 @@ public readonly ref partial struct DrawContext
         => Fonts.BlockHeight(lines, fontSize, family, weight, Scale);
 
     /// <summary>
-    /// One line of UTF-8 <paramref name="utf8"/> in <paramref name="font"/>, its
+    /// One line of <paramref name="text"/> in <paramref name="font"/>, its
     /// ascent at <paramref name="top"/>. What a <see cref="Text"/> is drawn with.
     /// </summary>
-    internal void DrawTextTop(ReadOnlySpan<byte> utf8, float x, float top, in Font font, ReadOnlySpan<char> color)
+    internal void DrawTextTop(ReadOnlySpan<char> text, float x, float top, in Font font, ReadOnlySpan<char> color)
     {
-        if (utf8.IsEmpty) return;
+        if (text.IsEmpty) return;
         var c = Color(color);
         float baselineY = (top * Scale) - FontMetrics(font.Size, font.Family, font.Weight).Ascent;
-        DrawRuns(utf8, x * Scale, baselineY, font.Size, c, font.Family, font.Weight);
+        DrawRuns(text, x * Scale, baselineY, font.Size, c, font.Family, font.Weight);
     }
 
     // An icon with no path: one glyph, centred in the logical rect.
-    private void DrawGlyphCentered(ReadOnlySpan<byte> utf8, float rectX, float rectY, float rectW, float rectH,
+    private void DrawGlyphCentered(ReadOnlySpan<char> text, float rectX, float rectY, float rectW, float rectH,
         float fontSize, Rgba color)
     {
         const int weight = 600;
         var metrics = FontMetrics(fontSize, null, weight);
-        float textWidth = _ctx.MeasureRuns(utf8, fontSize, null, weight);
+        float textWidth = _ctx.MeasureRuns(text, fontSize, null, weight);
         float textHeight = metrics.Descent - metrics.Ascent;
         float textX = (rectX * Scale) + ((rectW * Scale) - textWidth) / 2f;
         float baselineY = (rectY * Scale) + ((rectH * Scale) - textHeight) / 2f - metrics.Ascent;
 
-        DrawRuns(utf8, textX, baselineY, fontSize, color, null, weight);
+        DrawRuns(text, textX, baselineY, fontSize, color, null, weight);
     }
 
     /// <summary>
@@ -101,9 +101,9 @@ public readonly ref partial struct DrawContext
             var glyph = string.IsNullOrEmpty(iconName)
                 ? new System.Text.Rune('·')
                 : System.Text.Rune.TryCreate(char.ToUpperInvariant(iconName[0]), out var r) ? r : System.Text.Rune.ReplacementChar;
-            Span<byte> utf8 = stackalloc byte[4];
-            int length = glyph.EncodeToUtf8(utf8);
-            DrawGlyphCentered(utf8[..length], cx - size / 2f, cy - size / 2f, size, size, size * 0.75f, color);
+            Span<char> chars = stackalloc char[2];
+            int length = glyph.EncodeToUtf16(chars);
+            DrawGlyphCentered(chars[..length], cx - size / 2f, cy - size / 2f, size, size, size * 0.75f, color);
             return;
         }
 

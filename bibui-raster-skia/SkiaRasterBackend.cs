@@ -24,10 +24,8 @@ public sealed class SkiaRasterBackend : IRasterBackend
     // so a child can never be evicted from under a live paint: they go together.
     internal readonly ResourceCache<CacheKey, SkiaPaintEntry> Paints;
     internal readonly ResourceCache<TextPaintKey, SKPaint> TextPaints;
-    // The same paints over UTF-8, and the font each draws a text blob with:
-    // bibui's text is UTF-8 from the caller's bytes to the canvas.
-    internal readonly ResourceCache<TextPaintKey, SKPaint> Utf8TextPaints;
-    internal readonly ResourceCache<TextPaintKey, SKFont> Utf8TextFonts;
+    // The font each text paint draws a text blob with.
+    internal readonly ResourceCache<TextPaintKey, SKFont> TextFonts;
 
     // Typefaces by instance. SkiaSharp hands back one managed SKTypeface per
     // native face, and bibui splits text into runs by typeface identity — so
@@ -43,8 +41,7 @@ public sealed class SkiaRasterBackend : IRasterBackend
     {
         Paints = Create<CacheKey, SkiaPaintEntry>();
         TextPaints = Create<TextPaintKey, SKPaint>();
-        Utf8TextPaints = Create<TextPaintKey, SKPaint>();
-        Utf8TextFonts = Create<TextPaintKey, SKFont>();
+        TextFonts = Create<TextPaintKey, SKFont>();
     }
 
     private ResourceCache<TKey, TValue> Create<TKey, TValue>() where TKey : notnull
@@ -173,39 +170,16 @@ public sealed class SkiaRasterBackend : IRasterBackend
             });
     }
 
-    /// <summary><see cref="TextPaint"/> over UTF-8 bytes rather than UTF-16 chars.</summary>
-    internal SKPaint Utf8TextPaint(in RasterFont font, SKColor color)
-    {
-        var tf = Typeface(font.Typeface);
-        var key = TextPaintKey.For(font.Size, color, font.Typeface.Id);
-        return Utf8TextPaints.FromKey(key, (font.Size, color, tf),
-            static p => new SKPaint
-            {
-                TextSize = p.Size,
-                Typeface = p.tf.Native,
-                TextEncoding = SKTextEncoding.Utf8,
-                Color = p.color,
-                IsAntialias = true,
-                SubpixelText = true,
-                LcdRenderText = false,
-                IsAutohinted = true,
-                HintingLevel = SKPaintHinting.Full,
-            });
-    }
-
     /// <summary>
-    /// The font <see cref="Utf8TextPaint"/> draws with, for a text blob built
-    /// over UTF-8: what drawing a string does inside Skia, without the string.
+    /// The font <see cref="TextPaint"/> draws with, for a text blob built over
+    /// chars: what drawing a string does inside Skia, without the string.
     /// </summary>
-    internal SKFont Utf8TextFont(in RasterFont font, SKColor color, SKPaint paint)
-        => Utf8TextFonts.FromKey(TextPaintKey.For(font.Size, color, font.Typeface.Id), paint,
+    internal SKFont TextFont(in RasterFont font, SKColor color, SKPaint paint)
+        => TextFonts.FromKey(TextPaintKey.For(font.Size, color, font.Typeface.Id), paint,
             static p => p.ToFont());
 
-    public float MeasureText(in RasterFont font, string text)
+    public float MeasureText(in RasterFont font, ReadOnlySpan<char> text)
         => TextPaint(font, SKColors.Black).MeasureText(text);
-
-    public float MeasureText(in RasterFont font, ReadOnlySpan<byte> utf8)
-        => Utf8TextPaint(font, SKColors.Black).MeasureText(utf8);
 
     public TextMetrics GetMetrics(in RasterFont font)
     {
@@ -214,7 +188,7 @@ public sealed class SkiaRasterBackend : IRasterBackend
         return m.ToTextMetrics();
     }
 
-    public ShapedRun ShapeText(in RasterFont font, string text)
+    public ShapedRun ShapeText(in RasterFont font, ReadOnlySpan<char> text)
     {
         using var skFont = TextPaint(font, SKColors.Black).ToFont();
         var glyphs = new ushort[skFont.CountGlyphs(text)];
