@@ -8,7 +8,7 @@ namespace Bibui;
 /// <summary>
 /// Everything about text that is not drawing it: the typefaces, the runs a
 /// text splits into by typeface, a font's metrics, how wide a text is, and
-/// where it breaks into lines at a width. Text is UTF-8 throughout. Layout, the
+/// where it breaks into lines at a width. Text is UTF-16 throughout. Layout, the
 /// painter and the runtime all ask this one instance, so a text measured by any
 /// of them is a cache hit for the others, and what is drawn is what was measured.
 ///
@@ -70,12 +70,12 @@ public sealed class Fonts : IDisposable
     internal RasterTypeface Regular => _provider.Regular;
 
     /// <summary>
-    /// UTF-8 <paramref name="utf8"/> split into runs by the typeface that has
+    /// <paramref name="text"/> split into runs by the typeface that has
     /// each code point's glyph: the base font where it can, a fallback where
     /// not. The first run, the rest linked from it; null for empty text.
     /// </summary>
-    internal TextRun? SplitRuns(ReadOnlySpan<byte> utf8, string? family, int weight)
-        => _provider.SplitRuns(utf8, family, weight);
+    internal TextRun? SplitRuns(ReadOnlySpan<char> text, string? family, int weight)
+        => _provider.SplitRuns(text, family, weight);
 
     // ── Metrics ──────────────────────────────────────────────────────────────
 
@@ -159,47 +159,47 @@ public sealed class Fonts : IDisposable
     // ── A text node's size ───────────────────────────────────────────────────
 
     /// <summary>
-    /// How large <paramref name="text"/> is: as wide as its bytes on one line,
+    /// How large <paramref name="text"/> is: as wide as its chars on one line,
     /// and one line tall. A text is one line whatever room it is given; what
     /// breaks into lines is composed from texts, as a multi-line field is.
     /// </summary>
     internal Size Measure(Text text, in Font font)
-        => new(Measure(text.Content.Span, font), LineHeight(font));
+        => new(Measure(text.Content, font), LineHeight(font));
 
     // ── Public: measuring in a Font ──────────────────────────────────────────
 
     /// <summary>
-    /// The width of UTF-8 <paramref name="utf8"/> on one line in
+    /// The width of <paramref name="text"/> on one line in
     /// <paramref name="font"/>, in logical px. The same number layout gives a
     /// text with that content, from the same cache.
     /// </summary>
-    public float Measure(ReadOnlySpan<byte> utf8, in Font font)
-        => MeasureText(utf8, font.Size, font.Scale, font.Family, font.Weight);
+    public float Measure(ReadOnlySpan<char> text, in Font font)
+        => MeasureText(text, font.Size, font.Scale, font.Family, font.Weight);
 
     /// <summary>
-    /// The byte offset in UTF-8 <paramref name="utf8"/> nearest <paramref name="x"/>,
+    /// The char offset in <paramref name="text"/> nearest <paramref name="x"/>,
     /// logical px from where the text starts: a code point boundary, the one
     /// after a glyph when <paramref name="x"/> is past its middle. 0 at or before
     /// the start, the length past the end.
     ///
-    /// <para>Each candidate is the width of the bytes before it, measured as a
+    /// <para>Each candidate is the width of the chars before it, measured as a
     /// text of its own — which is how a text split at that offset is drawn.</para>
     /// </summary>
-    public int OffsetAt(ReadOnlySpan<byte> utf8, in Font font, float x)
+    public int OffsetAt(ReadOnlySpan<char> text, in Font font, float x)
     {
-        if (x <= 0f || utf8.IsEmpty) return 0;
+        if (x <= 0f || text.IsEmpty) return 0;
         int previous = 0;
         float previousWidth = 0f;
-        while (previous < utf8.Length)
+        while (previous < text.Length)
         {
-            System.Text.Rune.DecodeFromUtf8(utf8[previous..], out _, out int length);
+            System.Text.Rune.DecodeFromUtf16(text[previous..], out _, out int length);
             int next = previous + Math.Max(1, length);
-            float width = Measure(utf8[..next], font);
+            float width = Measure(text[..next], font);
             if (width >= x) return x - previousWidth < width - x ? previous : next;
             previous = next;
             previousWidth = width;
         }
-        return utf8.Length;
+        return text.Length;
     }
 
     // ── Measuring ────────────────────────────────────────────────────────────
@@ -228,31 +228,31 @@ public sealed class Fonts : IDisposable
     /// Width in physical px, summed over the run split. Measuring the whole
     /// text against one typeface would be wrong wherever fallback applies.
     /// </summary>
-    internal float MeasureRuns(ReadOnlySpan<byte> utf8, float logicalFontSize, string? family, int weight, float scale)
+    internal float MeasureRuns(ReadOnlySpan<char> text, float logicalFontSize, string? family, int weight, float scale)
     {
         float total = 0f;
-        for (var run = SplitRuns(utf8, family, weight); run is not null; run = run.Next)
-            total += _backend.MeasureText(new RasterFont(run.Typeface, logicalFontSize * scale), utf8[run.Start..run.End]);
+        for (var run = SplitRuns(text, family, weight); run is not null; run = run.Next)
+            total += _backend.MeasureText(new RasterFont(run.Typeface, logicalFontSize * scale), text[run.Start..run.End]);
         return total;
     }
 
-    /// <summary>The width of UTF-8 <paramref name="utf8"/> in logical px.</summary>
-    private float MeasureText(ReadOnlySpan<byte> utf8, float logicalFontSize, float scale, string? family, int weight)
+    /// <summary>The width of <paramref name="text"/> in logical px.</summary>
+    private float MeasureText(ReadOnlySpan<char> text, float logicalFontSize, float scale, string? family, int weight)
     {
-        if (utf8.IsEmpty) return 0f;
-        var key = MeasureKey.For(utf8, logicalFontSize * scale, family, weight);
+        if (text.IsEmpty) return 0f;
+        var key = MeasureKey.For(text, logicalFontSize * scale, family, weight);
         return _measures.TryGet(key, out float width)
             ? width
-            : _measures.Add(key, MeasureRuns(utf8, logicalFontSize, family, weight, scale) / scale);
+            : _measures.Add(key, MeasureRuns(text, logicalFontSize, family, weight, scale) / scale);
     }
 
 
     // ── Lines ────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The lines <paramref name="utf8"/> breaks into at <paramref name="width"/>
+    /// The lines <paramref name="text"/> breaks into at <paramref name="width"/>
     /// logical px in <paramref name="font"/>: the first, the rest linked from it;
-    /// null for empty text. Offsets are bytes into <paramref name="utf8"/>.
+    /// null for empty text. Offsets are chars into <paramref name="text"/>.
     ///
     /// <para><see cref="TextWrap.Words"/>, the default, is greedy at spaces: a
     /// line holds as many words as fit, and a word wider than the width is a
@@ -265,39 +265,39 @@ public sealed class Fonts : IDisposable
     /// <para>Either way a line break (\n, \r, \r\n) always starts a new line,
     /// and a blank line is a line of its own.</para>
     /// </summary>
-    public TextLine? Wrap(ReadOnlySpan<byte> utf8, in Font font, float width, TextWrap wrap = TextWrap.Words)
+    public TextLine? Wrap(ReadOnlySpan<char> text, in Font font, float width, TextWrap wrap = TextWrap.Words)
     {
-        if (utf8.IsEmpty) return null;
+        if (text.IsEmpty) return null;
         // The same text is wrapped several times in one frame — to measure the
         // box, and to draw it — and then identically on every frame after. The
         // key says everything that moves a line break, so a changed input is a
         // different key rather than a stale one.
-        var key = WrapKey.For(utf8, width, font.Size * font.Scale, font.Scale, font.Family, font.Weight, wrap);
-        return _lines.TryGet(key, out var lines) ? lines : _lines.Add(key, WrapUncached(utf8, width, font, wrap));
+        var key = WrapKey.For(text, width, font.Size * font.Scale, font.Scale, font.Family, font.Weight, wrap);
+        return _lines.TryGet(key, out var lines) ? lines : _lines.Add(key, WrapUncached(text, width, font, wrap));
     }
 
-    private TextLine WrapUncached(ReadOnlySpan<byte> utf8, float maxWidth, in Font font, TextWrap wrap)
+    private TextLine WrapUncached(ReadOnlySpan<char> text, float maxWidth, in Font font, TextWrap wrap)
     {
         var result = new Lines();
 
         int idx = 0;
-        while (idx <= utf8.Length)
+        while (idx <= text.Length)
         {
             int segStart = idx;
-            while (idx < utf8.Length && utf8[idx] != (byte)'\n' && utf8[idx] != (byte)'\r') idx++;
+            while (idx < text.Length && text[idx] != '\n' && text[idx] != '\r') idx++;
             int segEnd = idx;
 
             var before = result.Last;
-            if (wrap == TextWrap.Characters) WrapCharacters(utf8, segStart, segEnd, maxWidth, font, ref result);
-            else WrapSegment(utf8, segStart, segEnd, maxWidth, font, ref result);
+            if (wrap == TextWrap.Characters) WrapCharacters(text, segStart, segEnd, maxWidth, font, ref result);
+            else WrapSegment(text, segStart, segEnd, maxWidth, font, ref result);
             // Always emit ≥1 entry per logical line so blank lines (\n\n, trailing \n)
             // produce empty lines that line up with what is drawn.
             if (result.Last == before)
                 result.Add(new TextLine(segStart, segStart));
 
-            if (idx >= utf8.Length) break;
+            if (idx >= text.Length) break;
             // Consume the line break — \r\n counts as one.
-            if (idx + 1 < utf8.Length && utf8[idx] == (byte)'\r' && utf8[idx + 1] == (byte)'\n') idx += 2;
+            if (idx + 1 < text.Length && text[idx] == '\r' && text[idx + 1] == '\n') idx += 2;
             else idx++;
         }
 
@@ -317,7 +317,7 @@ public sealed class Fonts : IDisposable
     // spaces make empty words. A line's text is every word from its first
     // non-empty one to the last that fits, with the spaces between them as they
     // stand in the text — so a candidate line is one slice of it, never built.
-    private void WrapSegment(ReadOnlySpan<byte> utf8, int segStart, int segEnd, float maxWidth, in Font font,
+    private void WrapSegment(ReadOnlySpan<char> text, int segStart, int segEnd, float maxWidth, in Font font,
                              ref Lines result)
     {
         int lineStart = segStart;   // where the line's range starts: its first word
@@ -328,10 +328,10 @@ public sealed class Fonts : IDisposable
         while (i <= segEnd)
         {
             int wordStart = i;
-            while (i < segEnd && utf8[i] != (byte)' ') i++;
+            while (i < segEnd && text[i] != ' ') i++;
             int wordEnd = i;
 
-            var candidate = textStart < 0 ? utf8[wordStart..wordEnd] : utf8[textStart..wordEnd];
+            var candidate = textStart < 0 ? text[wordStart..wordEnd] : text[textStart..wordEnd];
             float w = MeasureRuns(candidate, font.Size, font.Family, font.Weight, font.Scale) / font.Scale;
             if (!Fits(w, maxWidth) && textStart >= 0)
             {
@@ -354,21 +354,21 @@ public sealed class Fonts : IDisposable
 
     // One logical line, [segStart, segEnd), cut into the longest runs of
     // characters that fit, each at least one character long.
-    private void WrapCharacters(ReadOnlySpan<byte> utf8, int segStart, int segEnd, float maxWidth, in Font font,
+    private void WrapCharacters(ReadOnlySpan<char> text, int segStart, int segEnd, float maxWidth, in Font font,
                                 ref Lines result)
     {
         int start = segStart;
         while (start < segEnd)
         {
             // Invariant: [start, lo) fits, or is the first character; nothing past hi does.
-            int lo = NextCharacter(utf8, start, segEnd), hi = segEnd;
+            int lo = NextCharacter(text, start, segEnd), hi = segEnd;
             while (lo < hi)
             {
-                int mid = CharacterStart(utf8, (lo + hi + 1) / 2, lo);
-                if (mid <= lo) mid = NextCharacter(utf8, lo, segEnd);
-                float w = MeasureRuns(utf8[start..mid], font.Size, font.Family, font.Weight, font.Scale) / font.Scale;
+                int mid = CharacterStart(text, (lo + hi + 1) / 2, lo);
+                if (mid <= lo) mid = NextCharacter(text, lo, segEnd);
+                float w = MeasureRuns(text[start..mid], font.Size, font.Family, font.Weight, font.Scale) / font.Scale;
                 if (Fits(w, maxWidth)) lo = mid;
-                else hi = CharacterStart(utf8, mid - 1, lo);
+                else hi = CharacterStart(text, mid - 1, lo);
             }
             result.Add(new TextLine(start, lo));
             start = lo;
@@ -376,17 +376,17 @@ public sealed class Fonts : IDisposable
     }
 
     // Where the character after the one at `at` starts, no further than `end`.
-    private static int NextCharacter(ReadOnlySpan<byte> utf8, int at, int end)
+    private static int NextCharacter(ReadOnlySpan<char> text, int at, int end)
     {
         at++;
-        while (at < end && (utf8[at] & 0xC0) == 0x80) at++;
+        while (at < end && char.IsLowSurrogate(text[at])) at++;
         return at;
     }
 
     // The nearest character start at or before `at`, no earlier than `floor`.
-    private static int CharacterStart(ReadOnlySpan<byte> utf8, int at, int floor)
+    private static int CharacterStart(ReadOnlySpan<char> text, int at, int floor)
     {
-        while (at > floor && at < utf8.Length && (utf8[at] & 0xC0) == 0x80) at--;
+        while (at > floor && at < text.Length && char.IsLowSurrogate(text[at])) at--;
         return at;
     }
 }
@@ -406,7 +406,7 @@ public enum TextWrap { Words, Characters }
 public readonly record struct Font(float Size, string? Family, int Weight, float Scale);
 
 /// <summary>
-/// One line of a text broken at a width: the byte range [Start, End) of the
+/// One line of a text broken at a width: the char range [Start, End) of the
 /// text it was broken from, which holds the characters themselves. Linked to the
 /// lines before and after it. A cached chain: read it, never relink it.
 /// </summary>
@@ -432,7 +432,7 @@ public sealed class TextLine
 }
 
 /// <summary>
-/// A stretch of text set in one typeface: the byte range [Start, End) of the
+/// A stretch of text set in one typeface: the char range [Start, End) of the
 /// text it was split from, linked to the runs before and after it. A cached
 /// chain: read it, never relink it.
 /// </summary>

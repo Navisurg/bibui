@@ -100,20 +100,13 @@ public sealed class SkiaRasterCanvas : IRasterCanvas
 
     // ── Text ─────────────────────────────────────────────────────────────────
 
-    public float DrawText(string text, float x, float baselineY, in RasterFont font, Rgba color)
-    {
-        var paint = _backend.TextPaint(font, color.ToSk());
-        Native.DrawText(text, x, baselineY, paint);
-        return paint.MeasureText(text);
-    }
-
-    public float DrawText(ReadOnlySpan<byte> utf8, float x, float baselineY, in RasterFont font, Rgba color)
+    public float DrawText(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color)
     {
         var sk = color.ToSk();
-        var paint = _backend.Utf8TextPaint(font, sk);
-        using (var blob = SKTextBlob.Create(utf8, SKTextEncoding.Utf8, _backend.Utf8TextFont(font, sk, paint)))
+        var paint = _backend.TextPaint(font, sk);
+        using (var blob = SKTextBlob.Create(text, _backend.TextFont(font, sk, paint)))
             if (blob is not null) Native.DrawText(blob, x, baselineY, paint);
-        return paint.MeasureText(utf8);
+        return paint.MeasureText(text);
     }
 
     public void DrawGlyphRun(ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
