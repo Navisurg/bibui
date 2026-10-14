@@ -136,10 +136,10 @@ public sealed class BibUiEvent
     public uint CodePoint { get; set; }
 
     /// <summary>
-    /// UTF-8 bytes carried by a Paste event. The clipboard is read at the WM
+    /// The text carried by a Paste event. The clipboard is read at the WM
     /// boundary and stashed here, so TextOp.FromStateAndEvent does no I/O.
     /// </summary>
-    public byte[]? PasteData { get; set; }
+    public string? PasteData { get; set; }
 
     // ── Actions a keystroke and a menu item both ask for ─────────────────────
     // They accumulate onto the event rather than returning a fresh one, so the
@@ -178,6 +178,6 @@ public sealed class BibUiEvent
         if (string.IsNullOrEmpty(clipboardText)) return;
 
         var oneLine = clipboardText.Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ');
-        PasteData = System.Text.Encoding.UTF8.GetBytes(oneLine);
+        PasteData = oneLine;
     }
 }

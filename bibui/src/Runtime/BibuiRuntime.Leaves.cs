@@ -16,22 +16,22 @@ public sealed partial class BibuiRuntime
     private readonly ResourceCache<string, Text> _retainedTexts = new(keepFrames: 60);
 
     /// <summary>
-    /// A text showing the UTF-8 <paramref name="text"/>, linked under the parent
+    /// A text showing <paramref name="text"/>, linked under the parent
     /// in scope and sized by the size stacks — on an axis with nothing pushed,
     /// by its own text. Set in <paramref name="fontSize"/>, or the size in
     /// scope, and in <paramref name="family"/>, or the family in scope, at the
     /// weight in scope (<see cref="PushFontSize"/>, <see cref="PushFontFace"/>);
     /// <paramref name="textColor"/>, or the primary text colour.
     ///
-    /// <para>The text is the caller's memory, held, not copied — a
-    /// <see cref="BibuiStr.AsMemory"/>, or a slice of one — so the caller keeps
-    /// it as it is until the frame is painted.</para>
+    /// <para>The text is copied into the node, so a string, a slice of a
+    /// <see cref="BibuiStr"/> or a buffer on the stack may all be passed, and
+    /// changed as soon as the call returns.</para>
     ///
     /// <para>It has no identity: a keyless text is one of a pool reused frame
     /// to frame. Use <see cref="TextFromId"/> for one that needs to be found
     /// again.</para>
     /// </summary>
-    public Text Text(ReadOnlyMemory<byte> text, FontSize? fontSize = null, UiColor? textColor = null,
+    public Text Text(ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null,
         FontSlot? family = null)
     {
         lock (_syncRoot)
@@ -67,7 +67,7 @@ public sealed partial class BibuiRuntime
     /// like <see cref="BoxFromId"/>, for a text that needs identity: something
     /// to find it by, or to animate.
     /// </summary>
-    public Text TextFromId(string id, ReadOnlyMemory<byte> text, FontSize? fontSize = null,
+    public Text TextFromId(string id, ReadOnlySpan<char> text, FontSize? fontSize = null,
         UiColor? textColor = null, FontSlot? family = null)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -184,14 +184,14 @@ public sealed partial class BibuiRuntime
 
     // A text is the one node sized by what it holds: on an axis with nothing
     // pushed, it is as large as its text.
-    private Text DescribeText(Text text, ReadOnlyMemory<byte> content, FontSize? fontSize, UiColor? textColor,
+    private Text DescribeText(Text text, ReadOnlySpan<char> content, FontSize? fontSize, UiColor? textColor,
         FontSlot? family)
     {
         ResetNode(text);
         text.SizeX = _sizeXStack.Count > 0 ? _sizeXStack[^1] : SemanticSize.Text();
         text.SizeY = _sizeYStack.Count > 0 ? _sizeYStack[^1] : SemanticSize.Text();
         LinkUnder(text, parent: null);
-        text.Content = content;
+        text.SetContent(content);
         text.Size = fontSize ?? SizeInScope();
         text.Color = textColor;
         var face = FaceInScope();
