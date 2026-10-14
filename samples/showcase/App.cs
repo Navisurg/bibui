@@ -219,7 +219,7 @@ internal sealed partial class App
 
     public List<Target> VisibleTargets()
     {
-        string query = System.Text.Encoding.UTF8.GetString(Search.Str);
+        string query = Search.ToString();
         IEnumerable<Target> rows = Data.Targets;
         if (query.Length > 0)
             rows = rows.Where(t => t.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
@@ -245,7 +245,7 @@ internal sealed partial class App
     {
         string key = (night ? "night:" : "") + t.Id;
         if (!_logs.TryGetValue(key, out var log))
-            _logs[key] = log = S((night ? Data.Night + "\n" : "") + Data.Log(t, "01:48"));
+            _logs[key] = log = BibuiStr.FromStrLit((night ? Data.Night + "\n" : "") + Data.Log(t, "01:48"));
         return log;
     }
 

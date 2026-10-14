@@ -11,10 +11,10 @@ namespace Showcase;
 // The Appearance sheet, the context menu, and the pages that are not the overview.
 internal sealed partial class App
 {
-    private static readonly ToggleOption[] ModeOptions = [new(S("Dark"), "dark"), new(S("Light"), "light")];
+    private static readonly ToggleOption[] ModeOptions = [new("Dark", "dark"), new("Light", "light")];
 
     private static readonly RadioOption[] DensityOptions =
-        [new(S("Compact"), "compact"), new(S("Default"), "default"), new(S("Comfortable"), "comfortable")];
+        [new("Compact", "compact"), new("Default", "default"), new("Comfortable", "comfortable")];
 
 
     // ── Appearance ───────────────────────────────────────────────────────────
@@ -75,19 +75,19 @@ internal sealed partial class App
             }
         }
         rt.Gap(10f);
-        rt.Text(U8($"Theme.FromSeed(\"{Accent}\", mode: {(Dark ? "Dark" : "Light")})"), FontSize.Px(12f), UiColor.TextSecondary, FontSlot.Mono);
+        rt.Text($"Theme.FromSeed(\"{Accent}\", mode: {(Dark ? "Dark" : "Light")})", FontSize.Px(12f), UiColor.TextSecondary, FontSlot.Mono);
         rt.Gap(22f);
 
         // Theme files, or the generated theme.
         Section(rt, "Theme");
         string current = ThemeFileName is null ? "Generated from accent" : Title(ThemeFileName) + "  ·  themes/" + ThemeFileName + ".json";
-        var select = Select.Begin(rt, "theme-file", S(current), width: inner);
+        var select = Select.Begin(rt, "theme-file", current, width: inner);
         if (select.Open)
         {
-            if (Select.Item(rt, "theme-generated", S("Generated from accent"), selected: ThemeFileName is null).Clicked)
+            if (Select.Item(rt, "theme-generated", "Generated from accent", selected: ThemeFileName is null).Clicked)
             { ThemeFileName = null; select.Close(); }
             foreach (var file in ThemeFiles)
-                if (Select.Item(rt, "theme-" + file, S(Title(file) + "  ·  themes/" + file + ".json"), selected: ThemeFileName == file).Clicked)
+                if (Select.Item(rt, "theme-" + file, Title(file) + "  ·  themes/" + file + ".json", selected: ThemeFileName == file).Clicked)
                 { ThemeFileName = file; select.Close(); }
         }
         select.End();
@@ -105,7 +105,7 @@ internal sealed partial class App
             if (MathF.Abs(radius.Value - Radius) > 0.01f) { Radius = radius.Value; ThemeFileName = null; }
         }
         rt.Gap(6f);
-        rt.Text(U8($"{Radius:0} px  ·  Sm {Radius * 2f / 3f:0.#}, Lg {Radius * 4f / 3f:0.#}"), FontSize.Px(12f), UiColor.TextSecondary);
+        rt.Text($"{Radius:0} px  ·  Sm {Radius * 2f / 3f:0.#}, Lg {Radius * 4f / 3f:0.#}", FontSize.Px(12f), UiColor.TextSecondary);
         rt.Gap(20f);
         Section(rt, "Density");
         var density = RadioGroup.Build(rt, "settings-density", DensityOptions, Density switch
@@ -123,13 +123,13 @@ internal sealed partial class App
 
         // Motion and the sky
         Section(rt, "Behaviour");
-        var reduce = Switch.Build(rt, "settings-reduce", ReducedMotion, label: S("Reduce motion"));
+        var reduce = Switch.Build(rt, "settings-reduce", ReducedMotion, label: "Reduce motion");
         if (reduce.Clicked) ReducedMotion = !ReducedMotion;
         rt.Gap(12f);
-        var grid = Checkbox.Build(rt, "settings-grid", Grid, label: S("Alt-az grid on the sky"));
+        var grid = Checkbox.Build(rt, "settings-grid", Grid, label: "Alt-az grid on the sky");
         if (grid.Clicked) Grid = !Grid;
         rt.Gap(10f);
-        var labels = Checkbox.Build(rt, "settings-labels", Labels, label: S("Name the targets"));
+        var labels = Checkbox.Build(rt, "settings-labels", Labels, label: "Name the targets");
         if (labels.Clicked) Labels = !Labels;
         rt.Gap(24f);
 
@@ -149,15 +149,15 @@ internal sealed partial class App
         if (sheet.End().Dismissed | close.Clicked) SettingsOpen = false;
     }
 
-    private static readonly (BibuiStr[] Keys, string What)[] Shortcuts =
+    private static readonly (string[] Keys, string What)[] Shortcuts =
     [
-        ([S("/")], "Search targets"),
-        ([S("↑"), S("↓")], "Move through the queue"),
-        ([S("Enter")], "Slew to the selected target"),
-        ([S("Space")], "Pause or resume the feed"),
-        ([S("L")], "Light or dark"),
-        ([S("[")], "Fold the sidebar"),
-        ([S("1"), S("–"), S("4")], "Pages"),
+        (["/"], "Search targets"),
+        (["↑", "↓"], "Move through the queue"),
+        (["Enter"], "Slew to the selected target"),
+        (["Space"], "Pause or resume the feed"),
+        (["L"], "Light or dark"),
+        (["["], "Fold the sidebar"),
+        (["1", "–", "4"], "Pages"),
     ];
 
     private static void Section(BibuiRuntime rt, string label)
@@ -188,7 +188,7 @@ internal sealed partial class App
             dot.ChildLayoutAxis = LayoutAxis.X;
             if (chosen) Centred(dot, CentredY(Icon(rt, "check", 15f, "#0B0D17")));
         }
-        if (i.Hovering) Tooltip.Build(rt, S(name + "  " + hex), b);
+        if (i.Hovering) Tooltip.Build(rt, name + "  " + hex, b);
         return new BibuiWidget(b, i);
     }
 
@@ -198,18 +198,18 @@ internal sealed partial class App
     {
         if (Array.Find(Data.Targets, x => x.Id == MenuFor) is not { } t) return;
         if (Menu.Begin(rt, "row-menu", MenuX, MenuY, 232f) is not { } menu) return;
-        Menu.Label(rt, S(t.Name));
+        Menu.Label(rt, t.Name);
         bool close = false;
-        if (Menu.Item(rt, "menu-slew", S("Slew to target"), "send", S("Enter"), disabled: Pointing == t.Id).Clicked) { Selected = t.Id; Slew(); close = true; }
-        if (Menu.Item(rt, "menu-log", S("Open observing log"), "file-text", S("4")).Clicked) { Selected = t.Id; Page = Page.Journal; close = true; }
-        if (Menu.Item(rt, "menu-copy", S("Copy coordinates"), "copy", null).Clicked)
+        if (Menu.Item(rt, "menu-slew", "Slew to target", "send", "Enter", disabled: Pointing == t.Id).Clicked) { Selected = t.Id; Slew(); close = true; }
+        if (Menu.Item(rt, "menu-log", "Open observing log", "file-text", "4").Clicked) { Selected = t.Id; Page = Page.Journal; close = true; }
+        if (Menu.Item(rt, "menu-copy", "Copy coordinates", "copy", null).Clicked)
         {
             rt.ClipboardSet($"{t.Code}  RA {t.RaHours:0.000}h  Dec {t.DecDeg:+0.00;-0.00}°");
             close = true;
         }
         Menu.Separator(rt);
-        if (Menu.Item(rt, "menu-hold", S("Hold for weather"), "pause", null).Clicked) close = true;
-        if (Menu.Item(rt, "menu-drop", S("Drop from tonight"), "trash-2", null, disabled: true).Clicked) close = true;
+        if (Menu.Item(rt, "menu-hold", "Hold for weather", "pause", null).Clicked) close = true;
+        if (Menu.Item(rt, "menu-drop", "Drop from tonight", "trash-2", null, disabled: true).Clicked) close = true;
         menu.End();
         if (close) rt.CloseDropDown("row-menu");
     }
@@ -261,14 +261,14 @@ internal sealed partial class App
     // ── Journal ──────────────────────────────────────────────────────────────
 
     private static readonly RadioOption[] Ratings =
-        [new(S("Excellent"), "5"), new(S("Good"), "4"), new(S("Fair"), "3"), new(S("Poor"), "2")];
+        [new("Excellent", "5"), new("Good", "4"), new("Fair", "3"), new("Poor", "2")];
 
     public string Rating = "4";
     public bool[] Checklist = [true, true, false, false];
     private static readonly string[] ChecklistItems =
         ["Dome flushed before dusk", "Focus run on the first target", "Flats at dawn", "Back up tonight's data"];
     public bool NightOpen = true;
-    public readonly BibuiStr Note = S("Lantern's outer shell needs another 40 min of OIII. Kestrel is next; start it before 03:10.");
+    public readonly BibuiStr Note = BibuiStr.FromStrLit("Lantern's outer shell needs another 40 min of OIII. Kestrel is next; start it before 03:10.");
     public readonly TextEditState NoteEdit = new();
     public bool NoteFocused;
 
@@ -284,14 +284,14 @@ internal sealed partial class App
         var items = Column();
         for (int k = 0; k < ChecklistItems.Length; k++)
         {
-            var cb = Checkbox.Build(rt, "check-" + k, Checklist[k], label: S(ChecklistItems[k]));
+            var cb = Checkbox.Build(rt, "check-" + k, Checklist[k], label: ChecklistItems[k]);
             if (cb.Clicked) Checklist[k] = !Checklist[k];
             if (k > 0) Gap(items, 12f);
             UiNode.PushIntoParent(items, cb.Node);
         }
         var rating = RadioGroup.Build(rt, "rating", Ratings, Rating);
         if (rating.Picked is { } r) Rating = r;
-        var summary = Expander.Build(rt, "night-summary", S("Night summary"), NightOpen);
+        var summary = Expander.Build(rt, "night-summary", "Night summary", NightOpen);
         if (summary.Toggled) NightOpen = !NightOpen;
         if (summary.Body is { } body)
         {
@@ -304,7 +304,7 @@ internal sealed partial class App
                     $"{SlewCount} slews from this console",
                 })
                 {
-                    rt.Text(U8("·  " + line), ComponentSize.Sm, UiColor.TextSecondary);
+                    rt.Text("·  " + line, ComponentSize.Sm, UiColor.TextSecondary);
                     rt.Gap(6f);
                 }
             }
@@ -318,7 +318,7 @@ internal sealed partial class App
         using (rt.PushParent(noteBox))
         using (rt.PushFontSize(ComponentSize.Sm))
         using (rt.PushSizeY(TextField.Rows(rt, 4)))
-            note = TextField.Multiline(rt, "note", Note, NoteEdit, NoteFocused, placeholder: S("Hand-over note for the morning crew"));
+            note = TextField.Multiline(rt, "note", Note, NoteEdit, NoteFocused, placeholder: "Hand-over note for the morning crew");
         if (note.Pressed) { NoteFocused = true; SearchFocused = false; }
 
         int ticked = Checklist.Count(c => c);

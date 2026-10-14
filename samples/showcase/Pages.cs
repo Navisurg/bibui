@@ -160,9 +160,9 @@ internal sealed partial class App
         Box? frost = null;
         if (glass)
         {
-            slew = Button.Build(rt, "slew", S(Pointing == Selected ? "On target" : "Slew here"), disabled: Pointing == Selected, size: ComponentSize.Sm);
+            slew = Button.Build(rt, "slew", Pointing == Selected ? "On target" : "Slew here", disabled: Pointing == Selected, size: ComponentSize.Sm);
             if (slew.Clicked) Slew();
-            open = Button.Build(rt, "open-log", S("Open log"), ghost: true, size: ComponentSize.Sm);
+            open = Button.Build(rt, "open-log", "Open log", ghost: true, size: ComponentSize.Sm);
             if (open.Clicked) Page = Page.Journal;
             frost = rt.BoxFromId("sky-glass", InteractionKinds.LeftPress);
             rt.InteractionsFor(frost);
@@ -190,7 +190,7 @@ internal sealed partial class App
             hits.Add(hit);
             bool chosen = t.Id == Selected;
             marks.Add(new Sky.Mark(x, y, t.Status, hit.HotT, chosen));
-            if (i.Hovering) Tooltip.Build(rt, S($"{t.Name}  ·  alt {alt:0}°  ·  {Data.StatusName(t.Status)}"), hit);
+            if (i.Hovering) Tooltip.Build(rt, $"{t.Name}  ·  alt {alt:0}°  ·  {Data.StatusName(t.Status)}", hit);
             if (Labels && (chosen || t.Status == TargetStatus.Imaging))
             {
                 var tag = Row(Bold(rt, t.Name, FontSize.Px(11.5f), chosen ? UiColor.AccentForeground : "#DCE3FA"));
@@ -267,7 +267,7 @@ internal sealed partial class App
                     T(rt, $"{sel.Code} · {Data.KindName(sel.Kind)} · {sel.Filter}", FontSize.Px(12f), UiColor.TextSecondary),
                     Row(Stat(rt, "Altitude", $"{salt:0.0}°"), Spring(), Stat(rt, "Azimuth", $"{saz:0}°"), Spring(),
                         Stat(rt, "Airmass", airmass > 9 ? "—" : $"{airmass:0.00}"), Spring(), Stat(rt, "Mag", $"{sel.Magnitude:0.0}")).FillX(),
-                    Progress.Build(rt, sel.DoneMin, sel.PlannedMin, S($"Exposure  {sel.DoneMin} / {sel.PlannedMin} min"), thickness: 6f),
+                    Progress.Build(rt, sel.DoneMin, sel.PlannedMin, $"Exposure  {sel.DoneMin} / {sel.PlannedMin} min", thickness: 6f),
                     Row(slew.Node, Space(8f), open.Node),
                 ])
             {
@@ -344,7 +344,7 @@ internal sealed partial class App
     private readonly record struct Chart(Charts.Series Series, string Title, string Unit, string Format, UiColor Color);
 
     private static readonly ToggleOption[] MetricOptions =
-        [new(S("Seeing"), "seeing"), new(S("Sensor"), "temp"), new(S("Data"), "data")];
+        [new("Seeing", "seeing"), new("Sensor", "temp"), new("Data", "data")];
 
     private Box TelemetryCard(BibuiRuntime rt, string id, float w, float h, Metric metric, bool picker)
     {
@@ -405,10 +405,10 @@ internal sealed partial class App
     {
         // The filter's dropdown and the header cells ask before the rows.
         string filterLabel = Array.Find(Filters, f => f.Value == Filter).Label ?? "All targets";
-        var select = Select.Begin(rt, "queue-filter", S(filterLabel), width: 150f);
+        var select = Select.Begin(rt, "queue-filter", filterLabel, width: 150f);
         if (select.Open)
             foreach (var (value, label) in Filters)
-                if (Select.Item(rt, "queue-filter-" + value, S(label), selected: Filter == value).Clicked)
+                if (Select.Item(rt, "queue-filter-" + value, label, selected: Filter == value).Clicked)
                 {
                     Filter = value;
                     select.Close();
@@ -544,7 +544,7 @@ internal sealed partial class App
         rt.InteractionsFor(view);
 
         var card = Column(
-            CardHeader(rt, "file-text", "Observing log", "Markdown", Badge.Build(rt, S(t.Code), BadgeVariant.Outline)),
+            CardHeader(rt, "file-text", "Observing log", "Markdown", Badge.Build(rt, t.Code, BadgeVariant.Outline)),
             Space(6f),
             frame);
         card.Px(w, h).Style = CardStyle(rt);

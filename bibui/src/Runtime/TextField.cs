@@ -38,7 +38,7 @@ public static class TextField
     /// </summary>
     public static BibuiWidget SingleLine(BibuiRuntime runtime, string id, BibuiStr text,
         TextEditState edit, bool focused, uint events = SingleLineEvents,
-        TextColor textColor = TextColor.Primary, BibuiStr? placeholder = null)
+        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default)
     {
         Font font = runtime.FontInScope();
         float lineHeight = runtime.Fonts.LineHeight(font);
@@ -63,7 +63,7 @@ public static class TextField
 
         // An empty buffer shows the placeholder, in a quieter colour, the same way.
         bool empty = text.Length == 0;
-        ReadOnlySpan<char> shown = empty ? placeholder is null ? default : placeholder.Str : text.Str;
+        ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
         TextColor color = empty ? TextColor.Secondary : textColor;
 
         // Not focused: no caret and nothing highlighted. Empty: the caret is
@@ -96,7 +96,7 @@ public static class TextField
     /// </summary>
     public static BibuiWidget Ellipsis(BibuiRuntime runtime, string id, BibuiStr text,
         TextEditState edit, bool focused, uint events = 0,
-        TextColor textColor = TextColor.Primary, BibuiStr? placeholder = null)
+        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default)
     {
         UiNode box = runtime.ParentInScope;   // holds the line, and the "…" when it is cut
         float room = box.Extent.X > 0f
@@ -106,7 +106,7 @@ public static class TextField
 
         var line = SingleLine(runtime, id, text, edit, focused, events, textColor, placeholder);
         bool empty = text.Length == 0;
-        ReadOnlySpan<char> shown = empty ? placeholder is null ? default : placeholder.Str : text.Str;
+        ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
         if (focused || runtime.Fonts.Measure(shown, runtime.FontInScope()) <= room)
             return line;   // fits, or being edited: it scrolls instead
 
@@ -126,7 +126,7 @@ public static class TextField
     /// </summary>
     public static BibuiWidget Multiline(BibuiRuntime runtime, string id, BibuiStr text,
         TextEditState edit, bool focused, uint events = MultiLineEvents,
-        TextColor textColor = TextColor.Primary, BibuiStr? placeholder = null, TextWrap wrap = TextWrap.Words)
+        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default, TextWrap wrap = TextWrap.Words)
     {
         Font font = runtime.FontInScope();
 
@@ -164,7 +164,7 @@ public static class TextField
 
         // An empty buffer shows the placeholder, in a quieter colour, the same way.
         bool empty = text.Length == 0;
-        ReadOnlySpan<char> shown = empty ? placeholder is null ? default : placeholder.Str : text.Str;
+        ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
         TextColor color = empty ? TextColor.Secondary : textColor;
         TextLine? lines = runtime.Fonts.Wrap(shown, font, room, wrap);
 

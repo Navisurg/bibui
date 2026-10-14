@@ -14,7 +14,7 @@ internal static class DemoMarkdown
     private const float FieldWidth = 320f;
     private const float ViewerWidth = 420f;
 
-    private static readonly BibuiStr Source = BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes(
+    private static readonly BibuiStr Source = BibuiStr.FromStrLit(
         "# Markdown\n"
         + "\n"
         + "A **native** viewer: `inline code`, ~~struck text~~ and [links](https://commonmark.org) wrap as one paragraph.\n"
@@ -36,7 +36,7 @@ internal static class DemoMarkdown
         + "\n"
         + "```\n"
         + "Markdown.Build(runtime, \"doc\", source);\n"
-        + "```\n"));
+        + "```\n");
 
     private static readonly TextEditState Edit = new();
     private static bool _focused;
@@ -47,7 +47,7 @@ internal static class DemoMarkdown
         var page = Arrange.Column();
         using (runtime.PushParent(page))
         {
-            Bold(runtime, U8("Edit the source on the left; the viewer draws it as you type. Escape stops editing."),
+            Bold(runtime, "Edit the source on the left; the viewer draws it as you type. Escape stops editing.",
                 ComponentSize.Sm, TextColor.Secondary);
             runtime.Gap(16f);
 
@@ -88,7 +88,7 @@ internal static class DemoMarkdown
             }
 
             runtime.Gap(16f);
-            runtime.Text(U8(_lastLink is null ? "Click a link in the viewer." : $"Clicked: {_lastLink}"),
+            runtime.Text(_lastLink is null ? "Click a link in the viewer." : $"Clicked: {_lastLink}",
                 ComponentSize.Sm, TextColor.Secondary);
         }
 

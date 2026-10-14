@@ -62,7 +62,7 @@ internal static class SelfTest
             Key(rt, Bibui.Key.Slash);
             Check(app.SearchFocused, "/ gives the search field the keyboard");
             Type(rt, "kes");
-            Check(System.Text.Encoding.UTF8.GetString(app.Search.Str) == "kes", "typing goes into the search field, and the slash does not");
+            Check(app.Search.ToString() == "kes", "typing goes into the search field, and the slash does not");
             Check(app.VisibleTargets().Count == 1, "the search filters the queue to one target");
             Key(rt, Bibui.Key.L);
             Check(app.Dark, "a letter typed into the field is not a shortcut");

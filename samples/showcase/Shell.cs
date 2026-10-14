@@ -32,7 +32,7 @@ internal sealed partial class App
         }
         var fold = IconButton(rt, "sidebar-fold", open > 0.5f ? "chevron-left" : "chevron-right", 30f);
         if (fold.Clicked) SidebarWanted = !SidebarWanted;
-        var live = Switch.Build(rt, "live", Live, label: open > 0.6f ? S("Live feed") : null, height: 20f);
+        var live = Switch.Build(rt, "live", Live, label: open > 0.6f ? "Live feed" : null, height: 20f);
         if (live.Clicked) Live = !Live;
 
         Box side = rt.BoxFromId("sidebar", InteractionKinds.Clip);
@@ -86,7 +86,7 @@ internal sealed partial class App
         Gap(side, 14f);
 
         // Who is on shift, and the fold.
-        var you = Row(CentredY(Avatar.Build(rt, S("IR"), 32f, ink: UiColor.AccentForeground, fontSize: ComponentSize.Sm)));
+        var you = Row(CentredY(Avatar.Build(rt, "IR", 32f, ink: UiColor.AccentForeground, fontSize: ComponentSize.Sm)));
         if (fade > 0f)
         {
             var who = Column(Bold(rt, "Ines Rowe", ComponentSize.Sm, UiColor.TextPrimary),
@@ -133,7 +133,7 @@ internal sealed partial class App
         }
         else if (i.Hovering)
         {
-            Tooltip.Build(rt, S(label + "  ·  " + key), item);
+            Tooltip.Build(rt, label + "  ·  " + key, item);
         }
         return new BibuiWidget(item, i);
     }
@@ -206,7 +206,7 @@ internal sealed partial class App
             ? UiColor.Accent.WithAlpha(0.14f + 0.1f * b.HotT)
             : UiColor.SurfaceRaisedHover.WithAlpha(b.HotT * 0.9f - 0.3f * b.ActiveT);
         Centred(b, CentredY(Icon(rt, icon, size * 0.46f, on ? UiColor.Accent : UiColor.TextPrimary)));
-        if (tip is not null && i.Hovering) Tooltip.Build(rt, S(tip), b);
+        if (tip is not null && i.Hovering) Tooltip.Build(rt, tip, b);
         return new BibuiWidget(b, i);
     }
 
@@ -327,13 +327,13 @@ internal sealed partial class App
         TextField.InputStyle(rt, field, SearchFocused);
         field.ChildLayoutAxis = LayoutAxis.X;
         field.Px(width, 36f);
-        var line = TextField.SingleLine(rt, "search", Search, SearchEdit, SearchFocused, placeholder: S("Search targets"));
+        var line = TextField.SingleLine(rt, "search", Search, SearchEdit, SearchFocused, placeholder: "Search targets");
         if (line.Pressed) { SearchFocused = true; NoteFocused = false; }
         UiNode.PushIntoParent(field, CentredY(Icon(rt, "search", 15f, UiColor.TextSecondary)));
         Gap(field, 8f);
         UiNode.PushIntoParent(field, Column(Spring(), line.Node.FillX(), Spring()).FillX().FillY());
         Gap(field, 8f);
-        UiNode.PushIntoParent(field, CentredY(KeyboardShortcut.Build(rt, S("/"))));
+        UiNode.PushIntoParent(field, CentredY(KeyboardShortcut.Build(rt, "/")));
         return field;
     }
 }
