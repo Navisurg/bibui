@@ -24,7 +24,7 @@ public static Box Panel(BibuiRuntime runtime);
 public const float Height = 36f;     // the strip, at the default density
 public const float PanelGap = 8f;    // the space to put between strip and panel
 
-public readonly record struct TabOption(BibuiStr Label, string Value);
+public readonly record struct TabOption(string Label, string Value);
 public readonly record struct TabsWidget(Box Node, string? Picked);
 ```
 
@@ -66,11 +66,11 @@ sealed class SettingsTabs
 {
     static readonly TabOption[] Items =
     [
-        new(BibuiStr.FromStrLit("Account"u8), "account"),
-        new(BibuiStr.FromStrLit("Password"u8), "password"),
+        new("Account", "account"),
+        new("Password", "password"),
     ];
-    static readonly byte[] AccountText = "Manage your account settings."u8.ToArray();
-    static readonly byte[] PasswordText = "Change your password."u8.ToArray();
+    const string AccountText = "Manage your account settings.";
+    const string PasswordText = "Change your password.";
 
     string _tab = "account";   // the caller's state
 

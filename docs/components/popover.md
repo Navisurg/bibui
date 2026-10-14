@@ -54,8 +54,8 @@ using Bibui.Runtime;
 
 sealed class SharePopover
 {
-    static readonly BibuiStr Share = BibuiStr.FromStrLit("Share"u8);
-    static readonly byte[] Body = "Anyone with the link can view."u8.ToArray();
+    const string Share = "Share";
+    const string Body = "Anyone with the link can view.";
 
     public UiNode Build(BibuiRuntime runtime)
     {

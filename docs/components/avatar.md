@@ -13,7 +13,7 @@ Fixtures: `avatar-default` and `avatar-large`.
 ```cs
 public static Box Build(
     BibuiRuntime runtime,
-    BibuiStr initials,
+    ReadOnlySpan<char> initials,
     float size = DefaultSize,
     UiColor? fill = null,
     UiColor? ink = null,
@@ -50,7 +50,7 @@ using Bibui.Runtime;
 
 sealed class Reviewer
 {
-    static readonly BibuiStr Initials = BibuiStr.FromStrLit("MK"u8);
+    const string Initials = "MK";
 
     public UiNode Build(BibuiRuntime runtime)
         => Avatar.Build(runtime, Initials, size: 32f, fill: UiColor.SurfaceRaised, ink: UiColor.TextPrimary,

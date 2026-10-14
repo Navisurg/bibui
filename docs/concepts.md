@@ -41,8 +41,8 @@ A whole frame, rendered headless to a PNG:
 
 ```csharp
 var runtime = new BibuiRuntime();          // Skia, when Bibui.Raster.Skia is referenced
-byte[] hello = "Hello, bibui"u8.ToArray();
-BibuiStr ok = BibuiStr.FromStrLit("OK"u8);
+const string hello = "Hello, bibui";
+const string ok = "OK";
 
 runtime.Mount(() =>
     Column(
@@ -543,7 +543,7 @@ There is no component base class, no renderer per component, and no callback:
 ```csharp
 public static class Chip
 {
-    public static BibuiWidget Build(BibuiRuntime runtime, string id, BibuiStr label, bool selected)
+    public static BibuiWidget Build(BibuiRuntime runtime, string id, ReadOnlySpan<char> label, bool selected)
     {
         Box chip = runtime.BoxFromId(id, InteractionKinds.LeftPress);
         Interaction interaction = runtime.InteractionsFor(chip);
@@ -558,7 +558,7 @@ public static class Chip
         chip.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
 
         using (runtime.PushParent(chip))
-            runtime.Text(label.AsMemory(), ComponentSize.Sm, selected ? TextColor.Accent : TextColor.Primary);
+            runtime.Text(label, ComponentSize.Sm, selected ? TextColor.Accent : TextColor.Primary);
 
         return new BibuiWidget(chip, interaction);
     }
@@ -597,27 +597,30 @@ show.
 components are written exactly this way. Their source is the best reference
 for writing your own.
 
-## Text is UTF-8
+## Text is UTF-16
 
-bibui holds, measures and draws text as UTF-8 bytes. No `string` sits between
-your text and the glyphs.
+bibui holds, measures and draws text as .NET's own chars (UTF-16). UTF-8 only
+appears where bytes leave or enter the process: the clipboard, the Wayland
+protocol and files.
 
-- `runtime.Text(ReadOnlyMemory<byte> text, ...)` shows a text. A `byte[]`
-  converts to it.
-- A component label is a `BibuiStr`, a growable UTF-8 buffer. Make fixed labels
-  once from a UTF-8 literal: `BibuiStr.FromStrLit("Save"u8)`. Pass `label.AsMemory()`
-  to `runtime.Text`.
-- The text is **held, not copied**. Keep the memory unchanged until the frame
-  has been painted. Formatting a new value each frame is fine:
-  `runtime.Text(Encoding.UTF8.GetBytes($"{count} items"))`.
-- A text field edits a `BibuiStr` in place, with a `TextEditState` for the
-  caret and selection. Both belong to the caller.
+- `runtime.Text(ReadOnlySpan<char> text, ...)` shows a text, and a component
+  label is a `ReadOnlySpan<char>`. A `string` converts to it, so
+  `runtime.Text("Save")` and `Button.Build(runtime, "save", "Save")` just work.
+- The text is **copied** into the node, so it may change as soon as the call
+  returns. A literal costs nothing, since literals are made once. To show a
+  number without making a string each frame, format it into a stack buffer:
+  `Span<char> buf = stackalloc char[16]; count.TryFormat(buf, out int n); runtime.Text(buf[..n]);`
+- A `BibuiStr` is a growable char buffer for text the user edits: a text
+  field edits one in place, with a `TextEditState` for the caret and
+  selection. Both belong to the caller.
+- Offsets into text (a caret, a selection, a wrapped line's range) count chars.
+  A character such as 👍🏽 can be several chars; the caret steps over it whole.
 
 ```csharp
 static class Labels
 {
-    public static readonly BibuiStr Save = BibuiStr.FromStrLit("Save"u8);
-    public static readonly BibuiStr Cancel = BibuiStr.FromStrLit("Cancel"u8);
+    public const string Save = "Save";
+    public const string Cancel = "Cancel";
 }
 ```
 

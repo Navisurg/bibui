@@ -14,6 +14,29 @@ before it was published.
 
 ### Changed
 
+- **Text is UTF-16, not UTF-8 (since 0.9.1, breaking).** bibui now holds,
+  measures and draws .NET's own chars, so a `string` goes straight in:
+  `runtime.Text("Party 🎉")`, `Button.Build(runtime, "b", "Save")`.
+  - `runtime.Text`/`TextFromId` and every component's label take a
+    `ReadOnlySpan<char>` (was `ReadOnlyMemory<byte>` or `BibuiStr`). The text
+    is copied into the node, so it may change as soon as the call returns.
+    An optional label is empty, not null, for none.
+  - `TabOption`, `ToggleOption` and `RadioOption` take a `string` label;
+    `KeyboardShortcut.Build` takes its keys as strings.
+  - `BibuiStr` is a `char` buffer for text the user edits (a `TextField`'s
+    buffer, a Markdown source). `FromStrLit` takes chars, and `ToString()`
+    gives the text.
+  - `TextField`'s placeholder is a `ReadOnlySpan<char>`. Caret, selection and
+    wrapped-line offsets count chars, and the caret, Backspace and a click
+    move by text element, so 👍🏽 or 👨‍👩‍👧 is never split
+    (`TextOp.ScanTextElement`, was `ScanCodePoint`).
+  - `Fonts.Measure`/`OffsetAt`/`Wrap`, `MarkdownDocument` (`Parse`, `Text`,
+    `TextOf`, `CodeOf`), `BibUiEvent.PasteData` (a `string`) and the raster
+    backends' `MeasureText`/`ShapeText`/`DrawText` take or give chars. The
+    backends' `string` and UTF-8 overloads are one `ReadOnlySpan<char>`
+    overload each.
+  - To migrate: drop `"…"u8`, `Encoding.UTF8.GetBytes(…)` and
+    `BibuiStr.FromStrLit(…)` around labels and texts, and pass the string.
 - **A frame is build, layout, paint.** Application code describes the frame
   through the runtime (`runtime.Box()`, `runtime.BoxFromId(id, claims)`,
   `runtime.Text`, `runtime.Icon`, `runtime.PushParent`); the layout solver

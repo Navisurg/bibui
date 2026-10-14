@@ -17,7 +17,7 @@ public static BibuiWidget Build(
     BibuiRuntime runtime,
     string id,
     bool on,
-    BibuiStr? label = null,
+    ReadOnlySpan<char> label = default,
     bool disabled = false,
     bool indeterminate = false)
 ```
@@ -56,9 +56,9 @@ using Bibui.Runtime;
 
 sealed class NotificationSettings
 {
-    static readonly BibuiStr All = BibuiStr.FromStrLit("All notifications"u8);
-    static readonly BibuiStr Email = BibuiStr.FromStrLit("Email"u8);
-    static readonly BibuiStr Push = BibuiStr.FromStrLit("Push"u8);
+    const string All = "All notifications";
+    const string Email = "Email";
+    const string Push = "Push";
 
     bool _email = true, _push;   // the caller's state
 

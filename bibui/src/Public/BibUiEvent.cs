@@ -169,7 +169,7 @@ public sealed class BibUiEvent
     /// Splice clipboard text in at the caret; the caller reads the clipboard,
     /// because that is I/O. A single-line field cannot hold a line break, so a
     /// pasted one is collapsed to a space here rather than in the splice, which
-    /// has no idea what shape of field the bytes go into.
+    /// has no idea what shape of field the text goes into.
     /// </summary>
     public void Paste(string? clipboardText)
     {

@@ -38,7 +38,7 @@ void Eq<T>(T expected, T actual, string? message = null)
 
 // Apply an event to (str, state) via the full pipeline: construct op,
 // splice via ReplaceRange, commit cursor + mark. Then verify the
-// buffer's UTF-8 contents and the new cursor/mark.
+// buffer's text and the new cursor/mark.
 void ApplyAndCheck(BibuiStr str, TextEditState state, BibUiEvent ev,
                    string expectedText, int expectedCursor, int expectedMark)
 {

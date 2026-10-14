@@ -68,14 +68,13 @@ using Bibui.Runtime;
 using static Bibui.Arrange;
 
 var runtime = new BibuiRuntime(new ManagedRasterBackend());
-var label = BibuiStr.FromStrLit("Add one"u8);
 int count = 0;
 
 runtime.Mount(() =>
 {
-    var add = Button.Build(runtime, "add", label);
+    var add = Button.Build(runtime, "add", "Add one");
     if (add.Clicked) count++;
-    var text = runtime.Text(System.Text.Encoding.UTF8.GetBytes($"Clicked {count} times"));
+    var text = runtime.Text($"Clicked {count} times");
     return Column(text, Space(12f), add).FillX().FillY().Padded(EdgeInsets.All(24f));
 });
 

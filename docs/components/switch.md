@@ -17,7 +17,7 @@ public static BibuiWidget Build(
     BibuiRuntime runtime,
     string id,
     bool on,
-    BibuiStr? label = null,
+    ReadOnlySpan<char> label = default,
     bool disabled = false,
     float height = 24f)
 ```
@@ -57,7 +57,7 @@ using Bibui.Runtime;
 
 sealed class AirplaneMode
 {
-    static readonly BibuiStr Label = BibuiStr.FromStrLit("Airplane mode"u8);
+    const string Label = "Airplane mode";
 
     bool _on;   // the caller's state
 

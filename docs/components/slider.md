@@ -22,7 +22,7 @@ public static SliderWidget Build(
     float min = 0f,
     float max = 1f,
     float step = 0f,
-    BibuiStr? label = null,
+    ReadOnlySpan<char> label = default,
     bool disabled = false)
 
 public readonly record struct SliderWidget(UiNode Node, float Value, Interaction Interaction);
@@ -66,7 +66,7 @@ using Bibui.Runtime;
 
 sealed class VolumeControl
 {
-    static readonly BibuiStr Label = BibuiStr.FromStrLit("Volume"u8);
+    const string Label = "Volume";
 
     float _volume = 40f;   // the caller's state
 

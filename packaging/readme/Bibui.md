@@ -32,11 +32,11 @@ int clicks = 0;
 
 runtime.Mount(() =>
 {
-    var button = Button.Build(runtime, "hello", BibuiStr.FromStrLit("Click me"u8));
+    var button = Button.Build(runtime, "hello", "Click me");
     if (button.Clicked) clicks++;
 
     return Column(
-            runtime.Text(System.Text.Encoding.UTF8.GetBytes($"Clicked {clicks} times")),
+            runtime.Text($"Clicked {clicks} times"),
             Space(12f),
             button.Node)
         .FillX().FillY()
