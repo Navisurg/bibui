@@ -26,11 +26,11 @@ namespace Bibui.Runtime;
 /// </summary>
 internal sealed class MarkdownParser
 {
-    private byte[] _src = [];
+    private char[] _src = [];
     private readonly List<int> _lineStart = [], _lineEnd = [], _origStart = [], _lineDelta = [];
 
-    private readonly ByteBuf _raw = new();     // inline sources: paragraphs, headings, cells
-    private readonly ByteBuf _out = new();     // the document's text
+    private readonly CharBuf _raw = new();     // inline sources: paragraphs, headings, cells
+    private readonly CharBuf _out = new();     // the document's text
     private readonly List<MarkdownRun> _runs = [];
     private readonly List<string> _links = [];
     private readonly Dictionary<string, string> _refs = new(StringComparer.Ordinal);
@@ -41,9 +41,9 @@ internal sealed class MarkdownParser
     private MarkdownAlign[] _tableAligns = [];
     private int _line;
 
-    public MarkdownDocument Run(ReadOnlySpan<byte> utf8)
+    public MarkdownDocument Run(ReadOnlySpan<char> text)
     {
-        Prepare(utf8);
+        Prepare(text);
         var root = new MarkdownBlock(MarkdownBlockKind.Document);
         _open.Add(root);
         for (_line = 0; _line < _lineStart.Count; _line++) Line(_lineStart[_line], _lineEnd[_line]);
@@ -59,35 +59,35 @@ internal sealed class MarkdownParser
 
     // Copies the source into _src a line at a time, \r\n and \r made \n, tabs in
     // leading whitespace expanded to the next multiple of four.
-    private void Prepare(ReadOnlySpan<byte> utf8)
+    private void Prepare(ReadOnlySpan<char> text)
     {
-        var buf = new ByteBuf(utf8.Length + 16);
+        var buf = new CharBuf(text.Length + 16);
         int i = 0;
-        while (i <= utf8.Length)
+        while (i <= text.Length)
         {
             int start = i;
-            while (i < utf8.Length && utf8[i] != (byte)'\n' && utf8[i] != (byte)'\r') i++;
+            while (i < text.Length && text[i] != '\n' && text[i] != '\r') i++;
             int end = i;
-            if (start == utf8.Length && start > 0 && end == start) break;   // no line after a final newline
+            if (start == text.Length && start > 0 && end == start) break;   // no line after a final newline
 
             int lineStart = buf.Length, col = 0, j = start;
-            for (; j < end && (utf8[j] == (byte)' ' || utf8[j] == (byte)'\t'); j++)
+            for (; j < end && (text[j] == ' ' || text[j] == '\t'); j++)
             {
-                int width = utf8[j] == (byte)'\t' ? 4 - col % 4 : 1;
-                for (int k = 0; k < width; k++) buf.Add((byte)' ');
+                int width = text[j] == '\t' ? 4 - col % 4 : 1;
+                for (int k = 0; k < width; k++) buf.Add(' ');
                 col += width;
             }
             int delta = col - (j - start);
-            buf.Add(utf8[j..end]);
+            buf.Add(text[j..end]);
             _lineStart.Add(lineStart);
             _lineEnd.Add(buf.Length);
             _origStart.Add(start);
             _lineDelta.Add(delta);
-            buf.Add((byte)'\n');
+            buf.Add('\n');
 
-            if (i >= utf8.Length) break;
-            i += utf8[i] == (byte)'\r' && i + 1 < utf8.Length && utf8[i + 1] == (byte)'\n' ? 2 : 1;
-            if (i == utf8.Length) break;
+            if (i >= text.Length) break;
+            i += text[i] == '\r' && i + 1 < text.Length && text[i + 1] == '\n' ? 2 : 1;
+            if (i == text.Length) break;
         }
         _src = buf.ToArray();
     }
@@ -105,9 +105,9 @@ internal sealed class MarkdownParser
             if (c.Kind == MarkdownBlockKind.Quote)
             {
                 int ind = Indent(p, e);
-                if (ind > 3 || p + ind >= e || _src[p + ind] != (byte)'>') break;
+                if (ind > 3 || p + ind >= e || _src[p + ind] != '>') break;
                 p += ind + 1;
-                if (p < e && _src[p] == (byte)' ') p++;
+                if (p < e && _src[p] == ' ') p++;
             }
             else if (c.Kind == MarkdownBlockKind.ListItem)
             {
@@ -151,7 +151,7 @@ internal sealed class MarkdownParser
             int ind = Indent(p, e);
             if (ind >= 4) break;
             int q = p + ind;
-            if (_src[q] == (byte)'>')
+            if (_src[q] == '>')
             {
                 CloseLeaf();
                 CloseTrailingList();
@@ -159,15 +159,15 @@ internal sealed class MarkdownParser
                 Tip.ChildList.Add(quote);
                 _open.Add(quote);
                 p = q + 1;
-                if (p < e && _src[p] == (byte)' ') p++;
+                if (p < e && _src[p] == ' ') p++;
                 blank = IsBlank(p, e);
                 continue;
             }
             if (IsThematicBreak(q, e)) break;
-            if (!ListMarker(q, e, out byte marker, out bool ordered, out int number, out int markerEnd)) break;
+            if (!ListMarker(q, e, out char marker, out bool ordered, out int number, out int markerEnd)) break;
 
             int after = markerEnd, spaces = 0;
-            while (after < e && _src[after] == (byte)' ') { after++; spaces++; }
+            while (after < e && _src[after] == ' ') { after++; spaces++; }
             bool emptyItem = after >= e;
             if (_leaf is { Kind: MarkdownBlockKind.Paragraph } && (emptyItem || ordered && number != 1)) break;
 
@@ -235,7 +235,7 @@ internal sealed class MarkdownParser
             SetRaw(heading, _src.AsSpan(hStart, hEnd - hStart), hStart < hEnd ? SourceOffset(hStart, _line) : -1);
             return;
         }
-        if (Fence(at, e, out byte fenceChar, out int fenceLength, out string? info))
+        if (Fence(at, e, out char fenceChar, out int fenceLength, out string? info))
         {
             CloseLeaf();
             OpenLeaf(new MarkdownBlock(MarkdownBlockKind.CodeBlock)
@@ -338,25 +338,25 @@ internal sealed class MarkdownParser
     // are taken out; a paragraph that was nothing else is dropped.
     private void CloseParagraph(MarkdownBlock paragraph)
     {
-        var joined = new ByteBuf();
+        var joined = new CharBuf();
         int source = -1;
         for (int i = 0; i < _leafLines.Count; i++)
         {
             var (start, end, line) = _leafLines[i];
-            while (start < end && _src[start] == (byte)' ') start++;
+            while (start < end && _src[start] == ' ') start++;
             if (i == 0 && start < end) source = SourceOffset(start, line);
-            if (i > 0) joined.Add((byte)'\n');
+            if (i > 0) joined.Add('\n');
             joined.Add(_src.AsSpan(start, end - start));
         }
         var text = joined.Span;
         int trimmed = text.Length;
-        while (trimmed > 0 && text[trimmed - 1] is (byte)' ' or (byte)'\n') trimmed--;
+        while (trimmed > 0 && text[trimmed - 1] is ' ' or '\n') trimmed--;
         text = text[..trimmed];
 
         if (paragraph.Kind == MarkdownBlockKind.Paragraph)
         {
             int consumed = 0;
-            while (consumed < text.Length && text[consumed] == (byte)'[' && RefDefinition(text[consumed..]) is var used and > 0)
+            while (consumed < text.Length && text[consumed] == '[' && RefDefinition(text[consumed..]) is var used and > 0)
             {
                 consumed += used;
                 source = -1;
@@ -377,7 +377,7 @@ internal sealed class MarkdownParser
             if (_open[i].ChildList.Remove(block)) return;
     }
 
-    private void SetRaw(MarkdownBlock block, ReadOnlySpan<byte> text, int source)
+    private void SetRaw(MarkdownBlock block, ReadOnlySpan<char> text, int source)
     {
         block.RawStart = _raw.Length;
         block.RawLength = text.Length;
@@ -393,7 +393,7 @@ internal sealed class MarkdownParser
         code.TextStart = _out.Length;
         for (int i = 0; i < count; i++)
         {
-            if (i > 0) _out.Add((byte)'\n');
+            if (i > 0) _out.Add('\n');
             var (start, end, _) = _leafLines[i];
             _out.Add(_src.AsSpan(start, end - start));
         }
@@ -414,11 +414,11 @@ internal sealed class MarkdownParser
                 row.ChildList.Add(cell);
                 if (c >= cells.Count) { SetRaw(cell, default, -1); continue; }
                 // \| is a pipe in a cell, inside a code span too.
-                var raw = new ByteBuf();
+                var raw = new CharBuf();
                 var (cs, ce) = cells[c];
                 for (int i = cs; i < ce; i++)
                 {
-                    if (_src[i] == (byte)'\\' && i + 1 < ce && _src[i + 1] == (byte)'|') continue;
+                    if (_src[i] == '\\' && i + 1 < ce && _src[i + 1] == '|') continue;
                     raw.Add(_src[i]);
                 }
                 SetRaw(cell, raw.Span, -1);
@@ -430,18 +430,18 @@ internal sealed class MarkdownParser
     private List<(int Start, int End)> SplitCells(int start, int end)
     {
         var cells = new List<(int, int)>();
-        while (start < end && _src[start] == (byte)' ') start++;
-        while (end > start && _src[end - 1] == (byte)' ') end--;
-        if (start < end && _src[start] == (byte)'|') start++;
-        if (end > start && _src[end - 1] == (byte)'|' && (end - 2 < start || _src[end - 2] != (byte)'\\')) end--;
+        while (start < end && _src[start] == ' ') start++;
+        while (end > start && _src[end - 1] == ' ') end--;
+        if (start < end && _src[start] == '|') start++;
+        if (end > start && _src[end - 1] == '|' && (end - 2 < start || _src[end - 2] != '\\')) end--;
         int cellStart = start;
         for (int i = start; i <= end; i++)
         {
-            if (i < end && _src[i] == (byte)'\\') { i++; continue; }
-            if (i < end && _src[i] != (byte)'|') continue;
+            if (i < end && _src[i] == '\\') { i++; continue; }
+            if (i < end && _src[i] != '|') continue;
             int s = cellStart, e = Math.Min(i, end);
-            while (s < e && _src[s] == (byte)' ') s++;
-            while (e > s && _src[e - 1] == (byte)' ') e--;
+            while (s < e && _src[s] == ' ') s++;
+            while (e > s && _src[e - 1] == ' ') e--;
             cells.Add((s, e));
             cellStart = i + 1;
         }
@@ -453,9 +453,9 @@ internal sealed class MarkdownParser
         bool anyPipe = false;
         for (int i = start; i < end; i++)
         {
-            byte b = _src[i];
-            if (b == (byte)'|') anyPipe = true;
-            else if (b is not ((byte)'-' or (byte)':' or (byte)' ')) return null;
+            char b = _src[i];
+            if (b == '|') anyPipe = true;
+            else if (b is not ('-' or ':' or ' ')) return null;
         }
         var cells = SplitCells(start, end);
         if (cells.Count == 0 || !anyPipe && cells.Count < 2) return null;
@@ -465,11 +465,11 @@ internal sealed class MarkdownParser
         {
             var (s, e) = cells[c];
             if (e <= s) return null;
-            bool left = _src[s] == (byte)':', right = _src[e - 1] == (byte)':';
+            bool left = _src[s] == ':', right = _src[e - 1] == ':';
             int dashes = 0;
             for (int i = s + (left ? 1 : 0); i < e - (right ? 1 : 0); i++)
             {
-                if (_src[i] != (byte)'-') return null;
+                if (_src[i] != '-') return null;
                 dashes++;
             }
             if (dashes == 0) return null;
@@ -483,14 +483,14 @@ internal sealed class MarkdownParser
     private int Indent(int p, int e)
     {
         int n = 0;
-        while (p + n < e && _src[p + n] == (byte)' ') n++;
+        while (p + n < e && _src[p + n] == ' ') n++;
         return n;
     }
 
     private bool IsBlank(int p, int e)
     {
         for (int i = p; i < e; i++)
-            if (_src[i] != (byte)' ') return false;
+            if (_src[i] != ' ') return false;
         return true;
     }
 
@@ -501,7 +501,7 @@ internal sealed class MarkdownParser
         int ind = Indent(p, e);
         if (ind >= 4) return false;
         int q = p + ind;
-        if (_src[q] == (byte)'>') return true;
+        if (_src[q] == '>') return true;
         if (IsThematicBreak(q, e) || AtxHeading(q, e, out _, out _, out _) || Fence(q, e, out _, out _, out _)) return true;
         // Not a paragraph's own line, so a list item may start it whatever its number.
         return ListMarker(q, e, out _, out _, out _, out _);
@@ -510,33 +510,33 @@ internal sealed class MarkdownParser
     private bool IsThematicBreak(int p, int e)
     {
         if (p >= e) return false;
-        byte c = _src[p];
-        if (c is not ((byte)'*' or (byte)'-' or (byte)'_')) return false;
+        char c = _src[p];
+        if (c is not ('*' or '-' or '_')) return false;
         int count = 0;
         for (int i = p; i < e; i++)
         {
             if (_src[i] == c) count++;
-            else if (_src[i] != (byte)' ') return false;
+            else if (_src[i] != ' ') return false;
         }
         return count >= 3;
     }
 
-    private bool ListMarker(int p, int e, out byte marker, out bool ordered, out int number, out int markerEnd)
+    private bool ListMarker(int p, int e, out char marker, out bool ordered, out int number, out int markerEnd)
     {
-        marker = 0; ordered = false; number = 0; markerEnd = p;
+        marker = '\0'; ordered = false; number = 0; markerEnd = p;
         if (p >= e) return false;
-        byte c = _src[p];
-        if (c is (byte)'-' or (byte)'+' or (byte)'*')
+        char c = _src[p];
+        if (c is '-' or '+' or '*')
         {
-            if (p + 1 < e && _src[p + 1] != (byte)' ') return false;
+            if (p + 1 < e && _src[p + 1] != ' ') return false;
             marker = c;
             markerEnd = p + 1;
             return true;
         }
         int i = p;
-        while (i < e && i - p < 9 && _src[i] is >= (byte)'0' and <= (byte)'9') number = number * 10 + (_src[i++] - '0');
-        if (i == p || i >= e || _src[i] is not ((byte)'.' or (byte)')')) return false;
-        if (i + 1 < e && _src[i + 1] != (byte)' ') return false;
+        while (i < e && i - p < 9 && _src[i] is >= '0' and <= '9') number = number * 10 + (_src[i++] - '0');
+        if (i == p || i >= e || _src[i] is not ('.' or ')')) return false;
+        if (i + 1 < e && _src[i + 1] != ' ') return false;
         marker = _src[i];
         ordered = true;
         markerEnd = i + 1;
@@ -546,63 +546,63 @@ internal sealed class MarkdownParser
     private bool AtxHeading(int p, int e, out int level, out int start, out int end)
     {
         level = 0; start = end = p;
-        while (p + level < e && _src[p + level] == (byte)'#') level++;
+        while (p + level < e && _src[p + level] == '#') level++;
         if (level is 0 or > 6) return false;
         int q = p + level;
-        if (q < e && _src[q] != (byte)' ') return false;
-        while (q < e && _src[q] == (byte)' ') q++;
+        if (q < e && _src[q] != ' ') return false;
+        while (q < e && _src[q] == ' ') q++;
         int z = e;
-        while (z > q && _src[z - 1] == (byte)' ') z--;
+        while (z > q && _src[z - 1] == ' ') z--;
         // A closing run of #s, after a space or alone.
         int hashes = z;
-        while (hashes > q && _src[hashes - 1] == (byte)'#') hashes--;
-        if (hashes < z && (hashes == q || _src[hashes - 1] == (byte)' '))
+        while (hashes > q && _src[hashes - 1] == '#') hashes--;
+        if (hashes < z && (hashes == q || _src[hashes - 1] == ' '))
         {
             z = hashes;
-            while (z > q && _src[z - 1] == (byte)' ') z--;
+            while (z > q && _src[z - 1] == ' ') z--;
         }
         start = q;
         end = z;
         return true;
     }
 
-    private bool Fence(int p, int e, out byte fenceChar, out int length, out string? info)
+    private bool Fence(int p, int e, out char fenceChar, out int length, out string? info)
     {
-        fenceChar = 0; length = 0; info = null;
-        if (p >= e || _src[p] is not ((byte)'`' or (byte)'~')) return false;
-        byte c = _src[p];
+        fenceChar = '\0'; length = 0; info = null;
+        if (p >= e || _src[p] is not ('`' or '~')) return false;
+        char c = _src[p];
         while (p + length < e && _src[p + length] == c) length++;
         if (length < 3) return false;
         int s = p + length, z = e;
-        while (s < z && _src[s] == (byte)' ') s++;
-        while (z > s && _src[z - 1] == (byte)' ') z--;
-        if (c == (byte)'`' && _src.AsSpan(s, z - s).Contains((byte)'`')) return false;
+        while (s < z && _src[s] == ' ') s++;
+        while (z > s && _src[z - 1] == ' ') z--;
+        if (c == '`' && _src.AsSpan(s, z - s).Contains('`')) return false;
         fenceChar = c;
-        info = z > s ? Encoding.UTF8.GetString(_src, s, z - s) : null;
+        info = z > s ? new string(_src, s, z - s) : null;
         return true;
     }
 
     private int SetextLevel(int p, int e)
     {
-        if (p >= e || _src[p] is not ((byte)'=' or (byte)'-')) return 0;
-        byte c = _src[p];
+        if (p >= e || _src[p] is not ('=' or '-')) return 0;
+        char c = _src[p];
         int i = p;
         while (i < e && _src[i] == c) i++;
-        return IsBlank(i, e) ? c == (byte)'=' ? 1 : 2 : 0;
+        return IsBlank(i, e) ? c == '=' ? 1 : 2 : 0;
     }
 
-    // `[label]: destination "title"` at the start of a paragraph: how many bytes
+    // `[label]: destination "title"` at the start of a paragraph: how many chars
     // it takes, through its line end, or 0 when it is not one.
-    private int RefDefinition(ReadOnlySpan<byte> text)
+    private int RefDefinition(ReadOnlySpan<char> text)
     {
         int i = 1;
-        while (i < text.Length && text[i] != (byte)']')
+        while (i < text.Length && text[i] != ']')
         {
-            if (text[i] == (byte)'[') return 0;
-            if (text[i] == (byte)'\\') i++;
+            if (text[i] == '[') return 0;
+            if (text[i] == '\\') i++;
             i++;
         }
-        if (i >= text.Length || i > 1000 || i + 1 >= text.Length || text[i + 1] != (byte)':') return 0;
+        if (i >= text.Length || i > 1000 || i + 1 >= text.Length || text[i + 1] != ':') return 0;
         string label = NormalizeLabel(text[1..i]);
         if (label.Length == 0) return 0;
         i += 2;
@@ -614,31 +614,31 @@ internal sealed class MarkdownParser
         if (titled && LineEndsAt(text, j)) i = j;
         else if (!LineEndsAt(text, afterDest)) return 0;
         else i = afterDest;
-        while (i < text.Length && text[i] == (byte)' ') i++;
+        while (i < text.Length && text[i] == ' ') i++;
         if (i < text.Length) i++;   // the newline
         _refs.TryAdd(label, url);
         return i;
     }
 
-    private static bool LineEndsAt(ReadOnlySpan<byte> text, int i)
+    private static bool LineEndsAt(ReadOnlySpan<char> text, int i)
     {
-        while (i < text.Length && text[i] == (byte)' ') i++;
-        return i >= text.Length || text[i] == (byte)'\n';
+        while (i < text.Length && text[i] == ' ') i++;
+        return i >= text.Length || text[i] == '\n';
     }
 
-    private static int SkipSpaceAndOneNewline(ReadOnlySpan<byte> text, int i)
+    private static int SkipSpaceAndOneNewline(ReadOnlySpan<char> text, int i)
     {
-        while (i < text.Length && text[i] == (byte)' ') i++;
-        if (i < text.Length && text[i] == (byte)'\n') i++;
-        while (i < text.Length && text[i] == (byte)' ') i++;
+        while (i < text.Length && text[i] == ' ') i++;
+        if (i < text.Length && text[i] == '\n') i++;
+        while (i < text.Length && text[i] == ' ') i++;
         return i;
     }
 
-    internal static string NormalizeLabel(ReadOnlySpan<byte> label)
+    internal static string NormalizeLabel(ReadOnlySpan<char> label)
     {
         var sb = new StringBuilder();
         bool space = false;
-        foreach (char ch in Encoding.UTF8.GetString(label).Trim())
+        foreach (char ch in label.Trim())
         {
             if (char.IsWhiteSpace(ch)) { space = true; continue; }
             if (space) sb.Append(' ');
@@ -658,10 +658,10 @@ internal sealed class MarkdownParser
             && block.ChildList[0] is { Kind: MarkdownBlockKind.Paragraph } first)
         {
             var raw = _raw.Span.Slice(first.RawStart, first.RawLength);
-            if (raw.Length >= 3 && raw[0] == (byte)'[' && raw[2] == (byte)']' && raw[1] is (byte)' ' or (byte)'x' or (byte)'X'
-                && (raw.Length == 3 || raw[3] is (byte)' ' or (byte)'\n'))
+            if (raw.Length >= 3 && raw[0] == '[' && raw[2] == ']' && raw[1] is ' ' or 'x' or 'X'
+                && (raw.Length == 3 || raw[3] is ' ' or '\n'))
             {
-                block.Task = raw[1] == (byte)' ' ? MarkdownTask.Unchecked : MarkdownTask.Checked;
+                block.Task = raw[1] == ' ' ? MarkdownTask.Unchecked : MarkdownTask.Checked;
                 block.TaskOffset = first.RawSource >= 0 ? first.RawSource + 1 : -1;
                 int skip = Math.Min(raw.Length, 4);
                 first.RawStart += skip;
@@ -685,7 +685,7 @@ internal sealed class MarkdownParser
         {
             public Kind Kind;
             public int Start, Len;           // in _out
-            public byte Ch;
+            public char Ch;
             public int Orig, Count, Closed, Opened;
             public bool CanOpen, CanClose;
             public int StrongOpen, EmOpen, StrikeOpen, StrongClose, EmClose, StrikeClose;
@@ -698,9 +698,9 @@ internal sealed class MarkdownParser
         private readonly List<Tok> _toks = [];
         private readonly List<int> _brackets = [];
         private int _delimTop = -1;
-        private ByteBuf Out => owner._out;
+        private CharBuf Out => owner._out;
 
-        public void Parse(ReadOnlySpan<byte> raw)
+        public void Parse(ReadOnlySpan<char> raw)
         {
             _toks.Clear();
             _brackets.Clear();
@@ -710,47 +710,47 @@ internal sealed class MarkdownParser
             Flatten();
         }
 
-        private void Scan(ReadOnlySpan<byte> raw)
+        private void Scan(ReadOnlySpan<char> raw)
         {
             int i = 0;
             while (i < raw.Length)
             {
-                byte b = raw[i];
+                char b = raw[i];
                 switch (b)
                 {
-                    case (byte)'\n':
+                    case '\n':
                         Newline(raw, ref i);
                         break;
-                    case (byte)'\\':
-                        if (i + 1 < raw.Length && raw[i + 1] == (byte)'\n') { TrimTrailingSpaces(); Add(Kind.Break); i += 2; SkipSpaces(raw, ref i); }
+                    case '\\':
+                        if (i + 1 < raw.Length && raw[i + 1] == '\n') { TrimTrailingSpaces(); Add(Kind.Break); i += 2; SkipSpaces(raw, ref i); }
                         else if (i + 1 < raw.Length && IsAsciiPunct(raw[i + 1])) { AppendText(raw.Slice(i + 1, 1)); i += 2; }
                         else { AppendText(raw.Slice(i, 1)); i++; }
                         break;
-                    case (byte)'`':
+                    case '`':
                         CodeSpan(raw, ref i);
                         break;
-                    case (byte)'*' or (byte)'_' or (byte)'~':
+                    case '*' or '_' or '~':
                         Delimiter(raw, ref i);
                         break;
-                    case (byte)'[':
-                        OpenBracket(i + 1, image: false, "["u8);
+                    case '[':
+                        OpenBracket(i + 1, image: false, "[");
                         i++;
                         break;
-                    case (byte)'!' when i + 1 < raw.Length && raw[i + 1] == (byte)'[':
-                        OpenBracket(i + 2, image: true, "!["u8);
+                    case '!' when i + 1 < raw.Length && raw[i + 1] == '[':
+                        OpenBracket(i + 2, image: true, "![");
                         i += 2;
                         break;
-                    case (byte)']':
+                    case ']':
                         CloseBracket(raw, ref i);
                         break;
-                    case (byte)'<':
-                        if (!Autolink(raw, ref i)) { AppendText("<"u8); i++; }
+                    case '<':
+                        if (!Autolink(raw, ref i)) { AppendText("<"); i++; }
                         break;
-                    case (byte)'&':
-                        if (!Entity(raw, ref i)) { AppendText("&"u8); i++; }
+                    case '&':
+                        if (!Entity(raw, ref i)) { AppendText("&"); i++; }
                         break;
                     default:
-                        if ((b is (byte)'h' or (byte)'w' or (byte)'H' or (byte)'W') && BareUrl(raw, ref i)) break;
+                        if ((b is 'h' or 'w' or 'H' or 'W') && BareUrl(raw, ref i)) break;
                         int start = i;
                         while (i < raw.Length && !IsSpecial(raw[i])) i++;
                         if (i == start) i++;
@@ -760,45 +760,45 @@ internal sealed class MarkdownParser
             }
         }
 
-        private static bool IsSpecial(byte b) => b is (byte)'\n' or (byte)'\\' or (byte)'`' or (byte)'*' or (byte)'_'
-            or (byte)'~' or (byte)'[' or (byte)'!' or (byte)']' or (byte)'<' or (byte)'&'
-            or (byte)'h' or (byte)'w' or (byte)'H' or (byte)'W';
+        private static bool IsSpecial(char b) => b is '\n' or '\\' or '`' or '*' or '_'
+            or '~' or '[' or '!' or ']' or '<' or '&'
+            or 'h' or 'w' or 'H' or 'W';
 
         // Two spaces before a line end break the line; otherwise it is a space.
-        private void Newline(ReadOnlySpan<byte> raw, ref int i)
+        private void Newline(ReadOnlySpan<char> raw, ref int i)
         {
             int spaces = 0;
             if (_toks.Count > 0 && _toks[^1] is { Kind: Kind.Text } last && last.Start + last.Len == Out.Length)
-                for (int k = Out.Length - 1; k >= last.Start && Out[k] == (byte)' '; k--) spaces++;
+                for (int k = Out.Length - 1; k >= last.Start && Out[k] == ' '; k--) spaces++;
             TrimTrailingSpaces();
             if (spaces >= 2) Add(Kind.Break);
-            else AppendText(" "u8);
+            else AppendText(" ");
             i++;
             SkipSpaces(raw, ref i);
         }
 
-        private static void SkipSpaces(ReadOnlySpan<byte> raw, ref int i)
+        private static void SkipSpaces(ReadOnlySpan<char> raw, ref int i)
         {
-            while (i < raw.Length && raw[i] == (byte)' ') i++;
+            while (i < raw.Length && raw[i] == ' ') i++;
         }
 
         private void TrimTrailingSpaces()
         {
             if (_toks.Count == 0 || _toks[^1] is not { Kind: Kind.Text } last || last.Start + last.Len != Out.Length) return;
-            while (last.Len > 0 && Out[last.Start + last.Len - 1] == (byte)' ') { last.Len--; Out.Length--; }
+            while (last.Len > 0 && Out[last.Start + last.Len - 1] == ' ') { last.Len--; Out.Length--; }
             _toks[^1] = last;
         }
 
-        private void CodeSpan(ReadOnlySpan<byte> raw, ref int i)
+        private void CodeSpan(ReadOnlySpan<char> raw, ref int i)
         {
             int n = 0;
-            while (i + n < raw.Length && raw[i + n] == (byte)'`') n++;
+            while (i + n < raw.Length && raw[i + n] == '`') n++;
             int j = i + n;
             while (j < raw.Length)
             {
-                if (raw[j] != (byte)'`') { j++; continue; }
+                if (raw[j] != '`') { j++; continue; }
                 int m = 0;
-                while (j + m < raw.Length && raw[j + m] == (byte)'`') m++;
+                while (j + m < raw.Length && raw[j + m] == '`') m++;
                 if (m == n) break;
                 j += m;
             }
@@ -806,11 +806,11 @@ internal sealed class MarkdownParser
 
             var content = raw[(i + n)..j];
             int start = Out.Length;
-            foreach (byte c in content) Out.Add(c == (byte)'\n' ? (byte)' ' : c);
+            foreach (char c in content) Out.Add(c == '\n' ? ' ' : c);
             int len = Out.Length - start;
             bool allSpace = true;
-            for (int k = start; k < start + len; k++) if (Out[k] != (byte)' ') { allSpace = false; break; }
-            if (len >= 2 && !allSpace && Out[start] == (byte)' ' && Out[start + len - 1] == (byte)' ')
+            for (int k = start; k < start + len; k++) if (Out[k] != ' ') { allSpace = false; break; }
+            if (len >= 2 && !allSpace && Out[start] == ' ' && Out[start + len - 1] == ' ')
             {
                 start++;
                 len -= 2;
@@ -819,9 +819,9 @@ internal sealed class MarkdownParser
             i = j + n;
         }
 
-        private void Delimiter(ReadOnlySpan<byte> raw, ref int i)
+        private void Delimiter(ReadOnlySpan<char> raw, ref int i)
         {
-            byte c = raw[i];
+            char c = raw[i];
             int n = 0;
             while (i + n < raw.Length && raw[i + n] == c) n++;
             int before = i > 0 ? PrevRune(raw, i) : ' ';
@@ -831,9 +831,9 @@ internal sealed class MarkdownParser
             bool left = !afterWs && (!afterP || beforeWs || beforeP);
             bool right = !beforeWs && (!beforeP || afterWs || afterP);
             bool canOpen, canClose;
-            if (c == (byte)'_') { canOpen = left && (!right || beforeP); canClose = right && (!left || afterP); }
+            if (c == '_') { canOpen = left && (!right || beforeP); canClose = right && (!left || afterP); }
             else { canOpen = left; canClose = right; }
-            if (c == (byte)'~' && n > 2) { canOpen = canClose = false; }
+            if (c == '~' && n > 2) { canOpen = canClose = false; }
 
             int start = Out.Length;
             Out.Add(raw.Slice(i, n));
@@ -849,7 +849,7 @@ internal sealed class MarkdownParser
             _delimTop = index;
         }
 
-        private void OpenBracket(int rawPos, bool image, ReadOnlySpan<byte> literal)
+        private void OpenBracket(int rawPos, bool image, ReadOnlySpan<char> literal)
         {
             int start = Out.Length;
             Out.Add(literal);
@@ -861,26 +861,26 @@ internal sealed class MarkdownParser
             });
         }
 
-        private void CloseBracket(ReadOnlySpan<byte> raw, ref int i)
+        private void CloseBracket(ReadOnlySpan<char> raw, ref int i)
         {
-            if (_brackets.Count == 0) { AppendText("]"u8); i++; return; }
+            if (_brackets.Count == 0) { AppendText("]"); i++; return; }
             int openerIndex = _brackets[^1];
             var opener = _toks[openerIndex];
             if (!opener.Active)
             {
                 _brackets.RemoveAt(_brackets.Count - 1);
-                AppendText("]"u8);
+                AppendText("]");
                 i++;
                 return;
             }
 
             string? url = null;
             int end = i + 1;
-            if (end < raw.Length && raw[end] == (byte)'(')
+            if (end < raw.Length && raw[end] == '(')
             {
                 int j = end + 1;
                 SkipWhitespace(raw, ref j);
-                if (j < raw.Length && raw[j] == (byte)')') { url = ""; end = j + 1; }
+                if (j < raw.Length && raw[j] == ')') { url = ""; end = j + 1; }
                 else if (Destination(raw, ref j, out string dest))
                 {
                     int k = j;
@@ -888,7 +888,7 @@ internal sealed class MarkdownParser
                     if (k > j && Title(raw, ref k)) SkipWhitespace(raw, ref k);
                     else k = j;
                     SkipWhitespace(raw, ref k);
-                    if (k < raw.Length && raw[k] == (byte)')') { url = dest; end = k + 1; }
+                    if (k < raw.Length && raw[k] == ')') { url = dest; end = k + 1; }
                 }
             }
             if (url is null)
@@ -896,9 +896,9 @@ internal sealed class MarkdownParser
                 // Reference: [text][label], [text][], or [text].
                 string? label = null;
                 int after = i + 1;
-                if (after < raw.Length && raw[after] == (byte)'[')
+                if (after < raw.Length && raw[after] == '[')
                 {
-                    int close = raw[after..].IndexOf((byte)']');
+                    int close = raw[after..].IndexOf(']');
                     if (close > 0)
                     {
                         label = close == 1 ? NormalizeLabel(raw[opener.RawPos..i]) : NormalizeLabel(raw.Slice(after + 1, close - 1));
@@ -910,7 +910,7 @@ internal sealed class MarkdownParser
             }
 
             _brackets.RemoveAt(_brackets.Count - 1);
-            if (url is null) { AppendText("]"u8); i++; return; }
+            if (url is null) { AppendText("]"); i++; return; }
 
             ProcessEmphasis(opener.DelimBottom);
             opener.Kind = Kind.LinkStart;
@@ -926,66 +926,65 @@ internal sealed class MarkdownParser
         }
 
         // <scheme:...> or <user@host>.
-        private bool Autolink(ReadOnlySpan<byte> raw, ref int i)
+        private bool Autolink(ReadOnlySpan<char> raw, ref int i)
         {
-            int close = raw[(i + 1)..].IndexOf((byte)'>');
+            int close = raw[(i + 1)..].IndexOf('>');
             if (close <= 0) return false;
             var inner = raw.Slice(i + 1, close);
-            if (inner.IndexOfAny((byte)' ', (byte)'<', (byte)'\n') >= 0) return false;
-            int colon = inner.IndexOf((byte)':');
+            if (inner.IndexOfAny(' ', '<', '\n') >= 0) return false;
+            int colon = inner.IndexOf(':');
             string url;
             if (colon >= 2 && colon <= 32 && IsAsciiLetter(inner[0]) && IsScheme(inner[..colon]))
-                url = Encoding.UTF8.GetString(inner);
-            else if (inner.IndexOf((byte)'@') > 0 && inner.IndexOf((byte)'@') < inner.Length - 1 && inner.IndexOf((byte)'\\') < 0)
-                url = "mailto:" + Encoding.UTF8.GetString(inner);
+                url = new string(inner);
+            else if (inner.IndexOf('@') > 0 && inner.IndexOf('@') < inner.Length - 1 && inner.IndexOf('\\') < 0)
+                url = string.Concat("mailto:", inner);
             else return false;
             AddLink(url, inner);
             i += close + 2;
             return true;
         }
 
-        private static bool IsScheme(ReadOnlySpan<byte> s)
+        private static bool IsScheme(ReadOnlySpan<char> s)
         {
-            foreach (byte b in s)
-                if (!(IsAsciiLetter(b) || b is >= (byte)'0' and <= (byte)'9' || b is (byte)'+' or (byte)'.' or (byte)'-')) return false;
+            foreach (char b in s)
+                if (!(IsAsciiLetter(b) || b is >= '0' and <= '9' || b is '+' or '.' or '-')) return false;
             return true;
         }
 
         // GFM's extended autolinks: http://, https:// and www. at the start of a word.
-        private bool BareUrl(ReadOnlySpan<byte> raw, ref int i)
+        private bool BareUrl(ReadOnlySpan<char> raw, ref int i)
         {
-            if (i > 0 && raw[i - 1] is not ((byte)' ' or (byte)'\n' or (byte)'*' or (byte)'_' or (byte)'~' or (byte)'(')) return false;
+            if (i > 0 && raw[i - 1] is not (' ' or '\n' or '*' or '_' or '~' or '(')) return false;
             var rest = raw[i..];
-            int prefix = StartsWithIgnoreCase(rest, "https://"u8) ? 8 : StartsWithIgnoreCase(rest, "http://"u8) ? 7
-                : StartsWithIgnoreCase(rest, "www."u8) ? 4 : 0;
+            int prefix = StartsWithIgnoreCase(rest, "https://") ? 8 : StartsWithIgnoreCase(rest, "http://") ? 7
+                : StartsWithIgnoreCase(rest, "www.") ? 4 : 0;
             if (prefix == 0) return false;
             int end = prefix;
-            while (end < rest.Length && rest[end] is not ((byte)' ' or (byte)'\n' or (byte)'<')) end++;
+            while (end < rest.Length && rest[end] is not (' ' or '\n' or '<')) end++;
             while (end > prefix)
             {
-                byte last = rest[end - 1];
-                if (last is (byte)'?' or (byte)'!' or (byte)'.' or (byte)',' or (byte)':' or (byte)'*' or (byte)'_'
-                    or (byte)'~' or (byte)'\'' or (byte)'"') { end--; continue; }
-                if (last == (byte)')' && Count(rest[..end], (byte)')') > Count(rest[..end], (byte)'(')) { end--; continue; }
+                char last = rest[end - 1];
+                if (last is '?' or '!' or '.' or ',' or ':' or '*' or '_'
+                    or '~' or '\'' or '"') { end--; continue; }
+                if (last == ')' && Count(rest[..end], ')') > Count(rest[..end], '(')) { end--; continue; }
                 break;
             }
             if (end <= prefix) return false;
             var text = rest[..end];
-            string url = Encoding.UTF8.GetString(text);
-            if (prefix == 4) url = "http://" + url;
+            string url = prefix == 4 ? string.Concat("http://", text) : new string(text);
             AddLink(url, text);
             i += end;
             return true;
         }
 
-        private static int Count(ReadOnlySpan<byte> s, byte b)
+        private static int Count(ReadOnlySpan<char> s, char b)
         {
             int n = 0;
-            foreach (byte c in s) if (c == b) n++;
+            foreach (char c in s) if (c == b) n++;
             return n;
         }
 
-        private static bool StartsWithIgnoreCase(ReadOnlySpan<byte> s, ReadOnlySpan<byte> prefix)
+        private static bool StartsWithIgnoreCase(ReadOnlySpan<char> s, ReadOnlySpan<char> prefix)
         {
             if (s.Length < prefix.Length) return false;
             for (int k = 0; k < prefix.Length; k++)
@@ -993,7 +992,7 @@ internal sealed class MarkdownParser
             return true;
         }
 
-        private void AddLink(string url, ReadOnlySpan<byte> text)
+        private void AddLink(string url, ReadOnlySpan<char> text)
         {
             int link = owner._links.Count;
             owner._links.Add(url);
@@ -1009,41 +1008,41 @@ internal sealed class MarkdownParser
             ("larr", "←"), ("rarr", "→"), ("times", "×"), ("middot", "·"), ("deg", "°"),
         ];
 
-        private bool Entity(ReadOnlySpan<byte> raw, ref int i)
+        private bool Entity(ReadOnlySpan<char> raw, ref int i)
         {
-            int semi = raw[(i + 1)..].IndexOf((byte)';');
+            int semi = raw[(i + 1)..].IndexOf(';');
             if (semi <= 0 || semi > 32) return false;
             var name = raw.Slice(i + 1, semi);
-            Span<byte> utf8 = stackalloc byte[4];
-            if (name[0] == (byte)'#')
+            Span<char> chars = stackalloc char[2];
+            if (name[0] == '#')
             {
-                bool hex = name.Length > 1 && name[1] is (byte)'x' or (byte)'X';
+                bool hex = name.Length > 1 && name[1] is 'x' or 'X';
                 var digits = name[(hex ? 2 : 1)..];
                 if (digits.IsEmpty || digits.Length > (hex ? 6 : 7)) return false;
                 int value = 0;
-                foreach (byte d in digits)
+                foreach (char d in digits)
                 {
-                    int v = d is >= (byte)'0' and <= (byte)'9' ? d - '0'
-                        : hex && (d | 0x20) is >= (byte)'a' and <= (byte)'f' ? (d | 0x20) - 'a' + 10 : -1;
+                    int v = d is >= '0' and <= '9' ? d - '0'
+                        : hex && (d | 0x20) is >= 'a' and <= 'f' ? (d | 0x20) - 'a' + 10 : -1;
                     if (v < 0) return false;
                     value = value * (hex ? 16 : 10) + v;
                 }
                 var rune = Rune.IsValid(value) && value != 0 ? new Rune(value) : Rune.ReplacementChar;
-                AppendText(utf8[..rune.EncodeToUtf8(utf8)]);
+                AppendText(chars[..rune.EncodeToUtf16(chars)]);
             }
             else
             {
                 string? found = null;
                 foreach (var (n, v) in Entities)
-                    if (name.SequenceEqual(Encoding.ASCII.GetBytes(n))) { found = v; break; }
+                    if (name.SequenceEqual(n)) { found = v; break; }
                 if (found is null) return false;
-                AppendText(Encoding.UTF8.GetBytes(found));
+                AppendText(found);
             }
             i += semi + 2;
             return true;
         }
 
-        private void AppendText(ReadOnlySpan<byte> text)
+        private void AppendText(ReadOnlySpan<char> text)
         {
             if (text.IsEmpty) return;
             if (_toks.Count > 0 && _toks[^1] is { Kind: Kind.Text } last && last.Start + last.Len == Out.Length)
@@ -1089,7 +1088,7 @@ internal sealed class MarkdownParser
             {
                 var closer = _toks[current];
                 if (!closer.CanClose) { current = closer.Next; continue; }
-                int slot = (closer.Ch == (byte)'*' ? 0 : closer.Ch == (byte)'_' ? 1 : 2) * 6 + closer.Orig % 3 * 2 + (closer.CanOpen ? 1 : 0);
+                int slot = (closer.Ch == '*' ? 0 : closer.Ch == '_' ? 1 : 2) * 6 + closer.Orig % 3 * 2 + (closer.CanOpen ? 1 : 0);
                 int opener = closer.Prev;
                 bool found = false;
                 while (opener >= 0 && opener != bottom && opener != openersBottom[slot])
@@ -1097,7 +1096,7 @@ internal sealed class MarkdownParser
                     var o = _toks[opener];
                     if (o.CanOpen && o.Ch == closer.Ch)
                     {
-                        if (closer.Ch == (byte)'~') found = o.Count == closer.Count;
+                        if (closer.Ch == '~') found = o.Count == closer.Count;
                         else
                         {
                             bool odd = (o.CanClose || closer.CanOpen) && (o.Orig + closer.Orig) % 3 == 0
@@ -1119,10 +1118,10 @@ internal sealed class MarkdownParser
                 }
 
                 var op = _toks[opener];
-                int use = closer.Ch == (byte)'~' ? closer.Count : op.Count >= 2 && closer.Count >= 2 ? 2 : 1;
+                int use = closer.Ch == '~' ? closer.Count : op.Count >= 2 && closer.Count >= 2 ? 2 : 1;
                 op.Count -= use; op.Opened += use;
                 closer.Count -= use; closer.Closed += use;
-                if (closer.Ch == (byte)'~') { op.StrikeOpen++; closer.StrikeClose++; }
+                if (closer.Ch == '~') { op.StrikeOpen++; closer.StrikeClose++; }
                 else if (use == 2) { op.StrongOpen++; closer.StrongClose++; }
                 else { op.EmOpen++; closer.EmClose++; }
                 _toks[opener] = op;
@@ -1210,72 +1209,72 @@ internal sealed class MarkdownParser
 
         // ── Shared with link reference definitions ───────────────────────────
 
-        private static void SkipWhitespace(ReadOnlySpan<byte> raw, ref int i)
+        private static void SkipWhitespace(ReadOnlySpan<char> raw, ref int i)
         {
-            while (i < raw.Length && raw[i] is (byte)' ' or (byte)'\n') i++;
+            while (i < raw.Length && raw[i] is ' ' or '\n') i++;
         }
 
         // A link destination: <...>, or a run without spaces whose parentheses balance.
-        internal static bool Destination(ReadOnlySpan<byte> raw, ref int i, out string url)
+        internal static bool Destination(ReadOnlySpan<char> raw, ref int i, out string url)
         {
             url = "";
-            var sb = new ByteBuf();
-            if (i < raw.Length && raw[i] == (byte)'<')
+            var sb = new CharBuf();
+            if (i < raw.Length && raw[i] == '<')
             {
                 int j = i + 1;
-                while (j < raw.Length && raw[j] is not ((byte)'>' or (byte)'\n' or (byte)'<'))
+                while (j < raw.Length && raw[j] is not ('>' or '\n' or '<'))
                 {
-                    if (raw[j] == (byte)'\\' && j + 1 < raw.Length && IsAsciiPunct(raw[j + 1])) j++;
+                    if (raw[j] == '\\' && j + 1 < raw.Length && IsAsciiPunct(raw[j + 1])) j++;
                     sb.Add(raw[j++]);
                 }
-                if (j >= raw.Length || raw[j] != (byte)'>') return false;
+                if (j >= raw.Length || raw[j] != '>') return false;
                 i = j + 1;
-                url = Encoding.UTF8.GetString(sb.Span);
+                url = new string(sb.Span);
                 return true;
             }
             int depth = 0, k = i;
             while (k < raw.Length)
             {
-                byte b = raw[k];
-                if (b <= (byte)' ') break;
-                if (b == (byte)'\\' && k + 1 < raw.Length && IsAsciiPunct(raw[k + 1])) { sb.Add(raw[k + 1]); k += 2; continue; }
-                if (b == (byte)'(') depth++;
-                else if (b == (byte)')') { if (depth == 0) break; depth--; }
+                char b = raw[k];
+                if (b <= ' ') break;
+                if (b == '\\' && k + 1 < raw.Length && IsAsciiPunct(raw[k + 1])) { sb.Add(raw[k + 1]); k += 2; continue; }
+                if (b == '(') depth++;
+                else if (b == ')') { if (depth == 0) break; depth--; }
                 sb.Add(b);
                 k++;
             }
             if (k == i || depth != 0) return false;
             i = k;
-            url = Encoding.UTF8.GetString(sb.Span);
+            url = new string(sb.Span);
             return true;
         }
 
         // A link title in "", '' or (): parsed past, and dropped.
-        internal static bool Title(ReadOnlySpan<byte> raw, ref int i)
+        internal static bool Title(ReadOnlySpan<char> raw, ref int i)
         {
             if (i >= raw.Length) return false;
-            byte open = raw[i];
-            byte close = open switch { (byte)'"' => (byte)'"', (byte)'\'' => (byte)'\'', (byte)'(' => (byte)')', _ => 0 };
-            if (close == 0) return false;
+            char open = raw[i];
+            char close = open switch { '"' => '"', '\'' => '\'', '(' => ')', _ => '\0' };
+            if (close == '\0') return false;
             for (int j = i + 1; j < raw.Length; j++)
             {
-                if (raw[j] == (byte)'\\') { j++; continue; }
+                if (raw[j] == '\\') { j++; continue; }
                 if (raw[j] == close) { i = j + 1; return true; }
             }
             return false;
         }
 
-        private static int PrevRune(ReadOnlySpan<byte> raw, int i)
-            => Rune.DecodeLastFromUtf8(raw[..i], out var rune, out _) == System.Buffers.OperationStatus.Done ? rune.Value : ' ';
+        private static int PrevRune(ReadOnlySpan<char> raw, int i)
+            => Rune.DecodeLastFromUtf16(raw[..i], out var rune, out _) == System.Buffers.OperationStatus.Done ? rune.Value : ' ';
 
-        private static int NextRune(ReadOnlySpan<byte> raw, int i)
-            => Rune.DecodeFromUtf8(raw[i..], out var rune, out _) == System.Buffers.OperationStatus.Done ? rune.Value : ' ';
+        private static int NextRune(ReadOnlySpan<char> raw, int i)
+            => Rune.DecodeFromUtf16(raw[i..], out var rune, out _) == System.Buffers.OperationStatus.Done ? rune.Value : ' ';
 
         private static bool IsWhitespace(int c) => c is ' ' or '\n' or '\t' or '\r' or '\f' || c > 127 && Rune.IsWhiteSpace(new Rune(c));
 
         private static bool IsPunct(int c)
         {
-            if (c < 128) return IsAsciiPunct((byte)c);
+            if (c < 128) return IsAsciiPunct((char)c);
             var category = Rune.GetUnicodeCategory(new Rune(c));
             return category is UnicodeCategory.ConnectorPunctuation or UnicodeCategory.DashPunctuation
                 or UnicodeCategory.OpenPunctuation or UnicodeCategory.ClosePunctuation or UnicodeCategory.InitialQuotePunctuation
@@ -1283,35 +1282,35 @@ internal sealed class MarkdownParser
                 or UnicodeCategory.CurrencySymbol or UnicodeCategory.ModifierSymbol or UnicodeCategory.OtherSymbol;
         }
 
-        private static bool IsAsciiLetter(byte b) => (b | 0x20) is >= (byte)'a' and <= (byte)'z';
+        private static bool IsAsciiLetter(char b) => (b | 0x20) is >= 'a' and <= 'z';
     }
 
-    private static bool IsAsciiPunct(byte b) => b is >= 33 and <= 47 or >= 58 and <= 64 or >= 91 and <= 96 or >= 123 and <= 126;
+    private static bool IsAsciiPunct(char c) => c is >= '!' and <= '/' or >= ':' and <= '@' or >= '[' and <= '`' or >= '{' and <= '~';
 
-    // A growable byte buffer: List<byte> without the per-byte call.
-    private sealed class ByteBuf(int capacity = 256)
+    // A growable char buffer: List<char> without the per-char call.
+    private sealed class CharBuf(int capacity = 256)
     {
-        private byte[] _bytes = new byte[Math.Max(16, capacity)];
+        private char[] _chars = new char[Math.Max(16, capacity)];
 
         public int Length { get; set; }
 
-        public byte this[int index] => _bytes[index];
+        public char this[int index] => _chars[index];
 
-        public ReadOnlySpan<byte> Span => _bytes.AsSpan(0, Length);
+        public ReadOnlySpan<char> Span => _chars.AsSpan(0, Length);
 
-        public void Add(byte b)
+        public void Add(char b)
         {
-            if (Length == _bytes.Length) Array.Resize(ref _bytes, _bytes.Length * 2);
-            _bytes[Length++] = b;
+            if (Length == _chars.Length) Array.Resize(ref _chars, _chars.Length * 2);
+            _chars[Length++] = b;
         }
 
-        public void Add(ReadOnlySpan<byte> bytes)
+        public void Add(ReadOnlySpan<char> chars)
         {
-            if (Length + bytes.Length > _bytes.Length) Array.Resize(ref _bytes, Math.Max(_bytes.Length * 2, Length + bytes.Length));
-            bytes.CopyTo(_bytes.AsSpan(Length));
-            Length += bytes.Length;
+            if (Length + chars.Length > _chars.Length) Array.Resize(ref _chars, Math.Max(_chars.Length * 2, Length + chars.Length));
+            chars.CopyTo(_chars.AsSpan(Length));
+            Length += chars.Length;
         }
 
-        public byte[] ToArray() => _bytes.AsSpan(0, Length).ToArray();
+        public char[] ToArray() => _chars.AsSpan(0, Length).ToArray();
     }
 }
