@@ -1,4 +1,3 @@
-using System.Text;
 using Bibui;
 using Bibui.Runtime;
 
@@ -36,7 +35,7 @@ internal static class LayoutCheck
     {
         if (node is Text text && text.SizeX.Kind != SizeKind.Text && text.Content.Length > 0)
         {
-            float wants = runtime.Fonts.Measure(text.Content.Span, runtime.FontInScope(text.Size, text.Family));
+            float wants = runtime.Fonts.Measure(text.Content, runtime.FontInScope(text.Size, text.Family));
             if (wants > node.Extent.X + Tolerance)
                 faults.Add(new("cut", node.Id is null ? path + " > " + Describe(node) : path, $"says {wants:0} px of text in {node.Extent.X:0} px"));
         }
@@ -84,7 +83,7 @@ internal static class LayoutCheck
         if (node.Id is { } id) return id;
         if (node is Text t)
         {
-            string s = Encoding.UTF8.GetString(t.Content.Span);
+            string s = new string(t.Content);
             return $"\"{(s.Length > 24 ? s[..24] + "…" : s)}\"";
         }
         return node.GetType().Name;

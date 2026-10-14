@@ -5,6 +5,18 @@ namespace ComponentGallery;
 
 internal static class GalleryHelpers
 {
+    // The text a read-only field shows: one buffer per field id, refilled when
+    // the text changes. A field draws from a BibuiStr, and keeping one per field
+    // (not one per string ever shown) keeps the count to the gallery's fields.
+    private static readonly Dictionary<string, BibuiStr> Shown = new();
+
+    internal static BibuiStr Held(string id, ReadOnlySpan<char> text)
+    {
+        if (!Shown.TryGetValue(id, out var str)) Shown[id] = str = new BibuiStr(0);
+        if (!str.Str.SequenceEqual(text)) str.ReplaceRange((0, (int)str.Length), text);
+        return str;
+    }
+
     // What each page shows, under its title: what the thing is, and the bibui
     // call that builds it where there is one.
     internal static string ComponentDescription(string route) => route switch

@@ -121,7 +121,7 @@ static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, SetState<Ga
     if (!folded)
     {
         // Logo / title
-        title = Arrange.Column(Bold(runtime, U8("Gallery"), ComponentSize.Lg, TextColor.Primary))
+        title = Arrange.Column(Bold(runtime, "Gallery", ComponentSize.Lg, TextColor.Primary))
             .Padded(new EdgeInsets(16, 20, 12, 20));
         rule = Separator.Build(runtime);
     }
@@ -136,7 +136,7 @@ static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, SetState<Ga
 
     bool Entry(string id, string label, float height, bool raised)
     {
-        var entry = Bibui.Runtime.Button.Build(runtime, id, Str(label), ghost: true);
+        var entry = Bibui.Runtime.Button.Build(runtime, id, label, ghost: true);
         (entry.Node.SizeX, entry.Node.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.Pixels(height));
         var style = entry.Node.Style;
         if (raised) style.Draw = DrawFlags.Background;
@@ -190,11 +190,11 @@ static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, SetState<Ga
 static UiNode BuildMenuBar(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState)
 {
     var toggle = Bibui.Runtime.Button.Build(runtime, "nav-menu",
-        Str(state.MenuOpen ? "Close" : "Components"), ghost: true, size: ComponentSize.Sm);
+        state.MenuOpen ? "Close" : "Components", ghost: true, size: ComponentSize.Sm);
     if (toggle.Clicked) setState.Set(state with { MenuOpen = !state.MenuOpen });
 
     return Arrange.Row("menu-bar",
-            Arrange.CentredY(Bold(runtime, U8("Gallery"), ComponentSize.Lg, TextColor.Primary)),
+            Arrange.CentredY(Bold(runtime, "Gallery", ComponentSize.Lg, TextColor.Primary)),
             Arrange.Spring(),
             Arrange.CentredY(toggle.Node))
         .Styled(new Style
@@ -221,7 +221,7 @@ static UiNode BuildContentPanel(BibuiRuntime runtime, GalleryState state, SetSta
 
     var page = Arrange.Column(
         // Page title
-        Arrange.Row("page-title", Bold(runtime, U8(state.Route), ComponentSize.Xxl, TextColor.Primary)).FillX(),
+        Arrange.Row("page-title", Bold(runtime, state.Route, ComponentSize.Xxl, TextColor.Primary)).FillX(),
         Arrange.Space(24f),
         Wrapped(runtime, GalleryHelpers.ComponentDescription(state.Route), width, ComponentSize.Sm, TextColor.Secondary),
         Arrange.Space(24f),
@@ -247,13 +247,12 @@ static UiNode BuildContentPanel(BibuiRuntime runtime, GalleryState state, SetSta
 // Text in lines no wider than width, broken between words.
 static UiNode Wrapped(BibuiRuntime runtime, string text, float width, ComponentSize size, TextColor color)
 {
-    var bytes = U8(text);
     var lines = Arrange.Column().FillX();
-    var line = runtime.Fonts.Wrap(bytes.Span, runtime.FontInScope(size), width);
+    var line = runtime.Fonts.Wrap(text, runtime.FontInScope(size), width);
     if (line is null)   // nothing to say still takes its line
-        UiNode.PushIntoParent(lines, runtime.Text(bytes, size, color));
+        UiNode.PushIntoParent(lines, runtime.Text(text, size, color));
     for (; line is not null; line = line.Next)
-        UiNode.PushIntoParent(lines, runtime.Text(bytes[line.Start..line.End], size, color));
+        UiNode.PushIntoParent(lines, runtime.Text(text.AsSpan(line.Start, line.End - line.Start), size, color));
     return lines;
 }
 
@@ -279,7 +278,7 @@ static UiNode BuildDemo(BibuiRuntime runtime, GalleryState state, SetState<Galle
     "Scrollbar" => DemoScrollbar.Build(runtime),
     "SplitPane" or "Carousel" or "ButtonStrip" or "Stack" or "InteractiveBox" or "Section"
             => DemoLayout.Build(runtime, state.Route, state.Layout, s => setState.Set(state with { Layout = s })),
-    _ => runtime.Text(U8("Select a component from the sidebar."), textColor: TextColor.Secondary),
+    _ => runtime.Text("Select a component from the sidebar.", textColor: TextColor.Secondary),
 };
 
 // ── The whole window ──────────────────────────────────────────────────────────

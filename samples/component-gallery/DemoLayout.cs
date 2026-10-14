@@ -30,7 +30,7 @@ internal static class DemoLayout
 
     "Section" => SectionPage(runtime, state, set),
 
-    _ => runtime.Text(U8("Select a component from the sidebar."), textColor: TextColor.Secondary),
+    _ => runtime.Text("Select a component from the sidebar.", textColor: TextColor.Secondary),
     };
 
     // ── SplitPane ────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ internal static class DemoLayout
             using (runtime.PushParent(row))
             {
                 Arrange.Spring(row);
-                runtime.Text(U8(label), ComponentSize.Sm, TextColor.Secondary);
+                runtime.Text(label, ComponentSize.Sm, TextColor.Secondary);
                 Arrange.Spring(row);
             }
             Arrange.Spring(pane);
@@ -182,7 +182,7 @@ internal static class DemoLayout
                         using (runtime.PushParent(row))
                         {
                             Arrange.Spring(row);
-                            runtime.Text(U8(Slides[index]), textColor: TextColor.Secondary);
+                            runtime.Text(Slides[index], textColor: TextColor.Secondary);
                             Arrange.Spring(row);
                         }
                         Arrange.Spring(slide);
@@ -223,7 +223,7 @@ internal static class DemoLayout
             }
 
             runtime.Gap(16f);
-            runtime.Text(U8($"Slide {index + 1} of {Slides.Length}"), ComponentSize.Sm, TextColor.Secondary);
+            runtime.Text($"Slide {index + 1} of {Slides.Length}", ComponentSize.Sm, TextColor.Secondary);
         }
         if (go != index) set(state with { CarouselIndex = go });
         return page;
@@ -327,7 +327,7 @@ internal static class DemoLayout
                     child.SizeY = SemanticSize.Pixels(40f);
                     child.Style.Padding = new EdgeInsets(8f, 12f, 0f, 12f);
                     using (runtime.PushParent(child))
-                        runtime.Text(U8($"Flow child {i}"), ComponentSize.Sm, TextColor.Secondary);
+                        runtime.Text($"Flow child {i}", ComponentSize.Sm, TextColor.Secondary);
                 }
 
             runtime.Gap(16f);
@@ -349,7 +349,7 @@ internal static class DemoLayout
                     row.Style.BackgroundColor = i % 2 == 0 ? "#1a1a2e" : "#16213e";
                     row.Style.Padding = new EdgeInsets(12f, 12f, 0f, 12f);
                     using (runtime.PushParent(row))
-                        runtime.Text(U8($"Row {i + 1}"), ComponentSize.Sm, TextColor.Disabled);
+                        runtime.Text($"Row {i + 1}", ComponentSize.Sm, TextColor.Disabled);
                 }
 
                 // Out of it: two cards at offsets from the box's corner, over
@@ -361,7 +361,7 @@ internal static class DemoLayout
             }
 
             runtime.Gap(16f);
-            runtime.Text(U8(state.StackClickCount > 0 ? $"Card A clicked {state.StackClickCount} time(s)" : "Click the blue card"),
+            runtime.Text(state.StackClickCount > 0 ? $"Card A clicked {state.StackClickCount} time(s)" : "Click the blue card",
                 ComponentSize.Sm, state.StackClickCount > 0 ? TextColor.Accent : TextColor.Secondary);
         }
         if (clicked) set(state with { StackClickCount = state.StackClickCount + 1 });
@@ -376,7 +376,7 @@ internal static class DemoLayout
         card.Style.CornerRadius = 6f;
         card.Style.Padding = EdgeInsets.All(10f);
         using (runtime.PushParent(card))
-            runtime.Text(U8(label), ComponentSize.Sm);
+            runtime.Text(label, ComponentSize.Sm);
         return card;
     }
 
@@ -406,7 +406,7 @@ internal static class DemoLayout
                 Tile(runtime, runtime.Box(), "Plain", "Claims nothing", "#27272A", null, TextColor.Disabled);
             }
             runtime.Gap(16f);
-            runtime.Text(U8(state.BoxClickCount > 0 ? $"Boxes clicked {state.BoxClickCount} time(s)" : "Click the colored boxes"),
+            runtime.Text(state.BoxClickCount > 0 ? $"Boxes clicked {state.BoxClickCount} time(s)" : "Click the colored boxes",
                 ComponentSize.Sm, state.BoxClickCount > 0 ? TextColor.Accent : TextColor.Secondary);
         }
         if (clicks > 0) set(state with { BoxClickCount = state.BoxClickCount + clicks });
@@ -423,8 +423,8 @@ internal static class DemoLayout
         tile.Style.Padding = EdgeInsets.All(12f);
         using (runtime.PushParent(tile))
         {
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8(title), ComponentSize.Sm);
-            runtime.Text(U8(caption), ComponentSize.Sm, captionColor);
+            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, ComponentSize.Sm);
+            runtime.Text(caption, ComponentSize.Sm, captionColor);
         }
     }
 
@@ -435,7 +435,7 @@ internal static class DemoLayout
         var page = Arrange.Column();
         using (runtime.PushParent(page))
         {
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8("Composite panel: header + stack of controls"), ComponentSize.Sm, TextColor.Secondary);
+            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text("Composite panel: header + stack of controls", ComponentSize.Sm, TextColor.Secondary);
             Arrange.Gap(page, 16f);
 
             var panel = runtime.Box();
@@ -446,16 +446,16 @@ internal static class DemoLayout
             panel.Style.CornerRadius = 10f;
             panel.Style.Padding = EdgeInsets.All(20f);
             using (runtime.PushParent(panel))
-            using (runtime.PushParent(Section.Build(runtime, Str("APPEARANCE"))))
+            using (runtime.PushParent(Section.Build(runtime, "APPEARANCE")))
             {
                 ColormapSelect(runtime, state, set, colormaps, width: 320f);
                 runtime.Gap(Section.Spacing);
-                var alpha = Slider.Build(runtime, "demo-colormap-alpha", state.ColormapAlpha, 0f, 1f, 0.01f, Str("Alpha"));
+                var alpha = Slider.Build(runtime, "demo-colormap-alpha", state.ColormapAlpha, 0f, 1f, 0.01f, "Alpha");
                 if (alpha.Value != state.ColormapAlpha) set(state with { ColormapAlpha = alpha.Value });
             }
 
             Arrange.Gap(page, 16f);
-            runtime.Text(U8($"Colormap: {state.ColormapValue}    Alpha: {state.ColormapAlpha:0.00}"), ComponentSize.Sm, TextColor.Secondary);
+            runtime.Text($"Colormap: {state.ColormapValue}    Alpha: {state.ColormapAlpha:0.00}", ComponentSize.Sm, TextColor.Secondary);
         }
         return page;
     }
@@ -465,7 +465,7 @@ internal static class DemoLayout
     private static UiNode ColormapSelect(BibuiRuntime runtime, LayoutState state,
         Action<LayoutState> set, IReadOnlyList<string> colormaps, float width)
     {
-        var select = Select.Begin(runtime, "demo-colormap", Str(state.ColormapValue), width);
+        var select = Select.Begin(runtime, "demo-colormap", state.ColormapValue, width);
         if (select.Open)
             foreach (var name in colormaps)
             {
@@ -498,7 +498,7 @@ internal static class DemoLayout
                             [.. (Bibui.Theming.Colormaps.Get(name) ?? []).Select(s => new ColorStop(s.Stop, UiColor.Hex(s.Color)))]);
                     }
                     Arrange.Gap(row, 8f);
-                    runtime.Text(U8(name));
+                    runtime.Text(name);
                 }
             }
         return select.End();

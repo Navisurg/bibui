@@ -35,7 +35,7 @@ internal static class DemoNavigation
 
     "MenuBar" => MenuBarPage(runtime, state, set),
 
-        _ => runtime.Text(U8("Select a component from the sidebar."), textColor: TextColor.Secondary),
+        _ => runtime.Text("Select a component from the sidebar.", textColor: TextColor.Secondary),
     };
 
     // ── Shared page pieces ───────────────────────────────────────────────────
@@ -43,7 +43,7 @@ internal static class DemoNavigation
     /// <summary>The bold caption over a demo, and the space under it.</summary>
     internal static void Heading(BibuiRuntime runtime, string text)
     {
-        using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8(text), ComponentSize.Sm, TextColor.Secondary);
+        using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(text, ComponentSize.Sm, TextColor.Secondary);
         runtime.Gap(16f);
     }
 
@@ -71,7 +71,7 @@ internal static class DemoNavigation
         using (runtime.PushParent(cell))
         using (runtime.PushFontFace(weight: weight))
         {
-            label = runtime.Text(U8(text), size, color);
+            label = runtime.Text(text, size, color);
             Arrange.Spring(cell);
         }
         return label;
@@ -99,9 +99,9 @@ internal static class DemoNavigation
     internal static BibuiWidget WideButton(BibuiRuntime runtime, string id, string label, float width,
         float height = 40f, bool ghost = false, bool disabled = false)
     {
-        var button = Bibui.Runtime.Button.Build(runtime, id, Str(label), ghost, disabled);
+        var button = Bibui.Runtime.Button.Build(runtime, id, label, ghost, disabled);
         Font font = runtime.FontInScope();
-        float padX = MathF.Max(0f, (width - runtime.Fonts.Measure(U8(label).Span, font)) / 2f);
+        float padX = MathF.Max(0f, (width - runtime.Fonts.Measure(label, font)) / 2f);
         float padY = MathF.Max(0f, (height - runtime.Fonts.LineHeight(font)) / 2f);
         button.Node.Style.Padding = EdgeInsets.Symmetric(horizontal: padX, vertical: padY);
         return button;
@@ -140,9 +140,9 @@ internal static class DemoNavigation
 
     private static readonly TabOption[] TabItems =
     [
-        new(Str("Account"), "account"),
-        new(Str("Password"), "password"),
-        new(Str("Notifications"), "notifications"),
+        new("Account", "account"),
+        new("Password", "password"),
+        new("Notifications", "notifications"),
     ];
 
     private static UiNode TabsPage(BibuiRuntime runtime, NavigationState state, Action<NavigationState> set)
@@ -160,13 +160,13 @@ internal static class DemoNavigation
                 Box panel = Tabs.Panel(runtime);
                 panel.SizeY = SemanticSize.Pixels(76f);
                 using (runtime.PushParent(panel))
-                    runtime.Text(U8(state.ActiveTab switch
+                    runtime.Text(state.ActiveTab switch
                     {
                         "account" => "Your name, your email, and the workspaces you are in.",
                         "password" => "Change the password, or sign out everywhere else.",
                         "notifications" => "Which events reach you, and how.",
                         _ => "",
-                    }), textColor: TextColor.Secondary);
+                    }, textColor: TextColor.Secondary);
             }
         }
         return page;
@@ -194,18 +194,18 @@ internal static class DemoNavigation
                     var (title, content, value) = AccordionItems[i];
                     if (i > 0) runtime.Gap(4f);
                     bool open = state.AccordionOpen == value;
-                    var item = Expander.Build(runtime, $"demo-accordion-{value}", Str(title), open);
+                    var item = Expander.Build(runtime, $"demo-accordion-{value}", title, open);
                     if (item.Toggled) set(state with { AccordionOpen = open ? null : value });
                     if (item.Body is { } body)
                     {
                         body.SizeY = SemanticSize.Pixels(59f);
                         using (runtime.PushParent(body))
-                            runtime.Text(U8(content), ComponentSize.Sm, TextColor.Secondary);
+                            runtime.Text(content, ComponentSize.Sm, TextColor.Secondary);
                     }
                 }
             }
             runtime.Gap(16f);
-            runtime.Text(U8($"Open: {(string.IsNullOrEmpty(state.AccordionOpen) ? "none" : state.AccordionOpen)}"),
+            runtime.Text($"Open: {(string.IsNullOrEmpty(state.AccordionOpen) ? "none" : state.AccordionOpen)}",
                 ComponentSize.Sm, TextColor.Secondary);
         }
         return page;
@@ -224,14 +224,14 @@ internal static class DemoNavigation
             bool toggled;
             using (runtime.PushParent(FixedColumn(runtime, 360f)))
             {
-                var expander = Expander.Build(runtime, "demo-expander", Str("Starred repositories"), state.ExpanderOpen);
+                var expander = Expander.Build(runtime, "demo-expander", "Starred repositories", state.ExpanderOpen);
                 toggled = expander.Toggled;
                 if (expander.Body is { } body)
                     using (runtime.PushParent(body))
                         for (int i = 0; i < StarredRepositories.Length; i++)
                         {
                             if (i > 0) runtime.Gap(4f);
-                            runtime.Text(U8(StarredRepositories[i]), ComponentSize.Sm, TextColor.Secondary);
+                            runtime.Text(StarredRepositories[i], ComponentSize.Sm, TextColor.Secondary);
                         }
             }
             runtime.Gap(16f);
@@ -291,7 +291,7 @@ internal static class DemoNavigation
             }
 
             runtime.Gap(16f);
-            runtime.Text(U8($"Active: {state.NavBarActiveItem}"), ComponentSize.Sm, TextColor.Secondary);
+            runtime.Text($"Active: {state.NavBarActiveItem}", ComponentSize.Sm, TextColor.Secondary);
         }
         if (picked is not null && picked != state.NavBarActiveItem) set(state with { NavBarActiveItem = picked });
         return page;
@@ -356,7 +356,7 @@ internal static class DemoNavigation
                 }
 
             runtime.Gap(16f);
-            runtime.Text(U8($"Active: {state.SidebarActiveItem}"), ComponentSize.Sm, TextColor.Secondary);
+            runtime.Text($"Active: {state.SidebarActiveItem}", ComponentSize.Sm, TextColor.Secondary);
         }
         if (picked is not null && picked != state.SidebarActiveItem) set(state with { SidebarActiveItem = picked });
         return page;
@@ -455,7 +455,7 @@ internal static class DemoNavigation
             }
 
             runtime.Gap(16f);
-            runtime.Text(U8($"Page {current} of {PageCount}"), ComponentSize.Sm, TextColor.Accent);
+            runtime.Text($"Page {current} of {PageCount}", ComponentSize.Sm, TextColor.Accent);
         }
         if (go is { } target && target != current) set(state with { PaginationPage = target });
         return page;

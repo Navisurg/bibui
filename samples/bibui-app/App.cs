@@ -56,23 +56,23 @@ public static class App
                 var weight = Slider(runtime, "weight-slider", state.LeftWeight, min: 5f, max: 95f, step: 1f);
                 if (weight.Value != state.LeftWeight) setState.Set(state with { LeftWeight = weight.Value });
 
-                string name = System.Text.Encoding.UTF8.GetString(nameText.Str);
+                string name = nameText.ToString();
                 // Typed text is not worth keeping once it changes, so the greeting is encoded each frame.
-                byte[] greeting = string.IsNullOrEmpty(name) ? U8Bytes("…") : System.Text.Encoding.UTF8.GetBytes($"Hello, {name}!");
+                string greeting = string.IsNullOrEmpty(name) ? "…" : $"Hello, {name}!";
 
                 return Column(
                     // ── Header ────────────────────────────────────────────────────
-                    Bold(runtime, U8("bibui interactive demo"), ComponentSize.Xxl, TextColor.Primary),
+                    Bold(runtime, "bibui interactive demo", ComponentSize.Xxl, TextColor.Primary),
                     Space(20f),
 
                     // ── Counter ───────────────────────────────────────────────────
                     Column(
-                        Bold(runtime, U8("Counter"), ComponentSize.Lg),
+                        Bold(runtime, "Counter", ComponentSize.Lg),
                         Space(12f),
                         Row(
                             CentredY(decrement.Node),
                             Space(8f),
-                            CentredY(Bold(runtime, U8(state.Counter.ToString()), ComponentSize.Xl, TextColor.Accent, id: "counter-label")),
+                            CentredY(Bold(runtime, state.Counter.ToString(), ComponentSize.Xl, TextColor.Accent, id: "counter-label")),
                             Space(8f),
                             CentredY(increment.Node)
                         ).FillX().Px(height: 40f)   // centring needs a row with a height of its own
@@ -81,12 +81,12 @@ public static class App
 
                     // ── Proportional layout (shares of a row) ─────────────────────
                     Column(
-                        Bold(runtime, U8("Proportional Layout (shares of a row)"), ComponentSize.Lg),
+                        Bold(runtime, "Proportional Layout (shares of a row)", ComponentSize.Lg),
                         Space(12f),
 
                         // Two panels whose widths follow the slider-driven shares.
                         Row(
-                            Column(Bold(runtime, U8($"weight {state.LeftWeight:0}"), textColor: TextColor.AccentForeground))
+                            Column(Bold(runtime, $"weight {state.LeftWeight:0}", textColor: TextColor.AccentForeground))
                                 .Styled(new Style
                                 {
                                     BackgroundColor = UiColor.Accent,
@@ -94,7 +94,7 @@ public static class App
                                     Padding = EdgeInsets.All(12f),
                                 }).FillX(state.LeftWeight / 100f).FillY(),
                             Space(12f),
-                            Column(Bold(runtime, U8($"weight {100f - state.LeftWeight:0}"), textColor: TextColor.Secondary))
+                            Column(Bold(runtime, $"weight {100f - state.LeftWeight:0}", textColor: TextColor.Secondary))
                                 .Styled(new Style
                                 {
                                     BackgroundColor = UiColor.Surface,
@@ -107,21 +107,21 @@ public static class App
                         Space(12f),
 
                         Row(
-                            runtime.Text(U8("Left share"), ComponentSize.Sm, TextColor.Secondary),
+                            runtime.Text("Left share", ComponentSize.Sm, TextColor.Secondary),
                             Spring(),
-                            runtime.Text(U8($"{state.LeftWeight:0}"), ComponentSize.Sm, TextColor.Primary)
+                            runtime.Text($"{state.LeftWeight:0}", ComponentSize.Sm, TextColor.Primary)
                         ).FillX(),
                         Space(8f),
                         weight.Node.FillX(),
                         Space(12f),
-                        runtime.Text(U8($"Split {state.LeftWeight:0} : {100f - state.LeftWeight:0}  — drag to resize"), ComponentSize.Sm, TextColor.Secondary)
+                        runtime.Text($"Split {state.LeftWeight:0} : {100f - state.LeftWeight:0}  — drag to resize", ComponentSize.Sm, TextColor.Secondary)
                     ).FillX().Styled(Card()),
                     Space(20f),
 
                     // ── Input + checkbox row ──────────────────────────────────────
                     Row(
                         Column(
-                            Bold(runtime, U8("Input"), ComponentSize.Lg),
+                            Bold(runtime, "Input", ComponentSize.Lg),
                             Space(10f),
                             nameField,
                             Space(10f),
@@ -129,7 +129,7 @@ public static class App
                         ).FillX().Styled(Card()),
                         Space(16f),
                         Column(
-                            Bold(runtime, U8("Checkbox"), ComponentSize.Lg),
+                            Bold(runtime, "Checkbox", ComponentSize.Lg),
                             Space(12f),
                             subscribe.Node,
                             Space(12f),
@@ -146,26 +146,14 @@ public static class App
             surface: new SurfaceOptions { Width = 720, Height = 1200 });
     }
 
-    // Sample-side only: the library takes bytes. Literals are encoded once and kept.
-    private static ReadOnlyMemory<byte> U8(string s) => U8Bytes(s);
-
     // A text at the bold weight, where a PushFontFace scope cannot go: inside an
     // expression. With an id, it is retained under it, so it can be found.
-    private static Text Bold(BibuiRuntime runtime, ReadOnlyMemory<byte> text, FontSize? fontSize = null, UiColor? textColor = null,
+    private static Text Bold(BibuiRuntime runtime, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null,
         string? id = null)
     {
         using (runtime.PushFontFace(weight: FontWeight.Bold))
             return id is null ? runtime.Text(text, fontSize, textColor) : runtime.TextFromId(id, text, fontSize, textColor);
     }
-
-    private static byte[] U8Bytes(string s)
-    {
-        if (!Utf8Cache.TryGetValue(s, out var bytes))
-            Utf8Cache[s] = bytes = System.Text.Encoding.UTF8.GetBytes(s);
-        return bytes;
-    }
-
-    private static readonly Dictionary<string, byte[]> Utf8Cache = new();
 
     // A slider, composed: a track that takes a press and follows the drag, holding
     // the filled rail, the knob and the rest of the rail side by side. It owns no
@@ -228,12 +216,12 @@ public static class App
 
     private static class Labels
     {
-        public static readonly BibuiStr Minus = BibuiStr.FromStrLit("−"u8);
-        public static readonly BibuiStr Plus = BibuiStr.FromStrLit("+"u8);
-        public static readonly BibuiStr Subscribe = BibuiStr.FromStrLit("Subscribe"u8);
-        public static readonly BibuiStr Subscribed = BibuiStr.FromStrLit("Subscribed"u8);
-        public static readonly BibuiStr Unsubscribed = BibuiStr.FromStrLit("Unsubscribed"u8);
-        public static readonly BibuiStr NamePlaceholder = BibuiStr.FromStrLit("Type your name…"u8);
+        public const string Minus = "−";
+        public const string Plus = "+";
+        public const string Subscribe = "Subscribe";
+        public const string Subscribed = "Subscribed";
+        public const string Unsubscribed = "Unsubscribed";
+        public const string NamePlaceholder = "Type your name…";
     }
 
     private record AppState(

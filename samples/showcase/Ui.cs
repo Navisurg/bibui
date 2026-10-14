@@ -1,4 +1,3 @@
-using System.Text;
 using Bibui;
 using Bibui.Runtime;
 using Bibui.TextEdit;
@@ -14,26 +13,20 @@ internal static class Ui
 {
     // ── Text ─────────────────────────────────────────────────────────────────
 
-    /// <summary>A text holds UTF-8 bytes; formatted per frame, encoded per frame.</summary>
-    public static ReadOnlyMemory<byte> U8(string s) => Encoding.UTF8.GetBytes(s);
-
-    /// <summary>A component label.</summary>
-    public static BibuiStr S(string s) => BibuiStr.FromStrLit(Encoding.UTF8.GetBytes(s));
-
     public static Text T(BibuiRuntime rt, string s, FontSize? size = null, UiColor? color = null)
-        => rt.Text(U8(s), size, color);
+        => rt.Text(s, size, color);
 
     public static Text Bold(BibuiRuntime rt, string s, FontSize? size = null, UiColor? color = null)
     {
         using (rt.PushFontFace(weight: FontWeight.Bold))
-            return rt.Text(U8(s), size, color);
+            return rt.Text(s, size, color);
     }
 
     /// <summary>A small capitalised label above a group: tracking is not a thing yet, so it is plain small caps by hand.</summary>
     public static Text Eyebrow(BibuiRuntime rt, string s)
     {
         using (rt.PushFontFace(weight: FontWeight.Bold))
-            return rt.Text(U8(s.ToUpperInvariant()), FontSize.Px(11f), UiColor.TextSecondary);
+            return rt.Text(s.ToUpperInvariant(), FontSize.Px(11f), UiColor.TextSecondary);
     }
 
     public static Icon Icon(BibuiRuntime rt, string name, float size, UiColor color)
