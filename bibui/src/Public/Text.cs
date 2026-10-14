@@ -5,11 +5,11 @@ namespace Bibui.TextEdit;
 
 public ref struct TextOp
 {
-    public System.ValueTuple<int, int> Range = (0, 0);
+    public System.ValueTuple<int, int> Range = (0, 0);  // The chars [start, end) the op replaces
     public ReadOnlySpan<char> ReplaceString = default;
     public ReadOnlySpan<char> CopyString = default;
-    public int NewCursor = 0;  // Cursor after applying op
-    public int NewMark = 0;  // Mark after op
+    public int NewCursor = 0;  // Cursor after applying op, in chars
+    public int NewMark = 0;  // Mark after op, in chars
 
     public static int MaxCharsPerCodePoint = 2; // a surrogate pair
 
@@ -99,7 +99,7 @@ public ref struct TextOp
     /// Scan to the end of the line in the direction of <paramref name="delta"/>:
     /// backwards to just after the preceding line break, forwards to just before
     /// the next one — so in a single-line buffer, to its start or its end.
-    /// Returns an offset from the cursor, like the other scans.
+    /// Returns the offset in chars from the cursor, like the other scans.
     /// </summary>
     internal static int LineScan(ReadOnlySpan<char> str, int cursor, int delta)
     {
@@ -128,6 +128,9 @@ public ref struct TextOp
     /// <see cref="BibUiEventKind.Submit"/> ends the line: it puts a \n at the
     /// cursor and lets go of the selection; the selected text stays. A text
     /// that has one line does not pass it Submit.
+    ///
+    /// <para><paramref name="buf"/> holds a typed code point, encoded: at least
+    /// <see cref="MaxCharsPerCodePoint"/> chars.</para>
     /// </summary>
     public static TextOp FromStateAndEvent(BibuiStr str,
                                            TextEditState state,
@@ -259,8 +262,19 @@ public enum TextActionFlags : UInt32
 
 
 
+/// <summary>
+/// Where the caret and the other end of the selection are in a text.
+///
+/// <para>Every offset in text editing — Cursor and Mark here, and
+/// TextOp's Range, NewCursor and NewMark, and what its scans return —
+/// counts UTF-16 code units: chars, the index into a string or a
+/// Span&lt;char&gt;. Not code points (👨 is one code point but two chars),
+/// and not what reads as one character (👨‍👩‍👧 is one text element but
+/// five code points and eight chars). A cursor always sits on a text
+/// element boundary.</para>
+/// </summary>
 public sealed class TextEditState
 {
-    public int Cursor = 0;
-    public int Mark = 0;    
+    public int Cursor = 0;  // In chars, on a text element boundary
+    public int Mark = 0;    // In chars, on a text element boundary
 }
