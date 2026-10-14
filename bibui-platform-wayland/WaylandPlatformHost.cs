@@ -29,6 +29,16 @@ public sealed record WaylandHostOptions
     /// the cost of drawing a hidden window this often while it animates.
     /// </summary>
     public TimeSpan FrameWait { get; init; } = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// Draw on the GPU when the runtime's raster backend can (Skia: it
+    /// implements <see cref="Bibui.Raster.IGlRasterBackend"/>) and EGL is
+    /// there: an EGL context on the window, frames drawn by Skia's GL backend
+    /// straight into its framebuffer. Default true. False, or BIBUI_GPU=0 in
+    /// the environment, keeps the wl_shm path, as does a backend that draws
+    /// only on the CPU (the managed rasterizer) or an EGL that fails to set up.
+    /// </summary>
+    public bool Gpu { get; init; } = true;
 }
 
 /// <summary>
@@ -68,6 +78,15 @@ public sealed record WaylandHostOptions
 /// <para>Scale (<see cref="WaylandScaleAndCursor"/>): the buffer is
 /// round(logical × scale) at the compositor's preferred fractional scale, shown
 /// at the logical size through wp_viewport; positions stay logical.</para>
+///
+/// <para><b>GPU</b> (<see cref="GpuPresenter"/>): when the runtime's raster
+/// backend draws through GL (Skia) and EGL is there, <see cref="Open"/> makes an
+/// EGL context over a wl_egl_window on the same surface and Present draws into
+/// its framebuffer instead of an shm buffer, then swaps — same pacing, configure,
+/// scale and input. BIBUI_GPU=0 or <see cref="WaylandHostOptions.Gpu"/> = false
+/// keeps the shm path; so does any EGL failure, which is printed to stderr.
+/// <c>new BibuiWindow(new BibuiRuntime(new SkiaRasterBackend()), new WaylandPlatformHost())</c>
+/// is all an app writes to draw on the GPU.</para>
 /// </summary>
 public sealed unsafe class WaylandPlatformHost : IPlatformHost
 {
@@ -88,6 +107,7 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
     private ZxdgToplevelDecorationV1 _decoration;
     private WlCallback _frameCallback;
     private BufferPool<ShmBuffer>? _pool;
+    private GpuPresenter? _gpu;
 
     // What the compositor asked for, and what is drawn.
     private ToplevelConfigure _configure = new();
@@ -147,7 +167,21 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
     public float Scale => SurfaceScale.ToFactor(_scale120); // the scale the runtime is sized at
     public bool IsClosing => _closing || !_open;
     public KeyModifiers HeldModifiers => _input.HeldModifiers;
-    public HostPresentation Presentation => HostPresentation.CpuPixels;
+    public HostPresentation Presentation => _gpu is null ? HostPresentation.CpuPixels : HostPresentation.GpuSurface;
+
+    /// <summary>
+    /// The GL renderer frames are drawn with (GL_RENDERER, e.g. "AMD Radeon
+    /// Graphics (radeonsi, …)") while the window is open on the GPU path; null on
+    /// the shm path and while closed.
+    /// </summary>
+    public string? GpuRenderer => _gpu?.Renderer;
+
+    /// <summary>
+    /// The raster backend's GL context while the window is open on the GPU path
+    /// (Bibui.Raster.Skia's SkiaGlContext carries the GRContext), else null.
+    /// Render thread only.
+    /// </summary>
+    public Bibui.Raster.IGlRasterContext? GlContext => _gpu?.Gl;
     public bool PacesFrames => true;
 
     public string? GetClipboardText() => _clipboard.GetText();
@@ -223,6 +257,29 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
             Pump(100);
         }
         ApplyConfigure();
+        StartGpu(runtime);
+    }
+
+    /// <summary>
+    /// Moves presentation to the GPU when <see cref="GpuSelection"/> says to try
+    /// and EGL sets up; otherwise leaves the shm path in place. Here in Open,
+    /// after the first configure, so the context and Skia's first shaders are
+    /// paid for before the first frame is shown.
+    /// </summary>
+    private void StartGpu(BibuiRuntime runtime)
+    {
+        var choice = GpuSelection.Decide(_options.Gpu, runtime.Raster);
+        if (choice != GpuChoice.Gpu)
+        {
+            if (GpuSelection.Verbose) Console.Error.WriteLine($"[bibui] Wayland host: wl_shm ({runtime.Raster.Name} on the CPU): {choice}");
+            return;
+        }
+        _gpu = GpuPresenter.TryCreate(_display, _surface.Handle, Math.Max(_fbW, 1), Math.Max(_fbH, 1),
+                                      (Bibui.Raster.IGlRasterBackend)runtime.Raster, out var error);
+        if (_gpu is null)
+            Console.Error.WriteLine($"[bibui] Wayland host: GPU unavailable ({error}); drawing on the CPU into wl_shm.");
+        else if (GpuSelection.Verbose)
+            Console.Error.WriteLine($"[bibui] Wayland host: GPU (EGL + {runtime.Raster.Name} GL): {_gpu.Renderer} — {_gpu.Version}");
     }
 
     public void Shutdown()
@@ -233,6 +290,7 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
             if (_display != 0)
             {
                 _pool?.Clear();
+                _gpu?.Dispose(); // before the wl_surface it draws on
                 if (!_frameCallback.IsNull) _frameCallback.DestroyProxy();
                 if (!_decoration.IsNull) _decoration.Destroy();
                 if (!_toplevel.IsNull) _toplevel.Destroy();
@@ -252,6 +310,7 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
         {
             _display = 0;
             _pool = null;
+            _gpu = null;
             _frameCallback = default; _decoration = default; _toplevel = default; _xdgSurface = default; _surface = default;
             _decorationManager = default; _wmBase = default; _shm = default; _compositor = default; _registry = default;
             _ackSerial = null;
@@ -316,6 +375,7 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
             }
         }
         if (_closing) return default;
+        if (_gpu is not null) return PresentGpu(runtime, _gpu);
 
         var buffer = _pool.TryAcquire(_fbW, _fbH);
         if (buffer is null)
@@ -353,8 +413,34 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
         long t2 = Stopwatch.GetTimestamp();
 
         return new PresentTimings(Ms(t1 - t0), Ms(t2 - t1));
+    }
 
-        static double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
+    private static double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
+
+    /// <summary>
+    /// The GPU path, paced already: the backend draws into the window's
+    /// framebuffer, and the swap commits it with whatever this frame set on the
+    /// surface first — the configure ack, the next frame callback, the viewport.
+    /// </summary>
+    private PresentTimings PresentGpu(BibuiRuntime runtime, GpuPresenter gpu)
+    {
+        var target = gpu.Target(_fbW, _fbH);
+        long t0 = Stopwatch.GetTimestamp();
+        runtime.RenderTo(target);
+        long t1 = Stopwatch.GetTimestamp();
+
+        if (_ackSerial is uint serial)
+        {
+            _xdgSurface.AckConfigure(serial);
+            _ackSerial = null;
+        }
+        _frameCallback = _surface.Frame();
+        _frameCallback.AddListener(FrameListener, (void*)GCHandle.ToIntPtr(_self));
+        _scale.BeforeCommit(_logicalW, _logicalH, _scale120);
+        gpu.Swap(); // attach + damage + commit
+        WaylandNative.wl_display_flush(_display);
+        long t2 = Stopwatch.GetTimestamp();
+        return new PresentTimings(Ms(t1 - t0), Ms(t2 - t1));
     }
 
     // ── Configure ────────────────────────────────────────────────────────────

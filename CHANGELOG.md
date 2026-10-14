@@ -110,6 +110,15 @@ before it was published.
 
 ### Added
 
+- Skia on the GPU on the raw Wayland host: `new BibuiWindow(new BibuiRuntime(new SkiaRasterBackend()), new WaylandPlatformHost())`
+  draws through EGL and Skia's GL backend straight into the window's
+  framebuffer, with no Silk.NET, and publishes with Native AOT. The host
+  picks it when the backend implements the new `IGlRasterBackend` (Skia does,
+  the managed rasterizer does not) and libEGL loads; `BIBUI_GPU=0` or
+  `WaylandHostOptions.Gpu = false` keeps wl_shm, and so does an EGL that fails
+  to set up. `WaylandPlatformHost.GpuRenderer` names the GL renderer and
+  `GlContext` (a `SkiaGlContext` on Skia, carrying the `GRContext`) is there
+  for GPU-resident resources of the app's own.
 - `Icons.Register(name, svgPathData)`: an app adds icons of its own at
   start-up, drawn by `runtime.Icon` and known to `Icon.IsKnown` like the
   built-in Lucide set (24×24 viewBox, stroke 2, round caps and joins). The

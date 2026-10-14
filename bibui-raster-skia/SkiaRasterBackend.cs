@@ -15,7 +15,7 @@ namespace Bibui.Raster.Skia;
 /// <see cref="EndFrame"/> ages them; the renderer that owns this backend calls
 /// it once per painted frame.</para>
 /// </summary>
-public sealed class SkiaRasterBackend : IRasterBackend
+public sealed partial class SkiaRasterBackend : IGlRasterBackend
 {
     private readonly List<Action> _endFrames = [];
     private readonly List<IDisposable> _disposables = [];

@@ -23,6 +23,7 @@ HostTests.Register(t);
 ClipboardTests.Register(t);
 InputTests.Register(t);
 ScaleTests.Register(t);
+GpuTests.Register(t);
 return t.Finish();
 
 namespace Bibui.WaylandTests
