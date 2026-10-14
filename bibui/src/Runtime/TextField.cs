@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Text;
 using Bibui;
 using Bibui.TextEdit;
 using Bibui.Theming;
@@ -16,7 +15,7 @@ public static class TextField
 {
     private static readonly UiColor Highlight = UiColor.Rgba(59, 130, 246, 110);
     private const float CaretWidth = 2f;
-    private static readonly byte[] Dots = "\u2026"u8.ToArray();
+    private const string Dots = "\u2026";
     private const float DotsGap = 2f;   // between a cut line and its "…"
 
     // The events a field takes while focused, as bits of their kinds. Read-only
@@ -64,28 +63,27 @@ public static class TextField
 
         // An empty buffer shows the placeholder, in a quieter colour, the same way.
         bool empty = text.Length == 0;
-        ReadOnlyMemory<byte> shown = empty ? placeholder?.AsMemory() ?? default : text.AsMemory();
-        ReadOnlySpan<byte> bytes = shown.Span;
+        ReadOnlySpan<char> shown = empty ? placeholder is null ? default : placeholder.Str : text.Str;
         TextColor color = empty ? TextColor.Secondary : textColor;
 
         // Not focused: no caret and nothing highlighted. Empty: the caret is
         // before the placeholder, which is not text to select.
-        int caret = focused && !empty ? Math.Clamp(edit.Cursor, 0, bytes.Length) : 0;
-        int mark = focused && !empty ? Math.Clamp(edit.Mark, 0, bytes.Length) : 0;
+        int caret = focused && !empty ? Math.Clamp(edit.Cursor, 0, shown.Length) : 0;
+        int mark = focused && !empty ? Math.Clamp(edit.Mark, 0, shown.Length) : 0;
         int lo = Math.Min(caret, mark), hi = Math.Max(caret, mark);
 
         // Edited, the caret is kept in sight; otherwise the line shows from its start.
         if (!focused || empty)
             view.TargetViewOffset = view.TargetViewOffset with { X = 0f };
         else
-            ScrollToCaret(view, new Vector2(runtime.Fonts.Measure(bytes[..caret], font), 0f), Vector2.Zero,
-                new Vector2(runtime.Fonts.Measure(bytes, font), 0f), view.Extent / 4f);
+            ScrollToCaret(view, new Vector2(runtime.Fonts.Measure(shown[..caret], font), 0f), Vector2.Zero,
+                new Vector2(runtime.Fonts.Measure(shown, font), 0f), view.Extent / 4f);
 
         using (runtime.PushParent(view))
         {
             DrawLine(runtime, shown, lo, hi, color);
             // Draw carret last so it appears over text
-            if (focused) DrawCaret(runtime, view, font, bytes, lo, hi, caret, top: 0f, SemanticSize.Pixels(lineHeight), edited);
+            if (focused) DrawCaret(runtime, view, font, shown, lo, hi, caret, top: 0f, SemanticSize.Pixels(lineHeight), edited);
         }
         return new BibuiWidget(view, interaction);
     }
@@ -108,7 +106,7 @@ public static class TextField
 
         var line = SingleLine(runtime, id, text, edit, focused, events, textColor, placeholder);
         bool empty = text.Length == 0;
-        ReadOnlySpan<byte> shown = empty ? placeholder is null ? default : placeholder.Str : text.Str;
+        ReadOnlySpan<char> shown = empty ? placeholder is null ? default : placeholder.Str : text.Str;
         if (focused || runtime.Fonts.Measure(shown, runtime.FontInScope()) <= room)
             return line;   // fits, or being edited: it scrolls instead
 
@@ -155,10 +153,10 @@ public static class TextField
             int lineUnderPointer = (int)MathF.Floor(pointerY / lineAdvance);
             var line = LineAt(runtime.Fonts.Wrap(text.Str, font, room, wrap), lineUnderPointer);
             int lineStart = line?.Start ?? 0, lineEnd = line?.End ?? 0;
-            var lineBytes = text.Str[lineStart..lineEnd];
+            ReadOnlySpan<char> lineText = text.Str[lineStart..lineEnd];
 
             edit.Cursor -= lineStart; edit.Mark -= lineStart;
-            HandlePointer(runtime, font, interaction, lineBytes, edit, pointerX, focused);
+            HandlePointer(runtime, font, interaction, lineText, edit, pointerX, focused);
             edit.Cursor += lineStart; edit.Mark += lineStart;
         }
 
@@ -166,15 +164,14 @@ public static class TextField
 
         // An empty buffer shows the placeholder, in a quieter colour, the same way.
         bool empty = text.Length == 0;
-        ReadOnlyMemory<byte> shown = empty ? placeholder?.AsMemory() ?? default : text.AsMemory();
-        ReadOnlySpan<byte> bytes = shown.Span;
+        ReadOnlySpan<char> shown = empty ? placeholder is null ? default : placeholder.Str : text.Str;
         TextColor color = empty ? TextColor.Secondary : textColor;
-        TextLine? lines = runtime.Fonts.Wrap(bytes, font, room, wrap);
+        TextLine? lines = runtime.Fonts.Wrap(shown, font, room, wrap);
 
         // Not focused: no caret and nothing highlighted. Empty: the caret is
         // before the placeholder, which is not text to select.
-        int caret = focused && !empty ? Math.Clamp(edit.Cursor, 0, bytes.Length) : 0;
-        int mark = focused && !empty ? Math.Clamp(edit.Mark, 0, bytes.Length) : 0;
+        int caret = focused && !empty ? Math.Clamp(edit.Cursor, 0, shown.Length) : 0;
+        int mark = focused && !empty ? Math.Clamp(edit.Mark, 0, shown.Length) : 0;
         int lo = Math.Min(caret, mark), hi = Math.Max(caret, mark);
 
         using var inView = runtime.PushParent(view);
@@ -210,7 +207,7 @@ public static class TextField
             int caretOnLine = caret - lineStart;
             float lineTop = caretLineIndex * lineAdvance;
             var caretHeight = SemanticSize.Pixels(lineHeight);
-            DrawCaret(runtime, view, font, bytes[lineStart..lineEnd], selectionStart, selectionEnd,
+            DrawCaret(runtime, view, font, shown[lineStart..lineEnd], selectionStart, selectionEnd,
                 caretOnLine, lineTop, caretHeight, edited);
 
             // Its line is kept in sight when it moves, so a wheel scroll is left alone.
@@ -266,12 +263,12 @@ public static class TextField
         box.Style.BackgroundColor = disabled ? UiColor.SurfaceRaised : UiColor.Surface;
     }
 
-    // The pointer on one line of text: line holds its bytes, x is from where it
+    // The pointer on one line of text: line holds its chars, x is from where it
     // starts, and the edit state is in the line's offsets. A press puts the
-    // cursor at the byte under it and sets the mark, unless shift extends a
+    // cursor at the text element under it and sets the mark, unless shift extends a
     // field already being edited; held, the cursor follows the pointer.
     private static void HandlePointer(BibuiRuntime runtime, Font font, Interaction interaction,
-        ReadOnlySpan<byte> line, TextEditState edit, float x, bool focused)
+        ReadOnlySpan<char> line, TextEditState edit, float x, bool focused)
     {
         int at = runtime.Fonts.OffsetAt(line, font, x);
         bool extend = focused && (interaction.Modifiers & KeyModifiers.Shift) != 0;
@@ -296,7 +293,7 @@ public static class TextField
     // One line of text, drawn as texts side by side split at the selection —
     // [lo, hi) in the line's offsets — the selected one in a box with the
     // highlight behind it, so layout puts the highlight under its glyphs.
-    private static void DrawLine(BibuiRuntime runtime, ReadOnlyMemory<byte> line, int lo, int hi,
+    private static void DrawLine(BibuiRuntime runtime, ReadOnlySpan<char> line, int lo, int hi,
         TextColor color)
     {
         if (lo > 0) Part(runtime, line[..lo], color);
@@ -313,11 +310,11 @@ public static class TextField
     }
 
     // A slice of the line, sized by its text whatever size is pushed.
-    private static void Part(BibuiRuntime runtime, ReadOnlyMemory<byte> bytes, TextColor color)
+    private static void Part(BibuiRuntime runtime, ReadOnlySpan<char> text, TextColor color)
     {
         using (runtime.PushSizeX(SemanticSize.Text()))
         using (runtime.PushSizeY(SemanticSize.Text()))
-            runtime.Text(bytes, textColor: color);
+            runtime.Text(text, textColor: color);
     }
 
     // Moves the view's target so the caret, the box [at, at + size), is in
@@ -340,7 +337,7 @@ public static class TextField
 
     // The caret on a line top below the first, after the text before it. It
     // glides there, but jumps right after an edit so it never trails a typed character.
-    private static void DrawCaret(BibuiRuntime runtime, Box view, Font font, ReadOnlySpan<byte> line,
+    private static void DrawCaret(BibuiRuntime runtime, Box view, Font font, ReadOnlySpan<char> line,
         int lo, int hi, int caret, float top, SemanticSize height, bool edited)
     {
         float before = runtime.Fonts.Measure(line[..lo], font);
@@ -365,7 +362,7 @@ public static class TextField
         Font font, float wrapWidth, TextWrap wrap)
     {
         bool edited = false;
-        Span<byte> pasteBuf = stackalloc byte[TextOp.MaxCodePointSize];
+        Span<char> charBuf = stackalloc char[TextOp.MaxCharsPerCodePoint];
         foreach (var handle in runtime.UnconsumedEvents)
         {
             var ev = handle.Event;
@@ -376,18 +373,18 @@ public static class TextField
                 handle.Eat();
                 continue;
             }
-            var op = TextOp.FromStateAndEvent(text, edit, ev, pasteBuf);
+            var op = TextOp.FromStateAndEvent(text, edit, ev, charBuf);
             if (op.Range.Item1 != op.Range.Item2 || op.ReplaceString.Length > 0) edited = true;
             text.ReplaceRange(op.Range, op.ReplaceString);
             edit.Cursor = op.NewCursor;
             edit.Mark = op.NewMark;
-            if (op.CopyString.Length > 0) runtime.ClipboardSet(Encoding.UTF8.GetString(op.CopyString));
+            if (op.CopyString.Length > 0) runtime.ClipboardSet(new string(op.CopyString));
             handle.Eat();
         }
         return edited;
     }
 
-    // Up or down a line, by the sign of ev.DeltaY, to the byte nearest the
+    // Up or down a line, by the sign of ev.DeltaY, to the char nearest the
     // caret's x on that line. With no line there — above the first, below the
     // last, or anywhere in a single line — the start or end of the text.
     // Shift keeps the mark.

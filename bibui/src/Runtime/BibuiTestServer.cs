@@ -597,7 +597,7 @@ public sealed class BibuiTestServer : IDisposable
     {
         var found = Find(node);
         if (found is null) return Err($"No node with id '{RequireId(node)}'");
-        return OkResult(FirstText(found) is { } text ? System.Text.Encoding.UTF8.GetString(text.Content.Span) : null);
+        return OkResult(FirstText(found) is { } text ? new string(text.Content) : null);
 
         static Text? FirstText(UiNode n)
         {

@@ -45,7 +45,7 @@ public sealed class LayoutException : Exception
 
     private static string? FirstText(UiNode node)
     {
-        if (node is Text t) return System.Text.Encoding.UTF8.GetString(t.Content.Span);
+        if (node is Text t) return new string(t.Content);
         for (var c = node.FirstChild; c is not null; c = c.Next == c ? null : c.Next)
             if (FirstText(c) is { } found) return found;
         return null;
