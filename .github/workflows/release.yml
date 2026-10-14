@@ -162,7 +162,10 @@ jobs:
         id: login
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         with:
-          user: navisurg
+          # The nuget.org user who created the trusted publishing policy, not
+          # the organization that owns it (navisurg): the token exchange looks
+          # the policy up by its creator. The packages are owned by navisurg.
+          user: Daniel-navisurg
 
       # --skip-duplicate: a re-run after a partial push publishes the rest
       # instead of failing on the packages already up. A .snupkg beside a
