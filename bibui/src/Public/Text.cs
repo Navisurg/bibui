@@ -35,10 +35,10 @@ public ref struct TextOp
         // A line break is a boundary on both sides, and \r\n is one element.
         if (str[cursor - 1] == '\n') return cursor >= 2 && str[cursor - 2] == '\r' ? -2 : -1;
 
-        // Whether a position is a boundary depends on what comes before it (a
+        // Whether a position is a boundary can depend on what comes before it (a
         // ZWJ sequence, the pairing of flags), so step back, a code point at a
-        // time, to a position no grapheme rule can join across — within the
-        // line and MaxLookBehind — and scan forward from there.
+        // time, to one that is certainly a boundary — within the line and
+        // MaxLookBehind — and scan forward from there.
         int floor = Math.Max(cursor + LineScan(str, cursor, -1), cursor - MaxLookBehind);
         int start = cursor;
         while (true)
@@ -47,23 +47,16 @@ public ref struct TextOp
             start -= Math.Max(1, length);
             if (start <= floor) break;
 
-            Rune.DecodeLastFromUtf16(str[..start], out Rune before, out _);
-            Rune.DecodeFromUtf16(str[start..], out Rune after, out _);
-
-            // Before can join what follows it: ZWJ and other format chars (most
-            // Prepend), marks (an Indic virama), a regional indicator, a Hangul
-            // leading jamo.
-            bool beforeJoins = before.Value is (>= 0x1F1E6 and <= 0x1F1FF) or (>= 0x1100 and <= 0x115F) or (>= 0xA960 and <= 0xA97F)
-                || Rune.GetUnicodeCategory(before) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark
-                    or UnicodeCategory.EnclosingMark or UnicodeCategory.Format;
-            // After can join what precedes it: marks, format chars (ZWJ, tags), a
-            // skin tone, a regional indicator, a Hangul vowel or trailing jamo,
-            // a halfwidth voiced mark.
-            bool afterJoins = after.Value is (>= 0x1F1E6 and <= 0x1F1FF) or (>= 0x1F3FB and <= 0x1F3FF)
-                    or (>= 0x1160 and <= 0x11FF) or (>= 0xD7B0 and <= 0xD7FF) or 0xFF9E or 0xFF9F
-                || Rune.GetUnicodeCategory(after) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark
-                    or UnicodeCategory.EnclosingMark or UnicodeCategory.Format;
-            if (!beforeJoins && !afterJoins) break;
+            // The pair test: a boundary .NET finds between the two code points
+            // alone holds whatever came before, unless the first is a mark or a
+            // format char — a ZWJ (emoji sequences) and a virama (Indic
+            // conjuncts) join by what precedes them, which the pair can't see.
+            Rune.DecodeLastFromUtf16(str[..start], out Rune before, out int beforeLength);
+            Rune.DecodeFromUtf16(str[start..], out _, out int afterLength);
+            if (Rune.GetUnicodeCategory(before) is not (UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark
+                    or UnicodeCategory.EnclosingMark or UnicodeCategory.Format)
+                && StringInfo.GetNextTextElementLength(str[(start - beforeLength)..(start + afterLength)]) == beforeLength)
+                break;
         }
 
         // The last element boundary before the cursor.
