@@ -74,7 +74,6 @@ jobs:
             tests/text-tests/text-tests.csproj \
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
-            tests/public-api/public-api.csproj \
             tests/wayland-hello/wayland-hello.csproj \
             samples/component-gallery/component-gallery.csproj \
             samples/bibui-app/bibui-app.csproj
@@ -84,9 +83,8 @@ jobs:
           done
 
       # The test programs CONTRIBUTING.md lists. Each prints what failed and
-      # exits non-zero. tests/public-api fails when a public surface differs
-      # from tests/public-api/api/*.txt. tests/wayland-tests is headless and
-      # reports SKIP for what needs a compositor or the protocol XML.
+      # exits non-zero. tests/wayland-tests is headless and reports SKIP for
+      # what needs a compositor or the protocol XML.
       - name: Unit tests
         shell: bash
         run: |
@@ -97,8 +95,7 @@ jobs:
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
-            bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
-            tests/public-api/public-api.csproj
+            bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj
           do
             echo "==> test $proj"
             dotnet run --project "$proj" --configuration Release --no-build

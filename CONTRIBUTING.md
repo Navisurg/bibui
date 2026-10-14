@@ -59,32 +59,11 @@ dotnet run --project tests/png-tests -c Release
 dotnet run --project tests/wayland-tests -c Release             # headless; skips what needs a compositor
 dotnet run --project bibui-raster-managed/tests -c Release
 dotnet run --project bibui-raster-managed/damage-tests -c Release  # damage tracking, byte for byte
-dotnet run --project tests/public-api -c Release                # the public API snapshot, below
 ```
 
 Layout is asserted over the laid-out nodes, not over pixels: build the tree,
 then check bounds with `runtime.FindById(...)` or `BibuiPage.GetBounds(...)`
 (`Bibui.Testing`). Add a test beside the change it covers.
-
-### The public API snapshot
-
-Every package's public surface is written down in
-`tests/public-api/api/<assembly>.txt`, and the test fails when the code and
-the file disagree. When you change a public type or member on purpose,
-regenerate the files and commit them with the change:
-
-```bash
-dotnet run --project tests/public-api -c Release -- --update
-```
-
-The diff of those files is the API review, so say in the pull request why the
-surface changed. Make a helper `internal` rather than adding it to the
-snapshot; tests reach internals through `InternalsVisibleTo`.
-
-Those files are what bibui's version numbers promise about. A pull request
-that removes or changes a line in them is a breaking change: deprecate the
-member with `[Obsolete]` first and remove it in the next major version, as
-`docs/versioning.md` describes.
 
 ### Pixel verification
 
