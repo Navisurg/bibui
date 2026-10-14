@@ -28,7 +28,7 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
 /// own, and nothing the painter does not already draw.
 ///
 /// <para>The source is parsed by <see cref="MarkdownDocument"/> once and kept
-/// per runtime and id until it changes, so a frame costs a byte comparison and
+/// per runtime and id until it changes, so a frame costs a comparison and
 /// the build. Each paragraph is broken into lines here, across its runs —
 /// a bold word, a code span and plain text wrap as one paragraph — at the width
 /// the viewer had last frame, as <see cref="TextField.Multiline"/> does. A line
@@ -112,9 +112,9 @@ public static class Markdown
     {
         ArgumentNullException.ThrowIfNull(source);
         if (offset < 0 || offset >= source.Length) return;
-        byte mark = source.Str[offset];
-        if (mark is not ((byte)' ' or (byte)'x' or (byte)'X')) return;
-        source.ReplaceRange((offset, offset + 1), mark == (byte)' ' ? "x"u8 : " "u8);
+        char mark = source.Str[offset];
+        if (mark is not (' ' or 'x' or 'X')) return;
+        source.ReplaceRange((offset, offset + 1), mark == ' ' ? "x" : " ");
     }
 
     private static MarkdownWidget Build(BibuiRuntime runtime, string id, Cache cache, Entry entry, float? width,
@@ -176,7 +176,7 @@ public static class Markdown
     {
         private readonly List<string> _ids = [];
 
-        public byte[]? Source;
+        public char[]? Source;
         public MarkdownDocument? Document;
         public long Used;
 
@@ -354,15 +354,14 @@ public static class Markdown
             view.Style.BorderWidth = 1f;
             view.Style.CornerRadius = 6f;
 
-            var code = _doc.CodeOf(block);
-            var span = code.Span;
+            var code = _doc.CodeOf(block).Span;
             using (_runtime.PushParent(view))
             {
                 int start = 0, index = 0;
                 while (true)
                 {
-                    int newline = span[start..].IndexOf((byte)'\n');
-                    int end = newline < 0 ? span.Length : start + newline;
+                    int newline = code[start..].IndexOf('\n');
+                    int end = newline < 0 ? code.Length : start + newline;
                     if (index++ > 0) _runtime.Gap(advance - lineHeight);
                     using (_runtime.PushFontFace(FontSlot.Mono, FontWeight.Regular))
                         _runtime.Text(code[start..end], mono.Size, look.Color, FontSlot.Mono);
@@ -394,8 +393,9 @@ public static class Markdown
             int count = list.Children.Count;
 
             float numberWidth = 0f;
+            Span<char> number = stackalloc char[12];
             if (list.Ordered)
-                numberWidth = _runtime.Fonts.Measure(Number(list.Level + count - 1).Span, font);
+                numberWidth = _runtime.Fonts.Measure(Number(list.Level + count - 1, number), font);
             bool tasks = false;
             for (int k = 0; k < count; k++) tasks |= list.Children[k].Task != MarkdownTask.None;
             float markerWidth = MathF.Ceiling(MathF.Max(px * 1.5f,
@@ -426,9 +426,9 @@ public static class Markdown
                     if (item.Task != MarkdownTask.None) Task(item, lineHeight);
                     else if (list.Ordered)
                     {
-                        var number = Number(list.Level + k);
-                        _runtime.Gap(markerWidth - px * 0.5f - _runtime.Fonts.Measure(number.Span, font));
-                        _runtime.Text(number, look.Size, look.Color, look.Family);
+                        var text = Number(list.Level + k, number);
+                        _runtime.Gap(markerWidth - px * 0.5f - _runtime.Fonts.Measure(text, font));
+                        _runtime.Text(text, look.Size, look.Color, look.Family);
                     }
                     else Bullet(lineHeight, look.Color);
                 }
@@ -665,9 +665,9 @@ public static class Markdown
                 int i = run.Start, end = run.Start + run.Length;
                 while (i < end)
                 {
-                    bool space = text[i] == (byte)' ';
+                    bool space = text[i] == ' ';
                     int j = i;
-                    while (j < end && (text[j] == (byte)' ') == space) j++;
+                    while (j < end && (text[j] == ' ') == space) j++;
                     _frags.Add(new Frag
                     {
                         Run = r, Start = i, Len = j - i, Space = space,
@@ -808,37 +808,26 @@ public static class Markdown
                         content = true;
                         break;
                     }
-                    var bytes = text.Slice(f.Start, f.Len);
+                    var chars = text.Slice(f.Start, f.Len);
                     float avail = room - x - pad;
-                    int cut = avail > 0f ? _runtime.Fonts.OffsetAt(bytes, font, avail) : 0;
-                    while (cut > 0 && !Fits(_runtime.Fonts.Measure(bytes[..cut], font), avail))
-                        cut -= CodePointBefore(bytes, cut);
+                    // Cut between text elements, so a word too wide for the line never splits 👨‍👩‍👧.
+                    int cut = avail > 0f ? _runtime.Fonts.OffsetAt(chars, font, avail) : 0;
+                    while (cut > 0 && !Fits(_runtime.Fonts.Measure(chars[..cut], font), avail))
+                        cut += TextOp.ScanTextElement(chars, cut, -1);
                     if (cut == 0)
                     {
                         if (content) { EndLine(ref lineStart, ref x, ref content); continue; }
-                        cut = Math.Max(1, CodePointAt(bytes, 0));   // one character, whatever its width
+                        cut = TextOp.ScanTextElement(chars, 0, +1);   // one character, whatever its width
                     }
                     if (cut >= f.Len) { _placed.Add(f); x += pad + f.Width; content = true; break; }
-                    float head = _runtime.Fonts.Measure(bytes[..cut], font);
+                    float head = _runtime.Fonts.Measure(chars[..cut], font);
                     _placed.Add(f with { Len = cut, Width = head });
                     x += pad + head;
                     content = true;
                     EndLine(ref lineStart, ref x, ref content);
-                    f = f with { Start = f.Start + cut, Len = f.Len - cut, Width = _runtime.Fonts.Measure(bytes[cut..], font) };
+                    f = f with { Start = f.Start + cut, Len = f.Len - cut, Width = _runtime.Fonts.Measure(chars[cut..], font) };
                 }
             }
-        }
-
-        private static int CodePointAt(ReadOnlySpan<byte> bytes, int at)
-        {
-            System.Text.Rune.DecodeFromUtf8(bytes[at..], out _, out int length);
-            return Math.Max(1, length);
-        }
-
-        private static int CodePointBefore(ReadOnlySpan<byte> bytes, int at)
-        {
-            System.Text.Rune.DecodeLastFromUtf8(bytes[..at], out _, out int length);
-            return Math.Max(1, length);
         }
 
         // A paragraph's lines, each a row of texts: a text per stretch of one run.
@@ -888,14 +877,14 @@ public static class Markdown
             bool bold = look.Bold || (style & MarkdownStyle.Strong) != 0;
             FontSlot family = code ? FontSlot.Mono : look.Family;
             UiColor color = link ? UiColor.Accent : look.Color;
-            var memory = _doc.Text.Slice(start, length);
+            var chars = _doc.Text.Span.Slice(start, length);
             float textHeight = _runtime.Fonts.LineHeight(font);
             float top = MathF.Round((lineHeight - textHeight) / 2f);
 
             if (!code && !link && !strike && top <= 0f)
             {
                 using (_runtime.PushFontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
-                    _runtime.Text(memory, look.Size, color, family);
+                    _runtime.Text(chars, look.Size, color, family);
                 return;
             }
 
@@ -923,8 +912,8 @@ public static class Markdown
             using (_runtime.PushParent(box))
             {
                 using (_runtime.PushFontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
-                    _runtime.Text(memory, look.Size, color, family);
-                float width = _runtime.Fonts.Measure(memory.Span, font);
+                    _runtime.Text(chars, look.Size, color, family);
+                float width = _runtime.Fonts.Measure(chars, font);
                 if (link) Overlay(padX, top + MathF.Round(textHeight * UnderlineAt), width, hovering ? StrongLine : LineWidth, color);
                 if (strike) Overlay(padX, top + MathF.Round(textHeight * StrikeAt), width, LineWidth, color);
             }
@@ -942,12 +931,12 @@ public static class Markdown
 
     // ── Numbers ─────────────────────────────────────────────────────────────
 
-    private static readonly byte[]?[] Numbers = new byte[]?[1000];
-
-    // "n." as UTF-8, made once per number.
-    private static ReadOnlyMemory<byte> Number(int n)
+    // "n." formatted into the caller's buffer, which 12 chars always holds:
+    // nothing is kept, since the Text the number goes to copies it.
+    private static ReadOnlySpan<char> Number(int n, Span<char> into)
     {
-        if ((uint)n >= Numbers.Length) return System.Text.Encoding.UTF8.GetBytes($"{n}.");
-        return Numbers[n] ??= System.Text.Encoding.UTF8.GetBytes($"{n}.");
+        n.TryFormat(into, out int length);
+        into[length] = '.';
+        return into[..(length + 1)];
     }
 }
