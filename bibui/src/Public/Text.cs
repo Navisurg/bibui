@@ -8,7 +8,7 @@ public ref struct TextOp
     public int NewCursor = 0;  // Cursor after applying op
     public int NewMark = 0;  // Mark after op
 
-    public static int MaxCodePointSize = 2; // chars: a surrogate pair    
+    public static int MaxCharsPerCodePoint = 2; // a surrogate pair
 
     public TextOp() { }
 
