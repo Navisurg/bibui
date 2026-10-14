@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Bibui.Raster.Managed.Backend.Damage;
 
@@ -288,27 +289,16 @@ internal sealed class DamageRecorder(ManagedRasterBackend backend)
     // ── Text ─────────────────────────────────────────────────────────────────
 
     /// <summary>Records a run; <paramref name="drawn"/> is its advance when the canvas drew it (a teed frame), else it is measured.</summary>
-    internal float DrawText(string text, float x, float baselineY, in RasterFont font, Rgba color, float? drawn)
+    internal float DrawText(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color, float? drawn)
     {
         ref var op = ref _f.NewOp(OpKind.Text);
-        op.Ref = text; op.A = x; op.B = baselineY; op.Font = font; op.Color = color;
-        float advance = drawn ?? Advance(font, text);
-        ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(0x2AUL, text), x, baselineY), (ulong)(uint)font.Typeface.Id << 32 | color.Argb), font.Size);
-        Draw(ref op, h, Bounds(TextBox(x, x + advance, baselineY, font), default));
-        return advance;
-    }
-
-    /// <inheritdoc cref="DrawText(string, float, float, in RasterFont, Rgba, float?)"/>
-    internal float DrawText(ReadOnlySpan<byte> utf8, float x, float baselineY, in RasterFont font, Rgba color, float? drawn)
-    {
-        ref var op = ref _f.NewOp(OpKind.TextUtf8);
-        // The bytes are the caller's and may be reused once this returns: kept to be replayed.
-        op.Start = Tee ? 0 : _f.Store(utf8);
-        op.Count = utf8.Length;
+        // The chars are the caller's and may be reused once this returns: kept to be replayed.
+        op.Start = Tee ? 0 : _f.Store(text);
+        op.Count = text.Length;
         op.A = x; op.B = baselineY; op.Font = font; op.Color = color;
-        ulong content = Hash64.Bytes(utf8);
-        float advance = drawn ?? Advance(font, content, utf8);
-        ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(0x2DUL, (ulong)utf8.Length), content), x, baselineY),
+        ulong content = Hash64.Bytes(MemoryMarshal.AsBytes(text));
+        float advance = drawn ?? Advance(font, content, text);
+        ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(0x2DUL, (ulong)text.Length), content), x, baselineY),
             (ulong)(uint)font.Typeface.Id << 32 | color.Argb), font.Size);
         Draw(ref op, h, Bounds(TextBox(x, x + advance, baselineY, font), default));
         return advance;
@@ -339,29 +329,13 @@ internal sealed class DamageRecorder(ManagedRasterBackend backend)
     // frame must hand back without drawing. Measuring shapes the run, and the
     // replay shapes it again to draw it, so the same runs frame after frame are
     // answered from here: two frames' worth, the older half dropped as it fills.
-    private Dictionary<(int, float, string), float> _advances = [], _olderAdvances = [];
+    // Runs are keyed by a 64-bit hash of their chars: a collision would hand
+    // back another run's advance, at odds of 2^-64 per pair of runs.
+    private Dictionary<(int, float, ulong, int), float> _advances = [], _olderAdvances = [];
 
-    // UTF-8 runs are keyed by a 64-bit hash of their bytes: a collision would
-    // hand back another run's advance, at odds of 2^-64 per pair of runs.
-    private Dictionary<(int, float, ulong, int), float> _utf8Advances = [], _olderUtf8Advances = [];
-
-    private float Advance(in RasterFont font, ulong content, ReadOnlySpan<byte> utf8)
+    private float Advance(in RasterFont font, ulong content, ReadOnlySpan<char> text)
     {
-        var key = (font.Typeface.Id, font.Size, content, utf8.Length);
-        if (_utf8Advances.TryGetValue(key, out float a)) return a;
-        if (!_olderUtf8Advances.TryGetValue(key, out a)) a = backend.MeasureText(font, utf8);
-        if (_utf8Advances.Count >= 8192)
-        {
-            (_olderUtf8Advances, _utf8Advances) = (_utf8Advances, _olderUtf8Advances);
-            _utf8Advances.Clear();
-        }
-        _utf8Advances[key] = a;
-        return a;
-    }
-
-    private float Advance(in RasterFont font, string text)
-    {
-        var key = (font.Typeface.Id, font.Size, text);
+        var key = (font.Typeface.Id, font.Size, content, text.Length);
         if (_advances.TryGetValue(key, out float a)) return a;
         if (!_olderAdvances.TryGetValue(key, out a)) a = backend.MeasureText(font, text);
         if (_advances.Count >= 8192)

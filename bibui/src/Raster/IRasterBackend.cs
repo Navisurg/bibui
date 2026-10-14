@@ -88,10 +88,7 @@ public interface IRasterBackend : IDisposable
     // gets here (FontProvider), so a backend never does font fallback itself.
 
     /// <summary>The advance width of <paramref name="text"/> in <paramref name="font"/>, in physical px.</summary>
-    float MeasureText(in RasterFont font, string text);
-
-    /// <summary>The advance width of UTF-8 <paramref name="utf8"/> in <paramref name="font"/>, in physical px.</summary>
-    float MeasureText(in RasterFont font, ReadOnlySpan<byte> utf8);
+    float MeasureText(in RasterFont font, ReadOnlySpan<char> text);
 
     /// <summary>Ascent, descent and leading of <paramref name="font"/>, in physical px.</summary>
     TextMetrics GetMetrics(in RasterFont font);
@@ -103,7 +100,7 @@ public interface IRasterBackend : IDisposable
     /// (HarfBuzz) may substitute and kern here; the advances it returns must be
     /// the ones <see cref="MeasureText"/> sums.
     /// </summary>
-    ShapedRun ShapeText(in RasterFont font, string text);
+    ShapedRun ShapeText(in RasterFont font, ReadOnlySpan<char> text);
 
     // ── Frame clock ──────────────────────────────────────────────────────────
 
@@ -201,14 +198,7 @@ public interface IRasterCanvas
     /// <see cref="IRasterBackend.MeasureText"/> would — so a caller laying runs
     /// end to end does not ask twice.
     /// </summary>
-    float DrawText(string text, float x, float baselineY, in RasterFont font, Rgba color);
-
-    /// <summary>
-    /// <see cref="DrawText(string, float, float, in RasterFont, Rgba)"/> over
-    /// UTF-8 <paramref name="utf8"/>: bibui's text is UTF-8 from the caller's
-    /// bytes to the canvas, so the common path never makes a string.
-    /// </summary>
-    float DrawText(ReadOnlySpan<byte> utf8, float x, float baselineY, in RasterFont font, Rgba color);
+    float DrawText(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color);
 
     /// <summary>
     /// A shaped run: <paramref name="glyphs"/> at <paramref name="positions"/>,

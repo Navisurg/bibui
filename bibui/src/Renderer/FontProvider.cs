@@ -22,7 +22,7 @@ internal sealed class FontProvider
     // the system font matcher on every text measurement.
     private readonly Dictionary<long, RasterTypeface?> _fallbackCache = new();
 
-    // Typeface runs, addressed by a content hash of (UTF-8 text, family, weight) — see RunsKey.
+    // Typeface runs, addressed by a content hash of (text, family, weight) — see RunsKey.
     // Touch-evicted rather than unbounded like the two dictionaries above, because its
     // keys come from arbitrary UI text rather than a fixed set of fonts: text that stops
     // being drawn falls out on its own. Made by Fonts, which is what ticks it —
@@ -164,24 +164,24 @@ internal sealed class FontProvider
     }
 
     /// <summary>
-    /// Splits UTF-8 <paramref name="utf8"/> into contiguous runs by typeface coverage.
+    /// Splits <paramref name="text"/> into contiguous runs by typeface coverage.
     /// Each code point is rendered in the base typeface (resolved from
     /// <paramref name="family"/>/<paramref name="weight"/> via <see cref="Resolve"/>) when
     /// supported, otherwise in a system fallback resolved by the backend. A run is a
-    /// byte range, so a code point is never split across runs.
+    /// char range, so a code point is never split across runs.
     /// </summary>
-    internal TextRun? SplitRuns(ReadOnlySpan<byte> utf8, string? family, int weight)
+    internal TextRun? SplitRuns(ReadOnlySpan<char> text, string? family, int weight)
     {
-        if (utf8.IsEmpty) return null;
-        var key = RunsKey.For(utf8, family, weight);
-        return _runs.TryGet(key, out var runs) ? runs : _runs.Add(key, SplitRunsUncached(utf8, family, weight));
+        if (text.IsEmpty) return null;
+        var key = RunsKey.For(text, family, weight);
+        return _runs.TryGet(key, out var runs) ? runs : _runs.Add(key, SplitRunsUncached(text, family, weight));
     }
 
     // The split itself: one glyph lookup into the backend per code point. That
     // call is the reason the result above is worth caching — it is charged for
     // the whole text on every measure, and the wrap loop measures the same
     // accumulating line once per word.
-    private TextRun SplitRunsUncached(ReadOnlySpan<byte> utf8, string? family, int weight)
+    private TextRun SplitRunsUncached(ReadOnlySpan<char> text, string? family, int weight)
     {
         var baseTf = Resolve(family, weight);
         TextRun? first = null, last = null;
@@ -189,9 +189,9 @@ internal sealed class FontProvider
         RasterTypeface? currentTf = null;
         int start = 0;
         int i = 0;
-        while (i < utf8.Length)
+        while (i < text.Length)
         {
-            System.Text.Rune.DecodeFromUtf8(utf8[i..], out var rune, out int len);
+            System.Text.Rune.DecodeFromUtf16(text[i..], out var rune, out int len);
             len = Math.Max(1, len);
 
             // Pick the typeface for this code point:
@@ -212,7 +212,7 @@ internal sealed class FontProvider
             currentTf = tfForCp;
             i += len;
         }
-        Add(new TextRun(currentTf!, start, utf8.Length));
+        Add(new TextRun(currentTf!, start, text.Length));
         return first!;
 
         void Add(TextRun run) => last = first is null ? first = run : last!.Append(run);

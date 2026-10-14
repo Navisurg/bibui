@@ -59,8 +59,8 @@ internal sealed class DrawingContext
         => _fonts.Metrics(logicalFontSize, family, weight, _scale);
 
     /// <inheritdoc cref="Fonts.MeasureRuns"/>
-    internal float MeasureRuns(ReadOnlySpan<byte> utf8, float logicalFontSize, string? family, int weight)
-        => _fonts.MeasureRuns(utf8, logicalFontSize, family, weight, _scale);
+    internal float MeasureRuns(ReadOnlySpan<char> text, float logicalFontSize, string? family, int weight)
+        => _fonts.MeasureRuns(text, logicalFontSize, family, weight, _scale);
 
     internal IRasterCanvas Canvas => _canvas;
 
