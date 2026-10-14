@@ -78,10 +78,11 @@ public static class Markdown
         ArgumentNullException.ThrowIfNull(source);
         var cache = Caches.GetValue(runtime, static _ => new Cache());
         var entry = cache.Entry(id);
-        if (entry.Source is null || !source.Str.SequenceEqual(entry.Source))
+        if (!entry.Parsed || !source.Str.SequenceEqual(entry.Source.Str))
         {
-            entry.Source = source.Str.ToArray();
-            entry.Document = MarkdownDocument.Parse(entry.Source);
+            entry.Source.ReplaceRange((0, (int)entry.Source.Length), source.Str);
+            entry.Document = MarkdownDocument.Parse(entry.Source.Str);
+            entry.Parsed = true;
         }
         return Build(runtime, id, cache, entry, width, textSize);
     }
@@ -98,7 +99,7 @@ public static class Markdown
         ArgumentNullException.ThrowIfNull(document);
         var cache = Caches.GetValue(runtime, static _ => new Cache());
         var entry = cache.Entry(id);
-        entry.Source = null;
+        entry.Parsed = false;
         entry.Document = document;
         return Build(runtime, id, cache, entry, width, textSize);
     }
@@ -176,7 +177,11 @@ public static class Markdown
     {
         private readonly List<string> _ids = [];
 
-        public char[]? Source;
+        // The source last parsed, refilled in place when it changes: an edit
+        // copies into it, and allocates only when the source outgrows it.
+        public readonly BibuiStr Source = new(0);
+        // Whether Document was parsed from Source, not handed in by the caller.
+        public bool Parsed;
         public MarkdownDocument? Document;
         public long Used;
 
