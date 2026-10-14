@@ -223,6 +223,77 @@ Run("WordScan backward jumps to the start of the current word", () =>
     Eq(6, op.NewMark,   "mark should collapse to cursor");
 });
 
+// ── An emoji of several code points ───────────────────────────────────────────
+//
+// 👨‍👩‍👧 is five code points — man, ZWJ, woman, ZWJ, girl — and 8 UTF-16 chars,
+// drawn as one character. An arrow key crosses it whole, and Ctrl+Arrow treats
+// it as a word like any other run of non-whitespace. Offsets are in chars.
+
+const string Family = "👨‍👩‍👧";   // [0..8)
+
+Run("ArrowRight over a multi-code-point emoji crosses all 8 chars of it", () =>
+{
+    // "go 👨‍👩‍👧 now" — the family is [3..11)
+    var str   = BibuiStr.FromStrLit($"go {Family} now");
+    var state = new TextEditState { Cursor = 3, Mark = 3 };
+    var ev = new BibUiEvent { Delta = +1 };
+
+    var op = TextOp.FromStateAndEvent(str, state, ev, codePointBuf);
+
+    Eq(11, op.NewCursor, "cursor should land just past the family");
+    Eq(11, op.NewMark,   "mark should collapse to cursor");
+});
+
+Run("ArrowLeft over a multi-code-point emoji crosses all 8 chars of it", () =>
+{
+    var str   = BibuiStr.FromStrLit($"go {Family} now");
+    var state = new TextEditState { Cursor = 11, Mark = 11 };
+    var ev = new BibUiEvent { Delta = -1 };
+
+    var op = TextOp.FromStateAndEvent(str, state, ev, codePointBuf);
+
+    Eq(3, op.NewCursor, "cursor should land just before the family");
+    Eq(3, op.NewMark,   "mark should collapse to cursor");
+});
+
+Run("WordScan forward over a multi-code-point emoji lands past it", () =>
+{
+    // From the end of "go": skip the space, then the family as one word
+    var str   = BibuiStr.FromStrLit($"go {Family} now");
+    var state = new TextEditState { Cursor = 2, Mark = 2 };
+    var ev = new BibUiEvent { Delta = +1, Flags = TextActionFlags.WordScan };
+
+    var op = TextOp.FromStateAndEvent(str, state, ev, codePointBuf);
+
+    Eq(11, op.NewCursor, "cursor should land just past the family");
+    Eq(11, op.NewMark,   "mark should collapse to cursor");
+});
+
+Run("WordScan backward over a multi-code-point emoji lands before it", () =>
+{
+    // From the start of "now": skip the space, then the family as one word
+    var str   = BibuiStr.FromStrLit($"go {Family} now");
+    var state = new TextEditState { Cursor = 12, Mark = 12 };
+    var ev = new BibUiEvent { Delta = -1, Flags = TextActionFlags.WordScan };
+
+    var op = TextOp.FromStateAndEvent(str, state, ev, codePointBuf);
+
+    Eq(3, op.NewCursor, "cursor should land just before the family");
+    Eq(3, op.NewMark,   "mark should collapse to cursor");
+});
+
+Run("WordScan treats letters and a multi-code-point emoji with no space between as one word", () =>
+{
+    // "hi👨‍👩‍👧 there" — "hi" and the family are the word [0..10)
+    var str   = BibuiStr.FromStrLit($"hi{Family} there");
+    var state = new TextEditState { Cursor = 0, Mark = 0 };
+    var ev = new BibUiEvent { Delta = +1, Flags = TextActionFlags.WordScan };
+
+    var op = TextOp.FromStateAndEvent(str, state, ev, codePointBuf);
+
+    Eq(10, op.NewCursor, "cursor should land just past the family");
+});
+
 // ── Copy / Cut / Paste ────────────────────────────────────────────────────────
 
 Run("Copy on a selection fills CopyString and preserves the selection", () =>
