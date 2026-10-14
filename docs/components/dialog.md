@@ -5,8 +5,12 @@ centred, or docked to an edge as a sheet (left or right) or a drawer (top or
 bottom). You build the panel's content between `Begin` and `End`. The scrim
 fades in and the panel slides in as the dialog opens.
 
-*Dialog has no fixture yet, so there is no screenshot. The gallery's overlay pages
-show all four sides.*
+| Centred | Sheet from the right |
+|---|---|
+| ![dialog-centred](images/dialog-centred.png) | ![dialog-sheet-right](images/dialog-sheet-right.png) |
+
+Fixtures: `dialog-centred` and `dialog-sheet-right`, each fully shown over a
+page it dims. The gallery's overlay pages show all four sides.
 
 ## Begin and End
 

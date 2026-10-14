@@ -94,7 +94,7 @@ internal static class DemoMarkdown
 
         if (_focused)
             foreach (var handle in runtime.UnconsumedEvents)
-                if (handle.Event is { Kind: BibUiEventKind.Press, Key: Bibui.Key.Escape })
+                if (handle.Event is { IsKeyDown: true, Key: Bibui.Key.Escape })
                 {
                     _focused = false;
                     handle.Eat();

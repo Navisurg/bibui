@@ -14,31 +14,16 @@ internal sealed record InputsState
     public float SliderValue { get; init; } = 40f;
     public string RadioValue { get; init; } = "option-a";
     public string? SelectValue { get; init; }
-    public bool SelectOpen { get; init; }
     public string? CountryValue { get; init; }
-    public bool CountryOpen { get; init; }
     public bool TogglePressed { get; init; }
     public string ToggleGroupValue { get; init; } = "bold";
     public DateOnly? DatePickerValue { get; init; }
     public DateOnly DatePickerMonth { get; init; } = DateOnly.FromDateTime(DateTime.Today);
-    public bool DatePickerOpen { get; init; }
     public DateOnly? CalendarSelected { get; init; }
     public int TimePickerHour { get; init; } = 9;
     public int TimePickerMinute { get; init; } = 30;
-    public bool TimePickerOpen { get; init; }
     public string? ColorPickerValue { get; init; } = "#3B82F6";
-    public bool ColorPickerOpen { get; init; }
     public int DemoButtonClickCount { get; init; }
-
-    /// <summary>The page's open state, for a page that has one.</summary>
-    internal InputsState? Opened(string route) => route switch
-    {
-        "Select" => this with { SelectOpen = true },
-        "DatePicker" => this with { DatePickerOpen = true },
-        "TimePicker" => this with { TimePickerOpen = true },
-        "ColorPicker" => this with { ColorPickerOpen = true },
-        _ => null,
-    };
 }
 
 internal static class DemoInputs
@@ -137,16 +122,16 @@ internal static class DemoInputs
         {
             Heading(runtime, "Choose one from a list");
             var chosen = Fruits.FirstOrDefault(f => f.Value == state.SelectValue);
-            var select = Select.Begin(runtime, "demo-select", Str(chosen.Label ?? "Pick a fruit…"), state.SelectOpen);
-            string? picked = null;
+            var select = Select.Begin(runtime, "demo-select", Str(chosen.Label ?? "Pick a fruit…"));
             if (select.Open)
                 foreach (var fruit in Fruits)
                     if (Select.Item(runtime, $"demo-select-option-{fruit.Value}", Str(fruit.Label),
                             fruit.Value == state.SelectValue, fruit.Disabled).Clicked)
-                        picked = fruit.Value;
-            var result = select.End();
-            if (picked is not null) set(state with { SelectValue = picked, SelectOpen = false });
-            else if (result.Toggled) set(state with { SelectOpen = !state.SelectOpen });
+                    {
+                        select.Close();
+                        set(state with { SelectValue = fruit.Value });
+                    }
+            select.End();
 
             Arrange.Gap(page, 16f);
             runtime.Text(U8(state.SelectValue is null ? "Nothing selected" : $"Selected: {state.SelectValue}"), ComponentSize.Sm, state.SelectValue is null ? TextColor.Secondary : TextColor.Accent);
@@ -156,7 +141,7 @@ internal static class DemoInputs
 
             Arrange.Gap(page, 24f);
             Heading(runtime, "Disabled");
-            Select.Begin(runtime, "demo-select-disabled", Str("Choose a plan"), open: false, disabled: true).End();
+            Select.Begin(runtime, "demo-select-disabled", Str("Choose a plan"), disabled: true).End();
         }
         return page;
     }
@@ -344,7 +329,7 @@ internal static class DemoInputs
     {
         if (Focused is null) return;
         foreach (var handle in runtime.UnconsumedEvents)
-            if (handle.Event is { Kind: BibUiEventKind.Press, Key: Bibui.Key.Escape } or { Kind: BibUiEventKind.Submit })
+            if (handle.Event is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: BibUiEventKind.Submit })
             {
                 Focused = null;
                 handle.Eat();
@@ -679,21 +664,20 @@ internal static class DemoInputs
     {
         Heading(runtime, "A set width, and taller rows");
         var chosen = Countries.FirstOrDefault(c => c.Value == state.CountryValue);
-        var select = Select.Begin(runtime, "demo-select-country", Str(chosen.Label ?? "Choose a country…"),
-            state.CountryOpen, width: 240f);
-        string? picked = null;
+        var select = Select.Begin(runtime, "demo-select-country", Str(chosen.Label ?? "Choose a country…"), width: 240f);
         if (select.Open)
             foreach (var country in Countries)
             {
                 var item = Select.Item(runtime, $"demo-select-country-{country.Value}", Str(country.Label),
                     country.Value == state.CountryValue);
                 Tall(runtime, item.Node, 36f);
-                if (item.Clicked) picked = country.Value;
+                if (item.Clicked)
+                {
+                    select.Close();
+                    set(state with { CountryValue = country.Value });
+                }
             }
-        var result = select.End();
-        Tall(runtime, result.Node, TriggerHeight);
-        if (picked is not null) set(state with { CountryValue = picked, CountryOpen = false });
-        else if (result.Toggled) set(state with { CountryOpen = !state.CountryOpen });
+        Tall(runtime, select.End(), TriggerHeight);
 
         runtime.Gap(16f);
         runtime.Text(U8(state.CountryValue is null ? "No country selected" : $"Country: {state.CountryValue}"),
@@ -752,11 +736,11 @@ internal static class DemoInputs
         return trigger;
     }
 
-    // The popup named id, open this frame, 4 px under where trigger was drawn
-    // last frame, as large as what is built into it.
-    private static Box OpenPopup(BibuiRuntime runtime, string id, Box trigger, float padding)
+    // The popup named id, when it is open, 4 px under where trigger was drawn
+    // last frame, as large as what is built into it. Null when it is not open.
+    private static Box? BeginPopup(BibuiRuntime runtime, string id, Box trigger, float padding)
     {
-        Box popup = runtime.OpenDropDown(id);
+        if (runtime.BeginDropDown(id) is not { } popup) return null;
         popup.SizeX = popup.SizeY = SemanticSize.ChildrenSum();
         // Under the trigger; above it when the window has no room below, and
         // against the window's bottom edge when it has none above either. Its
@@ -780,7 +764,7 @@ internal static class DemoInputs
 
     // After its contents have asked: a press on the popup's padding stops there
     // rather than reaching what is beneath.
-    private static void ClosePopup(BibuiRuntime runtime, Box popup)
+    private static void EndPopup(BibuiRuntime runtime, Box popup)
     {
         popup.Claims = InteractionKinds.Press;
         runtime.InteractionsFor(popup);
@@ -931,7 +915,10 @@ internal static class DemoInputs
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Pick a date from a popover calendar");
+            const string id = "demo-datepicker-popup";
             Box trigger = PickerTrigger(runtime, "demo-datepicker", 240f, disabled: false, out bool toggled);
+            if (toggled)
+                if (runtime.IsDropDownOpen(id)) runtime.CloseDropDown(id); else runtime.OpenDropDown(id, trigger);
             using (runtime.PushParent(trigger))
             {
                 CentredIcon(runtime, "calendar", 16f, UiColor.TextSecondary);
@@ -940,20 +927,20 @@ internal static class DemoInputs
                     color: state.DatePickerValue is null ? TextColor.Secondary : TextColor.Primary);
             }
 
-            if (state.DatePickerOpen)
+            if (BeginPopup(runtime, id, trigger, padding: 12f) is { } popup)
             {
-                Box popup = OpenPopup(runtime, "demo-datepicker-popup", trigger, padding: 12f);
                 MonthResult result;
                 using (runtime.PushParent(popup))
                     result = MonthView(runtime, "demo-datepicker", state.DatePickerMonth, state.DatePickerValue);
-                ClosePopup(runtime, popup);
+                EndPopup(runtime, popup);
                 if (result.Picked is { } day)
-                    set(state with { DatePickerValue = day, DatePickerOpen = false, DatePickerMonth = day });
+                {
+                    runtime.CloseDropDown(id);
+                    set(state with { DatePickerValue = day, DatePickerMonth = day });
+                }
                 else if (result.Step != 0)
                     set(state with { DatePickerMonth = state.DatePickerMonth.AddMonths(result.Step) });
-                else if (toggled) set(state with { DatePickerOpen = false });
             }
-            else if (toggled) set(state with { DatePickerOpen = true });
 
             runtime.Gap(16f);
             runtime.Text(U8(state.DatePickerValue is null ? "No date selected" : $"Selected: {state.DatePickerValue:yyyy-MM-dd}"),
@@ -971,10 +958,12 @@ internal static class DemoInputs
         {
             Heading(runtime, "Select a time");
             int hour = state.TimePickerHour, minute = state.TimePickerMinute;
+            const string id = "demo-timepicker-popup";
             Box trigger = TimeTrigger(runtime, "demo-timepicker", $"{hour:D2}:{minute:D2}", disabled: false, out bool toggled);
-            if (state.TimePickerOpen)
+            if (toggled)
+                if (runtime.IsDropDownOpen(id)) runtime.CloseDropDown(id); else runtime.OpenDropDown(id, trigger);
+            if (BeginPopup(runtime, id, trigger, padding: 0f) is { } popup)
             {
-                Box popup = OpenPopup(runtime, "demo-timepicker-popup", trigger, padding: 0f);
                 popup.SizeX = SemanticSize.Pixels(200f);
                 using (runtime.PushParent(popup))
                 {
@@ -990,11 +979,10 @@ internal static class DemoInputs
                         minute = Spinner(runtime, "demo-timepicker-minute", "Min", minute, 60, 5);
                     }
                 }
-                ClosePopup(runtime, popup);
+                EndPopup(runtime, popup);
             }
             if (hour != state.TimePickerHour || minute != state.TimePickerMinute)
                 set(state with { TimePickerHour = hour, TimePickerMinute = minute });
-            else if (toggled) set(state with { TimePickerOpen = !state.TimePickerOpen });
 
             runtime.Gap(16f);
             runtime.Text(U8($"Selected: {state.TimePickerHour:D2}:{state.TimePickerMinute:D2}"), ComponentSize.Sm, TextColor.Accent);
@@ -1089,9 +1077,8 @@ internal static class DemoInputs
 
     private static readonly string[] CustomPalette = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD"];
 
-    // The custom-palette picker's own state, which the gallery state has no field for.
+    // The custom-palette picker's own value, which the gallery state has no field for.
     private static string CustomColor = "#FF6B6B";
-    private static bool CustomColorOpen;
 
     private static UiNode ColorPickerPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
@@ -1099,32 +1086,30 @@ internal static class DemoInputs
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Pick a color from a palette");
-            var main = ColorPicker(runtime, "demo-colorpicker", state.ColorPickerValue, DefaultPalette, state.ColorPickerOpen);
-            if (main.Picked is { } color) set(state with { ColorPickerValue = color, ColorPickerOpen = false });
-            else if (main.Toggled) set(state with { ColorPickerOpen = !state.ColorPickerOpen });
+            if (ColorPicker(runtime, "demo-colorpicker", state.ColorPickerValue, DefaultPalette) is { } color)
+                set(state with { ColorPickerValue = color });
 
             runtime.Gap(16f);
             runtime.Text(U8(state.ColorPickerValue is null ? "No color selected" : $"Color: {state.ColorPickerValue}"),
                 ComponentSize.Sm, state.ColorPickerValue is null ? TextColor.Secondary : TextColor.Accent);
             runtime.Gap(16f);
             Heading(runtime, "Custom palette");
-            var custom = ColorPicker(runtime, "demo-colorpicker-custom", CustomColor, CustomPalette, CustomColorOpen);
-            if (custom.Picked is { } c) (CustomColor, CustomColorOpen) = (c, false);
-            else if (custom.Toggled) CustomColorOpen = !CustomColorOpen;
+            if (ColorPicker(runtime, "demo-colorpicker-custom", CustomColor, CustomPalette) is { } c) CustomColor = c;
             runtime.Gap(16f);
-            ColorPicker(runtime, "demo-colorpicker-disabled", "#3B82F6", DefaultPalette, open: false, disabled: true);
+            ColorPicker(runtime, "demo-colorpicker-disabled", "#3B82F6", DefaultPalette, disabled: true);
         }
         return page;
     }
 
-    private readonly record struct ColorPickerResult(bool Toggled, string? Picked);
-
-    // A trigger showing value as a swatch and its hex, and — when open — a
-    // popup of the palette, six to a row, under it.
-    private static ColorPickerResult ColorPicker(BibuiRuntime runtime, string id, string? value,
-        IReadOnlyList<string> palette, bool open, bool disabled = false)
+    // A trigger showing value as a swatch and its hex, which opens a popup of
+    // the palette, six to a row, under it. The colour picked, which closes it.
+    private static string? ColorPicker(BibuiRuntime runtime, string id, string? value,
+        IReadOnlyList<string> palette, bool disabled = false)
     {
+        string popupId = id + "-popup";
         Box trigger = PickerTrigger(runtime, id, 220f, disabled, out bool toggled);
+        if (toggled)
+            if (runtime.IsDropDownOpen(popupId)) runtime.CloseDropDown(popupId); else runtime.OpenDropDown(popupId, trigger);
         using (runtime.PushParent(trigger))
         {
             using (CentredCell(runtime))
@@ -1144,9 +1129,8 @@ internal static class DemoInputs
         }
 
         string? picked = null;
-        if (open && !disabled)
+        if (BeginPopup(runtime, popupId, trigger, padding: 12f) is { } popup)
         {
-            Box popup = OpenPopup(runtime, id + "-popup", trigger, padding: 12f);
             using (runtime.PushParent(popup))
             {
                 for (int start = 0; start < palette.Count; start += 6)
@@ -1168,8 +1152,9 @@ internal static class DemoInputs
                         }
                 }
             }
-            ClosePopup(runtime, popup);
+            EndPopup(runtime, popup);
         }
-        return new ColorPickerResult(toggled, picked);
+        if (picked is not null) runtime.CloseDropDown(popupId);
+        return picked;
     }
 }

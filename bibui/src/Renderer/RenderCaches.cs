@@ -191,8 +191,7 @@ internal sealed class RenderCaches : IDisposable
         _endFrames.Add(backend.EndFrame);
     }
 
-    // Signed as it is built; DrawContext.DrawPath hands the backend the path under it.
-    private Damage.SignaturePath? _scratchPath;
+    private RasterPath? _scratchPath;
 
     /// <summary>
     /// A path for geometry drawn once and dropped — a chart series whose points
@@ -201,7 +200,7 @@ internal sealed class RenderCaches : IDisposable
     /// </summary>
     public RasterPath ScratchPath()
     {
-        _scratchPath ??= new Damage.SignaturePath(Backend.CreatePath());
+        _scratchPath ??= Backend.CreatePath();
         _scratchPath.Rewind();
         return _scratchPath;
     }

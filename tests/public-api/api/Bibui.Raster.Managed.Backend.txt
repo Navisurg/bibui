@@ -25,7 +25,10 @@ namespace Bibui.Raster.Managed.Backend
     {
         public ManagedRasterBackend(Bibui.Raster.Managed.Antialiasing antialiasing = 1) { }
         public Bibui.Raster.Managed.Antialiasing Antialiasing { get; }
+        public bool DamageTracking { get; set; }
         public Bibui.Raster.RasterTypeface DefaultTypeface { get; }
+        public string? LastFullRepaintReason { get; }
+        public System.Collections.Generic.IReadOnlyList<Bibui.Raster.PixelRect>? LastRepaint { get; }
         public Bibui.Raster.Managed.GaussianMaskBlur MaskBlur { get; }
         public string Name { get; }
         public Bibui.Text.FreeType.TextEngine Text { get; }

@@ -16,7 +16,6 @@ internal sealed partial class App
     private static readonly RadioOption[] DensityOptions =
         [new(S("Compact"), "compact"), new(S("Default"), "default"), new(S("Comfortable"), "comfortable")];
 
-    private bool _themeSelectOpen;
 
     // ── Appearance ───────────────────────────────────────────────────────────
 
@@ -28,9 +27,10 @@ internal sealed partial class App
 
         const float width = 392f;
         float inner = width - 48f - Scrollbar.Lane - 4f;
-        // Inside a dialog everything is built in statement form, under the
-        // parent in scope: a control asks while it is linked under the dialog,
-        // which is how the dialog knows the press is its own.
+        // A control asks while it is built, so it is built with the dialog's
+        // panel (or something under it) as the parent in scope: that is how
+        // the dialog knows the press is its own. Where it is pushed afterwards,
+        // by Row, Column or CentredY, is free, so long as it stays inside.
         var sheet = Dialog.Begin(rt, "settings", shown, DialogSide.Right, width);
 
         // The sheet scrolls when the window is shorter than what is in it.
@@ -43,21 +43,14 @@ internal sealed partial class App
         view.AllowOverflowY = true;
         var inView = rt.PushParent(view);
 
-        BibuiWidget close = default;
-        var header = rt.Box();
-        header.ChildLayoutAxis = LayoutAxis.X;
-        header.Px(inner, 44f);
-        using (rt.PushParent(header))
-        {
-            VCentre(rt, () =>
-            {
-                Bold(rt, "Appearance", ComponentSize.Lg, UiColor.TextPrimary);
-                rt.Gap(2f);
-                T(rt, "One seed colour, the whole theme, live", ComponentSize.Sm, UiColor.TextSecondary);
-            });
-            Spring(header);
-            VCentre(rt, () => close = IconButton(rt, "settings-close", "x", 30f));
-        }
+        var close = IconButton(rt, "settings-close", "x", 30f);
+        UiNode.PushIntoParent(view, Row(
+            CentredY(Column(
+                Bold(rt, "Appearance", ComponentSize.Lg, UiColor.TextPrimary),
+                Space(2f),
+                T(rt, "One seed colour, the whole theme, live", ComponentSize.Sm, UiColor.TextSecondary))),
+            Spring(),
+            CentredY(close.Node)).Px(inner, 44f));
         rt.Gap(22f);
 
         // Mode
@@ -88,16 +81,16 @@ internal sealed partial class App
         // Theme files, or the generated theme.
         Section(rt, "Theme");
         string current = ThemeFileName is null ? "Generated from accent" : Title(ThemeFileName) + "  ·  themes/" + ThemeFileName + ".json";
-        var select = Select.Begin(rt, "theme-file", S(current), _themeSelectOpen, width: inner);
+        var select = Select.Begin(rt, "theme-file", S(current), width: inner);
         if (select.Open)
         {
             if (Select.Item(rt, "theme-generated", S("Generated from accent"), selected: ThemeFileName is null).Clicked)
-            { ThemeFileName = null; _themeSelectOpen = false; }
+            { ThemeFileName = null; select.Close(); }
             foreach (var file in ThemeFiles)
                 if (Select.Item(rt, "theme-" + file, S(Title(file) + "  ·  themes/" + file + ".json"), selected: ThemeFileName == file).Clicked)
-                { ThemeFileName = file; _themeSelectOpen = false; }
+                { ThemeFileName = file; select.Close(); }
         }
-        if (select.End().Toggled) _themeSelectOpen = !_themeSelectOpen;
+        select.End();
         rt.Gap(22f);
 
         // Shape and rhythm
@@ -142,17 +135,10 @@ internal sealed partial class App
 
         Section(rt, "Keyboard");
         foreach (var (keys, what) in Shortcuts)
-        {
-            var row = rt.Box();
-            row.ChildLayoutAxis = LayoutAxis.X;
-            row.Px(inner, 30f);
-            using (rt.PushParent(row))
-            {
-                VCentre(rt, () => T(rt, what, ComponentSize.Sm, UiColor.TextSecondary));
-                Spring(row);
-                VCentre(rt, () => KeyboardShortcut.Build(rt, keys));
-            }
-        }
+            UiNode.PushIntoParent(view, Row(
+                CentredY(T(rt, what, ComponentSize.Sm, UiColor.TextSecondary)),
+                Spring(),
+                CentredY(KeyboardShortcut.Build(rt, keys))).Px(inner, 30f));
 
         rt.Gap(8f);
         inView.Dispose();
@@ -200,13 +186,7 @@ internal sealed partial class App
             dot.Style.BackgroundColor = hex;
             dot.Style.Shadow = BoxShadow.Glow(hex, blur: 4f + 10f * b.HotT, spread: 0f);
             dot.ChildLayoutAxis = LayoutAxis.X;
-            if (chosen)
-                using (rt.PushParent(dot))
-                {
-                    Spring(dot);
-                    VCentre(rt, () => Icon(rt, "check", 15f, "#0B0D17"));
-                    Spring(dot);
-                }
+            if (chosen) Centred(dot, CentredY(Icon(rt, "check", 15f, "#0B0D17")));
         }
         if (i.Hovering) Tooltip.Build(rt, S(name + "  " + hex), b);
         return new BibuiWidget(b, i);
@@ -216,10 +196,8 @@ internal sealed partial class App
 
     private void BuildContextMenu(BibuiRuntime rt)
     {
-        if (MenuFor is not { } id) return;
-        var t = Array.Find(Data.Targets, x => x.Id == id);
-        if (t is null) { MenuFor = null; return; }
-        var menu = Menu.Begin(rt, "row-menu", MenuX, MenuY, 232f);
+        if (Array.Find(Data.Targets, x => x.Id == MenuFor) is not { } t) return;
+        if (Menu.Begin(rt, "row-menu", MenuX, MenuY, 232f) is not { } menu) return;
         Menu.Label(rt, S(t.Name));
         bool close = false;
         if (Menu.Item(rt, "menu-slew", S("Slew to target"), "send", S("Enter"), disabled: Pointing == t.Id).Clicked) { Selected = t.Id; Slew(); close = true; }
@@ -232,11 +210,8 @@ internal sealed partial class App
         Menu.Separator(rt);
         if (Menu.Item(rt, "menu-hold", S("Hold for weather"), "pause", null).Clicked) close = true;
         if (Menu.Item(rt, "menu-drop", S("Drop from tonight"), "trash-2", null, disabled: true).Clicked) close = true;
-        var root = menu.End();
-        // A press outside the menu closes it, as a press on its own padding does not.
-        // The menu does not report one, so the frame's events are read here.
-        if (close || (!root.Hovering && rt.UnconsumedEvents.Any(h => h.Event.Kind == Bibui.TextEdit.BibUiEventKind.MouseDown)))
-            MenuFor = null;
+        menu.End();
+        if (close) rt.CloseDropDown("row-menu");
     }
 
     // ── Targets ──────────────────────────────────────────────────────────────

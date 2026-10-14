@@ -14,8 +14,8 @@ Fixtures: `menu-dropdown` and `menu-context`.
 ## Begin, rows, End
 
 ```cs
-public static MenuScope Begin(BibuiRuntime runtime, string id, float x, float y, float width = 220f)
-public static MenuScope BeginBelow(BibuiRuntime runtime, string id, Box anchor, float width = 220f, float gap = 4f)
+public static MenuScope? Begin(BibuiRuntime runtime, string id, float x, float y, float width = 220f)
+public static MenuScope? BeginBelow(BibuiRuntime runtime, string id, UiNode anchor, float width = 220f, float gap = 4f)
 
 public static BibuiWidget Item(
     BibuiRuntime runtime,
@@ -31,9 +31,12 @@ public static Box Label(BibuiRuntime runtime, BibuiStr text)
 public BibuiWidget End();
 ```
 
+`Begin` and `BeginBelow` return null while the menu is not open. It opens with
+`runtime.OpenDropDown(id, anchor)` and closes with `runtime.CloseDropDown(id)`.
+
 | Parameter | Meaning |
 |---|---|
-| `id` (Begin) | The menu's dropdown root. |
+| `id` (Begin) | The menu's dropdown. |
 | `x`, `y` | Where its top left goes, in window coordinates: for a context menu, the pointer's position at the right press. |
 | `anchor` | `BeginBelow` opens under this box where it was drawn last frame, with the left edges aligned. |
 | `width` | The menu's width. It is as tall as its rows. |
@@ -49,14 +52,22 @@ public BibuiWidget End();
 - The menu is one of the runtime's dropdowns. It is drawn over everything, and
   nothing beneath it gets a press where it was drawn. `End()` claims
   `InteractionKinds.Press` for the list after its rows, so a press on its padding
-  or on a rule stops there. `End()` returns the list's `BibuiWidget`.
+  or on a rule stops there.
+- `End()` returns the list and its own `Interaction`. It eats an Escape no one
+  has eaten and closes the menu, so the Escape does not also close what is
+  under it. Something built before the menu that reads keys has Escape first:
+  leave it alone while the menu is open.
 - `Separator` and `Label` take nothing.
+- A press closes the open menu when a box outside the menu and its anchor takes
+  it, or when nothing takes it. The press still reaches the box that took it.
+  A trigger opened it with itself as the anchor, so its own press leaves the
+  menu to it: its click closes the menu. A context menu opened on a right press
+  is opened again by the next one, wherever it lands, and so moves there.
 
 ## State the caller owns
 
-Whether the menu is open, and for a context menu, where it opens. An item clicked
-is usually your cue to act and close the menu. A press outside the menu does not
-close it: watch for one yourself if you want that.
+For a context menu, where it opens. The runtime keeps whether it is open. An
+item clicked is usually your cue to act and close the menu.
 
 ## Theme tokens
 
@@ -82,23 +93,22 @@ sealed class AccountMenu
     static readonly BibuiStr SettingsKey = BibuiStr.FromStrLit("⌘S"u8);
     static readonly BibuiStr LogOut = BibuiStr.FromStrLit("Log out"u8);
 
-    bool _open;   // the caller's state
-
     public UiNode Build(BibuiRuntime runtime)
     {
         var trigger = Button.Build(runtime, "account-trigger", Trigger);
-        if (trigger.Clicked) _open = !_open;
+        if (trigger.Clicked)
+            if (runtime.IsDropDownOpen("account-menu")) runtime.CloseDropDown("account-menu");
+            else runtime.OpenDropDown("account-menu", trigger.Node);
 
-        if (_open)
+        if (Menu.BeginBelow(runtime, "account-menu", trigger.Node) is { } menu)
         {
-            var menu = Menu.BeginBelow(runtime, "account-menu", (Box)trigger.Node);
             Menu.Label(runtime, Account);
             bool chosen = Menu.Item(runtime, "account-profile", Profile, "user").Clicked;
             chosen |= Menu.Item(runtime, "account-settings", Settings, "settings", SettingsKey).Clicked;
             Menu.Separator(runtime);
             chosen |= Menu.Item(runtime, "account-logout", LogOut, "log-out").Clicked;
             menu.End();
-            if (chosen) _open = false;
+            if (chosen) runtime.CloseDropDown("account-menu");
         }
         return trigger;
     }
@@ -117,25 +127,24 @@ sealed class FileContextMenu
     static readonly BibuiStr Rename = BibuiStr.FromStrLit("Rename"u8);
     static readonly BibuiStr Delete = BibuiStr.FromStrLit("Delete"u8);
 
-    (float X, float Y)? _openAt;   // the caller's state
+    (float X, float Y) _at;   // the caller's state: where it opens
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        if (_openAt is { } at)
+        Box area = runtime.BoxFromId("file-area", InteractionKinds.RightPress);
+        var press = runtime.InteractionsFor(area);
+        // The area's press closed an open menu; opening it again here moves it.
+        if (press.RightPressed) { _at = (press.X, press.Y); runtime.OpenDropDown("file-menu"); }
+        area.SizeX = SemanticSize.Pixels(320f);
+        area.SizeY = SemanticSize.Pixels(200f);
+
+        if (Menu.Begin(runtime, "file-menu", _at.X, _at.Y) is { } menu)
         {
-            var menu = Menu.Begin(runtime, "file-menu", at.X, at.Y);
             bool chosen = Menu.Item(runtime, "file-rename", Rename, "pencil").Clicked;
             chosen |= Menu.Item(runtime, "file-delete", Delete, "trash").Clicked;
             menu.End();
-            if (chosen) _openAt = null;
+            if (chosen) runtime.CloseDropDown("file-menu");
         }
-
-        Box area = runtime.BoxFromId("file-area", InteractionKinds.LeftPress | InteractionKinds.RightPress);
-        var press = runtime.InteractionsFor(area);
-        if (press.RightPressed) _openAt = (press.X, press.Y);
-        else if (press.Pressed) _openAt = null;   // a left press beside the menu closes it
-        area.SizeX = SemanticSize.Pixels(320f);
-        area.SizeY = SemanticSize.Pixels(200f);
         return area;
     }
 }

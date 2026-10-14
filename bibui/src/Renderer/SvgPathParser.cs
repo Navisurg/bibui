@@ -43,6 +43,28 @@ internal static class SvgPathParser
         return path;
     }
 
+    /// <summary>
+    /// Parses <paramref name="svg"/> and throws <see cref="FormatException"/>
+    /// on anything a draw would quietly drop: a parse error, a path that does
+    /// not begin with a move, a number that is not finite, or no segment to
+    /// stroke. What <c>Icons.Register</c> checks an app's path with.
+    /// </summary>
+    public static RecordedPath ParseStrict(string svg)
+    {
+        string trimmed = svg.TrimStart(' ', ',', '\t', '\n', '\r');
+        if (trimmed.Length == 0) throw new FormatException("The path data is empty.");
+        if (trimmed[0] is not ('M' or 'm')) throw new FormatException($"The path data must begin with a move (M or m), not '{trimmed[0]}'.");
+        var path = new RecordedPath();
+        BuildPath(svg, path);
+        if (!path.AllFinite) throw new FormatException("The path data holds a number too large to be finite.");
+        if (!path.HasSegment) throw new FormatException("The path data draws nothing: it has no line, curve or arc.");
+        lock (_cacheLock)
+        {
+            _cache[svg] = path;
+        }
+        return path;
+    }
+
     private static void BuildPath(string s, IPathBuilder path)
     {
         int i = 0;
@@ -340,6 +362,26 @@ internal sealed class RecordedPath : IPathBuilder
     }
 
     public void Close() => _verbs.Add(Verb.Close);
+
+    /// <summary>True when every coordinate is finite.</summary>
+    public bool AllFinite
+    {
+        get
+        {
+            foreach (float a in _args) if (!float.IsFinite(a)) return false;
+            return true;
+        }
+    }
+
+    /// <summary>True when there is something to stroke: a line, curve or arc, not only moves.</summary>
+    public bool HasSegment
+    {
+        get
+        {
+            foreach (var v in _verbs) if (v is not (Verb.Move or Verb.Close)) return true;
+            return false;
+        }
+    }
 
     /// <summary>Issues every verb, in order, into <paramref name="into"/>.</summary>
     public void ReplayInto(IPathBuilder into)

@@ -1,7 +1,7 @@
 // Gradients, mask blur (shadows), the shadow cache, image and backdrop
 // blur. The references are the definitions: Skia's stop rules and
-// interpolation, its kernel sizes per sigma (measured against SkiaSharp 2.88.8
-// with the bench's probes), and conservation of what a blur spreads.
+// interpolation, its kernel sizes per sigma (measured against SkiaSharp
+// 2.88.8), and conservation of what a blur spreads.
 using System.Numerics;
 using Bibui.Raster.Managed;
 

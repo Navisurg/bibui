@@ -51,11 +51,56 @@ public Icon Icon(string name, float? size = null)
 ```
 
 - `name` is a Lucide-style glyph name, such as `"search"`, `"check"` or
-  `"chevron-down"`. An unknown name draws a visible placeholder instead of
-  nothing.
+  `"chevron-down"`, or the name of an icon the app registered (below). Names
+  ignore case. An unknown name throws in a debug build and draws its first
+  letter in a release build; check a name that comes from data with
+  `Icon.IsKnown`.
 - `size` is the side in pixels. Without one, the icon uses the font size in
   scope, so an icon beside a label matches the label.
 - Set `Color` on the returned `Icon`. Without it, the icon is `TextPrimary`.
+
+### Icons of the app's own
+
+```cs
+public static void Icons.Register(string name, string svgPathData)
+public static bool Icons.IsBuiltIn(string? name)
+public static IReadOnlyList<string> Icons.Names
+```
+
+An app that needs an icon bibui does not have registers it once, at start-up,
+before the first frame:
+
+```csharp
+Icons.Register("moon", "M12 3a6 6 0 009 9 9 9 0 11-9-9z");   // Lucide, ISC
+// ...
+runtime.Icon("moon", 16f);
+```
+
+- `svgPathData` is the `d` attribute of an SVG path, drawn by the same rules
+  as the built-in set: a **24×24 viewBox**, **stroked 2 units wide** with
+  **round caps and joins**, never filled, scaled to the icon's size. Draw it
+  for that grid; Lucide's and Feather's icons already are.
+- An icon of several elements is one path: join their path data, starting each
+  part with an absolute `M` (a lone element's leading `m` is relative to the
+  origin), and write a `<circle cx cy r>` as two arcs,
+  `M{cx+r} {cy}a{r} {r} 0 1 1-{2r} 0 {r} {r} 0 0 1 {2r} 0z`. Commands M L H V C
+  S Q T A Z are supported, absolute and relative.
+- The path is checked when it is registered, so bad data fails at start-up,
+  not when a frame is painted: a parse error, a path that does not begin with
+  a move, a number that is not finite, or a path with nothing to stroke throws
+  `FormatException`, naming the icon.
+- A built-in name throws `ArgumentException`: an app icon cannot replace one of
+  bibui's. Registering the same name with the same path again does nothing,
+  so a start-up routine may run twice; with other path data it throws, since
+  two parts of the app disagree about what the name draws.
+- Registration is plain strings: no discovery, no reflection, safe under Native
+  AOT. It is meant to finish before the first frame; reads while it happens
+  are safe, but there is no unregistering.
+- `Icon.IsKnown` and the fixture verifier's unknown-icon check see registered
+  icons. `Icons.Names` lists every name, built-in then registered, for a
+  gallery or a picker.
+- Ship the icon's licence with the app. The showcase's `AppIcons.cs` registers
+  five Lucide icons and credits them in `NOTICE`.
 
 ## Spinner
 

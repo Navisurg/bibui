@@ -73,7 +73,7 @@ change. Each page names the fixture it shows.
 | [RadioGroup](radio-group.md) | A column of options, one chosen | `RadioGroupWidget` |
 | [Toggle and ToggleGroup](toggle.md) | A button that stays pressed, and a segmented control | `BibuiWidget`, `ToggleGroupWidget` |
 | [Slider](slider.md) | A value on a track | `SliderWidget` |
-| [Select](select.md) | A trigger that opens a list | `SelectScope` → `SelectResult` |
+| [Select](select.md) | A trigger that opens a list | `SelectScope` → `Box` |
 | [TextField](text-field.md) | Single-line, ellipsis and multi-line text, and the input look | `BibuiWidget` |
 | [Tabs](tabs.md) | A strip of tabs and the panel under it | `TabsWidget`, `Box` |
 | [Expander](expander.md) | An outlined frame whose header opens a body | `ExpanderWidget` |

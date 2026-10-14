@@ -69,6 +69,7 @@ jobs:
             bibui-platform-wayland/bibui-platform-wayland.csproj \
             tools/wayland-scanner/wayland-scanner.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
+            bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
             tests/bibui-runtime-tests/bibui-runtime-tests.csproj \
             tests/text-tests/text-tests.csproj \
             tests/png-tests/png-tests.csproj \
@@ -96,6 +97,7 @@ jobs:
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
+            bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
             tests/public-api/public-api.csproj
           do
             echo "==> test $proj"

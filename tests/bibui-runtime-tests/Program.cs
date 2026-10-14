@@ -436,84 +436,33 @@ Run("Shares split the space remaining after fixed-size siblings (3:1)", () =>
     IsTrue(MathF.Abs(small.Width - 100f) <= 0.5f, $"Expected small column 100 (1/4 of 400), got {small.Width}");
 });
 
-// ── Full app integration (mirrors samples/bibui-app) ─────────────────────────
+// ── Full app integration (samples/bibui-app's own build) ─────────────────────
 //
-// These tests drive the same state machine as the live window — counter,
-// input and checkbox — entirely through the BibuiPage semantic API.
-// No window opens; this is the "headless mode" equivalent of the running app.
-
-static Style CardStyle() => new()
-{
-    BackgroundColor = "#18181B",
-    BorderColor = "#27272A",
-    BorderWidth = 1f,
-    CornerRadius = 16f,
-    Padding = EdgeInsets.All(16f),
-};
+// These tests drive the sample's real build, BibuiApp.App — counter, input and
+// checkbox — entirely through the BibuiPage semantic API. No window opens; this
+// is the "headless mode" equivalent of the running app.
 
 static BibuiPage LaunchApp()
 {
     var runtime = new BibuiRuntime();
-    // The name field's text, caret and focus: the app's, edited in place.
-    var nameText = new BibuiStr(32);
-    var nameEdit = new TextEditState();
-    bool nameFocused = false;
-
-    runtime.MountStateful(
-        initialState: new AppState(0, "", false, null, false),
-        build: (state, setState) =>
-        {
-            var subscribe = Bibui.Runtime.Checkbox.Build(runtime, "subscribe-checkbox", state.Subscribed, BibuiStr.FromStrLit("Subscribe"u8));
-            var nameField = FieldFrame(runtime,
-                SemanticSize.Pixels(44f));
-            Bibui.Runtime.TextField.InputStyle(runtime, nameField, nameFocused);
-            BibuiWidget nameLine;
-            using (runtime.PushParent(nameField)) nameLine = Bibui.Runtime.TextField.SingleLine(runtime, "name-input", nameText, nameEdit, nameFocused,
-                placeholder: BibuiStr.FromStrLit("Type your name…"u8));
-            if (nameLine.Pressed) nameFocused = true;
-            string name = System.Text.Encoding.UTF8.GetString(nameText.Str);
-            if (subscribe.Clicked) setState.Set(state with { Subscribed = !state.Subscribed });
-
-            return Arrange.Column(
-                // ── Counter ──────────────────────────────────────────────
-                    Arrange.Column(
-                            Bold(runtime, "Counter"u8.ToArray(), ComponentSize.Lg).FillX(),
-                            Arrange.Space(12f),
-                            Arrange.Row(
-                                    Arrange.CentredY(Btn(runtime, "decrement-btn", "−",
-                                        () => setState.Set(state with { Counter = state.Counter - 1 })).Px(48f, 36f)),
-                                    Arrange.Space(8f),
-                                    Arrange.CentredY(BoldFromId(runtime, "counter-label",
-                                            U8(state.Counter.ToString()), ComponentSize.Xl, TextColor.Accent)),
-                                    Arrange.Space(8f),
-                                    Arrange.CentredY(Btn(runtime, "increment-btn", "+",
-                                        () => setState.Set(state with { Counter = state.Counter + 1 })).Px(48f, 36f)),
-                                    Arrange.Space(8f),
-                                    Arrange.CentredY(Btn(runtime, "reset-btn", "Reset",
-                                        () => setState.Set(state with { Counter = 0 }), disabled: state.Counter == 0).Px(70f, 36f))).Px(height: 36f)).Styled(CardStyle()).FillX(),
-                Arrange.Space(20f),
-                // ── Input + checkbox row ──────────────────────────────────
-                    Arrange.Row(
-                        Arrange.Column(
-                                    Bold(runtime, "Input"u8.ToArray(), ComponentSize.Lg).FillX(),
-                                    Arrange.Space(10f),
-                                    nameField,
-                                    Arrange.Space(10f),
-                                    runtime.TextFromId("greeting",
-                                            U8(string.IsNullOrEmpty(name) ? "…" : $"Hello, {name}!"),
-                                            ComponentSize.Sm,
-                                            string.IsNullOrEmpty(name) ? TextColor.Secondary : TextColor.Accent).FillX()).Styled(CardStyle()).FillX(),
-                        Arrange.Space(16f),
-                        Arrange.Column(
-                                    Bold(runtime, "Checkbox"u8.ToArray(), ComponentSize.Lg),
-                                    Arrange.Space(12f),
-                                    subscribe.Node,
-                                    Arrange.Space(12f),
-                                    runtime.TextFromId("subscribe-state", U8(state.Subscribed ? "Subscribed" : "Unsubscribed"))).Styled(CardStyle()).Px(width: 220f)).FillX()).FillX().FillY().Styled(new Style { Padding = EdgeInsets.All(28f), BackgroundColor = "#09090B" });
-        },
-        surface: new SurfaceOptions { Width = 720, Height = 820 });
-
+    BibuiApp.App.Mount(runtime);
     return BibuiPage.From(runtime);
+}
+
+// Whether the checkbox's card holds a text reading exactly `text` in the last
+// frame: the badge beside the checkbox says its state, under a box with no id.
+static bool ShowsText(BibuiPage page, string text)
+{
+    var card = page.FindById("subscribe-checkbox")?.Parent ?? throw new InvalidOperationException("No checkbox card");
+    return Find(card);
+
+    bool Find(UiNode n)
+    {
+        if (n is Text t && System.Text.Encoding.UTF8.GetString(t.Content.Span) == text) return true;
+        for (var c = n.FirstChild; c is not null; c = c.Next == c ? null : c.Next)
+            if (Find(c)) return true;
+        return false;
+    }
 }
 
 // ── App: counter ──────────────────────────────────────────────────────────────
@@ -536,8 +485,10 @@ Run("App: increment and decrement", () =>
     page.Click("decrement-btn");
     Eq("2", page.GetText("counter-label"));
 
-    page.Click("reset-btn");
-    Eq("0", page.GetText("counter-label"));
+    page.Click("decrement-btn");
+    page.Click("decrement-btn");
+    page.Click("decrement-btn");
+    Eq("-1", page.GetText("counter-label"), "The counter goes below zero");
 });
 
 // ── App: name input ───────────────────────────────────────────────────────────
@@ -561,16 +512,14 @@ Run("App: subscribe checkbox toggles", () =>
 {
     using var page = LaunchApp();
 
-    Eq("Unsubscribed", page.GetText("subscribe-state"), "Starts unchecked");
+    IsTrue(ShowsText(page, "Unsubscribed") && !ShowsText(page, "Subscribed"), "Starts unchecked");
 
     page.Click("subscribe-checkbox");
-    Eq("Subscribed", page.GetText("subscribe-state"));
+    IsTrue(ShowsText(page, "Subscribed") && !ShowsText(page, "Unsubscribed"), "The badge reads Subscribed once checked");
 
     page.Click("subscribe-checkbox");
-    Eq("Unsubscribed", page.GetText("subscribe-state"), "Toggled back to unchecked");
+    IsTrue(ShowsText(page, "Unsubscribed") && !ShowsText(page, "Subscribed"), "Toggled back to unchecked");
 });
-
-// ── App: video player ─────────────────────────────────────────────────────────
 
 // ── HitTest coordinate verification ──────────────────────────────────────────
 
@@ -1664,15 +1613,15 @@ Run("UiColor.WithAlpha: drops a pre-existing alpha rather than compounding it", 
 // A select whose state the test keeps, built the way an app builds one.
 static void BuildSelect(BibuiRuntime runtime, SelectState state, string id)
 {
-    var select = Bibui.Runtime.Select.Begin(runtime, id, Str(state.Value ?? "Pick one..."), state.Open);
-    string? picked = null;
+    var select = Bibui.Runtime.Select.Begin(runtime, id, Str(state.Value ?? "Pick one..."));
     if (select.Open)
         foreach (var (label, value) in new[] { ("Option A", "a"), ("Option B", "b"), ("Option C", "c") })
             if (Bibui.Runtime.Select.Item(runtime, $"{id}-option-{value}", Str(label), value == state.Value).Clicked)
-                picked = value;
-    var result = select.End();
-    if (picked is not null) (state.Value, state.Open) = (picked, false);
-    else if (result.Toggled) state.Open = !state.Open;
+            {
+                state.Value = value;
+                select.Close();
+            }
+    select.End();
 }
 
 static void ClickCentre(BibuiRuntime runtime, string id)
@@ -1707,11 +1656,11 @@ Run("Select: an item of a select nested deep, its list past every container, is 
     }, new SurfaceOptions { Width = 800, Height = 500 });
     runtime.Render();
     ClickCentre(runtime, "sel");
-    IsTrue(state.Open, "the trigger opens it");
+    IsTrue(runtime.IsDropDownOpen("sel-list"), "the trigger opens it");
     runtime.Render();
     ClickCentre(runtime, "sel-option-a");
     Eq("a", state.Value, "the first item, below every container, takes the click");
-    IsTrue(!state.Open, "and picking closes it");
+    IsTrue(!runtime.IsDropDownOpen("sel-list"), "and picking closes it");
 });
 
 Run("Select: its open list takes the press over a button built after it", () =>
@@ -2629,6 +2578,78 @@ Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and 
     IsTrue(px[Px(4, 30) + 2] > 200 && px[Px(4, 30)] < 60, "left of the gradient is red");
     IsTrue(px[Px(115, 30)] > 200 && px[Px(115, 30) + 2] < 60, "right of the gradient is blue");
     IsTrue(px.Chunk(4).Any(c => c[0] > 240 && c[1] > 240 && c[2] > 240), "the dashed white stroke drew");
+});
+
+Run("Box.Draw: a retained box draws while its build says so, and acquiring it again clears it", () =>
+{
+    // Draw is build state like the rest: BoxFromId (and the keyless pool)
+    // clears it, so a callback set under a condition does not linger into
+    // frames whose condition is false.
+    bool draw = true;
+    int retainedCalls = 0, pooledCalls = 0;
+    Box? retained = null, pooled = null;
+    var runtime = new BibuiRuntime();
+    runtime.Mount(() =>
+    {
+        var box = runtime.BoxFromId("drawn", InteractionKinds.LeftPress);
+        box.Px(60f, 60f);
+        if (draw) box.Draw = _ => retainedCalls++;
+        using (runtime.PushParent(box))
+        {
+            var inner = runtime.Box().Px(20f, 20f);
+            if (draw) inner.Draw = _ => pooledCalls++;
+            pooled = inner;
+        }
+        retained = box;
+        return box;
+    }, new SurfaceOptions { Width = 60, Height = 60 });
+
+    runtime.Render();
+    Eq(1, retainedCalls, "the retained box's callback runs at paint");
+    Eq(1, pooledCalls, "so does a pooled box's");
+    var first = retained;
+
+    draw = false;
+    runtime.Render();
+    IsTrue(ReferenceEquals(first, retained), "the same retained box both frames");
+    IsNull(retained!.Draw, "BoxFromId cleared the callback");
+    IsNull(pooled!.Draw, "the keyless pool cleared it too");
+    Eq(1, retainedCalls, "a cleared callback is not called again");
+    Eq(1, pooledCalls, "nor is a pooled one");
+});
+
+Run("DrawContext.Resolve: follows a theme changed between the build and the paint", () =>
+{
+    var light = ThemeLoader.BibuiLight();
+    var dark = ThemeLoader.BibuiDark();
+    static Rgba Expect(ThemeTokens t, UiColor c) { var (r, g, b, a) = c.ResolveColor(t.Colors); return new Rgba(r, g, b, a); }
+    IsTrue(Expect(light, UiColor.Surface) != Expect(dark, UiColor.Surface), "the two themes differ, or this proves nothing");
+
+    Rgba accent = default, surface = default, faded = default;
+    ThemeTokens? seen = null;
+    var root = new Box
+    {
+        Draw = ctx =>
+        {
+            seen = ctx.Theme;
+            accent = ctx.Resolve(UiColor.Accent);
+            surface = ctx.Resolve(UiColor.Surface);
+            faded = ctx.Resolve(UiColor.Accent.WithAlpha(0.5f));
+            ctx.DrawRoundRect(ctx.Rect, 0f, fill: ctx.Paint(PaintSpec.Fill(surface)));
+        },
+    }.Px(40f, 40f);
+    var renderer = new BibuiRenderer();
+    var options = new SurfaceOptions { Width = 40, Height = 40, ScaleFactor = 1f };
+    renderer.Layout(root, options, light);             // built and laid out in one theme
+    var output = renderer.Render(root, options, dark); // painted in another
+
+    IsTrue(ReferenceEquals(dark, seen), "ctx.Theme is the theme the frame is painted in");
+    Eq(Expect(dark, UiColor.Accent), accent, "a token resolves against the painting theme");
+    Eq(Expect(dark, UiColor.Surface), surface, "every token does");
+    Eq(new Rgba(accent.R, accent.G, accent.B, 128), faded, "WithAlpha applies, over the same token");
+    var px = output.RawBgraBytes;
+    int mid = (20 * 40 + 20) * 4;
+    IsTrue(px[mid] == surface.B && px[mid + 1] == surface.G && px[mid + 2] == surface.R, "and that is what was painted");
 });
 
 // ── What a node is told about a gesture ───────────────────────────────────────
@@ -3858,7 +3879,8 @@ static (BibuiRuntime Runtime, Func<(int Under, int Item)> Counts, Action<bool> S
                     runtime.Box().Px(10f, 10f);
                     if (open)
                     {
-                        var dropDown = runtime.OpenDropDown("menu");
+                        runtime.OpenDropDown("menu");
+                        var dropDown = runtime.BeginDropDown("menu")!;
                         dropDown.Px(100f, 40f).At(50f, 50f);
                         using (runtime.PushParent(dropDown))
                         {
@@ -3875,7 +3897,7 @@ static (BibuiRuntime Runtime, Func<(int Under, int Item)> Counts, Action<bool> S
     return (runtime, () => (under, item), v => open = v, () => tree);
 }
 
-Run("OpenDropDown: linked nowhere while building, last in the tree after", () =>
+Run("BeginDropDown: linked nowhere while building, last in the tree after", () =>
 {
     var (runtime, _, _, tree) = DropDownPage();
     runtime.Render();
@@ -3888,7 +3910,7 @@ Run("OpenDropDown: linked nowhere while building, last in the tree after", () =>
         IsTrue(n.Id != "menu", "and the dropdown is not in the row it was opened in");
 });
 
-Run("OpenDropDown: its rect is its own, even against a box that asked first", () =>
+Run("BeginDropDown: its rect is its own, even against a box that asked first", () =>
 {
     var (runtime, counts, _, _) = DropDownPage();
     runtime.Render();
@@ -3899,16 +3921,218 @@ Run("OpenDropDown: its rect is its own, even against a box that asked first", ()
     Eq((1, 1), counts(), "outside it the box beneath still does");
 });
 
-Run("OpenDropDown: a dropdown no longer opened stops occupying its rect", () =>
+Run("BeginDropDown: a dropdown no longer begun stops occupying its rect", () =>
 {
     var (runtime, counts, setOpen, _) = DropDownPage();
     runtime.Render();
     runtime.Render();
     setOpen(false);
-    runtime.Render();   // the frame it is not opened: still last frame's rect
+    runtime.Render();   // the frame it is not begun: still last frame's rect
     runtime.Render();   // gone
     ClickAt(runtime, 70f, 60f);
     Eq((1, 0), counts(), "the box beneath has it again");
+});
+
+// ── PushIntoParent moves ───────────────────────────────────────────────────
+
+// A node's children by id, walked forwards and backwards; checks every link on the way.
+static string Kids(UiNode parent)
+{
+    var forwards = new List<string>();
+    UiNode? prev = null;
+    for (var n = parent.FirstChild; n is not null; n = n.Next)
+    {
+        if (!ReferenceEquals(n.Parent, parent)) throw new Exception($"{n.Id} is in {parent.Id}'s list but names {n.Parent?.Id} as its parent");
+        if (!ReferenceEquals(n.Prev, prev)) throw new Exception($"{n.Id}.Prev is {n.Prev?.Id}, not {prev?.Id}");
+        forwards.Add(n.Id ?? "?");
+        prev = n;
+        if (forwards.Count > 100) throw new Exception($"{parent.Id}'s list runs in a ring");
+    }
+    if (!ReferenceEquals(parent.LastChild, prev)) throw new Exception($"{parent.Id}.LastChild is {parent.LastChild?.Id}, not {prev?.Id}");
+    return string.Join(",", forwards);
+}
+
+Run("PushIntoParent: a node that has a parent is moved, and both lists stay whole", () =>
+{
+    Box a = new() { Id = "a" }, b = new() { Id = "b" };
+    Box x = new() { Id = "x" }, y = new() { Id = "y" }, z = new() { Id = "z" };
+    UiNode.PushIntoParent(a, x);
+    UiNode.PushIntoParent(a, y);
+    UiNode.PushIntoParent(a, z);
+
+    UiNode.PushIntoParent(b, y);          // from the middle
+    Eq("x,z", Kids(a));
+    Eq("y", Kids(b));
+    UiNode.PushIntoParent(b, x);          // from the front
+    Eq("z", Kids(a));
+    UiNode.PushIntoParent(b, z);          // the last one
+    Eq("", Kids(a));
+    IsNull(a.FirstChild, "a is empty");
+    Eq("y,x,z", Kids(b));
+});
+
+Run("PushIntoParent: into the parent it is already in, a node moves to the end", () =>
+{
+    Box a = new() { Id = "a" };
+    Box x = new() { Id = "x" }, y = new() { Id = "y" }, z = new() { Id = "z" };
+    UiNode.PushIntoParent(a, x);
+    UiNode.PushIntoParent(a, y);
+    UiNode.PushIntoParent(a, z);
+    UiNode.PushIntoParent(a, x);
+    Eq("y,z,x", Kids(a));
+    UiNode.PushIntoParent(a, x);          // already last
+    Eq("y,z,x", Kids(a));
+    UiNode.PushIntoParent(a, z);          // from the middle
+    Eq("y,x,z", Kids(a));
+
+    Box only = new() { Id = "only" }, solo = new() { Id = "solo" };
+    UiNode.PushIntoParent(only, solo);
+    UiNode.PushIntoParent(only, solo);
+    Eq("solo", Kids(only));
+});
+
+Run("PushIntoParent: a node into itself or its own descendant throws, and the tree is left as it was", () =>
+{
+    Box a = new() { Id = "a" }, b = new() { Id = "b" }, c = new() { Id = "c" };
+    UiNode.PushIntoParent(a, b);
+    UiNode.PushIntoParent(b, c);
+    Throws<InvalidOperationException>(() => UiNode.PushIntoParent(c, a), "an ancestor into its grandchild");
+    Throws<InvalidOperationException>(() => UiNode.PushIntoParent(b, a), "a parent into its child");
+    Throws<InvalidOperationException>(() => UiNode.PushIntoParent(a, a), "a node into itself");
+    Eq("b", Kids(a));
+    Eq("c", Kids(b));
+    Eq("", Kids(c));
+});
+
+Run("PushIntoParent: Row(runtime.Text(...)) inside a PushParent scope moves the text into the row", () =>
+{
+    var runtime = new BibuiRuntime();
+    Box card = null!, row = null!;
+    Text above = null!, title = null!, below = null!;
+    runtime.Mount(
+        () =>
+        {
+            var page = Arrange.Column().FillX().FillY();
+            using (runtime.PushParent(page))
+            {
+                card = runtime.BoxFromId("card");
+                card.ChildLayoutAxis = LayoutAxis.Y;
+                card.Px(200f, 100f);
+                using (runtime.PushParent(card))
+                {
+                    above = runtime.Text(U8("above"));
+                    row = Arrange.Row(
+                        title = runtime.Text(U8("title")),
+                        Arrange.Spring(),
+                        Arrange.CentredY(runtime.Box().Px(10f, 10f))).FillX().Px(height: 24f);
+                    UiNode.PushIntoParent(card, row);
+                    below = runtime.Text(U8("below"));
+                }
+            }
+            return page;
+        },
+        new SurfaceOptions { Width = 300, Height = 300 });
+
+    for (int frame = 0; frame < 3; frame++)
+    {
+        runtime.Render();
+        var kids = new List<UiNode>();
+        for (var n = card.FirstChild; n is not null; n = n.Next) kids.Add(n);
+        Eq(3, kids.Count, $"frame {frame}: the card holds the first text, the row and the last text");
+        IsTrue(ReferenceEquals(kids[0], above) && ReferenceEquals(kids[1], row) && ReferenceEquals(kids[2], below), "in that order");
+        IsTrue(ReferenceEquals(card.LastChild, below) && ReferenceEquals(below.Prev, row) && ReferenceEquals(row.Prev, above), "linked both ways");
+        IsTrue(ReferenceEquals(title.Parent, row) && ReferenceEquals(row.FirstChild, title), "the title is the row's first child");
+        IsNull(title.Prev, "and nothing of the card's comes before it");
+        Eq(row.Rect.Y, title.Rect.Y, "the title is laid out in the row");
+        IsTrue(row.Rect.Y >= above.Rect.Y + above.Extent.Y - 0.01f, "the row is below the first text");
+        IsTrue(below.Rect.Y >= row.Rect.Y + 24f - 0.01f, "and the last text below the row");
+    }
+});
+
+Run("PushIntoParent: in a dropdown, a control built in expression form asks while it is under the dropdown", () =>
+{
+    var runtime = new BibuiRuntime();
+    int under = 0, go = 0;
+    Box menu = null!, row = null!;
+    BibuiWidget button = default;
+    runtime.Mount(
+        () =>
+        {
+            var page = Arrange.Column().FillX().FillY();
+            using (runtime.PushParent(page))
+            {
+                var below = runtime.BoxFromId("under", InteractionKinds.LeftPress);
+                below.Px(300f, 300f);
+                if (runtime.InteractionsFor(below).Clicked) under++;
+
+                runtime.OpenDropDown("menu");
+                menu = runtime.BeginDropDown("menu")!;
+                menu.Px(200f, 60f).At(20f, 20f);
+                using (runtime.PushParent(menu))
+                {
+                    row = Arrange.Row(
+                        runtime.Text(U8("Run it")),
+                        Arrange.Spring(),
+                        (button = Button.Build(runtime, "go", Str("Go")))).FillX();
+                    UiNode.PushIntoParent(menu, row);
+                    if (button.Clicked) go++;
+                }
+            }
+            return page;
+        },
+        new SurfaceOptions { Width = 300, Height = 300 });
+    runtime.Render();
+    runtime.Render();
+
+    Eq("row-only", ReferenceEquals(menu.FirstChild, row) && ReferenceEquals(menu.LastChild, row) ? "row-only" : "other",
+        "the dropdown holds only the row: the text and the button moved out of it");
+    IsTrue(ReferenceEquals(button.Node.Parent, row), "the button is in the row");
+    ClickCentre(runtime, "go");
+    Eq((0, 1), (under, go), "the button has the press, not the box beneath");
+});
+
+Run("PushIntoParent: in a Select, rows built in expression form are picked by a click", () =>
+{
+    var runtime = new BibuiRuntime();
+    string? picked = null;
+    int under = 0;
+    runtime.Mount(
+        () =>
+        {
+            var page = Arrange.Column().FillX().FillY();
+            using (runtime.PushParent(page))
+            {
+                runtime.OpenDropDown("pick-list");
+                var select = Bibui.Runtime.Select.Begin(runtime, "pick", Str("Pick one"));
+                if (select.Open)
+                {
+                    // Something in the list to push into: built under the list, the parent in scope.
+                    var holder = runtime.Box().FillX();
+                    holder.ChildLayoutAxis = LayoutAxis.Y;
+                    holder.SizeY = SemanticSize.ChildrenSum();
+                    BibuiWidget a = default, b = default;
+                    UiNode.PushIntoParent(holder, Arrange.Row(
+                        runtime.Text(U8("·")),
+                        Arrange.Space(6f),
+                        Arrange.Column(
+                            a = Bibui.Runtime.Select.Item(runtime, "pick-a", Str("Option A")),
+                            b = Bibui.Runtime.Select.Item(runtime, "pick-b", Str("Option B"))).FillX()).FillX());
+                    if (a.Clicked) picked = "a";
+                    if (b.Clicked) picked = "b";
+                }
+                select.End();
+                var below = runtime.BoxFromId("under", InteractionKinds.LeftPress);
+                below.FillX().FillY();
+                if (runtime.InteractionsFor(below).Clicked) under++;
+            }
+            return page;
+        },
+        new SurfaceOptions { Width = 300, Height = 300 });
+    runtime.Render();
+    runtime.Render();
+    ClickCentre(runtime, "pick-b");
+    Eq("b", picked, "Option B is picked");
+    Eq(0, under, "and the box beneath the list got nothing");
 });
 
 Run("OpenToolTip: one tooltip a frame, last in the tree, placed by its default offset, taking nothing", () =>
@@ -3926,7 +4150,8 @@ Run("OpenToolTip: one tooltip a frame, last in the tree, placed by its default o
                 var below = runtime.BoxFromId("under", InteractionKinds.LeftPress);
                 below.Px(200f, 200f);
                 if (runtime.InteractionsFor(below).Clicked) presses++;
-                runtime.OpenDropDown("menu").Px(50f, 50f).At(150f, 150f);
+                runtime.OpenDropDown("menu");
+                runtime.BeginDropDown("menu")!.Px(50f, 50f).At(150f, 150f);
 
                 first = runtime.OpenToolTip();
                 runtime.DefaultToolTipOffset(first);
@@ -4871,6 +5096,7 @@ Run("Style.Clear: restores every property", () =>
         if (u == typeof(Gradient)) return new Gradient();
         if (u == typeof(BoxShadow)) return new BoxShadow();
         if (u == typeof(EdgeBorder)) return new EdgeBorder();
+        if (u == typeof(System.Numerics.Vector2)) return new System.Numerics.Vector2(7f, 9f);
         if (u.IsEnum)
             foreach (var v in Enum.GetValues(u))
                 if (!Equals(v, current)) return v;
@@ -5625,7 +5851,6 @@ Run("Interaction.PressCount: held, a double press is still a double press", () =
 Run("Menu: an item clicked in an open menu reports it, and the caller closes it", () =>
 {
     var runtime = new BibuiRuntime();
-    bool open = false;
     string? picked = null;
     runtime.Mount(() =>
     {
@@ -5633,13 +5858,15 @@ Run("Menu: an item clicked in an open menu reports it, and the caller closes it"
         using (runtime.PushParent(page))
         {
             var trigger = Bibui.Runtime.Button.Build(runtime, "menu-trigger", Str("Actions"));
-            if (trigger.Clicked) open = !open;
-            if (open)
+            if (trigger.Clicked) runtime.OpenDropDown("menu", trigger.Node);
+            if (Bibui.Runtime.Menu.BeginBelow(runtime, "menu", trigger.Node) is { } menu)
             {
-                var menu = Bibui.Runtime.Menu.BeginBelow(runtime, "menu", (Box)trigger.Node);
                 foreach (var label in new[] { "Copy", "Paste" })
                     if (Bibui.Runtime.Menu.Item(runtime, $"menu-{label}", Str(label)).Clicked)
-                        (picked, open) = (label, false);
+                    {
+                        picked = label;
+                        runtime.CloseDropDown("menu");
+                    }
                 Bibui.Runtime.Menu.Separator(runtime);
                 Bibui.Runtime.Menu.Item(runtime, "menu-Delete", Str("Delete"), disabled: true);
                 menu.End();
@@ -5649,14 +5876,281 @@ Run("Menu: an item clicked in an open menu reports it, and the caller closes it"
     }, new SurfaceOptions { Width = 400, Height = 300 });
     runtime.Render();
     ClickCentre(runtime, "menu-trigger");
-    IsTrue(open, "the trigger opens it");
+    IsTrue(runtime.IsDropDownOpen("menu"), "the trigger opens it");
     runtime.Render();
     ClickCentre(runtime, "menu-Delete");
     Eq(null, picked, "a disabled item reports nothing");
-    IsTrue(open, "and the menu stays open");
+    IsTrue(runtime.IsDropDownOpen("menu"), "and the menu stays open");
     ClickCentre(runtime, "menu-Paste");
     Eq("Paste", picked, "the item under the pointer has the click");
-    IsTrue(!open, "and the caller closes it");
+    IsTrue(!runtime.IsDropDownOpen("menu"), "and the caller closes it");
+});
+
+Run("Menu: Escape closes the open menu and is eaten", () =>
+{
+    var runtime = new BibuiRuntime();
+    int escapesLeft = 0;
+    runtime.Mount(() =>
+    {
+        var page = Arrange.Column().FillX().FillY();
+        using (runtime.PushParent(page))
+        {
+            if (Bibui.Runtime.Menu.Begin(runtime, "menu", 10f, 10f) is { } menu)
+            {
+                Bibui.Runtime.Menu.Item(runtime, "menu-copy", Str("Copy"));
+                menu.End();
+            }
+            escapesLeft += runtime.UnconsumedEvents.Count(h => h.Event is { IsKeyDown: true, Key: Bibui.Key.Escape });
+        }
+        return page;
+    }, new SurfaceOptions { Width = 200, Height = 200 });
+    runtime.OpenDropDown("menu");
+    runtime.Render();
+    runtime.ProcessEvent(BibuiWindow.BibUiEventFromKey(Bibui.Key.Escape, ctrl: false, shift: false));
+    runtime.Render();
+    IsTrue(!runtime.IsDropDownOpen("menu"), "Escape closes it");
+    Eq(0, escapesLeft, "and the menu ate it");
+    runtime.ProcessEvent(BibuiWindow.BibUiEventFromKey(Bibui.Key.Escape, ctrl: false, shift: false));
+    runtime.Render();
+    Eq(1, escapesLeft, "with the menu closed, Escape is left for the app");
+});
+
+// ── Dismissing a dropdown ────────────────────────────────────────────────────
+
+// A page whose button beneath asks first, as content built before a dropdown
+// does, then a trigger that toggles a menu under it on its click, and two
+// rows a right press opens a context menu on, where it went down. Counts the
+// button's clicks. The presses here go down and up in frames of their own, as
+// a person's do.
+(BibuiRuntime runtime, Func<int> beneath, Func<string?> menuFor) DismissPage()
+{
+    var runtime = new BibuiRuntime();
+    int beneath = 0;
+    string? menuFor = null;
+    float mx = 0f, my = 0f;
+    runtime.Mount(() =>
+    {
+        var page = Arrange.Column().FillX().FillY();
+        using (runtime.PushParent(page))
+        {
+            var under = Bibui.Runtime.Button.Build(runtime, "under", Str("Beneath"));
+            under.Node.Px(400f, 100f);
+            if (under.Clicked) beneath++;
+            var trigger = Bibui.Runtime.Button.Build(runtime, "trigger", Str("Actions"));
+            if (trigger.Clicked)
+                if (runtime.IsDropDownOpen("menu")) runtime.CloseDropDown("menu"); else runtime.OpenDropDown("menu", trigger.Node);
+            if (Bibui.Runtime.Menu.BeginBelow(runtime, "menu", trigger.Node, width: 160f) is { } menu)
+            {
+                Bibui.Runtime.Menu.Item(runtime, "menu-copy", Str("Copy"));
+                Bibui.Runtime.Menu.Separator(runtime);
+                Bibui.Runtime.Menu.Item(runtime, "menu-paste", Str("Paste"));
+                menu.End();
+            }
+            foreach (var id in new[] { "row-1", "row-2" })
+            {
+                var row = runtime.BoxFromId(id, InteractionKinds.RightPress);
+                var i = runtime.InteractionsFor(row);
+                if (i.RightPressed) { (menuFor, mx, my) = (id, i.X, i.Y); runtime.OpenDropDown("ctx"); }
+                row.Px(400f, 40f);
+            }
+            if (Bibui.Runtime.Menu.Begin(runtime, "ctx", mx, my, 120f) is { } ctx)
+            {
+                Bibui.Runtime.Menu.Item(runtime, "ctx-open", Str("Open"));
+                ctx.End();
+            }
+        }
+        return page;
+    }, new SurfaceOptions { Width = 600, Height = 500 });
+    runtime.Render();
+    runtime.Render();
+    return (runtime, () => beneath, () => menuFor);
+}
+
+// Down, a frame, up, a frame.
+static void PressAndRelease(BibuiRuntime runtime, float x, float y, MouseButton button = MouseButton.Left)
+{
+    runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x, Y = y });
+    runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = button, X = x, Y = y });
+    runtime.Render();
+    runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = button, X = x, Y = y });
+    runtime.Render();
+}
+
+static (float X, float Y) Centre(BibuiRuntime runtime, string id)
+{
+    var b = BibuiPage.From(runtime).GetBounds(id);
+    return (b.X + b.Width / 2f, b.Y + b.Height / 2f);
+}
+
+Run("Dismiss: a click on the trigger of an open menu closes it, and another opens it", () =>
+{
+    var (runtime, _, _) = DismissPage();
+    var (x, y) = Centre(runtime, "trigger");
+    PressAndRelease(runtime, x, y);
+    IsTrue(runtime.IsDropDownOpen("menu"), "the click opens it");
+    runtime.Render();
+    PressAndRelease(runtime, x, y);
+    IsTrue(!runtime.IsDropDownOpen("menu"), "the next closes it: its press is the trigger's, which the menu leaves to it");
+    PressAndRelease(runtime, x, y);
+    IsTrue(runtime.IsDropDownOpen("menu"), "and the next opens it again");
+});
+
+Run("Dismiss: a right press on another row moves an open context menu there", () =>
+{
+    var (runtime, _, menuFor) = DismissPage();
+    var (_, y1) = Centre(runtime, "row-1");
+    PressAndRelease(runtime, 20f, y1, MouseButton.Right);
+    Eq("row-1", menuFor(), "a right press opens it on its row");
+    IsTrue(runtime.IsDropDownOpen("ctx"), "and does not dismiss the menu it opened");
+    runtime.Render();
+    var (_, y2) = Centre(runtime, "row-2");
+    PressAndRelease(runtime, 300f, y2, MouseButton.Right);
+    Eq("row-2", menuFor(), "a right press on the other row");
+    IsTrue(runtime.IsDropDownOpen("ctx"), "closes the menu and opens it there, which stands");
+    var ctx = BibuiPage.From(runtime).GetBounds("ctx");
+    IsTrue(ctx.X == 300f && ctx.Y == y2, "and it is drawn where that press went down");
+});
+
+Run("Dismiss: a press a box outside takes closes it, and still reaches that box", () =>
+{
+    var (runtime, beneath, _) = DismissPage();
+    var (x, y) = Centre(runtime, "trigger");
+    PressAndRelease(runtime, x, y);
+    runtime.Render();
+    var (ux, uy) = Centre(runtime, "under");
+    PressAndRelease(runtime, ux, uy);
+    IsTrue(!runtime.IsDropDownOpen("menu"), "the button beneath took the press: the menu is closed");
+    Eq(1, beneath(), "and the button has its click");
+});
+
+Run("Dismiss: a press nothing takes closes it", () =>
+{
+    var (runtime, beneath, _) = DismissPage();
+    var (x, y) = Centre(runtime, "trigger");
+    PressAndRelease(runtime, x, y);
+    runtime.Render();
+    PressAndRelease(runtime, 590f, 490f);
+    IsTrue(!runtime.IsDropDownOpen("menu"), "an empty corner closes it");
+    Eq(0, beneath(), "and nothing has a click");
+});
+
+Run("Dismiss: a press inside, on an item or on the padding, does not", () =>
+{
+    var (runtime, beneath, _) = DismissPage();
+    var (x, y) = Centre(runtime, "trigger");
+    PressAndRelease(runtime, x, y);
+    runtime.Render();
+    var (ix, iy) = Centre(runtime, "menu-copy");
+    PressAndRelease(runtime, ix, iy);
+    IsTrue(runtime.IsDropDownOpen("menu"), "an item's press leaves it open");
+    var list = BibuiPage.From(runtime).GetBounds("menu");
+    PressAndRelease(runtime, list.X + 1f, list.Y + 1f);
+    IsTrue(runtime.IsDropDownOpen("menu"), "so does a press on its padding");
+    Eq(0, beneath(), "and neither reaches the button beneath");
+});
+
+Run("Dismiss: a dropdown opened in every frame it is built is never dismissed", () =>
+{
+    var runtime = new BibuiRuntime();
+    int beneath = 0;
+    runtime.Mount(() =>
+    {
+        var page = Arrange.Column().FillX().FillY();
+        using (runtime.PushParent(page))
+        {
+            var under = Bibui.Runtime.Button.Build(runtime, "under", Str("Beneath"));
+            under.Node.FillX().FillY();
+            if (under.Clicked) beneath++;
+            runtime.OpenDropDown("toast");
+            runtime.BeginDropDown("toast")!.Px(100f, 40f).At(250f, 250f);
+        }
+        return page;
+    }, new SurfaceOptions { Width = 400, Height = 300 });
+    runtime.Render();
+    runtime.Render();
+    PressAndRelease(runtime, 20f, 20f);
+    Eq(1, beneath, "the press beside it is the button's");
+    IsTrue(runtime.IsDropDownOpen("toast"), "and the dropdown is still open");
+});
+
+Run("Dismiss: opening a dropdown after it was begun asks for the frame it shows in; one opened every frame does not keep asking", () =>
+{
+    var runtime = new BibuiRuntime();
+    int wakes = 0;
+    bool openLate = false;
+    runtime.WakeUp = () => wakes++;
+    runtime.Mount(() =>
+    {
+        var page = Arrange.Column().FillX().FillY();
+        using (runtime.PushParent(page))
+        {
+            runtime.BeginDropDown("late")?.Px(50f, 50f);
+            if (openLate) runtime.OpenDropDown("late");
+            runtime.OpenDropDown("always");
+            runtime.BeginDropDown("always")!.Px(50f, 50f).At(100f, 100f);
+        }
+        return page;
+    }, new SurfaceOptions { Width = 200, Height = 200 });
+    runtime.Render();
+    runtime.Render();
+    wakes = 0;
+    runtime.Render();
+    runtime.Render();
+    Eq(0, wakes, "a dropdown opened every frame it is built asks for nothing");
+    openLate = true;
+    runtime.Render();
+    IsTrue(wakes > 0, "one opened after its build point asks for a frame");
+});
+
+Run("Dismiss: a dropdown its caller stops building closes", () =>
+{
+    var runtime = new BibuiRuntime();
+    bool build = true;
+    runtime.Mount(() =>
+    {
+        var page = Arrange.Column().FillX().FillY();
+        using (runtime.PushParent(page))
+            if (build) runtime.BeginDropDown("pop")?.Px(50f, 50f);
+        return page;
+    }, new SurfaceOptions { Width = 200, Height = 200 });
+    runtime.OpenDropDown("pop");
+    runtime.Render();
+    IsTrue(runtime.IsDropDownOpen("pop"), "open while it is begun");
+    build = false;
+    runtime.Render();
+    IsTrue(!runtime.IsDropDownOpen("pop"), "closed in the frame it is not");
+});
+
+Run("BibUiEvent.IsKeyDown: every key-down kind, and nothing else", () =>
+{
+    foreach (var key in new[] { Bibui.Key.Up, Bibui.Key.Down, Bibui.Key.Left, Bibui.Key.Home, Bibui.Key.Enter,
+                 Bibui.Key.Escape, Bibui.Key.Slash, Bibui.Key.Backspace, Bibui.Key.Delete })
+        IsTrue(BibuiWindow.BibUiEventFromKey(key, ctrl: false, shift: false).IsKeyDown, $"{key} is a key-down");
+    foreach (var key in new[] { Bibui.Key.A, Bibui.Key.C, Bibui.Key.X, Bibui.Key.V })
+        IsTrue(BibuiWindow.BibUiEventFromKey(key, ctrl: true, shift: false).IsKeyDown, $"Ctrl+{key} is a key-down");
+    Eq(BibUiEventKind.Navigate, BibuiWindow.BibUiEventFromKey(Bibui.Key.Up, false, false).Kind, "an arrow is still a Navigate");
+    Eq(BibUiEventKind.Submit, BibuiWindow.BibUiEventFromKey(Bibui.Key.Enter, false, false).Kind, "Enter is still a Submit");
+    foreach (var kind in new[] { BibUiEventKind.Null, BibUiEventKind.Text, BibUiEventKind.Release, BibUiEventKind.MouseDown,
+                 BibUiEventKind.MouseUp, BibUiEventKind.MouseMove, BibUiEventKind.Scroll })
+        IsTrue(!new BibUiEvent { Kind = kind }.IsKeyDown, $"{kind} is not a key-down");
+});
+
+Run("BibUiEvent.IsKeyDown: a shortcut handler sees arrows and Enter that reach the app", () =>
+{
+    var runtime = new BibuiRuntime();
+    var seen = new List<Bibui.Key>();
+    runtime.Mount(() =>
+    {
+        foreach (var handle in runtime.UnconsumedEvents)
+            if (handle.Event.IsKeyDown) { seen.Add(handle.Event.Key); handle.Eat(); }
+        return runtime.Box().Px(10f, 10f);
+    }, new SurfaceOptions { Width = 100, Height = 100 });
+    runtime.Render();
+    foreach (var key in new[] { Bibui.Key.Down, Bibui.Key.Enter, Bibui.Key.G })
+        runtime.ProcessEvent(BibuiWindow.BibUiEventFromKey(key, ctrl: false, shift: false));
+    runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.Text, Char = 'g', CodePoint = 'g' });
+    runtime.Render();
+    Eq("Down,Enter,G", string.Join(",", seen), "each key once, its Text not among them");
 });
 
 Run("Popover: its open panel blocks the box beneath it, and only there", () =>
@@ -5675,9 +6169,12 @@ Run("Popover: its open panel blocks the box beneath it, and only there", () =>
             var below = Bibui.Runtime.Button.Build(runtime, "below", Str("Beneath"));
             below.Node.FillX().FillY();
             if (below.Clicked) beneath++;
-            var popover = Bibui.Runtime.Popover.Begin(runtime, "pop", (Box)trigger.Node, width: 200f);
-            runtime.Text(U8("Floating over the button below"));
-            panel = (Box)popover.End().Node;
+            runtime.OpenDropDown("pop", trigger.Node);
+            if (Bibui.Runtime.Popover.Begin(runtime, "pop", trigger.Node, width: 200f) is { } popover)
+            {
+                runtime.Text(U8("Floating over the button below"));
+                panel = (Box)popover.End().Node;
+            }
         }
         return page;
     }, new SurfaceOptions { Width = 400, Height = 300 });
@@ -6354,84 +6851,6 @@ Run("Button: a ghost rests bare and lights up under the pointer", () =>
     IsTrue(hot != cold, $"a ghost should gain a fill under the pointer: cold {cold}, hot {hot}");
 });
 
-// ── Damage tracking ───────────────────────────────────────────────────
-// The byte-for-byte oracle over scenes and fixtures is `bibui-verify
-// damage-oracle`; these pin the policy a host relies on.
-
-(BibuiRuntime Rt, Bibui.Raster.IRasterSurface Target, Func<byte[]> Pixels) DamageRig(bool tracked)
-{
-    var rt = new BibuiRuntime { TargetHz = 60f, DamageTracking = tracked };
-    rt.Mount(() =>
-    {
-        var rows = new List<Arrange.Item>();
-        for (int r = 0; r < 3; r++)
-        {
-            var cells = new List<Arrange.Item>();
-            for (int c = 0; c < 4; c++)
-            {
-                if (c > 0) cells.Add(Arrange.Space(6f));
-                cells.Add(Bibui.Runtime.Button.Build(rt, $"d{r * 4 + c}", Str($"Item {r * 4 + c}")).Node);
-            }
-            if (r > 0) rows.Add(Arrange.Space(6f));
-            rows.Add(Arrange.Row([.. cells]));
-        }
-        return Arrange.Column([.. rows]).FillX().FillY().Padded(EdgeInsets.All(8f));
-    }, ThemeLoader.NeutralDark(), new SurfaceOptions { Width = 400, Height = 160, ScaleFactor = 1f });
-    var target = rt.Raster.CreateSurface(400, 160);
-    return (rt, target, () => { var px = new byte[400 * 160 * 4]; target.ReadPixels(px, 400, 160); return px; });
-}
-
-Run("Damage: the first frame is whole, a hover is repainted in part, and both equal a whole repaint", () =>
-{
-    var (dmg, dt, dpx) = DamageRig(tracked: true);
-    var (full, ft, fpx) = DamageRig(tracked: false);
-    dmg.RenderTo(dt); full.RenderTo(ft);
-    IsNull(dmg.LastRepaint, "the first frame has nothing to repaint from");
-    IsNull(dmg.LastDamage, "and is damaged whole");
-
-    foreach (var (x, y) in new[] { (40f, 20f), (130f, 20f), (130f, 60f), (390f, 150f) })
-    {
-        dmg.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x, Y = y });
-        full.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x, Y = y });
-        dmg.RenderTo(dt); full.RenderTo(ft);
-        IsTrue(dmg.LastRepaint is not null, $"a hover at {x},{y} should repaint in part, was {dmg.LastFullRepaintReason}");
-        IsTrue(dpx().AsSpan().SequenceEqual(fpx()), $"the frame after a hover at {x},{y} must equal a whole repaint");
-    }
-
-    for (int i = 0; i < 30; i++) dmg.RenderTo(dt);   // let every fade settle
-    IsTrue(dmg.LastDamage is { Count: 0 }, "an idle frame damages nothing");
-});
-
-Run("Damage: a target that keeps no pixels, a resize and a theme are painted whole", () =>
-{
-    var (dmg, dt, _) = DamageRig(tracked: true);
-    dmg.RenderTo(dt);
-    dmg.RenderTo(dt, retained: false);
-    IsNull(dmg.LastRepaint, "retained: false");
-    dmg.RenderTo(dt);
-    IsTrue(dmg.LastRepaint is not null, "and the target is known again after a whole frame");
-
-    dmg.SetTheme(ThemeLoader.NeutralDark());
-    dmg.RenderTo(dt);
-    Eq("theme", dmg.LastFullRepaintReason);
-
-    dmg.ResizeSurface(300, 160, 1f);
-    using var smaller = dmg.Raster.CreateSurface(300, 160);
-    dmg.RenderTo(smaller);
-    Eq("resize or scale", dmg.LastFullRepaintReason);
-});
-
-Run("Damage: turning tracking off and on again forgets every target", () =>
-{
-    var (dmg, dt, _) = DamageRig(tracked: true);
-    dmg.RenderTo(dt);
-    dmg.DamageTracking = false;
-    dmg.RenderTo(dt);
-    dmg.DamageTracking = true;
-    dmg.RenderTo(dt);
-    IsNull(dmg.LastRepaint, "the target was painted untracked in between");
-});
-
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 Console.WriteLine();
@@ -6748,8 +7167,8 @@ Run("Tokens: elevation puts the theme's shadow under what floats", () =>
         BoxShadow? menu = null, dialog = null;
         Themed(theme, rt =>
         {
-            var scope = Bibui.Runtime.Menu.Begin(rt, "menu", 10f, 10f);
-            menu = scope.End().Node.Style.Shadow;
+            rt.OpenDropDown("menu");
+            menu = ((Box)Bibui.Runtime.Menu.Begin(rt, "menu", 10f, 10f)!.Value.End().Node).Style.Shadow;
             var panel = Bibui.Runtime.Dialog.Begin(rt, "dialog", shown: 1f).End().Panel;
             dialog = panel.Style.Shadow;
         });
@@ -6846,6 +7265,12 @@ MarkdownTests.Register(Run);
 Console.WriteLine();
 Console.WriteLine("Icon names");
 IconNameTests.Register(Run);
+Console.WriteLine();
+Console.WriteLine("App icons");
+AppIconTests.Register(Run);
+Console.WriteLine();
+Console.WriteLine("Motion");
+MotionTests.Register(Run);
 
 Console.WriteLine($"Results: {passed} passed, {failed} failed, {skipped} skipped"
     + (filter is null ? "" : $" ({filteredOut} not matching '{filter}')"));
@@ -6866,10 +7291,6 @@ static class ObjectExtensions
 {
     public static string ToStr(this object? o) => o is null ? "null" : o.ToString() ?? "null";
 }
-
-// ── App state record (used by full-app integration tests) ─────────────────────
-
-record AppState(int Counter, string Name, bool Subscribed, string? VideoPath, bool VideoPlaying);
 
 // ── Sign-up flow state (used by the form page tests) ──────────────────────────
 
@@ -6944,4 +7365,4 @@ sealed class ScriptedHost(int iterations) : IPlatformHost
 }
 
 // The state BuildSelect keeps for a test's select.
-sealed class SelectState { public bool Open; public string? Value; }
+sealed class SelectState { public string? Value; }

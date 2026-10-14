@@ -13,8 +13,8 @@ internal sealed partial class App
     private static readonly (Page Page, string Icon, string Label, string Key)[] Nav =
     [
         (Page.Overview, "grid", "Overview", "1"),
-        (Page.Targets, "star", "Targets", "2"),
-        (Page.Telemetry, "zap", "Telemetry", "3"),
+        (Page.Targets, "telescope", "Targets", "2"),
+        (Page.Telemetry, "activity", "Telemetry", "3"),
         (Page.Journal, "file-text", "Journal", "4"),
     ];
 
@@ -172,12 +172,11 @@ internal sealed partial class App
     /// <summary>The brand mark: an orb lit from the upper left, in the accent.</summary>
     private static Box Orb(BibuiRuntime rt, float size)
     {
-        var accent = Charts.Resolve(rt, UiColor.Accent);
-        var deep = Charts.Resolve(rt, UiColor.AccentActive);
         return new Box
         {
             Draw = ctx =>
             {
+                Rgba accent = ctx.Resolve(UiColor.Accent), deep = ctx.Resolve(UiColor.AccentActive);
                 var r = ctx.Logical;
                 float s = ctx.Scale;
                 float rad = r.Width / 2f;
@@ -206,12 +205,7 @@ internal sealed partial class App
         b.Style.BackgroundColor = on
             ? UiColor.Accent.WithAlpha(0.14f + 0.1f * b.HotT)
             : UiColor.SurfaceRaisedHover.WithAlpha(b.HotT * 0.9f - 0.3f * b.ActiveT);
-        using (rt.PushParent(b))
-        {
-            Spring(b);
-            VCentre(rt, () => Icon(rt, icon, size * 0.46f, on ? UiColor.Accent : UiColor.TextPrimary));
-            Spring(b);
-        }
+        Centred(b, CentredY(Icon(rt, icon, size * 0.46f, on ? UiColor.Accent : UiColor.TextPrimary)));
         if (tip is not null && i.Hovering) Tooltip.Build(rt, S(tip), b);
         return new BibuiWidget(b, i);
     }
@@ -268,7 +262,7 @@ internal sealed partial class App
         Box? field = showSearch ? SearchField(rt, 280f) : null;
         var pause = IconButton(rt, "live-toggle", Live ? "pause" : "play", tip: Live ? "Pause the feed  ·  Space" : "Resume the feed  ·  Space");
         if (pause.Clicked) Live = !Live;
-        var mode = IconButton(rt, "mode", Dark ? "sunrise" : "star", tip: Dark ? "Light mode  ·  L" : "Dark mode  ·  L");
+        var mode = IconButton(rt, "mode", Dark ? "sun" : "moon", tip: Dark ? "Light mode  ·  L" : "Dark mode  ·  L");
         if (mode.Clicked) { Dark = !Dark; ThemeFileName = null; }
         var look = IconButton(rt, "appearance", "sliders", on: SettingsOpen, tip: "Appearance  ·  ,");
         if (look.Clicked) SettingsOpen = !SettingsOpen;

@@ -10,15 +10,8 @@ internal sealed record LayoutState
     public int StackClickCount { get; init; }
     public int BoxClickCount { get; init; }
     public string ColormapValue { get; init; } = "viridis";
-    public bool ColormapOpen { get; init; }
     public float ColormapAlpha { get; init; } = 0.67f;
 
-    /// <summary>The page's open state, for a page that has one.</summary>
-    internal LayoutState? Opened(string route) => route switch
-    {
-        "Section" => this with { ColormapOpen = true },
-        _ => null,
-    };
 }
 
 internal static class DemoLayout
@@ -472,13 +465,16 @@ internal static class DemoLayout
     private static UiNode ColormapSelect(BibuiRuntime runtime, LayoutState state,
         Action<LayoutState> set, IReadOnlyList<string> colormaps, float width)
     {
-        var select = Select.Begin(runtime, "demo-colormap", Str(state.ColormapValue), state.ColormapOpen, width);
-        string? picked = null;
+        var select = Select.Begin(runtime, "demo-colormap", Str(state.ColormapValue), width);
         if (select.Open)
             foreach (var name in colormaps)
             {
                 Box row = runtime.BoxFromId($"demo-colormap-option-{name}", InteractionKinds.LeftPress);
-                if (runtime.InteractionsFor(row).Clicked) picked = name;
+                if (runtime.InteractionsFor(row).Clicked)
+                {
+                    select.Close();
+                    set(state with { ColormapValue = name });
+                }
                 row.ChildLayoutAxis = LayoutAxis.X;
                 row.SizeX = SemanticSize.ParentPct(1f);
                 row.SizeY = SemanticSize.ChildrenSum();
@@ -505,9 +501,6 @@ internal static class DemoLayout
                     runtime.Text(U8(name));
                 }
             }
-        var result = select.End();
-        if (picked is not null) set(state with { ColormapValue = picked, ColormapOpen = false });
-        else if (result.Toggled) set(state with { ColormapOpen = !state.ColormapOpen });
-        return result.Node;
+        return select.End();
     }
 }

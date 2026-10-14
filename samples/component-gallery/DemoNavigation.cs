@@ -12,14 +12,7 @@ internal sealed record NavigationState
     public int PaginationPage { get; init; } = 3;
     public string NavBarActiveItem { get; init; } = "Overview";
     public string SidebarActiveItem { get; init; } = "Dashboard";
-    public string? MenuBarOpenMenu { get; init; }
 
-    /// <summary>The page's open state, for a page that has one.</summary>
-    internal NavigationState? Opened(string route) => route switch
-    {
-        "MenuBar" => this with { MenuBarOpenMenu = "File" },
-        _ => null,
-    };
 }
 
 internal static class DemoNavigation
@@ -506,10 +499,6 @@ internal static class DemoNavigation
 
     private static UiNode MenuBarPage(BibuiRuntime runtime, NavigationState state, Action<NavigationState> set)
     {
-        // What the build decided; applied once, after it.
-        bool changed = false;
-        string? open = state.MenuBarOpenMenu;
-
         var page = Arrange.Column();
         using (runtime.PushParent(page))
         {
@@ -523,15 +512,30 @@ internal static class DemoNavigation
             bar.Style.BorderWidth = 1f;
             bar.Style.CornerRadius = 4f;
             bar.Style.Padding = new EdgeInsets(2f, 8f, 2f, 8f);
+            // The open menu's dropdown, if one is.
+            string? openList = null;
+            foreach (var (menu, _) in Menus)
+            {
+                string list = $"demo-menu-bar-{menu.ToLowerInvariant()}-menu";
+                if (runtime.IsDropDownOpen(list)) openList = list;
+            }
             using (runtime.PushParent(bar))
                 foreach (var (menu, items) in Menus)
                 {
-                    bool isOpen = state.MenuBarOpenMenu == menu;
-                    Box trigger = runtime.BoxFromId($"demo-menu-bar-{menu.ToLowerInvariant()}", InteractionKinds.LeftPress);
+                    string id = $"demo-menu-bar-{menu.ToLowerInvariant()}", list = id + "-menu";
+                    Box trigger = runtime.BoxFromId(id, InteractionKinds.LeftPress);
                     var interaction = runtime.InteractionsFor(trigger);
-                    if (interaction.Pressed) { open = isOpen ? null : menu; changed = true; }
+                    // A press on another trigger has closed the open menu already.
+                    if (interaction.Pressed)
+                        if (openList == list) runtime.CloseDropDown(list); else runtime.OpenDropDown(list, trigger);
                     // With a menu open, moving onto another trigger opens that one instead.
-                    else if (state.MenuBarOpenMenu is not null && !isOpen && interaction.Hovering) { open = menu; changed = true; }
+                    else if (openList is not null && openList != list && interaction.Hovering)
+                    {
+                        runtime.CloseDropDown(openList);
+                        runtime.OpenDropDown(list, trigger);
+                        openList = list;
+                    }
+                    bool isOpen = runtime.IsDropDownOpen(list);
                     trigger.ChildLayoutAxis = LayoutAxis.X;
                     trigger.SizeX = SemanticSize.ChildrenSum();
                     trigger.SizeY = SemanticSize.ParentPct(1f);
@@ -541,19 +545,18 @@ internal static class DemoNavigation
                     trigger.Style.HoverBackgroundColor = UiColor.SurfaceRaised;
                     using (runtime.PushParent(trigger)) MidText(runtime, menu);
 
-                    if (isOpen && MenuDropDown(runtime, menu, items, trigger)) { open = null; changed = true; }
+                    if (MenuDropDown(runtime, list, items, trigger)) runtime.CloseDropDown(list);
                 }
         }
-        if (changed && open != state.MenuBarOpenMenu) set(state with { MenuBarOpenMenu = open });
         return page;
     }
 
-    // The open menu: a dropdown under its trigger, where the trigger was drawn
-    // last frame. Reports whether an item was clicked, which closes it.
-    private static bool MenuDropDown(BibuiRuntime runtime, string menu, (string Label, string? Icon, string Shortcut)[] items, Box trigger)
+    // The menu named id, when it is open: a dropdown under its trigger, where
+    // the trigger was drawn last frame. Reports whether an item was clicked,
+    // which closes it.
+    private static bool MenuDropDown(BibuiRuntime runtime, string id, (string Label, string? Icon, string Shortcut)[] items, Box trigger)
     {
-        string id = $"demo-menu-bar-{menu.ToLowerInvariant()}";
-        Box list = runtime.OpenDropDown(id + "-menu");
+        if (runtime.BeginDropDown(id) is not { } list) return false;
         list.SizeX = SemanticSize.Pixels(220f);
         list.SizeY = SemanticSize.ChildrenSum();
         list.At(trigger.Rect.X, trigger.Rect.Y + trigger.Extent.Y + 6f);

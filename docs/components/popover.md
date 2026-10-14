@@ -11,16 +11,19 @@ Fixture: `popover-open`.
 ## Begin and End
 
 ```cs
-public static PopoverScope Begin(BibuiRuntime runtime, string id, Box anchor, float width = 280f)
+public static PopoverScope? Begin(BibuiRuntime runtime, string id, UiNode anchor, float width = 280f)
 
 // PopoverScope
 public BibuiWidget End();
 ```
 
+`Begin` returns null while the popover is not open. Your trigger opens it with
+`runtime.OpenDropDown(id, trigger)` and closes it with `runtime.CloseDropDown(id)`.
+
 | Parameter | Meaning |
 |---|---|
-| `id` | The popover's dropdown root. |
-| `anchor` | The box it opens under, 8 px below and centred on it, where it was drawn last frame. |
+| `id` | The popover's dropdown. |
+| `anchor` | The node it opens under, 8 px below and centred on it, where it was drawn last frame. |
 | `width` | The panel's width. It is as tall as its content. |
 
 ## Claims and reports
@@ -30,10 +33,13 @@ public BibuiWidget End();
 - `End()` claims `InteractionKinds.Press` for the panel after its content, and
   returns its `BibuiWidget`. Use `Hovering` to keep a hover card open while the
   pointer is on it.
+- A press closes it when a box outside the popover and its trigger takes it, or
+  when nothing takes it.
 
 ## State the caller owns
 
-Whether it is open. Build it only in a frame it is open.
+None: the runtime keeps whether it is open. A hover card opens it while the
+pointer is over the trigger or the card, and closes it when it is over neither.
 
 ## Theme tokens
 
@@ -51,16 +57,15 @@ sealed class SharePopover
     static readonly BibuiStr Share = BibuiStr.FromStrLit("Share"u8);
     static readonly byte[] Body = "Anyone with the link can view."u8.ToArray();
 
-    bool _open;   // the caller's state
-
     public UiNode Build(BibuiRuntime runtime)
     {
         var trigger = Button.Build(runtime, "share", Share);
-        if (trigger.Clicked) _open = !_open;
+        if (trigger.Clicked)
+            if (runtime.IsDropDownOpen("share-popover")) runtime.CloseDropDown("share-popover");
+            else runtime.OpenDropDown("share-popover", trigger.Node);
 
-        if (_open)
+        if (Popover.Begin(runtime, "share-popover", trigger.Node) is { } popover)
         {
-            var popover = Popover.Begin(runtime, "share-popover", (Box)trigger.Node);
             runtime.Text(Body, ComponentSize.Sm, TextColor.Secondary);
             popover.End();
         }

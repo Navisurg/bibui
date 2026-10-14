@@ -70,23 +70,37 @@ static partial class IconNameTests
             Check(string.Join(' ', names) == expected, $"found [{string.Join(' ', names)}], expected [{expected}]");
         });
 
+        run("Icon names: the scan reads the names an app registers with Icons.Register", () =>
+        {
+            const string source = """
+                Icons.Register("t-reg-a", "M4 12h16");
+                Icons.Register(name: "t-reg-b", svgPathData: "M4 12h16");
+                Other.Register("not-an-icon", "x");
+                """;
+            string got = string.Join(' ', ScanRegistered(source).Order());
+            Check(got == "t-reg-a t-reg-b", $"found [{got}]");
+        });
+
         run("Icon names: every icon name the repository's code spells out is registered", () =>
         {
             string root = RepoRoot();
             var unknown = new List<string>();
             int found = 0;
-            foreach (string path in ScannedDirs(root))
+            var files = ScannedDirs(root)
+                .SelectMany(path => Directory.EnumerateFiles(path, "*.cs", SearchOption.AllDirectories))
+                .Where(file => !IsGenerated(file) && !file.EndsWith(nameof(IconNameTests) + ".cs", StringComparison.Ordinal))
+                .Select(file => (File: file, Text: File.ReadAllText(file)))
+                .ToList();
+            // An app's own icons are registered at its start-up, which this
+            // process never runs: a name some code registers counts as known.
+            var registered = new HashSet<string>(files.SelectMany(f => ScanRegistered(f.Text)), StringComparer.OrdinalIgnoreCase);
+            foreach (var (file, text) in files)
             {
-                foreach (string file in Directory.EnumerateFiles(path, "*.cs", SearchOption.AllDirectories))
+                foreach (var (name, offset) in Scan(text))
                 {
-                    if (IsGenerated(file) || file.EndsWith(nameof(IconNameTests) + ".cs", StringComparison.Ordinal)) continue;
-                    string text = File.ReadAllText(file);
-                    foreach (var (name, offset) in Scan(text))
-                    {
-                        found++;
-                        if (!Icon.IsKnown(name))
-                            unknown.Add($"{Path.GetRelativePath(root, file)}:{LineOf(text, offset)} \"{name}\"");
-                    }
+                    found++;
+                    if (!Icon.IsKnown(name) && !registered.Contains(name))
+                        unknown.Add($"{Path.GetRelativePath(root, file)}:{LineOf(text, offset)} \"{name}\"");
                 }
             }
             Check(found >= 50, $"the scan found only {found} icon names; it has stopped reading something");
@@ -133,6 +147,19 @@ static partial class IconNameTests
     //      that parameter's position (a helper such as Entry("Settings", "settings"));
     //   5. a static readonly array of tuples with an element called Icon, at
     //      that element's place in each row.
+
+    // Names an app registers: the first literal of each Icons.Register call.
+    internal static IEnumerable<string> ScanRegistered(string text)
+    {
+        var found = new List<(string, int)>();
+        foreach (Match call in CallStart().Matches(text))
+        {
+            if (call.Groups["qualifier"].Value != "Icons" || call.Groups["method"].Value != "Register") continue;
+            if (TryArguments(text, call.Index + call.Length - 1, out var args) && args.Count > 0)
+                Literals(args[0], found);
+        }
+        return found.Select(f => f.Item1);
+    }
 
     internal static IEnumerable<(string Name, int Offset)> Scan(string text)
     {

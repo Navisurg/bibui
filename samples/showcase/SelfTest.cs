@@ -93,6 +93,23 @@ internal static class SelfTest
             Check(!app.SidebarWanted, "[ folds the sidebar");
         }
 
+        {
+            var app = newApp();
+            app.Live = false;
+            app.Page = Page.Targets;
+            var rt = Mount(backend(), app, 1440, 900);
+            Frames(rt, 3);
+            string row = "row-" + app.Selected;
+            string other = Array.Find(Data.Targets, t => t.Id != app.Selected)!.Id;
+
+            RightClick(rt, row);
+            Check(rt.IsDropDownOpen("row-menu") && app.MenuFor == app.Selected, "a right press on a row opens its menu");
+            RightClick(rt, "row-" + other, across: 0.02f);   // left of the open menu, which opened mid-row
+            Check(rt.IsDropDownOpen("row-menu") && app.MenuFor == other, "a right press on another row moves it there");
+            Key(rt, Bibui.Key.Escape);
+            Check(!rt.IsDropDownOpen("row-menu"), "Escape closes the menu");
+        }
+
         if (failures.Count > 0)
         {
             Console.WriteLine($"{failures.Count} failed.");
@@ -117,6 +134,15 @@ internal static class SelfTest
     private static void Click(BibuiRuntime rt, string id)
     {
         rt.DispatchClick(id);
+        Frames(rt, 2);
+    }
+
+    private static void RightClick(BibuiRuntime rt, string id, float across = 0.5f)
+    {
+        var box = (Box)rt.FindById(id)!;
+        float x = box.Rect.X + box.Extent.X * across, y = box.Rect.Y + box.Extent.Y / 2f;
+        rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Right, X = x, Y = y });
+        rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Right, X = x, Y = y });
         Frames(rt, 2);
     }
 

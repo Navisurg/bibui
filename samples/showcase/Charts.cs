@@ -9,25 +9,20 @@ namespace Showcase;
 /// <summary>
 /// Charts drawn straight onto the canvas through <see cref="DrawContext"/>.
 /// A draw callback runs at paint time, after layout, so it knows the rect it
-/// fills; the colours it needs are resolved from the theme while the frame is
-/// built, because a callback is handed no theme of its own.
+/// fills, and resolves the theme colours it needs there too
+/// (<see cref="DrawContext.Resolve(UiColor)"/>), so a theme changed between
+/// build and paint is followed.
 /// </summary>
 internal static class Charts
 {
-    /// <summary>
-    /// A theme colour as the canvas wants it, resolved against the theme in
-    /// force while the frame is built: a callback is handed no theme.
-    /// </summary>
-    public static Rgba Resolve(BibuiRuntime rt, UiColor color) => DrawContext.Color(color.Resolve(rt.Theme.Colors));
-
     /// <summary>A minimal line with a soft fill under it and a dot at its newest value.</summary>
     public static Box Sparkline(BibuiRuntime rt, float[] values, UiColor color)
     {
-        Rgba c = Resolve(rt, color);
         return new Box
         {
             Draw = ctx =>
             {
+                Rgba c = ctx.Resolve(color);
                 var r = ctx.Logical;
                 (float min, float max) = Range(values, 0.15f);
                 Span<(float X, float Y)> pts = stackalloc (float, float)[values.Length];
@@ -49,9 +44,8 @@ internal static class Charts
     /// <summary>
     /// A wide area chart: dashed grid, a gradient under a two-pixel line, a
     /// pulsing head at the newest reading, and a crosshair where the pointer is.
-    /// The retained box takes the press, so it knows when it is hovered; the
-    /// picture is a plain box inside it, because only a box made with
-    /// <c>new</c> can carry a draw callback.
+    /// The retained box takes the press, so it knows when it is hovered, and
+    /// draws the picture itself.
     /// </summary>
     public static (Box Node, int? Hover) AreaChart(BibuiRuntime rt, string id, Series s, UiColor color)
     {
@@ -65,49 +59,43 @@ internal static class Charts
             hover = (int)MathF.Round(f * (s.Values.Length - 1));
         }
 
-        Rgba line = Resolve(rt, color);
-        Rgba grid = Resolve(rt, UiColor.Border);
-        Rgba text = Resolve(rt, UiColor.TextSecondary);
-        Rgba surface = Resolve(rt, UiColor.Surface);
         int? h = hover;
-        bool reduced = rt.Theme.Motion.Easing == Bibui.Theming.MotionEasing.None;
-
-        var plot = new Box
+        host.Draw = ctx =>
         {
-            Draw = ctx =>
+            bool reduced = ctx.Theme.Motion.Easing == Bibui.Theming.MotionEasing.None;
+            Rgba line = ctx.Resolve(color);
+            Rgba grid = ctx.Resolve(UiColor.Border);
+            Rgba text = ctx.Resolve(UiColor.TextSecondary);
+            Rgba surface = ctx.Resolve(UiColor.Surface);
+            var r = ctx.Logical;
+            for (int t = 0; t <= s.Ticks; t++)
             {
-                var r = ctx.Logical;
-                for (int t = 0; t <= s.Ticks; t++)
-                {
-                    float y = r.Top + r.Height * t / s.Ticks;
-                    ctx.DrawEdge(r.Left, y, r.Right, y, 1f, grid, dashed: t > 0 && t < s.Ticks);
-                }
+                float y = r.Top + r.Height * t / s.Ticks;
+                ctx.DrawEdge(r.Left, y, r.Right, y, 1f, grid, dashed: t > 0 && t < s.Ticks);
+            }
 
-                Span<(float X, float Y)> pts = stackalloc (float, float)[s.Values.Length];
-                for (int k = 0; k < s.Values.Length; k++)
-                    pts[k] = (r.Left + r.Width * k / (s.Values.Length - 1),
-                              r.Bottom - r.Height * Math.Clamp((s.Values[k] - s.Min) / (s.Max - s.Min), 0f, 1f));
-                ctx.DrawFilledPathGradient(pts, r.Top, r.Bottom, line.WithAlpha(110));
-                ctx.DrawPolyline(pts, line, 2f);
+            Span<(float X, float Y)> pts = stackalloc (float, float)[s.Values.Length];
+            for (int k = 0; k < s.Values.Length; k++)
+                pts[k] = (r.Left + r.Width * k / (s.Values.Length - 1),
+                          r.Bottom - r.Height * Math.Clamp((s.Values[k] - s.Min) / (s.Max - s.Min), 0f, 1f));
+            ctx.DrawFilledPathGradient(pts, r.Top, r.Bottom, line.WithAlpha(110));
+            ctx.DrawPolyline(pts, line, 2f);
 
-                // The newest reading breathes: a ring that grows and fades once a second.
-                var (hx, hy) = pts[^1];
-                float pulse = reduced ? 0f : ctx.Sawtooth(AnimKey.For(id, "pulse"), 1.6f);
-                float pr = 4f + 10f * pulse;
-                ctx.DrawArc(hx, hy, pr, 2f, line.WithAlpha((byte)(170 * (1f - pulse))), 0f, 360f);
-                ctx.DrawRRect(hx - 4f, hy - 4f, 8f, 8f, 4f, line, surface, 2f);
+            // The newest reading breathes: a ring that grows and fades once a second.
+            var (hx, hy) = pts[^1];
+            float pulse = reduced ? 0f : ctx.Sawtooth(AnimKey.For(id, "pulse"), 1.6f);
+            float pr = 4f + 10f * pulse;
+            ctx.DrawArc(hx, hy, pr, 2f, line.WithAlpha((byte)(170 * (1f - pulse))), 0f, 360f);
+            ctx.DrawRRect(hx - 4f, hy - 4f, 8f, 8f, 4f, line, surface, 2f);
 
-                if (h is { } k2)
-                {
-                    var (cx, cy) = pts[k2];
-                    ctx.DrawEdge(cx, r.Top, cx, r.Bottom, 1f, text.WithAlpha(140), dashed: true);
-                    ctx.DrawShadow(cx - 5f, cy - 5f, 10f, 10f, 5f, 0f, 0f, 12f, 2f, line.WithAlpha(200));
-                    ctx.DrawRRect(cx - 5f, cy - 5f, 10f, 10f, 5f, surface, line, 2.5f);
-                }
-            },
+            if (h is { } k2)
+            {
+                var (cx, cy) = pts[k2];
+                ctx.DrawEdge(cx, r.Top, cx, r.Bottom, 1f, text.WithAlpha(140), dashed: true);
+                ctx.DrawShadow(cx - 5f, cy - 5f, 10f, 10f, 5f, 0f, 0f, 12f, 2f, line.WithAlpha(200));
+                ctx.DrawRRect(cx - 5f, cy - 5f, 10f, 10f, 5f, surface, line, 2.5f);
+            }
         };
-        plot.FillX().FillY();
-        UiNode.PushIntoParent(host, plot);
         host.FillX().FillY();
         return (host, hover);
     }
@@ -128,12 +116,11 @@ internal static class Charts
     /// <summary>A ring gauge: a track, an arc of <paramref name="value"/> 0..1, and nothing else.</summary>
     public static Box Ring(BibuiRuntime rt, float value, UiColor color, float size)
     {
-        Rgba c = Resolve(rt, color);
-        Rgba track = Resolve(rt, UiColor.Border);
         return new Box
         {
             Draw = ctx =>
             {
+                Rgba c = ctx.Resolve(color), track = ctx.Resolve(UiColor.Border);
                 var r = ctx.Logical;
                 float cx = r.MidX, cy = r.MidY, rad = MathF.Min(r.Width, r.Height) / 2f - 4f;
                 ctx.DrawArc(cx, cy, rad, 5f, track, 0f, 360f);

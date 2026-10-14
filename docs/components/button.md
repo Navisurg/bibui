@@ -4,11 +4,13 @@ A labelled button. Solid by default: a raised fill and an edge, with the theme's
 hover and press treatments. A ghost button has no fill or edge at rest and only
 lights up under the pointer. It is as large as its label plus padding.
 
-![A button with a tooltip above it](images/tooltip-above.png)
+| Solid | Ghost | Disabled |
+|---|---|---|
+| ![button-default](images/button-default.png) | ![button-ghost](images/button-ghost.png) | ![button-disabled](images/button-disabled.png) |
 
-*Button has no fixture of its own yet. The picture above is `tooltip-above`,
-where a solid button is the tooltip's trigger. `popover-open` and
-`menu-dropdown` show it too.*
+Fixtures: `button-default`, `button-ghost` and `button-disabled`. The ghost
+button draws only its label at rest. `tooltip-above`, `popover-open` and
+`menu-dropdown` show a solid button as the trigger of an overlay.
 
 ## Build
 

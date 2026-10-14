@@ -45,7 +45,8 @@ public enum FontWeight { Regular, Bold }
 /// A standalone glyph, sized and colored independently — for placing a Lucide-style icon
 /// anywhere without borrowing another component's icon slot (e.g. a leading search glyph in a
 /// custom-composed search field, or a bare nav-item icon). Glyph names are looked up in
-/// bibui's icon set, and a name it does not have is a mistake in the build:
+/// bibui's icon set and the icons the app added with <see cref="Icons.Register"/>,
+/// and a name neither has is a mistake in the build:
 /// <c>runtime.Icon</c> throws on one in a debug build, and the fixture verifier
 /// fails a fixture that draws one. A release build draws the name's first
 /// letter in its place instead, so a slot is never silently blank and a shipped
@@ -54,7 +55,8 @@ public enum FontWeight { Regular, Bold }
 public sealed class Icon : UiComponent
 {
     /// <summary>
-    /// True when bibui's icon set has an icon called <paramref name="name"/>
+    /// True when bibui's icon set, or the app's registered icons
+    /// (<see cref="Icons.Register"/>), have an icon called <paramref name="name"/>
     /// (ignoring case). Check a name that comes from data before drawing it.
     /// </summary>
     public static bool IsKnown(string? name) => Bibui.Renderer.IconRegistry.Has(name);

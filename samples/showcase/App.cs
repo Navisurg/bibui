@@ -35,7 +35,7 @@ internal sealed partial class App
     public readonly BibuiStr Search = new(64);
     public readonly TextEditState SearchEdit = new();
     public bool SearchFocused;
-    public string? MenuFor;                         // the target a context menu is open on
+    public string? MenuFor;                         // the target the context menu, row-menu, was opened on
     public float MenuX, MenuY;
     public bool SettingsOpen;
     public int SlewCount;
@@ -47,7 +47,6 @@ internal sealed partial class App
     public float Radius = 8f;
     public Density Density = Density.Default;
     public bool ReducedMotion;
-    public bool SelectOpen;
 
     public static readonly (string Hex, string Name)[] Accents =
     [
@@ -111,6 +110,8 @@ internal sealed partial class App
             Clock += rt.Dt * 20.0;   // the night runs twenty times faster than the wall clock
             rt.RequestFrame();
         }
+        // The context menu takes its own Escape, so it is built before the keys are read.
+        BuildContextMenu(rt);
         Keyboard(rt);
 
         float w = rt.SurfaceWidth, h = rt.SurfaceHeight;
@@ -119,7 +120,6 @@ internal sealed partial class App
 
         // Overlays ask first: they are on top.
         BuildSettings(rt);
-        BuildContextMenu(rt);
 
         var sidebar = Sidebar(rt, open, h);
         var main = Main(rt, w - SidebarWidth(open), h);
@@ -148,17 +148,15 @@ internal sealed partial class App
             if (SearchFocused || NoteFocused)
             {
                 // A field has the keyboard: only Escape (and Enter, in the one-line search) takes it back.
-                if (ev is { Kind: BibUiEventKind.Press, Key: Key.Escape } || SearchFocused && ev.Kind == BibUiEventKind.Submit)
+                if (ev is { IsKeyDown: true, Key: Key.Escape } || SearchFocused && ev.Kind == BibUiEventKind.Submit)
                 {
                     SearchFocused = NoteFocused = false;
                     handle.Eat();
                 }
                 continue;
             }
-            // Keys arrive as Press, or as Navigate (arrows, Home, End) and Submit (Enter)
-            // for the text fields' sake; a shortcut reads the key whatever the kind.
-            if (ev.Kind is BibUiEventKind.Text or BibUiEventKind.MouseDown or BibUiEventKind.MouseUp
-                or BibUiEventKind.MouseMove or BibUiEventKind.Scroll or BibUiEventKind.Release) continue;
+            // Any key that went down, arrows (Navigate) and Enter (Submit) included.
+            if (!ev.IsKeyDown) continue;
             bool used = true;
             switch (ev.Key)
             {
@@ -167,8 +165,7 @@ internal sealed partial class App
                     if (Page is Page.Telemetry or Page.Journal) Page = Page.Overview;
                     break;
                 case Key.Escape:
-                    if (MenuFor is not null) MenuFor = null;
-                    else if (SettingsOpen) SettingsOpen = false;
+                    if (SettingsOpen) SettingsOpen = false;
                     else used = false;
                     break;
                 case Key.Down: MoveSelection(+1); break;

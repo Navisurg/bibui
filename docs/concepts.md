@@ -206,8 +206,8 @@ a group, a pill or a spacer: anything nothing will ask about.
 
 `runtime.BoxFromId(id, claims)` gives a **retained** box: the same instance
 every frame, for as long as something keeps asking for it. Each call clears
-everything the build sets (style, children, size, claims) so that "not set this
-frame" can be expressed. A few things carry over from the frame before:
+everything the build sets (style, children, size, claims, draw callback) so
+that "not set this frame" can be expressed. A few things carry over from the frame before:
 
 - `Rect` and `Extent`, where it was drawn last frame, which is what an ask tests;
 - `HotT` and `ActiveT`, how hovered and how pressed it is, eased over frames;
@@ -240,6 +240,14 @@ using (runtime.PushParent(card))
     runtime.Text(subtitle, ComponentSize.Sm, TextColor.Secondary);
 }
 ```
+
+The two forms mix. A node has one parent, and pushing it somewhere else
+(`Row`, `Column`, `CentredY`, `UiNode.PushIntoParent`) **moves** it: it is
+taken out of the parent it was linked under and appended to the new one. So
+inside a `PushParent` scope, `Row(runtime.Text(title), Spring(), badge)` makes
+the text under the parent in scope and then moves it into the row; push the
+row where it belongs. Pushing a node into the parent it is already in moves it
+to the end. Pushing a node into one of its own descendants throws.
 
 Every `Push…` returns a scope to dispose. If a scope is still open when the
 build returns, the runtime throws rather than linking next frame's boxes under
@@ -323,11 +331,13 @@ this frame.
 
 ### Dropdowns are the exception
 
-`runtime.OpenDropDown(id)` returns a floating root to build a dropdown into.
-You build it inline, wherever its trigger is. When the build returns, the
-runtime links it as the last child of the tree, so it is painted over
-everything. You place it yourself, usually under the trigger's rectangle from
-last frame.
+A dropdown is open from `runtime.OpenDropDown(id, anchor)` until
+`runtime.CloseDropDown(id)` or a press dismisses it. The anchor is the node it
+belongs to, its trigger usually. While it is open, `runtime.BeginDropDown(id)`
+returns a floating root to build it into, and null when it is not. You build
+it inline, wherever its trigger is. When the build returns, the runtime links
+it as the last child of the tree, so it is painted over everything. You place
+it yourself, usually under the trigger's rectangle from last frame.
 
 While a dropdown is open, **the rectangle it was drawn at last frame belongs to
 it**. A box that is not inside the dropdown gets no pointer event and no hover
@@ -336,19 +346,95 @@ before it. Its rows ask as usual. The root should ask after them, to take what
 they left, so that a press on its padding stops there:
 
 ```csharp
-SelectScope select = Select.Begin(runtime, "fruit", current, open: fruitOpen);
+SelectScope select = Select.Begin(runtime, "fruit", current);
 if (select.Open)
 {
     foreach (var (id, label) in fruits)
-        if (Select.Item(runtime, id, label, selected: id == chosen).Clicked) { chosen = id; fruitOpen = false; }
+        if (Select.Item(runtime, id, label, selected: id == chosen).Clicked) { chosen = id; select.Close(); }
 }
-if (select.End().Toggled) fruitOpen = !fruitOpen;
+select.End();
 ```
 
-`Select.Begin` and `End` do all of this: they open the dropdown under the
-trigger, push it as the parent for the rows, and ask for the root last.
+`Select.Begin` and `End` do all of this: the trigger's click opens the list or
+closes it, and they begin the list under the trigger, push it as the parent
+for the rows, and ask for the root last.
+
+Whether a box is inside the dropdown is decided **when it asks**, by walking
+its parents. So a control in a dropdown (or a `Dialog` or a `Menu`, which are
+dropdowns) must already be linked under it at the moment it asks. Both forms
+work there:
+
+- **Statement form** is always right: build under the dropdown, or under a box
+  pushed inside it, and every control is linked there as it is built.
+- **Expression form** works too, because a component asks inside its `Build`,
+  while it is still linked under the parent in scope; `Row`, `CentredY` and
+  the rest move it afterwards. Keep the dropdown (or something in it) as the
+  parent in scope while the arguments are built, and push the result inside
+  the dropdown: `UiNode.PushIntoParent(panel, Row(label, Spring(), Button.Build(...)))`.
+
+What that rules out is asking a box **after** it has been moved into a row
+or column that is not yet linked under the dropdown, for example acquiring a
+box with `BoxFromId`, putting it in a `Row`, then calling `InteractionsFor`
+before the row is pushed in: at that moment the box is under a row with no
+parent, outside the dropdown, and inside the dropdown's rectangle it gets
+nothing. Ask before you rearrange, or push the row in first.
 `runtime.OpenToolTip()` is linked last too, after the dropdowns, but it claims
 nothing and covers nothing: the pointer goes through a tooltip.
+
+A press dismisses an open dropdown in two ways, both in the runtime:
+
+- **A box takes it** that is not under the dropdown's root or its anchor. The
+  runtime closes the dropdown in `InteractionsFor`, as the box takes the press,
+  so the press still reaches the box. Under is the same walk up the parents as
+  above, so the trigger's own press leaves the dropdown to the trigger.
+- **Nothing takes it.** After the build, a press no box took closes every open
+  dropdown but those opened during the build, which came after it.
+
+What is said last in a frame stands. The box that took the press closed the
+dropdown before its caller read what it reported, so a caller that opens the
+dropdown on that press opens it again: a right press on another row closes a
+context menu and opens it there. A dropdown opened in every frame it is built
+is never dismissed, which is how `Dialog` stays up. One that is not begun in a
+frame, and not opened in it, closes.
+
+Escape is a key, not a press, so the runtime does not close dropdowns on it.
+`Menu` eats an Escape no one has eaten and closes itself; any other dropdown
+leaves Escape to the app.
+
+### Keys
+
+Keys are not claimed or asked for. They are the frame's events, read from
+`runtime.UnconsumedEvents`, and whoever handles one eats it so nothing after
+it sees it. A focused text field eats the keys it takes; what is left is the
+app's.
+
+The window translates each key down into an intent for the text fields, so
+its `Kind` depends on the key: `Navigate` for the arrows, Home and End (and
+Ctrl+A), `Submit` for Enter, `Edit` for Backspace, Delete, Ctrl+X and Ctrl+V,
+`Copy` for Ctrl+C, and `Press` for everything else. A shortcut handler
+filters on **`BibUiEvent.IsKeyDown`**, true for all of them, and then reads
+`Key`; filtering on `Press` alone never sees ↑, ↓ or Enter.
+
+A printable key arrives twice: the key down, and a `Text` event with the
+character it typed, which is not a key down. A key that gives a field the
+keyboard must eat both, or the field, focused by the time the `Text` is read,
+types it. The key down comes first in the same frame's events:
+
+```csharp
+bool focusedNow = false;
+foreach (var handle in runtime.UnconsumedEvents)
+{
+    var ev = handle.Event;
+    if (ev is { Kind: BibUiEventKind.Text, Char: '/' } && focusedNow) { handle.Eat(); continue; }
+    if (!ev.IsKeyDown || searchFocused) continue;
+    switch (ev.Key)
+    {
+        case Key.Slash: searchFocused = focusedNow = true; handle.Eat(); break;
+        case Key.Down:  MoveSelection(+1); handle.Eat(); break;
+        case Key.Enter: Open(); handle.Eat(); break;
+    }
+}
+```
 
 ## Hot, active and animation
 
@@ -392,6 +478,57 @@ Box sidebar = runtime.Box().Px(width: 48f + 192f * open).FillY();
 - While anything is still moving, the runtime keeps asking the host for
   frames. When everything has arrived, the loop goes idle.
 - A value nobody asks for in a frame stops moving, and is forgotten soon after.
+
+### Transitions, presence and transforms
+
+Exponential approach suits a hover. For motion with a start and an end, give
+`Animate` a `Transition`:
+
+```csharp
+// A fixed time along a named curve; a spring that keeps its speed when retargeted.
+float slide = runtime.Animate("view", "x", target, Transition.Timed(0.22f, Easing.Emphasized));
+Vector2 bar = runtime.Animate("selection", "at", new Vector2(0f, row * 32f), Transition.OnSpring(Spring.Snappy));
+
+// A colour crossfaded in Oklab (a theme token follows a theme swap).
+UiColor bg = runtime.AnimateColor(id, "bg", selected ? UiColor.Accent : UiColor.SurfaceRaised);
+```
+
+`Easing` has the CSS and Material curves (`EaseOut`, `Standard`,
+`Emphasized`, …) or any `cubic-bezier`; `Spring.FromResponse(seconds,
+dampingRatio)` makes a spring by feel. `Transition.Delay` holds a value still
+before it moves, counted again from every new target.
+
+Something that has to stay on screen while it leaves asks `Presence` every
+frame, present or not, and builds while it is `Mounted`:
+
+```csharp
+var palette = runtime.Presence("palette", state.PaletteOpen);
+if (palette.Mounted)
+{
+    Box panel = BuildPalette();
+    PresenceStyle.FadeDown(16f).ApplyTo(panel.Style, palette.Progress);
+}
+```
+
+`PresenceList` does the same for the rows of a list: removed rows stay, in
+place and with their item, while they collapse, and added rows can stagger in.
+`CollapseBox` gives a row the height its presence says:
+
+```csharp
+foreach (var row in runtime.PresenceList("inbox", messages, m => m.Id, stagger: 0.02f))
+{
+    Box holder = runtime.CollapseBox("row-" + row.Key, row.Progress).FillX();
+    using (runtime.PushParent(holder)) BuildRow(row.Item, interactive: !row.Exiting);
+}
+```
+
+`Style.Translate`, `Scale`, `Rotate` and `TransformOrigin` move a node and
+its subtree when it is painted, not when it is laid out, so nothing around it
+moves; the pointer finds it where it is drawn. `runtime.SetTheme(theme,
+transition)` crossfades every colour from the old theme to the new one.
+
+`runtime.ReducedMotion` (or `BIBUI_REDUCED_MOTION=1`) makes all of it, hover
+and the renderer's own eased values included, arrive in one step.
 
 If your own state changes outside a build (a timer, a network reply), call
 `runtime.RequestFrame()`. It is safe from any thread, and it wakes a window
@@ -500,14 +637,34 @@ nothing back for the next frame. So the picture is a pure function of the tree
 and the theme. Given the same tree, theme, surface size and scale factor, a
 frame is the same image, byte for byte, every time.
 
-**Damage tracking.** With `runtime.DamageTracking = true` (or
-`BIBUI_DAMAGE=1`), `runtime.RenderTo(surface)` records the frame instead of
-drawing it straight away. It compares the record with the frame the surface
-already holds and repaints only the rectangles that differ.
-`runtime.LastDamage` tells the host what to present. The result is
-byte-identical to a full repaint, and the runtime falls back to a full repaint
-when more than half the surface changed. See [Performance](performance.md) for
-measurements.
+### Custom drawing
+
+A box can paint itself: set `Box.Draw` to a callback, and the painter calls it
+with a `DrawContext` after the box's decoration and children, inside the box's
+rect. `Draw` is build state like any other. Set it on the box the build
+acquired, retained or pooled. The next `BoxFromId` or `Box()` clears it, so a
+box draws only for as long as its build keeps setting the callback. A chart
+that must know when it is hovered draws on its own retained box:
+
+```csharp
+Box chart = runtime.BoxFromId("chart", InteractionKinds.LeftPress);
+Interaction i = runtime.InteractionsFor(chart);
+chart.FillX().FillY();
+chart.Draw = ctx =>
+{
+    var r = ctx.Logical;                          // the box's rect, logical px
+    Rgba line = ctx.Resolve(UiColor.Accent);      // a token, resolved at paint
+    ctx.DrawPolyline(Points(r), line, 2f);
+    if (i.Hovering) ctx.DrawEdge(i.X, r.Top, i.X, r.Bottom, 1f, ctx.Resolve(UiColor.Border), dashed: true);
+};
+```
+
+Resolve colours in the callback with `ctx.Resolve(UiColor)`, not while
+building. `ctx.Theme` is the theme the frame is painted in, the same one the
+painter resolves every built-in node against, so a callback follows a theme
+that changed between build and paint, and `WithAlpha` applies as it does to a
+`Style` colour. Everything a callback draws goes through the same recorded
+canvas as the built-in nodes, so damage tracking sees it like any other paint.
 
 ## Hosts and raster backends
 
@@ -555,6 +712,18 @@ runtime.Mount(() => BuildUi(runtime));
 if (WaylandPlatformHost.IsSupported)
     new BibuiWindow(runtime, new WaylandPlatformHost(new WaylandHostOptions { AppId = "my-app" })).Run("My app");
 ```
+
+**Damage tracking.** The managed rasterizer can rasterise only what changed.
+With `new ManagedRasterBackend { DamageTracking = true }` (or `BIBUI_DAMAGE=1`),
+the backend records each frame the painter issues instead of drawing it,
+compares it draw by draw with the frame before, and rasterises only the
+rectangles that differ onto a surface that still holds an earlier frame, such
+as the Wayland host's shared-memory buffers. Nothing above the rasterizer
+changes: every frame is still built, laid out and painted whole, and the host
+still tells the compositor the whole surface changed. The result is
+byte-identical to a full repaint, and past half the surface the whole frame is
+drawn. Skia always draws whole frames. See [Performance](performance.md) for
+measurements.
 
 A Wayland host can also draw with Skia, and a headless program (tests, a
 command-line tool that renders PNGs) needs no host at all. It calls

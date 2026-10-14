@@ -12,9 +12,14 @@ namespace Bibui.Runtime;
 /// a trigger — and a context menu — opened where the right button went down:
 /// where it opens is the caller's to say.
 ///
-/// <para>It owns nothing. The caller keeps whether it is open, opens it only
-/// in a frame it is, and applies what the items report: an item clicked is
-/// typically the caller's cue to act and close it.</para>
+/// <para>It is a dropdown of the runtime's, open from
+/// <see cref="BibuiRuntime.OpenDropDown"/> until
+/// <see cref="BibuiRuntime.CloseDropDown"/> or a press that dismisses it: a
+/// press a box outside it takes, or one nothing takes. A dropdown menu's
+/// trigger opens it with itself as the anchor, so the trigger's own press
+/// leaves it to the trigger; a context menu opens on the press that wants it
+/// there, and so moves rather than closes. The caller applies what the items
+/// report: an item clicked is typically its cue to act and close the menu.</para>
 /// </summary>
 public static class Menu
 {
@@ -30,17 +35,18 @@ public static class Menu
     private const float RuleGap = 2f;
 
     /// <summary>
-    /// Opens the menu named <paramref name="id"/> at (<paramref name="x"/>,
-    /// <paramref name="y"/>) in window coordinates, <paramref name="width"/> px
-    /// wide and as tall as its rows, and pushes it, so what is built until
-    /// <see cref="MenuScope.End"/> goes into it.
+    /// Begins the menu named <paramref name="id"/>, when it is open, at
+    /// (<paramref name="x"/>, <paramref name="y"/>) in window coordinates,
+    /// <paramref name="width"/> px wide and as tall as its rows, and pushes it,
+    /// so what is built until <see cref="MenuScope.End"/> goes into it. Null
+    /// when it is not open.
     /// </summary>
-    public static MenuScope Begin(BibuiRuntime runtime, string id, float x, float y, float width = 220f)
+    public static MenuScope? Begin(BibuiRuntime runtime, string id, float x, float y, float width = 220f)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
 
-        Box list = runtime.OpenDropDown(id);
+        if (runtime.BeginDropDown(id) is not { } list) return null;
         list.SizeX = SemanticSize.Pixels(width);
         list.SizeY = SemanticSize.ChildrenSum();
         list.At(x, y);
@@ -56,11 +62,13 @@ public static class Menu
     }
 
     /// <summary>
-    /// Opens the menu named <paramref name="id"/> under <paramref name="anchor"/>,
-    /// where it was drawn last frame: left edges aligned, <paramref name="gap"/>
-    /// px below it. What a dropdown menu does with its trigger.
+    /// Begins the menu named <paramref name="id"/>, when it is open, under
+    /// <paramref name="anchor"/>, where it was drawn last frame: left edges
+    /// aligned, <paramref name="gap"/> px below it. What a dropdown menu does
+    /// with its trigger, which opens it with
+    /// <c>runtime.OpenDropDown(id, trigger)</c>. Null when it is not open.
     /// </summary>
-    public static MenuScope BeginBelow(BibuiRuntime runtime, string id, Box anchor, float width = 220f, float gap = 4f)
+    public static MenuScope? BeginBelow(BibuiRuntime runtime, string id, UiNode anchor, float width = 220f, float gap = 4f)
     {
         ArgumentNullException.ThrowIfNull(anchor);
         return Begin(runtime, id, anchor.Rect.X, anchor.Rect.Y + anchor.Extent.Y + gap, width);
@@ -167,12 +175,21 @@ public readonly struct MenuScope
     /// <summary>
     /// Stops building into the menu and returns it and what happened to it.
     /// The list asks after its rows, so a press on its padding or a rule stops
-    /// there rather than reaching what is beneath.
+    /// there rather than reaching what is beneath, and dismisses nothing. An
+    /// Escape no one has eaten closes the menu, and is eaten, so it does not
+    /// also close what is under it.
     /// </summary>
     public BibuiWidget End()
     {
         _inList.Dispose();
         _list.Claims = InteractionKinds.Press;
-        return new BibuiWidget(_list, _runtime.InteractionsFor(_list));
+        var widget = new BibuiWidget(_list, _runtime.InteractionsFor(_list));
+        foreach (var handle in _runtime.UnconsumedEvents)
+            if (handle.Event is { IsKeyDown: true, Key: Key.Escape })
+            {
+                handle.Eat();
+                _runtime.CloseDropDown(_list.Id!);
+            }
+        return widget;
     }
 }

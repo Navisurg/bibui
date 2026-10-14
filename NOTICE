@@ -11,7 +11,9 @@ texts that must travel with the material follow at the end of this file.
 1. Lucide icons (and the Feather icons Lucide derives from)
 -------------------------------------------------------------------------------
 What:     SVG path data for a subset of the Lucide icon set.
-Where:    bibui/src/Renderer/IconRegistry.cs (compiled into Bibui).
+Where:    bibui/src/Renderer/IconRegistry.cs (compiled into Bibui), and the
+          app icons the showcase registers (moon, sun, telescope,
+          thermometer, activity) in samples/showcase/AppIcons.cs.
 Licence:  ISC (Lucide); MIT for the icons Lucide derives from Feather.
           Copyright (c) Lucide Icons and Contributors
           Copyright (c) 2013-present Cole Bemis (Feather)

@@ -25,4 +25,11 @@ public sealed record FrameInput
     /// copying the value into a field of its own.
     /// </summary>
     public float Dt { get; init; }
+
+    /// <summary>
+    /// Whether this frame snaps instead of animating, from
+    /// <c>BibuiRuntime.ReducedMotion</c>: an eased value asked for here
+    /// arrives at its target on the next frame.
+    /// </summary>
+    public bool ReducedMotion { get; init; }
 }

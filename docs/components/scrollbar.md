@@ -5,8 +5,11 @@ the space before the thumb, the thumb, and the space after it. Each is a share
 of the track, taken from the view as it was last frame. Drag the thumb to put
 its centre under the pointer. Press either space to page by one view.
 
-*Scrollbar has no fixture yet, so there is no screenshot. The gallery's Scrollbar
-page shows both axes.*
+![scrollbar-scrolled: 40 rows in a 200 px view, scrolled part-way down](images/scrollbar-scrolled.png)
+
+Fixture: `scrollbar-scrolled`, a view of 40 rows scrolled 364 px down, its thumb
+about two fifths of the way along the track. The gallery's Scrollbar page shows
+both axes.
 
 ## Build
 

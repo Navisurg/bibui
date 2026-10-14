@@ -22,7 +22,6 @@ public static SelectScope Begin(
     BibuiRuntime runtime,
     string id,
     BibuiStr text,
-    bool open,
     float width = 220f,
     bool disabled = false)
 
@@ -35,16 +34,14 @@ public static BibuiWidget Item(
 
 // SelectScope
 public bool Open { get; }
-public SelectResult End();
-
-public readonly record struct SelectResult(Box Node, bool Toggled);
+public void Close();
+public Box End();
 ```
 
 | Parameter | Meaning |
 |---|---|
 | `id` | The trigger's retained box. The list is the dropdown `{id}-list`. |
 | `text` | What the trigger reads: the chosen option's label, or a placeholder. |
-| `open` | Whether to open the list this frame. |
 | `width` | The trigger's width. The list is as wide as the trigger was drawn. |
 | `disabled` | A raised, quiet trigger that swallows the press. It never opens. |
 | `Item.selected` | Draws that row raised. |
@@ -60,14 +57,14 @@ when the select is closed.
 - The list is one of the runtime's dropdowns. It is drawn over everything, and
   nothing beneath it gets a press where it was drawn. After its rows, it claims
   `InteractionKinds.Press`, so a press on its padding stops there.
-- `End()` returns a `SelectResult`. `Toggled` means the trigger was clicked this
-  frame. `Node` is the trigger, to place.
+- A click on the trigger opens the list, or closes it. A press that a box
+  outside the select takes closes it too, and so does one nothing takes.
+- `End()` returns the trigger, to place.
 
 ## State the caller owns
 
-Whether the list is open, and which value is chosen. A select never closes
-itself: close it when the trigger toggles it or an item is clicked. A press
-outside the open list does not close it yet.
+Which value is chosen. The runtime keeps whether the list is open: call
+`Close()` when you apply an item's click.
 
 ## Theme tokens
 
@@ -97,8 +94,7 @@ sealed class FruitPicker
         (BibuiStr.FromStrLit("Cherry"u8), "cherry"),
     ];
 
-    bool _open;            // the caller's state
-    string? _fruit;
+    string? _fruit;        // the caller's state
 
     public UiNode Build(BibuiRuntime runtime)
     {
@@ -106,17 +102,15 @@ sealed class FruitPicker
         foreach (var (label, value) in Fruits)
             if (value == _fruit) shown = label;
 
-        var select = Select.Begin(runtime, "fruit", shown, _open);
+        var select = Select.Begin(runtime, "fruit", shown);
         if (select.Open)
             foreach (var (label, value) in Fruits)
                 if (Select.Item(runtime, "fruit-" + value, label, selected: value == _fruit).Clicked)
                 {
                     _fruit = value;
-                    _open = false;
+                    select.Close();
                 }
-        var result = select.End();
-        if (result.Toggled) _open = !_open;
-        return result.Node;
+        return select.End();
     }
 }
 ```

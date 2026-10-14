@@ -62,7 +62,7 @@ runtime.Mount(() =>
             placeholder: S("Type here: dead keys, AltGr, held keys repeat, Ctrl+A, Ctrl+Left"));
     if (line.Pressed) typing = true;
     foreach (var handle in runtime.UnconsumedEvents)
-        if (typing && handle.Event is { Kind: BibUiEventKind.Press, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
+        if (typing && handle.Event is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
         {
             typing = false;
             handle.Eat();

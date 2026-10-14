@@ -29,19 +29,25 @@ internal static class Sky
     /// <summary>What the painter needs about one target.</summary>
     public readonly record struct Mark(float X, float Y, TargetStatus Status, float Hot, bool Selected);
 
-    /// <summary>Colours the sky is painted in, resolved while the frame was built.</summary>
-    public readonly record struct Palette(Rgba Accent, Rgba Success, Rgba Warning, Rgba Muted);
+    /// <summary>Colours the sky is painted in: tokens, resolved by the callback at paint.</summary>
+    public readonly record struct Palette(UiColor Accent, UiColor Success, UiColor Warning, UiColor Muted);
 
-    /// <summary>The box that paints the sky into its own rect.</summary>
-    public static Box Canvas(Dome dome, double lst, Mark[] marks, (float X, float Y)? slewFrom, Palette pal, bool grid, float radius, bool reduced)
-        => new()
-        {
-            Draw = ctx => Paint(ctx, dome, lst, marks, slewFrom, pal, grid, radius, reduced),
-        };
+    // The palette as the canvas wants it, resolved against the theme the frame is painted in.
+    private readonly record struct Colours(Rgba Accent, Rgba Success, Rgba Warning, Rgba Muted);
 
-    private static void Paint(DrawContext ctx, Dome d, double lst, Mark[] marks, (float X, float Y)? slewFrom, Palette pal,
+    /// <summary>
+    /// Makes <paramref name="box"/> paint the sky into its own rect. A box the
+    /// build acquired: its draw callback is cleared with the rest of its build
+    /// state when it is acquired again next frame.
+    /// </summary>
+    public static void PaintOn(Box box, Dome dome, double lst, Mark[] marks, (float X, float Y)? slewFrom, Palette pal, bool grid, float radius, bool reduced)
+        => box.Draw = ctx => Paint(ctx, dome, lst, marks, slewFrom, pal, grid, radius, reduced);
+
+    private static void Paint(DrawContext ctx, Dome d, double lst, Mark[] marks, (float X, float Y)? slewFrom, Palette palette,
         bool grid, float radius, bool reduced)
     {
+        var pal = new Colours(ctx.Resolve(palette.Accent), ctx.Resolve(palette.Success),
+            ctx.Resolve(palette.Warning), ctx.Resolve(palette.Muted));
         var L = ctx.Logical;
         float s = ctx.Scale;
         float R = d.R;

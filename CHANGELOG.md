@@ -24,8 +24,10 @@ before it was published.
 - **Interactions are asked for, not called back.** A box claims what it takes
   (`InteractionKinds`) and the holder asks with
   `runtime.InteractionsFor(box)`. Asking consumes, so the order boxes ask in
-  is their z-order. Overlays (menu, popover, tooltip, dialog) open with
-  `runtime.OpenDropDown(id)` and are drawn last.
+  is their z-order. Overlays (menu, popover, select, dialog) open with
+  `runtime.OpenDropDown(id, anchor)`, are built with
+  `runtime.BeginDropDown(id)` and drawn last, and close on a press that a box
+  outside them and their anchor takes, or that nothing takes.
 - **Components are functions.** `Button.Build`, `Switch.Build`,
   `Slider.Build`, `Dialog.Begin` and the rest compose boxes and return what
   happened (`BibuiWidget`). They own no state, and colours are theme tokens
@@ -85,6 +87,27 @@ before it was published.
 
 ### Added
 
+- `Icons.Register(name, svgPathData)`: an app adds icons of its own at
+  start-up, drawn by `runtime.Icon` and known to `Icon.IsKnown` like the
+  built-in Lucide set (24×24 viewBox, stroke 2, round caps and joins). The
+  path is checked when it is registered; a built-in name, or the same name
+  with other path data, throws. `Icons.Names` lists every icon, built-in and
+  registered.
+- Custom drawing on any box: `Box.Draw` is settable, so a retained box
+  (`BoxFromId`) can draw as well as be asked about, and it is cleared with
+  the rest of the build state when the box is acquired again.
+  `DrawContext.Theme` and `DrawContext.Resolve(UiColor)` resolve theme tokens
+  at paint, so a callback follows the theme the frame is painted in.
+- Motion: `runtime.Animate` with a `Transition` — timed along an `Easing`
+  (cubic-bezier, CSS and Material presets) or on a `Spring` that keeps its
+  velocity across targets, with a delay — for floats and `Vector2`;
+  `runtime.AnimateColor`, crossfading in Oklab (`ColorMix`); `Presence` and
+  `PresenceList` for things that stay drawn while they leave, with
+  `PresenceStyle` and `CollapseBox`; paint-time transforms on `Style`
+  (`Translate`, `Scale`, `Rotate`, `TransformOrigin`) that the pointer test
+  follows; `SetTheme(theme, transition)` crossfades; and
+  `runtime.ReducedMotion` (`BIBUI_REDUCED_MOTION=1`). Hover and press now
+  blend in Oklab.
 - `Bibui.Platform.Wayland`: a window host on raw Wayland (xdg-shell,
   wl_shm buffers, frame-callback pacing, fractional scale, cursor shapes,
   clipboard, key repeat), with no GLFW or OpenGL.
@@ -94,8 +117,9 @@ before it was published.
   the Wayland host, an app publishes with Native AOT as one file with no
   SkiaSharp.
 - A managed PNG encoder and decoder.
-- Damage tracking (`BibuiRuntime.DamageTracking`), which repaints only what
-  changed.
+- Damage tracking in the managed rasterizer
+  (`ManagedRasterBackend.DamageTracking`), which rasterises only what changed
+  and leaves every layer above it drawing whole frames.
 - `ThemeRegistry`: one table of theme names, open to themes registered from
   outside bibui.
 - Themes as JSON files with `extends` (`ThemeFile`,

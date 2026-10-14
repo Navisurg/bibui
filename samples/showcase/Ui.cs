@@ -93,27 +93,6 @@ internal static class Ui
         return pill;
     }
 
-    /// <summary>
-    /// A column the height of the parent in scope, with what <paramref name="build"/>
-    /// makes centred down it. Statement form: what is built links under the
-    /// parent in scope, as everything inside a dialog or a dropdown must.
-    /// (Expression forms there link a node twice without a word.)
-    /// </summary>
-    public static Box VCentre(BibuiRuntime rt, Action build)
-    {
-        var col = rt.Box();
-        col.ChildLayoutAxis = LayoutAxis.Y;
-        col.SizeX = SemanticSize.ChildrenSum();
-        col.SizeY = SemanticSize.ParentPct(1f);
-        using (rt.PushParent(col))
-        {
-            Spring(col);
-            build();
-            Spring(col);
-        }
-        return col;
-    }
-
     /// <summary>A hairline across the parent.</summary>
     public static Box Rule(BibuiRuntime rt) =>
         rt.Box().FillX().Px(height: 1f).Styled(new Style { BackgroundColor = UiColor.Border });

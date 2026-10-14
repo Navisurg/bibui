@@ -82,15 +82,17 @@ public sealed partial class BibuiRuntime
     /// with <see cref="PushFontSize"/>, or Md — so an icon beside a label is the
     /// label's size. It is as large as its <see cref="Icon.Size"/>, which may be
     /// changed on the icon that came back; the size stacks do not reach it.
-    /// A name bibui's icon set does not have (<see cref="Bibui.Icon.IsKnown"/>)
-    /// throws in a debug build; a release build draws its first letter.
+    /// The name is one of bibui's icons or one the app registered with
+    /// <see cref="Bibui.Icons.Register"/>. A name neither has
+    /// (<see cref="Bibui.Icon.IsKnown"/>) throws in a debug build; a release
+    /// build draws its first letter.
     /// </summary>
     public Icon Icon(string name, float? size = null)
     {
         ArgumentNullException.ThrowIfNull(name);
 #if DEBUG
         if (!Bibui.Icon.IsKnown(name))
-            throw new ArgumentException($"There is no icon called '{name}' (see Icon.IsKnown).", nameof(name));
+            throw new ArgumentException($"There is no icon called '{name}' (see Icon.IsKnown; an app adds its own with Icons.Register at start-up).", nameof(name));
 #endif
         lock (_syncRoot)
         {

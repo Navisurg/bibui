@@ -79,6 +79,7 @@ start. `--help` lists everything.
 | A `Dialog` sheet built in statement form, with `ToggleGroup`, `Slider`, `RadioGroup`, `Switch`, `Checkbox`, `Select`, `KeyboardShortcut`, `Tooltip` | `Settings.cs` |
 | `Expander`, `Separator`, `Badge`, `Avatar`, `Progress`, a multi-line `TextField` | `Shell.cs`, `Settings.cs` (Journal) |
 | State owned by the app, keyboard shortcuts, no callbacks | `App.cs` |
+| Icons of the app's own (moon, sun, telescope, thermometer, activity), registered at start-up with `Icons.Register` | `AppIcons.cs`, `Program.cs` |
 
 Each piece is a plain function that composes runtime boxes, as bibui's own
 components are. The app owns all its state; the build reads it, asks the boxes
@@ -88,19 +89,8 @@ it holds what happened, and writes the answers back.
 
 Each is worked around in the open where the code says so:
 
-- **Double linking.** A node built while a parent is in scope is linked there, so
-  `Row(...)`/`CentredY(...)` link it a second time with no error. Inside the
-  Appearance sheet everything is built in statement form, through `Ui.VCentre`.
-- **Drawing in a retained box.** `Box.Draw` is init-only, so a retained (askable) box cannot draw:
-  each chart is a retained host with a new drawn box inside it every frame. A
-  draw callback gets no theme, so colours are resolved while building.
 - **Rounded backdrop blur.** `BackdropBlur` ignores `CornerRadius`; zoom into the glass card's
   corners and the blur shows square.
-- **Keys and menus.** Arrows reach an app as `Navigate` and Enter as `Submit`, so
-  shortcuts read the key whatever the kind; a menu does not report a press
-  outside it, so the app reads the frame's events to close it.
-- **App icons.** Apps cannot register icons, hence a sunrise for light mode and a
-  star for dark.
 - **Scrim and token groups.** The dialog scrim is a fixed near-black, heavy in light mode; token
   groups are not records, so reduced motion copies `MotionTokens` field by field.
 - **Faces.** No italic face, no embedded monospace face, so code

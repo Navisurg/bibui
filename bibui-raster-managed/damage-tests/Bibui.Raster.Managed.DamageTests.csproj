@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Damage tracking in the managed raster backend (ManagedRasterBackend.DamageTracking):
+    scripted apps drawn on two backends, one rasterising only what changed and
+    one drawing whole frames, must agree byte for byte on every frame.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Raster.Managed.DamageTests</AssemblyName>
+    <RootNamespace>Bibui.Raster.Managed.DamageTests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../backend/Bibui.Raster.Managed.Backend.csproj" />
+    <!-- Aliased: its namespace Bibui.Text.FreeType collides with the type Bibui.Text in bibui (CS0434). -->
+    <ProjectReference Include="../../bibui-text-freetype/Bibui.Text.FreeType.csproj" Aliases="freetype" />
+  </ItemGroup>
+</Project>

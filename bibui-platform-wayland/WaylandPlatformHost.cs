@@ -40,8 +40,8 @@ public sealed record WaylandHostOptions
 /// <list type="bullet">
 /// <item><b>Present</b>: the runtime's raster backend draws into a free shm
 /// buffer (no copy), which is attached, damaged whole, and committed with a
-/// frame callback. The whole surface is redrawn every frame unless
-/// the runtime's damage tracking says which pixels changed.</item>
+/// frame callback. The whole buffer is damaged on every commit, whether or
+/// not the raster backend repainted all of it.</item>
 /// <item><b>Pacing</b> (<see cref="PacesFrames"/>): Present first waits for the
 /// previous frame's callback, so the compositor sets the frame rate and an idle
 /// window draws nothing. A pending configure skips the wait: a resize is drawn
@@ -340,15 +340,9 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
             _ackSerial = null;
         }
         _surface.Attach(buffer.Wl, 0, 0);
-        // With damage tracking on, the runtime says which buffer pixels
-        // differ from the frame committed before this one; the compositor need
-        // only take those. Null means all of them.
-        if (_surface.Version >= WlSurface.DamageBufferSince)
-        {
-            if (runtime.LastDamage is { } damage)
-                foreach (var r in damage) _surface.DamageBuffer(r.Left, r.Top, r.Width, r.Height);
-            else _surface.DamageBuffer(0, 0, buffer.Width, buffer.Height);
-        }
+        // The whole buffer is damaged on every commit. The compositor's copy
+        // of it costs less than finding which pixels changed would.
+        if (_surface.Version >= WlSurface.DamageBufferSince) _surface.DamageBuffer(0, 0, buffer.Width, buffer.Height);
         else _surface.Damage(0, 0, _logicalW, _logicalH);
         _frameCallback = _surface.Frame();
         _frameCallback.AddListener(FrameListener, (void*)GCHandle.ToIntPtr(_self));

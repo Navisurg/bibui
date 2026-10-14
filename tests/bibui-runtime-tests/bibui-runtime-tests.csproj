@@ -12,5 +12,7 @@
     <ProjectReference Include="../../bibui-testing/bibui-testing.csproj" />
     <!-- Silk.NET.Input, to pin Bibui.Key to it, and the default-host registration. -->
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+    <!-- The sample's own build (BibuiApp.App), which the full-app tests drive headless. -->
+    <ProjectReference Include="../../samples/bibui-app/bibui-app.csproj" />
   </ItemGroup>
 </Project>

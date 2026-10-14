@@ -1,20 +1,12 @@
 // The managed PNG codec against SkiaSharp, on every PNG the repo holds.
 //
-//   dotnet run --project tests/png-tests -c Release            # the tests
-//   dotnet run --project tests/png-tests -c Release -- --bench # decode/encode speed, ours vs Skia, on the rendered PNGs
+//   dotnet run --project tests/png-tests -c Release
 
-using System.Diagnostics;
 using System.IO.Compression;
 using Bibui.Imaging;
 using SkiaSharp;
 
 var root = FindRepoRoot();
-
-if (args.Contains("--bench"))
-{
-    Bench(root, args);
-    return 0;
-}
 
 int passed = 0, failed = 0;
 
@@ -34,9 +26,6 @@ void Run(string name, Action test)
     }
 }
 
-// Rendered component pictures, where the tree has them (a fixture suite's
-// baselines/); the codec fixtures below stand on their own without them.
-var baselines = BaselinePngs(root);
 var fixtures = Directory.GetFiles(Path.Combine(root, "tests", "png-tests", "fixtures"), "*.png").Order(StringComparer.Ordinal).ToArray();
 // Image assets and committed screenshots elsewhere in the tree, plus whatever a
 // local fixture run has left in artifacts/ (absent on a clean checkout).
@@ -47,9 +36,9 @@ var others = new[] { "samples", "artifacts" }
     .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") && !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
     .Order(StringComparer.Ordinal)
     .ToArray();
-var corpus = baselines.Concat(fixtures).Concat(others).ToArray();
+var corpus = fixtures.Concat(others).ToArray();
 
-Console.WriteLine($"PNG corpus: {baselines.Length} baselines, {fixtures.Length} fixtures, {others.Length} others");
+Console.WriteLine($"PNG corpus: {fixtures.Length} fixtures, {others.Length} others");
 
 Run($"Decode: every PNG in the repo ({corpus.Length}) is pixel-identical to SkiaSharp's straight-RGBA decode", () =>
 {
@@ -66,40 +55,11 @@ Run($"Decode: every PNG in the repo ({corpus.Length}) is pixel-identical to Skia
         throw new Exception($"{mismatches.Count} differ: " + string.Join("; ", mismatches.Take(8)));
 });
 
-Run("Decode: the verifier's view is unchanged — SKBitmap.Decode + GetPixel equals Png.Decode on every baseline", () =>
-{
-    // RasterChecker used to read pixels as SKBitmap.Decode(bytes).GetPixel(x, y):
-    // a premultiplied N32 bitmap, unpremultiplied again per read. On opaque pixels
-    // that is the stored sample; check that every baseline is opaque and equal.
-    foreach (var path in baselines)
-    {
-        var bytes = File.ReadAllBytes(path);
-        var ours = Png.Decode(bytes);
-        using var bmp = SKBitmap.Decode(bytes);
-        var span = bmp.GetPixelSpan();
-        bool bgra = bmp.ColorType == SKColorType.Bgra8888;
-        if (!bgra && bmp.ColorType != SKColorType.Rgba8888) throw new Exception($"{Rel(path)}: Skia chose {bmp.ColorType}");
-        for (int y = 0; y < ours.Height; y++)
-        {
-            var row = ours.Row(y);
-            var srow = span.Slice(y * bmp.RowBytes, ours.Width * 4);
-            for (int x = 0; x < ours.Width; x++)
-            {
-                int o = x * 4;
-                if (row[o + 3] != 255) throw new Exception($"{Rel(path)}: translucent pixel at ({x},{y})");
-                byte r = srow[o + (bgra ? 2 : 0)], g = srow[o + 1], b = srow[o + (bgra ? 0 : 2)];
-                if (r != row[o] || g != row[o + 1] || b != row[o + 2] || srow[o + 3] != 255)
-                    throw new Exception($"{Rel(path)}: ({x},{y}) is {r},{g},{b} in Skia, {row[o]},{row[o + 1]},{row[o + 2]} here");
-            }
-        }
-    }
-});
-
 Run("Decode: the fixtures cover colour types 0/2/3/4/6, depths 1-16, Adam7, tRNS, gAMA, iCCP and all five filters", () =>
 {
     var seen = new HashSet<string>();
     var filters = new HashSet<int>();
-    foreach (var path in fixtures.Concat(baselines))
+    foreach (var path in fixtures)
     {
         var info = Inspect(File.ReadAllBytes(path));
         seen.Add($"ct{info.ColorType}/{info.BitDepth}");
@@ -131,7 +91,7 @@ Run("Round trip: encode then decode gives back every corpus image exactly", () =
 
 Run("Round trip: Skia reads what we encode, pixel for pixel", () =>
 {
-    foreach (var path in baselines.Take(20).Concat(fixtures))
+    foreach (var path in fixtures)
     {
         var image = Png.Decode(File.ReadAllBytes(path));
         var diff = FirstDifference(image, SkiaDecodeStraight(Png.Encode(image)));
@@ -364,69 +324,9 @@ static void WriteChunk(Stream s, string type, byte[] data)
 
 string Rel(string path) => Path.GetRelativePath(root, path);
 
-static string[] BaselinePngs(string root)
-{
-    string dir = Path.Combine(root, "baselines");
-    return Directory.Exists(dir) ? Directory.GetFiles(dir, "*.png").Order(StringComparer.Ordinal).ToArray() : [];
-}
-
 static string FindRepoRoot()
 {
     var dir = new DirectoryInfo(AppContext.BaseDirectory);
     while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Directory.Build.props"))) dir = dir.Parent;
     return dir?.FullName ?? throw new Exception("cannot find the repo root (Directory.Build.props) above " + AppContext.BaseDirectory);
-}
-
-// ── Bench ────────────────────────────────────────────────────────────────────
-
-static void Bench(string root, string[] args)
-{
-    int rounds = args.SkipWhile(a => a != "--rounds").Skip(1).Select(int.Parse).FirstOrDefault(5);
-    // The rendered pictures when the tree has them: large, opaque, typical of
-    // what bibui encodes. Otherwise the codec fixtures.
-    var paths = BaselinePngs(root);
-    if (paths.Length == 0) paths = Directory.GetFiles(Path.Combine(root, "tests", "png-tests", "fixtures"), "*.png").Order(StringComparer.Ordinal).ToArray();
-    var files = paths.Select(File.ReadAllBytes).ToArray();
-    var images = files.Select(f => Png.Decode(f)).ToArray();
-    long pixels = images.Sum(i => (long)i.Width * i.Height);
-    Console.WriteLine($"{files.Length} PNGs, {pixels / 1e6:F1} Mpx, {files.Sum(f => (long)f.Length) / 1024} KiB encoded; best of {rounds} rounds");
-
-    // Skia's side does what the verifier and renderer did: SKBitmap.Decode, and
-    // SKImage.Encode(Png, 100) of a premultiplied N32 bitmap.
-    var skiaBitmaps = files.Select(f => SKBitmap.Decode(f)).ToArray();
-
-    double Time(Action each)
-    {
-        each(); // warm
-        double best = double.MaxValue;
-        for (int r = 0; r < rounds; r++)
-        {
-            var sw = Stopwatch.StartNew();
-            each();
-            best = Math.Min(best, sw.Elapsed.TotalMilliseconds);
-        }
-        return best;
-    }
-
-    long oursSize = 0, skiaSize = 0;
-    var decodeOurs = Time(() => { foreach (var f in files) Png.Decode(f); });
-    var decodeSkia = Time(() => { foreach (var f in files) SKBitmap.Decode(f).Dispose(); });
-    var encodeOurs = Time(() => { oursSize = 0; foreach (var i in images) oursSize += Png.Encode(i).Length; });
-    var encodeSkia = Time(() =>
-    {
-        skiaSize = 0;
-        foreach (var b in skiaBitmaps)
-        {
-            using var img = SKImage.FromBitmap(b);
-            using var data = img.Encode(SKEncodedImageFormat.Png, 100);
-            skiaSize += data.Size;
-        }
-    });
-
-    void Row(string what, double ours, double skia) =>
-        Console.WriteLine($"  {what,-8} managed {ours,8:F1} ms ({pixels / 1e3 / ours,6:F1} Mpx/s)   skia {skia,8:F1} ms ({pixels / 1e3 / skia,6:F1} Mpx/s)   managed/skia {ours / skia:F2}x");
-    Row("decode", decodeOurs, decodeSkia);
-    Row("encode", encodeOurs, encodeSkia);
-    Console.WriteLine($"  size     managed {oursSize / 1024} KiB   skia {skiaSize / 1024} KiB   managed/skia {(double)oursSize / skiaSize:F2}x");
-    foreach (var b in skiaBitmaps) b.Dispose();
 }

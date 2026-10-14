@@ -11,13 +11,9 @@ internal sealed record OverlaysState
     public bool AlertDialogOpen { get; init; }
     public bool DrawerRightOpen { get; init; }
     public bool DrawerBottomOpen { get; init; }
-    public bool PopoverOpen { get; init; }
-    public bool HoverPreviewOpen { get; init; }
     public bool TooltipOpen { get; init; }
     public bool CommandPaletteOpen { get; init; }
-    public bool DropdownOpen { get; init; }
     public string? DropdownLastSelected { get; init; }
-    public bool ContextMenuOpen { get; init; }
     public string? ContextLastSelected { get; init; }
 
     /// <summary>The page's open state, for a page that has one.</summary>
@@ -26,12 +22,8 @@ internal sealed record OverlaysState
         "Dialog" => this with { DialogOpen = true },
         "AlertDialog" => this with { AlertDialogOpen = true },
         "Drawer" => this with { DrawerRightOpen = true },
-        "Popover" => this with { PopoverOpen = true },
-        "HoverPreview" => this with { HoverPreviewOpen = true },
         "Tooltip" => this with { TooltipOpen = true },
         "CommandPalette" => this with { CommandPaletteOpen = true },
-        "DropdownMenu" => this with { DropdownOpen = true },
-        "ContextMenu" => this with { ContextMenuOpen = true },
         _ => null,
     };
 }
@@ -100,15 +92,15 @@ internal static class DemoOverlays
 
     // ── Popover ──────────────────────────────────────────────────────────────
 
-    // The trigger is an ordinary button; the popover opens under it when the
-    // page says it is open. Either button toggles it.
+    // The trigger is an ordinary button: it opens the popover under it and
+    // closes it again, and a press anywhere else closes it too.
     private static UiNode PopoverPage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
+        const string id = "demo-popover-content";
         var page = Arrange.Column();
         using (runtime.PushParent(page))
         {
-            Heading(runtime, "Either button opens and closes it");
-            bool toggled = false;
+            Heading(runtime, "Its button opens and closes it, and a press elsewhere closes it");
             Box area = Area(runtime, 340f, 140f);
             using (runtime.PushParent(area))
             {
@@ -118,12 +110,12 @@ internal static class DemoOverlays
                 {
                     Arrange.Spring(row);
                     var trigger = Button.Build(runtime, "demo-popover", Str("Open popover"));
-                    toggled |= trigger.Clicked;
+                    if (trigger.Clicked)
+                        if (runtime.IsDropDownOpen(id)) runtime.CloseDropDown(id); else runtime.OpenDropDown(id, trigger.Node);
                     Arrange.Spring(row);
 
-                    if (state.PopoverOpen)
+                    if (Popover.Begin(runtime, id, trigger.Node, width: 280f) is { } popover)
                     {
-                        var popover = Popover.Begin(runtime, "demo-popover-content", (Box)trigger.Node, width: 280f);
                         Paragraph(runtime, "demo-popover-text", "Anything built between Popover.Begin and End shows here, under its trigger.");
                         popover.End();
                     }
@@ -131,11 +123,7 @@ internal static class DemoOverlays
             }
 
             Arrange.Gap(page, 16f);
-            toggled |= Button.Build(runtime, "demo-popover-toggle", Str(state.PopoverOpen ? "Close" : "Toggle popover")).Clicked;
-            Arrange.Gap(page, 16f);
-            runtime.TextFromId("demo-popover-state", U8($"Popover: {(state.PopoverOpen ? "open" : "closed")}"), ComponentSize.Sm, TextColor.Secondary);
-
-            if (toggled) set(state with { PopoverOpen = !state.PopoverOpen });
+            runtime.TextFromId("demo-popover-state", U8($"Popover: {(runtime.IsDropDownOpen(id) ? "open" : "closed")}"), ComponentSize.Sm, TextColor.Secondary);
         }
         return page;
     }
@@ -143,19 +131,18 @@ internal static class DemoOverlays
     // ── HoverPreview: a popover the pointer opens ───────────────────────────
 
     // Whether the card is open because the pointer opened it, so leaving
-    // closes it; one the button or a click opened stays until closed the same way.
+    // closes it; one a click opened stays until closed the same way.
     private static bool HoverPreviewByHover;
 
     private static UiNode HoverPreviewPage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
+        const string id = "demo-hover-preview-content";
         var page = Arrange.Column();
         using (runtime.PushParent(page))
         {
-            Heading(runtime, "Point at @fernway, or press the button to pin the preview open");
-            bool toggled = Button.Build(runtime, "demo-hover-preview-toggle", Str(state.HoverPreviewOpen ? "Hide preview" : "Show preview")).Clicked;
-            Arrange.Gap(page, 16f);
-
-            bool hovering;
+            Heading(runtime, "Point at @fernway, or click it to pin the preview open");
+            Box trigger;
+            bool clicked, hovering;
             Box area = Area(runtime, 340f, 120f);
             using (runtime.PushParent(area))
             {
@@ -166,9 +153,9 @@ internal static class DemoOverlays
                     Arrange.Spring(row);
                     // A name, not a button: a box that takes the press so the
                     // pointer can be over it.
-                    Box trigger = runtime.BoxFromId("demo-hover-preview", InteractionKinds.LeftPress);
+                    trigger = runtime.BoxFromId("demo-hover-preview", InteractionKinds.LeftPress);
                     Interaction over = runtime.InteractionsFor(trigger);
-                    toggled |= over.Clicked;
+                    clicked = over.Clicked;
                     hovering = over.Hovering;
                     trigger.ChildLayoutAxis = LayoutAxis.X;
                     trigger.SizeX = trigger.SizeY = SemanticSize.ChildrenSum();
@@ -176,32 +163,32 @@ internal static class DemoOverlays
                         using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8("@fernway"), textColor: TextColor.Accent);
                     Arrange.Spring(row);
 
-                    if (state.HoverPreviewOpen)
+                    if (Popover.Begin(runtime, id, trigger, width: 280f) is { } card)
                     {
-                        var card = Popover.Begin(runtime, "demo-hover-preview-content", trigger, width: 280f);
                         Paragraph(runtime, "demo-hover-preview-text", "The team behind fernway/ui. Building design systems that ship.");
                         hovering |= card.End().Hovering;
                     }
                 }
             }
 
+            bool open = runtime.IsDropDownOpen(id);
             Arrange.Gap(page, 16f);
-            runtime.TextFromId("demo-hover-preview-state", U8(state.HoverPreviewOpen ? "Preview: open" : "Preview: closed"), ComponentSize.Sm, TextColor.Secondary);
+            runtime.TextFromId("demo-hover-preview-state", U8(open ? "Preview: open" : "Preview: closed"), ComponentSize.Sm, TextColor.Secondary);
 
-            if (toggled)
+            if (clicked)
             {
                 HoverPreviewByHover = false;
-                set(state with { HoverPreviewOpen = !state.HoverPreviewOpen });
+                if (open) runtime.CloseDropDown(id); else runtime.OpenDropDown(id, trigger);
             }
-            else if (!state.HoverPreviewOpen && hovering)
+            else if (!open && hovering)
             {
                 HoverPreviewByHover = true;
-                set(state with { HoverPreviewOpen = true });
+                runtime.OpenDropDown(id, trigger);
             }
-            else if (state.HoverPreviewOpen && HoverPreviewByHover && !hovering)
+            else if (open && HoverPreviewByHover && !hovering)
             {
                 HoverPreviewByHover = false;
-                set(state with { HoverPreviewOpen = false });
+                runtime.CloseDropDown(id);
             }
         }
         return page;
@@ -273,13 +260,11 @@ internal static class DemoOverlays
 
     private static UiNode DropdownMenuPage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
+        const string id = "demo-dropdown-menu-list";
         var page = Arrange.Column();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "A menu that opens under its button");
-            bool toggled = Button.Build(runtime, "demo-dropdown-toggle", Str(state.DropdownOpen ? "Close menu" : "Open menu")).Clicked;
-            Arrange.Gap(page, 16f);
-
             string? picked = null;
             Box area = Area(runtime, 280f, 200f);
             using (runtime.PushParent(area))
@@ -290,7 +275,8 @@ internal static class DemoOverlays
                 {
                     Arrange.Spring(row);
                     Box trigger = runtime.BoxFromId("demo-dropdown-menu", InteractionKinds.LeftPress);
-                    toggled |= runtime.InteractionsFor(trigger).Clicked;
+                    if (runtime.InteractionsFor(trigger).Clicked)
+                        if (runtime.IsDropDownOpen(id)) runtime.CloseDropDown(id); else runtime.OpenDropDown(id, trigger);
                     trigger.ChildLayoutAxis = LayoutAxis.X;
                     trigger.SizeX = trigger.SizeY = SemanticSize.ChildrenSum();
                     trigger.Style.Padding = EdgeInsets.Symmetric(horizontal: 12f, vertical: 8f);
@@ -306,14 +292,13 @@ internal static class DemoOverlays
                         using (runtime.PushParent(cell))
                         {
                             runtime.Gap(3f);
-                            runtime.Icon(state.DropdownOpen ? "chevron-up" : "chevron-down", 14f).Color = UiColor.TextSecondary;
+                            runtime.Icon(runtime.IsDropDownOpen(id) ? "chevron-up" : "chevron-down", 14f).Color = UiColor.TextSecondary;
                         }
                     }
                     Arrange.Spring(row);
 
-                    if (state.DropdownOpen)
+                    if (Menu.BeginBelow(runtime, id, trigger) is { } menu)
                     {
-                        var menu = Menu.BeginBelow(runtime, "demo-dropdown-menu-list", trigger);
                         for (int i = 0; i < AccountItems.Length; i++)
                         {
                             var (label, icon, shortcut) = AccountItems[i];
@@ -328,10 +313,13 @@ internal static class DemoOverlays
             }
 
             Arrange.Gap(page, 16f);
-            runtime.TextFromId("demo-dropdown-state", U8(state.DropdownOpen ? "Dropdown: open" : $"Dropdown: closed — selected: {state.DropdownLastSelected ?? "none"}"), ComponentSize.Sm, TextColor.Secondary);
+            runtime.TextFromId("demo-dropdown-state", U8(runtime.IsDropDownOpen(id) ? "Dropdown: open" : $"Dropdown: closed — selected: {state.DropdownLastSelected ?? "none"}"), ComponentSize.Sm, TextColor.Secondary);
 
-            if (picked is not null) set(state with { DropdownLastSelected = picked, DropdownOpen = false });
-            else if (toggled) set(state with { DropdownOpen = !state.DropdownOpen });
+            if (picked is not null)
+            {
+                runtime.CloseDropDown(id);
+                set(state with { DropdownLastSelected = picked });
+            }
         }
         return page;
     }
@@ -340,30 +328,34 @@ internal static class DemoOverlays
         [("Open", "folder", false), ("Copy link", "link", false), ("", "", false), ("Rename", "pencil", false), ("Delete", "trash", true)];
 
     // Where the right button last went down in the area, for the menu to open
-    // there; null opens it in the area's corner, as the button does.
+    // there; null opens it in the area's corner, as the open page's picture does.
     private static System.Numerics.Vector2? ContextAt;
 
     private static UiNode ContextMenuPage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
+        const string id = "demo-context-menu-list";
         var page = Arrange.Column();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Right-click in the box: the menu opens where you pressed");
-            bool toggled = Button.Build(runtime, "demo-context-menu-toggle", Str(state.ContextMenuOpen ? "Hide context menu" : "Show context menu")).Clicked;
-            Arrange.Gap(page, 16f);
 
             // The area a right press opens the menu in. An open menu's rect is
-            // its own, so a press on the menu never reaches the area.
+            // its own, so a press on the menu never reaches the area; a right
+            // press elsewhere in it closes the menu and opens it there.
             Box area = runtime.BoxFromId("demo-context-menu", InteractionKinds.RightPress);
             Interaction onArea = runtime.InteractionsFor(area);
+            if (onArea.RightPressed)
+            {
+                ContextAt = new System.Numerics.Vector2(onArea.X, onArea.Y);
+                runtime.OpenDropDown(id);
+            }
             area.ChildLayoutAxis = LayoutAxis.Y;
             area.Px(280f, 200f);
 
             string? picked = null;
-            if (state.ContextMenuOpen)
+            var at = ContextAt ?? area.Rect + new System.Numerics.Vector2(16f, 16f);
+            if (Menu.Begin(runtime, id, at.X, at.Y) is { } menu)
             {
-                var at = ContextAt ?? area.Rect + new System.Numerics.Vector2(16f, 16f);
-                var menu = Menu.Begin(runtime, "demo-context-menu-list", at.X, at.Y);
                 for (int i = 0; i < FileItems.Length; i++)
                 {
                     var (label, icon, disabled) = FileItems[i];
@@ -375,18 +367,12 @@ internal static class DemoOverlays
             }
 
             Arrange.Gap(page, 16f);
-            runtime.TextFromId("demo-context-menu-state", U8(state.ContextMenuOpen ? "Context menu: open" : $"Context menu: closed — selected: {state.ContextLastSelected ?? "none"}"), ComponentSize.Sm, TextColor.Secondary);
+            runtime.TextFromId("demo-context-menu-state", U8(runtime.IsDropDownOpen(id) ? "Context menu: open" : $"Context menu: closed — selected: {state.ContextLastSelected ?? "none"}"), ComponentSize.Sm, TextColor.Secondary);
 
-            if (picked is not null) set(state with { ContextLastSelected = picked, ContextMenuOpen = false });
-            else if (onArea.RightPressed)
+            if (picked is not null)
             {
-                ContextAt = new System.Numerics.Vector2(onArea.X, onArea.Y);
-                set(state with { ContextMenuOpen = true });
-            }
-            else if (toggled)
-            {
-                ContextAt = null;
-                set(state with { ContextMenuOpen = !state.ContextMenuOpen });
+                runtime.CloseDropDown(id);
+                set(state with { ContextLastSelected = picked });
             }
         }
         return page;
@@ -509,7 +495,7 @@ internal static class DemoOverlays
             bool escape = false;
             if (state.CommandPaletteOpen)
                 foreach (var handle in runtime.UnconsumedEvents)
-                    if (handle.Event is { Kind: BibUiEventKind.Press, Key: Bibui.Key.Escape })
+                    if (handle.Event is { IsKeyDown: true, Key: Bibui.Key.Escape })
                     {
                         escape = true;
                         handle.Eat();

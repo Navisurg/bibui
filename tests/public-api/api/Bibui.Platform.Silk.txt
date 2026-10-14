@@ -33,7 +33,7 @@ namespace Bibui.Runtime
 {
     public static class SkiaGpuExtensions
     {
-        public static void RenderTo(this Bibui.Runtime.BibuiRuntime runtime, SkiaSharp.SKSurface target, bool retained = false) { }
+        public static void RenderTo(this Bibui.Runtime.BibuiRuntime runtime, SkiaSharp.SKSurface target) { }
         public static void set_GpuResourceCacheLimit(Bibui.Runtime.BibuiWindow window, long value) { }
         extension(Bibui.Runtime.BibuiWindow window)
         {

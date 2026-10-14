@@ -6,6 +6,9 @@ namespace Bibui.Renderer;
 /// All paths are defined on a 24×24 viewBox with strokeWidth=2, linecap=round,
 /// linejoin=round. Rendered by scaling from 24px to the target icon size.
 /// https://lucide.dev
+///
+/// An app adds icons of its own through <see cref="Bibui.Icons.Register"/>;
+/// they are kept apart from the built-in set, which they may not replace.
 /// </summary>
 internal static class IconRegistry
 {
@@ -101,13 +104,50 @@ internal static class IconRegistry
         ["list-checks"]    = "M3 17l2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8",
     };
 
-    /// <summary>Returns the SVG path data for the given Lucide icon name, or null if not found.</summary>
-    public static string? Get(string? name) =>
-        name is not null && _paths.TryGetValue(name, out var p) ? p : null;
+    // Icons an app registered (Icons.Register). Written rarely, at start-up, and
+    // read every frame, so it is copy-on-write: a writer builds a new dictionary
+    // under the lock and publishes it whole, and a reader takes the current one
+    // with no lock at all.
+    private static Dictionary<string, string> _app = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object _appLock = new();
 
-    /// <summary>True when <paramref name="name"/> is a registered icon.</summary>
-    public static bool Has(string? name) => name is not null && _paths.ContainsKey(name);
+    /// <summary>Returns the SVG path data for the given icon name — built-in or registered — or null if not found.</summary>
+    public static string? Get(string? name)
+    {
+        if (name is null) return null;
+        if (_paths.TryGetValue(name, out var p)) return p;
+        return Volatile.Read(ref _app).TryGetValue(name, out p) ? p : null;
+    }
 
-    /// <summary>Returns all registered icon names.</summary>
-    public static IEnumerable<string> All => _paths.Keys;
+    /// <summary>True when <paramref name="name"/> is a built-in or registered icon.</summary>
+    public static bool Has(string? name) =>
+        name is not null && (_paths.ContainsKey(name) || Volatile.Read(ref _app).ContainsKey(name));
+
+    /// <summary>True when <paramref name="name"/> is one of bibui's own icons.</summary>
+    public static bool IsBuiltIn(string? name) => name is not null && _paths.ContainsKey(name);
+
+    /// <summary>Every icon name: the built-in set, then the app's.</summary>
+    public static IEnumerable<string> All => _paths.Keys.Concat(Volatile.Read(ref _app).Keys);
+
+    /// <summary>
+    /// Adds an app icon. The caller (<c>Icons.Register</c>) has validated the
+    /// name and the path; this only decides a clash: a built-in name throws, the
+    /// same name with the same path again is a no-op, with a different path throws.
+    /// </summary>
+    public static void Register(string name, string svgPathData)
+    {
+        if (_paths.ContainsKey(name))
+            throw new ArgumentException($"'{name}' is one of bibui's own icons; an app icon needs a name of its own.", nameof(name));
+        lock (_appLock)
+        {
+            var current = _app;
+            if (current.TryGetValue(name, out var existing))
+            {
+                if (string.Equals(existing, svgPathData, StringComparison.Ordinal)) return;
+                throw new ArgumentException($"An icon called '{name}' is already registered with other path data.", nameof(name));
+            }
+            var next = new Dictionary<string, string>(current, StringComparer.OrdinalIgnoreCase) { [name] = svgPathData };
+            Volatile.Write(ref _app, next);
+        }
+    }
 }

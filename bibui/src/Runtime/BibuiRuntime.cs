@@ -259,7 +259,7 @@ public sealed partial class BibuiRuntime
             {
                 build = _build ?? throw new InvalidOperationException("Runtime not mounted. Call Mount or MountStateful first.");
                 surface = _surface;
-                theme = _theme;
+                theme = PaintedTheme(_theme);
             }
 
             return RenderLocked(build, surface, theme);
@@ -275,16 +275,7 @@ public sealed partial class BibuiRuntime
     /// is set) no pixel readback or PNG factory. The caller owns the surface
     /// lifecycle and any flush/present step.
     /// </summary>
-    public void RenderTo(IRasterSurface target) => RenderTo(target, retained: true);
-
-    /// <summary>
-    /// <see cref="RenderTo(IRasterSurface)"/>, saying whether <paramref name="target"/>
-    /// still holds the last frame drawn onto it. With <see cref="DamageTracking"/>
-    /// on, a retained target is repainted only where the frame changed; pass
-    /// false for one whose contents are gone between frames (a GPU framebuffer
-    /// after a swap), which is then painted whole.
-    /// </summary>
-    public void RenderTo(IRasterSurface target, bool retained)
+    public void RenderTo(IRasterSurface target)
     {
         lock (_renderLock)
         {
@@ -296,27 +287,23 @@ public sealed partial class BibuiRuntime
             {
                 build = _build ?? throw new InvalidOperationException("Runtime not mounted. Call Mount or MountStateful first.");
                 surface = _surface;
-                theme = _theme;
+                theme = PaintedTheme(_theme);
                 capturePixels = _capturePixels;
             }
 
             BeginBuild();
             var tree = build();
-            LinkDropDowns(tree);
-            var interactiveBoxes = CollectInteractiveBoxes(tree);
+            EndDropDowns(tree);
+            var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
             // Every rect is solved before anything is painted.
             _renderer.Layout(tree, surface, theme);
+            var pointerTransforms = transformed ? PointerTransforms(tree) : null;
 
             // Capture after build() so state the host sets while building
             // lands in this frame, matching the readback path's capture timing.
             FrameInput input;
             lock (_syncRoot) input = CaptureFrameInput();
-            if (DamageTracking) RenderDamaged(target, retained, tree, surface, theme, input);
-            else
-            {
-                if (_dmgPrev is not null) ForgetDamageState();
-                _renderer.RenderTo(target, tree, surface, theme, input);
-            }
+            _renderer.RenderTo(target, tree, surface, theme, input);
 
             // Every path repaints unconditionally, so the only thing keeping an
             // animation going is the loop being told to iterate.
@@ -364,6 +351,7 @@ public sealed partial class BibuiRuntime
             lock (_syncRoot)
             {
                 _interactiveBoxes = interactiveBoxes;
+                _pointerTransforms = pointerTransforms;
                 _lastOutput = output;
                 _lastTree = tree;
             }
@@ -382,6 +370,7 @@ public sealed partial class BibuiRuntime
     private FrameInput CaptureFrameInput() => new()
     {
         Dt              = Dt,
+        ReducedMotion   = ReducedMotion,
     };
 
     private RenderOutput RenderLocked(Func<UiNode> build, SurfaceOptions surface, ThemeTokens theme)
@@ -394,11 +383,12 @@ public sealed partial class BibuiRuntime
         var t0 = Stopwatch.GetTimestamp();
         BeginBuild();
         var tree = build();
-        LinkDropDowns(tree);
+        EndDropDowns(tree);
         var t1 = Stopwatch.GetTimestamp();
-        var interactiveBoxes = CollectInteractiveBoxes(tree);
+        var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
         // Every rect is solved before anything is painted.
         _renderer.Layout(tree, surface, theme);
+        var pointerTransforms = transformed ? PointerTransforms(tree) : null;
         var t2 = Stopwatch.GetTimestamp();
         // Capture after build() so state the host sets while building
         // lands in this frame.
@@ -425,6 +415,7 @@ public sealed partial class BibuiRuntime
         lock (_syncRoot)
         {
             _interactiveBoxes = interactiveBoxes;
+            _pointerTransforms = pointerTransforms;
             _lastOutput = output;
             _lastTree = tree;
         }
@@ -540,6 +531,13 @@ public sealed partial class BibuiRuntime
 
         float cx = pos.X + size.X / 2f;
         float cy = pos.Y + size.Y / 2f;
+
+        // Where the centre is drawn, which is where a person would click it.
+        if (PointerTransformOf(id) is { } drawn)
+        {
+            var centre = System.Numerics.Vector2.Transform(new System.Numerics.Vector2(cx, cy), drawn);
+            (cx, cy) = (centre.X, centre.Y);
+        }
         ProcessEvents(new[]
         {
             new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = cx, Y = cy, TargetId = id },
@@ -602,14 +600,17 @@ public sealed partial class BibuiRuntime
     }
 
     /// <summary>The boxes with an id that claim something: what a named dispatch can reach.</summary>
-    private static Dictionary<string, Box> CollectInteractiveBoxes(UiNode root)
+    private static Dictionary<string, Box> CollectInteractiveBoxes(UiNode root, out bool transformed)
     {
         var boxes = new Dictionary<string, Box>();
+        bool any = false;
         Collect(root);
+        transformed = any;
         return boxes;
 
         void Collect(UiNode node)
         {
+            any |= node.Style.HasTransform;
             if (node is Box { Id: { } id } box && box.Claims != InteractionKinds.None)
                 boxes[id] = box;
             for (UiNode? c = node.FirstChild; c is not null; c = c.Next == c ? null : c.Next)

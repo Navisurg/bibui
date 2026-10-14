@@ -74,6 +74,7 @@ IRasterBackend NewBackend() => raster switch
     _ => throw new ArgumentException($"--raster {raster}: expected skia or managed"),
 };
 
+AppIcons.Register();
 var themeFiles = RegisterThemeFiles();
 
 App NewApp()

@@ -48,7 +48,6 @@ namespace Bibui
         public bool IsAnimating { get; }
         public Bibui.Raster.IRasterBackend Raster { get; }
         public void Layout(Bibui.UiNode root, Bibui.SurfaceOptions surface, Bibui.Theming.ThemeTokens theme) { }
-        public void Record(Bibui.FrameRecord into, Bibui.UiNode root, Bibui.SurfaceOptions surface, Bibui.Theming.ThemeTokens theme, Bibui.FrameInput? input = null, Bibui.Raster.IRasterCanvas? paintTo = null) { }
         public Bibui.Renderer.RenderOutput Render(Bibui.UiNode root, Bibui.SurfaceOptions surface, Bibui.Theming.ThemeTokens theme, Bibui.FrameInput? input = null) { }
         public void RenderTo(Bibui.Raster.IRasterSurface target, Bibui.UiNode root, Bibui.SurfaceOptions surface, Bibui.Theming.ThemeTokens theme, Bibui.FrameInput? input = null) { }
     }
@@ -86,7 +85,7 @@ namespace Bibui
         public Box() { }
         public float ActiveT { get; }
         public Bibui.InteractionKinds Claims { get; set; }
-        public Bibui.DrawCallback? Draw { get; init; }
+        public Bibui.DrawCallback? Draw { get; set; }
         public float HotT { get; }
     }
     public sealed class BoxShadow
@@ -108,6 +107,12 @@ namespace Bibui
         public static Bibui.CacheKey Of([System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<int> parts, Bibui.CacheKey sub = default) { }
         public static Bibui.CacheKey OfSpec(in Bibui.PaintSpec s, Bibui.CacheKey shader, Bibui.CacheKey mask, Bibui.CacheKey imageFilter, Bibui.CacheKey pathEffect) { }
         public static Bibui.CacheKey OfString(string? s) { }
+    }
+    public static class ColorMix
+    {
+        public static Bibui.Rgba FromOklab(System.Numerics.Vector4 lab) { }
+        public static Bibui.Rgba Oklab(Bibui.Rgba from, Bibui.Rgba to, float t) { }
+        public static System.Numerics.Vector4 ToOklab(Bibui.Rgba c) { }
     }
     public readonly struct ColorStop : System.IEquatable<Bibui.ColorStop>
     {
@@ -132,6 +137,7 @@ namespace Bibui
         public Bibui.RectF Logical { get; }
         public Bibui.RectF Rect { get; }
         public float Scale { get; }
+        public Bibui.Theming.ThemeTokens Theme { get; }
         public float Animate(Bibui.Renderer.AnimKey key, float target, float speed = 12, float epsilon = 0.01) { }
         public float BlockHeight(int lines, float fontSize, string? family = null, int weight = 400) { }
         public void BlurBackdrop(float x, float y, float w, float h, float sigma) { }
@@ -198,13 +204,16 @@ namespace Bibui
         public void PopClip() { }
         public void PopOpacityLayer() { }
         public void PopScale() { }
+        public void PopTransform() { }
         public void PopTranslation() { }
         public void PushClip(Bibui.RectF rect) { }
         public void PushClip(float x, float y, float w, float h) { }
         public void PushOpacityLayer(float opacity) { }
         public void PushScale(float originX, float originY, float scale) { }
+        public void PushTransform(System.Numerics.Matrix3x2 logical) { }
         public void PushTranslation(float dx, float dy) { }
         public Bibui.Raster.RasterShader RadialGradient(System.Numerics.Vector2 centre, float radius, System.ReadOnlySpan<Bibui.Rgba> colors, System.ReadOnlySpan<float> stops) { }
+        public Bibui.Rgba Resolve(Bibui.UiColor color) { }
         public float Sawtooth(Bibui.Renderer.AnimKey key, float periodSeconds = 1) { }
         public Bibui.Raster.RasterPaint Stroke(Bibui.Rgba color, float width) { }
         public static Bibui.Rgba Color(System.ReadOnlySpan<char> hex) { }
@@ -218,6 +227,23 @@ namespace Bibui
         HotEffects = 2,
         ActiveEffects = 4,
         Background = 8,
+    }
+    public readonly struct Easing : System.IEquatable<Bibui.Easing>
+    {
+        public Easing(float X1, float Y1, float X2, float Y2) { }
+        public float X1 { get; init; }
+        public float X2 { get; init; }
+        public float Y1 { get; init; }
+        public float Y2 { get; init; }
+        public static Bibui.Easing Ease { get; }
+        public static Bibui.Easing EaseIn { get; }
+        public static Bibui.Easing EaseInOut { get; }
+        public static Bibui.Easing EaseOut { get; }
+        public static Bibui.Easing Emphasized { get; }
+        public static Bibui.Easing EmphasizedAccelerate { get; }
+        public static Bibui.Easing Linear { get; }
+        public static Bibui.Easing Standard { get; }
+        public float Evaluate(float t) { }
     }
     public sealed class EdgeBorder
     {
@@ -285,17 +311,7 @@ namespace Bibui
         public static readonly Bibui.FrameInput None;
         public FrameInput() { }
         public float Dt { get; init; }
-    }
-    public sealed class FrameRecord
-    {
-        public FrameRecord() { }
-        public Bibui.Rgba Background { get; }
-        public int Height { get; }
-        public bool Unsigned { get; }
-        public int Width { get; }
-        public void Replay(Bibui.Raster.IRasterSurface target, System.Collections.Generic.IReadOnlyList<Bibui.Raster.PixelRect>? rects) { }
-        public void Settle(System.Collections.Generic.List<Bibui.Raster.PixelRect> rects, int maxRects = 8) { }
-        public static long AreaOf(System.Collections.Generic.IReadOnlyList<Bibui.Raster.PixelRect> rects) { }
+        public bool ReducedMotion { get; init; }
     }
     public sealed class Gradient
     {
@@ -332,6 +348,12 @@ namespace Bibui
         public string Name { get; set; }
         public Bibui.FontSize Size { get; set; }
         public static bool IsKnown(string? name) { }
+    }
+    public static class Icons
+    {
+        public static System.Collections.Generic.IReadOnlyList<string> Names { get; }
+        public static bool IsBuiltIn(string? name) { }
+        public static void Register(string name, string svgPathData) { }
     }
     public struct Interaction : System.IEquatable<Bibui.Interaction>
     {
@@ -555,6 +577,46 @@ namespace Bibui
         Stroke = 1,
         StrokeAndFill = 2,
     }
+    public readonly struct Presence : System.IEquatable<Bibui.Presence>
+    {
+        public Presence(float Progress, Bibui.PresenceState State) { }
+        public bool Entering { get; }
+        public bool Exiting { get; }
+        public bool Mounted { get; }
+        public float Progress { get; init; }
+        public Bibui.PresenceState State { get; init; }
+    }
+    public readonly struct PresenceItem<T> : System.IEquatable<Bibui.PresenceItem<T>>
+    {
+        public PresenceItem(string Key, T Item, float Progress, Bibui.PresenceState State) { }
+        public bool Entering { get; }
+        public bool Exiting { get; }
+        public T Item { get; init; }
+        public string Key { get; init; }
+        public float Progress { get; init; }
+        public Bibui.PresenceState State { get; init; }
+    }
+    public enum PresenceState
+    {
+        Gone = 0,
+        Entering = 1,
+        Present = 2,
+        Exiting = 3,
+    }
+    public readonly struct PresenceStyle : System.IEquatable<Bibui.PresenceStyle>
+    {
+        public PresenceStyle() { }
+        public System.Numerics.Vector2 Offset { get; init; }
+        public float Opacity { get; init; }
+        public float Scale { get; init; }
+        public static Bibui.PresenceStyle Fade { get; }
+        public void ApplyTo(Bibui.Style style, float progress) { }
+        public static Bibui.PresenceStyle FadeDown(float distance = 12) { }
+        public static Bibui.PresenceStyle FadeUp(float distance = 12) { }
+        public static Bibui.PresenceStyle Pop(float scale = 0.96) { }
+        public static Bibui.PresenceStyle SlideFromLeft(float distance = 24) { }
+        public static Bibui.PresenceStyle SlideFromRight(float distance = 24) { }
+    }
     public readonly struct RectF : System.IEquatable<Bibui.RectF>
     {
         public RectF(float Left, float Top, float Right, float Bottom) { }
@@ -612,6 +674,17 @@ namespace Bibui
         public float? StrokeWidth { get; set; }
         public Bibui.UiColor? TrackColor { get; set; }
     }
+    public readonly struct Spring : System.IEquatable<Bibui.Spring>
+    {
+        public Spring(float Stiffness, float Damping, float Mass = 1) { }
+        public float Damping { get; init; }
+        public float Mass { get; init; }
+        public float Stiffness { get; init; }
+        public static Bibui.Spring Bouncy { get; }
+        public static Bibui.Spring Gentle { get; }
+        public static Bibui.Spring Snappy { get; }
+        public static Bibui.Spring FromResponse(float response, float dampingRatio) { }
+    }
     public enum StrokeCap
     {
         Butt = 0,
@@ -642,7 +715,11 @@ namespace Bibui
         public Bibui.UiColor? HoverBorderColor { get; set; }
         public float Opacity { get; set; }
         public Bibui.EdgeInsets Padding { get; set; }
+        public float Rotate { get; set; }
+        public System.Numerics.Vector2 Scale { get; set; }
         public Bibui.BoxShadow? Shadow { get; set; }
+        public System.Numerics.Vector2 TransformOrigin { get; set; }
+        public System.Numerics.Vector2 Translate { get; set; }
         public void Clear() { }
     }
     public sealed class SurfaceOptions
@@ -688,6 +765,27 @@ namespace Bibui
     {
         Words = 0,
         Characters = 1,
+    }
+    public readonly struct Transition : System.IEquatable<Bibui.Transition>
+    {
+        public float Delay { get; init; }
+        public float Duration { get; init; }
+        public Bibui.Easing Easing { get; init; }
+        public Bibui.TransitionKind Kind { get; init; }
+        public float Speed { get; init; }
+        public Bibui.Spring Spring { get; init; }
+        public static Bibui.Transition Instant { get; }
+        public Bibui.Transition WithDelay(float seconds) { }
+        public static Bibui.Transition Exponential(float speed = 20) { }
+        public static Bibui.Transition OnSpring(Bibui.Spring? spring = default, float delay = 0) { }
+        public static Bibui.Transition Timed(float seconds, Bibui.Easing? easing = default, float delay = 0) { }
+    }
+    public enum TransitionKind
+    {
+        Exponential = 0,
+        Timed = 1,
+        Spring = 2,
+        Instant = 3,
     }
     public readonly struct UiColor : System.IEquatable<Bibui.UiColor>
     {
@@ -871,10 +969,6 @@ namespace Bibui.Raster
         int Width { get; }
         bool ReadPixels(System.Span<byte> bgraPremul, int width, int height);
     }
-    public interface IRecordingCanvas : Bibui.Raster.IRasterCanvas
-    {
-        void Defer(System.Action<Bibui.Raster.IRasterCanvas> draw);
-    }
     public readonly struct PixelRect : System.IEquatable<Bibui.Raster.PixelRect>
     {
         public PixelRect(int Left, int Top, int Right, int Bottom) { }
@@ -1045,18 +1139,14 @@ namespace Bibui.Runtime
         public bool CapturePixels { get; set; }
         public System.Func<string?> ClipboardGet { get; set; }
         public System.Action<string> ClipboardSet { get; set; }
-        public float DamageFullRepaintThreshold { get; set; }
-        public bool DamageTracking { get; set; }
         public float Dt { get; }
         public Bibui.Fonts Fonts { get; }
         public int FramesRequested { get; }
-        public System.Collections.Generic.IReadOnlyList<Bibui.Raster.PixelRect>? LastDamage { get; }
-        public string? LastFullRepaintReason { get; }
         public Bibui.Renderer.RenderOutput? LastOutput { get; }
-        public System.Collections.Generic.IReadOnlyList<Bibui.Raster.PixelRect>? LastRepaint { get; }
         public System.Action<string>? OnUnhandledKey { get; set; }
         public Bibui.UiNode ParentInScope { get; }
         public Bibui.Raster.IRasterBackend Raster { get; }
+        public bool ReducedMotion { get; set; }
         public float ScaleFactor { get; }
         public int SurfaceHeight { get; }
         public int SurfaceWidth { get; }
@@ -1064,9 +1154,15 @@ namespace Bibui.Runtime
         public Bibui.Theming.ThemeTokens Theme { get; }
         public System.Collections.Generic.IEnumerable<Bibui.Runtime.BibUiEventHandle> UnconsumedEvents { get; }
         public System.Action? WakeUp { get; set; }
+        public System.Numerics.Vector2 Animate(string id, string property, System.Numerics.Vector2 target, Bibui.Transition transition, float epsilon = 0.05) { }
+        public float Animate(string id, string property, float target, Bibui.Transition transition, float epsilon = 0.001) { }
         public float Animate(string id, string property, float target, float? speed = default, float epsilon = 0.001) { }
+        public Bibui.UiColor AnimateColor(string id, string property, Bibui.UiColor target, Bibui.Transition? transition = default) { }
+        public Bibui.Box? BeginDropDown(string id) { }
         public Bibui.Box Box() { }
         public Bibui.Box BoxFromId(string id, Bibui.InteractionKinds claims = 0, Bibui.UiNode? parent = null) { }
+        public void CloseDropDown(string id) { }
+        public Bibui.Box CollapseBox(string id, float progress, Bibui.UiNode? parent = null) { }
         public void ConsumeFrame() { }
         public void DefaultToolTipOffset(Bibui.Box box) { }
         public void DispatchClick(string id) { }
@@ -1076,12 +1172,15 @@ namespace Bibui.Runtime
         public Bibui.Box Gap(float pixels) { }
         public Bibui.Icon Icon(string name, float? size = default) { }
         public Bibui.Interaction InteractionsFor(Bibui.Box box) { }
+        public bool IsDropDownOpen(string id) { }
         public void Mount(System.Func<Bibui.UiNode> build, Bibui.SurfaceOptions? surface = null, string theme = "bibui-dark") { }
         public void Mount(System.Func<Bibui.UiNode> build, Bibui.Theming.ThemeTokens theme, Bibui.SurfaceOptions? surface = null) { }
         public void MountStateful<T>(T initialState, System.Func<T, Bibui.Runtime.SetState<T>, Bibui.UiNode> build, Bibui.SurfaceOptions? surface = null, string theme = "bibui-dark") { }
         public void MountStateful<T>(T initialState, System.Func<T, Bibui.Runtime.SetState<T>, Bibui.UiNode> build, Bibui.Theming.ThemeTokens theme, Bibui.SurfaceOptions? surface = null) { }
-        public Bibui.Box OpenDropDown(string id) { }
+        public void OpenDropDown(string id, Bibui.UiNode? anchor = null) { }
         public Bibui.Box OpenToolTip() { }
+        public Bibui.Presence Presence(string id, bool present, Bibui.Transition? enter = default, Bibui.Transition? exit = default, bool appear = false) { }
+        public System.Collections.Generic.IReadOnlyList<Bibui.PresenceItem<T>> PresenceList<T>(string id, System.Collections.Generic.IReadOnlyList<T> items, System.Func<T, string> keyOf, Bibui.Transition? enter = default, Bibui.Transition? exit = default, float stagger = 0, bool appear = false) { }
         public void ProcessEvent(Bibui.TextEdit.BibUiEvent ev) { }
         public void ProcessEvents(System.Collections.Generic.IReadOnlyList<Bibui.TextEdit.BibUiEvent> events) { }
         public Bibui.Runtime.BibuiRuntime.AxisScope PushAxis(Bibui.LayoutAxis axis) { }
@@ -1092,10 +1191,10 @@ namespace Bibui.Runtime
         public Bibui.Runtime.BibuiRuntime.SizeScope PushSizeY(Bibui.SemanticSize size) { }
         public Bibui.Renderer.RenderOutput Render() { }
         public void RenderTo(Bibui.Raster.IRasterSurface target) { }
-        public void RenderTo(Bibui.Raster.IRasterSurface target, bool retained) { }
         public void RequestFrame() { }
         public void ResizeSurface(int physicalWidth, int physicalHeight, float? scaleOverride = default) { }
         public void SetTheme(Bibui.Theming.ThemeTokens theme) { }
+        public void SetTheme(Bibui.Theming.ThemeTokens theme, Bibui.Transition crossfade) { }
         public Bibui.Spinner Spinner(float diameter = 24) { }
         public Bibui.Text Text(System.ReadOnlyMemory<byte> text, Bibui.FontSize? fontSize = default, Bibui.UiColor? textColor = default, Bibui.FontSlot? family = default) { }
         public Bibui.Text TextFromId(string id, System.ReadOnlyMemory<byte> text, Bibui.FontSize? fontSize = default, Bibui.UiColor? textColor = default, Bibui.FontSlot? family = default) { }
@@ -1295,8 +1394,8 @@ namespace Bibui.Runtime
     }
     public static class Menu
     {
-        public static Bibui.Runtime.MenuScope Begin(Bibui.Runtime.BibuiRuntime runtime, string id, float x, float y, float width = 220) { }
-        public static Bibui.Runtime.MenuScope BeginBelow(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.Box anchor, float width = 220, float gap = 4) { }
+        public static Bibui.Runtime.MenuScope? Begin(Bibui.Runtime.BibuiRuntime runtime, string id, float x, float y, float width = 220) { }
+        public static Bibui.Runtime.MenuScope? BeginBelow(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.UiNode anchor, float width = 220, float gap = 4) { }
         public static Bibui.BibuiWidget Item(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr label, string? icon = null, Bibui.BibuiStr? shortcut = null, bool disabled = false) { }
         public static Bibui.Box Label(Bibui.Runtime.BibuiRuntime runtime, Bibui.BibuiStr text) { }
         public static Bibui.Box Separator(Bibui.Runtime.BibuiRuntime runtime) { }
@@ -1307,7 +1406,7 @@ namespace Bibui.Runtime
     }
     public static class Popover
     {
-        public static Bibui.Runtime.PopoverScope Begin(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.Box anchor, float width = 280) { }
+        public static Bibui.Runtime.PopoverScope? Begin(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.UiNode anchor, float width = 280) { }
     }
     public readonly struct PopoverScope
     {
@@ -1347,19 +1446,14 @@ namespace Bibui.Runtime
     }
     public static class Select
     {
-        public static Bibui.Runtime.SelectScope Begin(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, bool open, float width = 220, bool disabled = false) { }
+        public static Bibui.Runtime.SelectScope Begin(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, float width = 220, bool disabled = false) { }
         public static Bibui.BibuiWidget Item(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr label, bool selected = false, bool disabled = false) { }
-    }
-    public readonly struct SelectResult : System.IEquatable<Bibui.Runtime.SelectResult>
-    {
-        public SelectResult(Bibui.Box Node, bool Toggled) { }
-        public Bibui.Box Node { get; init; }
-        public bool Toggled { get; init; }
     }
     public readonly struct SelectScope
     {
         public bool Open { get; }
-        public Bibui.Runtime.SelectResult End() { }
+        public void Close() { }
+        public Bibui.Box End() { }
     }
     public static class Separator
     {
@@ -1544,6 +1638,7 @@ namespace Bibui.TextEdit
         public int Delta { get; set; }
         public int DeltaY { get; set; }
         public Bibui.TextEdit.TextActionFlags Flags { get; set; }
+        public bool IsKeyDown { get; }
         public Bibui.Key Key { get; set; }
         public Bibui.TextEdit.BibUiEventKind Kind { get; set; }
         public Bibui.KeyModifiers Modifiers { get; set; }

@@ -90,7 +90,7 @@ public sealed partial class BibuiRuntime
     {
         if (_eased.Count == 0) return false;
 
-        bool instant = _theme.Motion.Easing == MotionEasing.None;
+        bool instant = Instant;
         bool animating = false;
         foreach (var (_, entry) in _eased.Entries)
         {

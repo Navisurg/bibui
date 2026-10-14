@@ -34,26 +34,10 @@ internal sealed class Painter
     internal void Paint(IRasterSurface surface, UiNode root, SurfaceOptions options, ThemeTokens theme, FrameInput input)
         => Paint(surface.Canvas, root, options, theme, input);
 
-    // The frame painted onto a recorder instead of a surface — the same
-    // walk, every raster call kept in `into` to be diffed and replayed by the
-    // caller (BibuiRuntime's damage tracking). With paintTo, also painted there
-    // as it is recorded, for a frame the caller already knows is whole.
-    private Damage.FrameRecorder? _recorder;
-
-    internal void Record(FrameRecord into, UiNode root, SurfaceOptions options, ThemeTokens theme, FrameInput input, IRasterCanvas? paintTo)
-    {
-        _recorder ??= new Damage.FrameRecorder(_caches.Backend);
-        _recorder.Begin(into,
-            SurfaceOptions.PhysicalSize(options.Width, options.ScaleFactor),
-            SurfaceOptions.PhysicalSize(options.Height, options.ScaleFactor), paintTo);
-        Paint(_recorder, root, options, theme, input);
-        _recorder.End();
-    }
-
     private void Paint(IRasterCanvas canvas, UiNode root, SurfaceOptions options, ThemeTokens theme, FrameInput input)
     {
         canvas.Clear(DrawingContext.ParseColor(theme.Colors.Background));
-        var ctx = new DrawingContext(canvas, options.ScaleFactor, _fonts, _caches, input, backdrop: true)
+        var ctx = new DrawingContext(canvas, options.ScaleFactor, _fonts, _caches, input, theme, backdrop: true)
         {
             SurfaceWidth = options.Width,
             SurfaceHeight = options.Height,
@@ -90,7 +74,12 @@ internal sealed class Painter
     private void Node(UiNode node, ThemeTokens theme, DrawContext ctx)
     {
         var frame = new Frame(node.Rect.X, node.Rect.Y, node.Extent.X, node.Extent.Y);
-        ctx.Recorder?.BeginBox(node.Id, node.GetType());   // a recorded frame signs what each node draws
+
+        // Style's transform moves what is painted, not where it was laid out:
+        // pushed around the node and its subtree, outside the fade, so a
+        // transparency layer is composited where the node is drawn.
+        bool moved = node.Style.HasTransform;
+        if (moved) ctx.PushTransform(node.Style.TransformFor(node.Rect, node.Extent));
 
         // Style.Opacity fades this node and its whole subtree via a transparency layer.
         bool fade = node.Style.Opacity < 1f;
@@ -133,7 +122,7 @@ internal sealed class Painter
             draw(ctx.For(frame.X, frame.Y, frame.Width, frame.Height));
 
         if (fade) ctx.PopOpacityLayer();
-        ctx.Recorder?.EndBox();
+        if (moved) ctx.PopTransform();
     }
 
     // A text is one line, drawn from the top-left of its rect as it was
@@ -152,14 +141,13 @@ internal sealed class Painter
             (icon.Color ?? UiColor.TextPrimary).Resolve(theme.Colors));
     }
 
-    /// <summary>Blends toward <paramref name="to"/>, channel by channel.</summary>
-    private static Rgba Blend(Rgba from, Rgba to, float t)
-    {
-        static byte L(byte a, byte b, float t) => (byte)MathF.Round(a + (b - a) * t);
-        return new Rgba(
-            L(from.R, to.R, t), L(from.G, to.G, t),
-            L(from.B, to.B, t), L(from.A, to.A, t));
-    }
+    /// <summary>
+    /// Blends toward <paramref name="to"/> in Oklab, so a hover between two
+    /// colours passes through the colours between them rather than the grey a
+    /// channel-by-channel blend makes of, say, a blue going to an orange.
+    /// Exact at both ends: a box at rest or fully hot draws the colour named.
+    /// </summary>
+    private static Rgba Blend(Rgba from, Rgba to, float t) => ColorMix.Oklab(from, to, t);
 
     /// <summary>
     /// Layers a state over what is under it. Called only where the state has a

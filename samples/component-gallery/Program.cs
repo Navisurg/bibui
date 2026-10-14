@@ -327,31 +327,34 @@ static void WriteReferences(GalleryOptions options)
         // One size writes straight into the directory; several, a folder each.
         var dir = sizes.Count == 1 ? outDir : Path.Combine(outDir, $"{width}x{height}");
         Directory.CreateDirectory(dir);
-        foreach (var (name, state) in Pages())
-            WriteReference(dir, name, state, theme, new SurfaceOptions { Width = width, Height = height });
+        foreach (var (name, state, dropDown) in Pages())
+            WriteReference(dir, name, state, dropDown, theme, new SurfaceOptions { Width = width, Height = height });
     }
     Console.WriteLine($"Done — references in {outDir}");
 }
 
-// Every page, and its open state where it has one, as the sidebar opens it.
-static IEnumerable<(string Name, GalleryState State)> Pages()
+// Every page, and open where it opens, as the sidebar opens it: its open
+// state, or the dropdown to open in its runtime.
+static IEnumerable<(string Name, GalleryState State, string? DropDown)> Pages()
 {
     foreach (var (group, routes) in NavGroups())
         foreach (var route in routes)
         {
             var state = InitialState() with { Route = route, OpenSidebarGroup = group };
-            yield return (route, state);
-            if (Opened(state) is { } open) yield return (route + "-open", open);
+            yield return (route, state, null);
+            if (Opened(state) is { } open) yield return (route + "-open", open, null);
+            else if (OpenedDropDown(route) is { } dropDown) yield return (route + "-open", state, dropDown);
         }
 }
 
 // A page that cannot be rendered — a layout ring, say — leaves what it threw
 // instead of a picture, and the rest go on.
-static void WriteReference(string outDir, string name, GalleryState state, Bibui.Theming.ThemeTokens theme,
-    SurfaceOptions surface)
+static void WriteReference(string outDir, string name, GalleryState state, string? dropDown,
+    Bibui.Theming.ThemeTokens theme, SurfaceOptions surface)
 {
     var runtime = new BibuiRuntime();
     runtime.MountStateful(state, (s, set) => BuildGallery(runtime, s, set), theme, surface);
+    if (dropDown is not null) runtime.OpenDropDown(dropDown);
     try
     {
         File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime));
@@ -388,13 +391,14 @@ static int CheckLayouts(GalleryOptions options)
         string? dir = options.OutDir is { } o ? Path.Combine(Path.GetFullPath(o), $"{width}x{height}") : null;
         if (dir is not null) Directory.CreateDirectory(dir);
         // And the sidebar on its own, as the menu shows it in a narrow window.
-        var menu = ("menu-open", InitialState() with { MenuOpen = true });
-        foreach (var (name, state) in Pages().Append(menu))
+        var menu = ("menu-open", InitialState() with { MenuOpen = true }, (string?)null);
+        foreach (var (name, state, dropDown) in Pages().Append(menu))
         {
             pages++;
             var runtime = new BibuiRuntime();
             runtime.MountStateful(state, (s, set) => BuildGallery(runtime, s, set), options.Theme(),
                 new SurfaceOptions { Width = width, Height = height });
+            if (dropDown is not null) runtime.OpenDropDown(dropDown);
             List<LayoutCheck.Fault> faults;
             try
             {
@@ -418,9 +422,22 @@ static int CheckLayouts(GalleryOptions options)
 
 // The page's open state, for a page that has one.
 static GalleryState? Opened(GalleryState state) =>
-    state.Inputs.Opened(state.Route) is { } inputs ? state with { Inputs = inputs }
-    : state.Display.Opened(state.Route) is { } display ? state with { Display = display }
+    state.Display.Opened(state.Route) is { } display ? state with { Display = display }
     : state.Overlays.Opened(state.Route) is { } overlays ? state with { Overlays = overlays }
-    : state.Navigation.Opened(state.Route) is { } navigation ? state with { Navigation = navigation }
-    : state.Layout.Opened(state.Route) is { } layout ? state with { Layout = layout }
     : null;
+
+// The dropdown a page opens, for a page whose open state is one.
+static string? OpenedDropDown(string route) => route switch
+{
+    "Select" => "demo-select-list",
+    "DatePicker" => "demo-datepicker-popup",
+    "TimePicker" => "demo-timepicker-popup",
+    "ColorPicker" => "demo-colorpicker-popup",
+    "Popover" => "demo-popover-content",
+    "HoverPreview" => "demo-hover-preview-content",
+    "DropdownMenu" => "demo-dropdown-menu-list",
+    "ContextMenu" => "demo-context-menu-list",
+    "MenuBar" => "demo-menu-bar-file-menu",
+    "Section" => "demo-colormap-list",
+    _ => null,
+};

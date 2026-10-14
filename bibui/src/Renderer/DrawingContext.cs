@@ -1,5 +1,6 @@
 using Bibui;
 using Bibui.Raster;
+using Bibui.Theming;
 
 namespace Bibui.Renderer;
 
@@ -17,13 +18,17 @@ internal sealed class DrawingContext
     internal float SurfaceWidth { get; set; }
     internal float SurfaceHeight { get; set; }
 
+    /// <summary>The theme this frame is painted in — the one the painter resolves every token against.</summary>
+    internal ThemeTokens Theme { get; }
+
     /// <param name="backdrop">
     /// Whether <see cref="DrawContext.BlurBackdrop"/> may read back what the canvas
     /// has painted. Without it the blur is a no-op.
     /// </param>
-    internal DrawingContext(IRasterCanvas canvas, float scale, Fonts fonts, RenderCaches caches, FrameInput input, bool backdrop = false)
+    internal DrawingContext(IRasterCanvas canvas, float scale, Fonts fonts, RenderCaches caches, FrameInput input, ThemeTokens theme, bool backdrop = false)
     {
         _canvas = canvas;
+        Theme = theme;
         _backend = caches.Backend;
         _scale = scale;
         _fonts = fonts;
@@ -42,6 +47,9 @@ internal sealed class DrawingContext
     /// <inheritdoc cref="FrameInput.Dt"/>
     public float Dt => _input.Dt;
 
+    /// <inheritdoc cref="FrameInput.ReducedMotion"/>
+    public bool ReducedMotion => _input.ReducedMotion;
+
     /// <summary>The font one run of text is measured and drawn in: a typeface at this size in physical px.</summary>
     internal RasterFont Font(RasterTypeface typeface, float logicalFontSize)
         => new(typeface, logicalFontSize * _scale);
@@ -56,8 +64,6 @@ internal sealed class DrawingContext
 
     internal IRasterCanvas Canvas => _canvas;
 
-    /// <summary>The recorder when this frame is recorded for damage tracking, else null.</summary>
-    internal Damage.FrameRecorder? Recorder => _canvas as Damage.FrameRecorder;
     internal IRasterBackend Backend => _backend;
     internal float Scale => _scale;
     internal RenderCaches Caches => _caches;

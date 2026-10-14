@@ -116,23 +116,6 @@ public sealed class BibuiRenderer
         => _painter.Paint(target, root, surface, theme, input ?? FrameInput.None);
 
     /// <summary>
-    /// The laid-out frame <see cref="RenderTo"/> would paint, recorded
-    /// into <paramref name="into"/> instead of drawn — to be diffed against the
-    /// previous frame's record and replayed onto a surface
-    /// (<see cref="FrameRecord.Replay"/>). Everything else about the frame
-    /// happens as in RenderTo: animations step, caches age.
-    /// <para>With <paramref name="paintTo"/>, the frame is also painted onto that
-    /// canvas as it is recorded — for a frame already known to be painted
-    /// whole, which then needs no replay (and cannot have one).</para>
-    /// </summary>
-    public void Record(FrameRecord into, UiNode root, SurfaceOptions surface, ThemeTokens theme,
-        FrameInput? input = null, IRasterCanvas? paintTo = null)
-    {
-        ArgumentNullException.ThrowIfNull(into);
-        _painter.Record(into, root, surface, theme, input ?? FrameInput.None, paintTo);
-    }
-
-    /// <summary>
     /// Paints the laid-out <paramref name="root"/> on the CPU and reads the
     /// pixels back: the verification and readback path.
     /// </summary>

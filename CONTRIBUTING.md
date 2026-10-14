@@ -58,6 +58,7 @@ dotnet run --project tests/text-tests -c Release
 dotnet run --project tests/png-tests -c Release
 dotnet run --project tests/wayland-tests -c Release             # headless; skips what needs a compositor
 dotnet run --project bibui-raster-managed/tests -c Release
+dotnet run --project bibui-raster-managed/damage-tests -c Release  # damage tracking, byte for byte
 dotnet run --project tests/public-api -c Release                # the public API snapshot, below
 ```
 
@@ -166,9 +167,11 @@ Acquiring, asking and describing are separate steps, and only asking has an
 order that matters. Acquire boxes, ask them innermost first, then set sizes
 and push children in whatever order is convenient.
 
-Dropdowns (`runtime.OpenDropDown(id)`) are the one exception: they are drawn
-last, over everything, and while open they own the rect they were drawn at,
-whatever order the rest of the frame asks in.
+Dropdowns (`runtime.OpenDropDown(id, anchor)`, built with
+`runtime.BeginDropDown(id)`) are the one exception: they are drawn last, over
+everything, and while open they own the rect they were drawn at, whatever
+order the rest of the frame asks in. A press that a box outside one and its
+anchor takes closes it, and so does a press nothing takes.
 
 ### When a layout is wrong, fix the layout code
 

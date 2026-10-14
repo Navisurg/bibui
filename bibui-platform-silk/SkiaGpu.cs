@@ -93,11 +93,8 @@ namespace Bibui.Runtime
         /// <see cref="BibuiRuntime.RenderTo(Bibui.Raster.IRasterSurface)"/> onto a surface
         /// made with SkiaSharp — typically a GPU surface over a window's framebuffer,
         /// which is how the Skia GPU host presents. Only on the Skia raster backend.
-        /// <paramref name="retained"/> says the surface still holds the last frame
-        /// drawn onto it, which a framebuffer after a swap does not; only then may
-        /// <see cref="BibuiRuntime.DamageTracking"/> repaint part of it.
         /// </summary>
-        public static void RenderTo(this BibuiRuntime runtime, SKSurface target, bool retained = false) =>
-            runtime.RenderTo(SkiaRendering.Backend(runtime.Raster).Wrap(target), retained);
+        public static void RenderTo(this BibuiRuntime runtime, SKSurface target) =>
+            runtime.RenderTo(SkiaRendering.Backend(runtime.Raster).Wrap(target));
     }
 }

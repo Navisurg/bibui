@@ -50,7 +50,9 @@ public static class Dialog
         ArgumentNullException.ThrowIfNull(id);
         shown = Math.Clamp(shown, 0f, 1f);
 
-        Box root = runtime.OpenDropDown(id);
+        // Opened in every frame it is built, so no press dismisses it.
+        runtime.OpenDropDown(id);
+        Box root = runtime.BeginDropDown(id)!;
         root.Px(runtime.SurfaceWidth, runtime.SurfaceHeight).At(0f, 0f);
         root.Style.BackgroundColor = Scrim.WithAlpha(ScrimAlpha * shown);
         bool across = side is DialogSide.Left or DialogSide.Right;

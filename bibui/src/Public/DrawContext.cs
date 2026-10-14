@@ -1,7 +1,7 @@
 using System.Numerics;
 using Bibui.Raster;
 using Bibui.Renderer;
-using Bibui.Renderer.Damage;
+using Bibui.Theming;
 
 namespace Bibui;
 
@@ -75,8 +75,9 @@ public readonly ref partial struct DrawContext
     }
 
     /// <summary>
-    /// The raw canvas. Prefer the Draw* methods: anything painted through here is
-    /// invisible to the renderer, so it cannot be recorded, hashed or skipped.
+    /// The raw canvas, in physical pixels. The Draw* methods below resolve theme
+    /// colours, scale and cached geometry for you; what is drawn here is drawn
+    /// as given, and the raster backend sees it like any other draw.
     /// </summary>
     public IRasterCanvas Canvas => _ctx.Canvas;
 
@@ -124,19 +125,12 @@ public readonly ref partial struct DrawContext
     public void DrawLine(float x1, float y1, float x2, float y2, in RasterPaint paint)
         => Canvas.DrawLine(x1, y1, x2, y2, paint);
 
-    public void DrawPath(RasterPath path, in RasterPaint paint) =>
-        // The scratch path is built through a signing wrapper; the backend draws the path under it.
-        Canvas.DrawPath(path is SignaturePath sp ? sp.Commit(mutable: true) : path, paint);
+    public void DrawPath(RasterPath path, in RasterPaint paint) => Canvas.DrawPath(path, paint);
 
     public void DrawPoints(PointMode mode, ReadOnlySpan<Vector2> points, in RasterPaint paint)
         => Canvas.DrawPoints(mode, points, paint);
 
-    /// <summary>
-    /// Draws <paramref name="image"/> into <paramref name="dest"/> (physical px).
-    /// The image must live until the frame is done: with damage tracking on
-    /// the frame is drawn after the walk that recorded it, so do not
-    /// dispose an image straight after drawing it here.
-    /// </summary>
+    /// <summary>Draws <paramref name="image"/> into <paramref name="dest"/> (physical px).</summary>
     public void DrawImage(RasterImage image, RectF dest, in RasterPaint paint)
         => Canvas.DrawImage(image, dest, paint);
 
@@ -154,6 +148,25 @@ public readonly ref partial struct DrawContext
 
     /// <summary>Parses <c>#rrggbb</c>/<c>#rrggbbaa</c> hex, as the theme spells colours.</summary>
     public static Rgba Color(ReadOnlySpan<char> hex) => Rgba.Parse(hex);
+
+    /// <summary>
+    /// The theme this frame is painted in: the one every built-in node resolves
+    /// its tokens against, read at paint rather than at build.
+    /// </summary>
+    public ThemeTokens Theme => _ctx.Theme;
+
+    /// <summary>
+    /// <paramref name="color"/> against <see cref="Theme"/>, the way the painter
+    /// resolves a <see cref="Style.BackgroundColor"/>: a token follows a theme
+    /// changed between the build and this paint, and <see cref="UiColor.WithAlpha"/>
+    /// applies. A callback that resolves here instead of capturing an
+    /// <see cref="Rgba"/> while building needs no theme passed to it.
+    /// </summary>
+    public Rgba Resolve(UiColor color)
+    {
+        var (r, g, b, a) = color.ResolveColor(_ctx.Theme.Colors);
+        return new Rgba(r, g, b, a);
+    }
 
     // ── Animation ────────────────────────────────────────────────────────────
     // State that outlives a frame, addressed by key and evicted by the same
@@ -194,7 +207,9 @@ public readonly ref partial struct DrawContext
         // Computed from Current, which nothing writes until the frame ends, so
         // asking twice writes the same answer twice and returns the same value
         // to both callers.
-        cell.Next = cell.Current + (target - cell.Current) * (1f - MathF.Pow(2f, -speed * _ctx.Dt));
+        cell.Next = _ctx.ReducedMotion
+            ? target
+            : cell.Current + (target - cell.Current) * (1f - MathF.Pow(2f, -speed * _ctx.Dt));
         return cell.Current;
     }
 
@@ -528,6 +543,23 @@ public readonly ref partial struct DrawContext
 
     public void PopScale() => Canvas.Restore();
 
+    /// <summary>
+    /// Draws everything until <see cref="PopTransform"/> through
+    /// <paramref name="logical"/>, a transform over logical px (what
+    /// <c>Style.Translate</c>/<c>Scale</c>/<c>Rotate</c> build), applied on top
+    /// of whatever transform is already in force.
+    /// </summary>
+    public void PushTransform(Matrix3x2 logical)
+    {
+        // The same map over physical px: down to logical, through it, back up.
+        float s = Scale;
+        var physical = Matrix3x2.CreateScale(1f / s) * logical * Matrix3x2.CreateScale(s);
+        Canvas.Save();
+        Canvas.SetMatrix(physical * Canvas.TotalMatrix);
+    }
+
+    public void PopTransform() => Canvas.Restore();
+
 
     /// <summary>Clips to this logical rect until the matching <see cref="PopClip"/>.</summary>
     public void PushClip(float x, float y, float w, float h) => PushClip(Physical(x, y, w, h));
@@ -588,7 +620,7 @@ public readonly ref partial struct DrawContext
     /// </summary>
     public RasterPath Path(CacheKey key, Action<RasterPath> build) =>
         _caches.Paths.FromKey(key, (backend: _ctx.Backend, build),
-            static p => Signed(p.backend, p.build));
+            static p => Built(p.backend, p.build));
 
     /// <summary>
     /// Geometry built from <paramref name="arg"/> by a <c>static</c> lambda, so a
@@ -597,26 +629,21 @@ public readonly ref partial struct DrawContext
     /// </summary>
     public RasterPath Path<TArg>(CacheKey key, TArg arg, Action<TArg, RasterPath> build)
         => _caches.Paths.FromKey(key, (backend: _ctx.Backend, arg, build),
-            static p => Signed(p.backend, p.arg, p.build));
+            static p => Built(p.backend, p.arg, p.build));
 
-    // A cached path is built through a SignaturePath, so it carries a hash
-    // of its content and its bounds — what a damage-tracked frame signs it by.
-    private static RasterPath Signed(IRasterBackend backend, Action<RasterPath> build)
+    private static RasterPath Built(IRasterBackend backend, Action<RasterPath> build)
     {
-        var tee = new SignaturePath(backend.CreatePath());
-        build(tee);
-        return tee.Commit(mutable: false);
+        var path = backend.CreatePath();
+        build(path);
+        return path;
     }
 
-    private static RasterPath Signed<TArg>(IRasterBackend backend, TArg arg, Action<TArg, RasterPath> build)
+    private static RasterPath Built<TArg>(IRasterBackend backend, TArg arg, Action<TArg, RasterPath> build)
     {
-        var tee = new SignaturePath(backend.CreatePath());
-        build(arg, tee);
-        return tee.Commit(mutable: false);
+        var path = backend.CreatePath();
+        build(arg, path);
+        return path;
     }
-
-    /// <summary>The recorder when this frame is recorded for damage tracking, else null.</summary>
-    internal FrameRecorder? Recorder => _ctx.Recorder;
 
 
     // ── Renderer plumbing ────────────────────────────────────────────────────

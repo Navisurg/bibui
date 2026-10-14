@@ -1,7 +1,6 @@
 using System.Numerics;
 using Bibui.Raster;
 using Bibui.Renderer;
-using Bibui.Renderer.Damage;
 
 namespace Bibui;
 
@@ -123,8 +122,7 @@ public readonly ref partial struct DrawContext
             (srcPath, s, backend: _ctx.Backend),
             static (p, path) =>
             {
-                using var raw = p.backend.CreatePath();
-                var unscaled = new SignaturePath(raw); // signed, so the icon's path is too
+                using var unscaled = p.backend.CreatePath();
                 p.srcPath.ReplayInto(unscaled);
                 path.AddPath(unscaled, Matrix3x2.CreateScale(p.s, p.s));
             });

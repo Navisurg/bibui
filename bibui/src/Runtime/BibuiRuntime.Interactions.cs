@@ -61,6 +61,15 @@ public sealed partial class BibuiRuntime
         Vector2 rect = rectMin;
         Vector2 size = Vector2.Max(Vector2.Zero, rectMax - rectMin);
 
+        // A box drawn somewhere other than where it was laid out — moved,
+        // scaled or turned by its own Style or an ancestor's — is hit where it
+        // is drawn: the pointer is taken back into layout space, through the
+        // transform last frame painted it with, and tested there.
+        // (A static call with its arguments spelled out rather than a local
+        // function: one capturing these locals costs an allocation per ask.)
+        Dictionary<string, Drawn>? transforms;
+        lock (_syncRoot) transforms = _pointerTransforms;
+
         InteractionKinds claims = box.Claims;
         if (claims == InteractionKinds.Disabled)
         {
@@ -79,7 +88,7 @@ public sealed partial class BibuiRuntime
                 BibUiEvent blocked = handle.Event;
                 if (blocked.Kind is not (BibUiEventKind.MouseDown or BibUiEventKind.MouseUp)) continue;
                 Vector2 at = new(blocked.X, blocked.Y);
-                if (!InBounds(at, rect, size) || IsUnderDropDown(box, at)) continue;
+                if (!Hit(at, geometry, rect, size, transforms) || IsUnderDropDown(box, at)) continue;
 
                 // A release belonging to a gesture someone else started is not
                 // this box's to swallow: it has to reach its owner, or that
@@ -90,6 +99,7 @@ public sealed partial class BibuiRuntime
                     && _activeId[blockedButton] is not null && _activeId[blockedButton] != id) continue;
 
                 handle.Eat();
+                if (blocked.Kind == BibUiEventKind.MouseDown) PressTaken(box);
             }
             return interaction;
         }
@@ -114,7 +124,7 @@ public sealed partial class BibuiRuntime
             Vector2 pos = new(ev.X, ev.Y);
             // An open dropdown's rect is the dropdown's: what is not under it
             // treats a point there as outside itself.
-            bool inBounds = InBounds(pos, rect, size) && !IsUnderDropDown(box, pos);
+            bool inBounds = Hit(pos, geometry, rect, size, transforms) && !IsUnderDropDown(box, pos);
 
             // Per button, not "claims some press": a box that took only the
             // right one must leave a left press for whoever did claim it.
@@ -126,6 +136,7 @@ public sealed partial class BibuiRuntime
                 _activeId[button] = id;
                 _pressPos[button] = pos;
                 handle.Eat();
+                PressTaken(box);
 
 
                 interaction.Pressed |= kind.HasFlag(InteractionKinds.LeftPress);
@@ -197,7 +208,7 @@ public sealed partial class BibuiRuntime
 
         // TODO(K): Maybe also scrollable
         if ((claims & Pressable) != 0
-            && InBounds(mousePos, rect, size)
+            && Hit(mousePos, geometry, rect, size, transforms)
             && !IsUnderDropDown(box, mousePos)
             && (_hotId is null || _hotId == id)
             && NoOtherBoxActive(id))
@@ -279,6 +290,75 @@ public sealed partial class BibuiRuntime
     {
         for (int b = 0; b < 3; b++)
             if (_activeId[b] is not null && _activeId[b] != id) return false;
+        return true;
+    }
+
+    // Where each interactive box was drawn last frame, for the boxes a
+    // transform moved: its own transform and its ancestors', and the clipping
+    // ancestors it was drawn inside, each with the transform it was drawn
+    // through. Null when nothing in the frame had a transform, which keeps the
+    // common case to one rect test.
+    private Dictionary<string, Drawn>? _pointerTransforms;
+
+    /// <summary>A moved box as it was drawn: layout space to the surface, and the clips it was cut by.</summary>
+    private sealed record Drawn(Matrix3x2 World, Matrix3x2 Inverse, DrawnClip? Clips);
+
+    /// <summary>A clipping ancestor: its laid-out rect, and the surface back to its layout space.</summary>
+    private sealed record DrawnClip(Vector2 Min, Vector2 Max, Matrix3x2 Inverse, DrawnClip? Next);
+
+    /// <summary>The transform the box named <paramref name="id"/> was drawn through last frame, or null for none.</summary>
+    private Matrix3x2? PointerTransformOf(string id)
+    {
+        lock (_syncRoot)
+            return _pointerTransforms is not null && _pointerTransforms.TryGetValue(id, out var d) ? d.World : null;
+    }
+
+    /// <summary>
+    /// Every moved interactive box as it was drawn, composed as the painter
+    /// composes transforms. Run after layout, only for a frame that has a
+    /// transform somewhere.
+    /// </summary>
+    private static Dictionary<string, Drawn> PointerTransforms(UiNode root)
+    {
+        var map = new Dictionary<string, Drawn>();
+        Walk(root, Matrix3x2.Identity, Matrix3x2.Identity, moved: false, clips: null);
+        return map;
+
+        void Walk(UiNode node, Matrix3x2 parent, Matrix3x2 parentInverse, bool moved, DrawnClip? clips)
+        {
+            var world = parent;
+            var inverse = parentInverse;
+            if (node.Style.HasTransform)
+            {
+                world = node.Style.TransformFor(node.Rect, node.Extent) * parent;
+                // Scaled to nothing has no inverse, and nothing to hit.
+                inverse = Matrix3x2.Invert(world, out var inv) ? inv : new Matrix3x2(float.NaN, 0, 0, float.NaN, 0, 0);
+                moved = true;
+            }
+            if (node is Box { Id: { } id, Claims: var claims } && claims != InteractionKinds.None)
+            {
+                if (moved) map[id] = new Drawn(world, inverse, clips);
+                // A box that clips cuts what is under it, drawn where it is drawn.
+                if ((claims & InteractionKinds.Clip) != 0)
+                    clips = new DrawnClip(node.Rect, node.Rect + node.Extent, inverse, clips);
+            }
+            for (UiNode? c = node.FirstChild; c is not null; c = c.Next == c ? null : c.Next)
+                Walk(c, world, inverse, moved, clips);
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="at"/> lands on <paramref name="geometry"/> as it
+    /// was drawn: inside its own rect and every clipping ancestor's, each
+    /// tested in its own layout space. A box no transform moved is tested as
+    /// laid out, against <paramref name="rect"/> already cut to its clips.
+    /// </summary>
+    private static bool Hit(Vector2 at, Box geometry, Vector2 rect, Vector2 size, Dictionary<string, Drawn>? transforms)
+    {
+        if (transforms is null || geometry.Id is not { } id || !transforms.TryGetValue(id, out var drawn)) return InBounds(at, rect, size);
+        if (!InBounds(Vector2.Transform(at, drawn.Inverse), geometry.Rect, geometry.Extent)) return false;
+        for (var clip = drawn.Clips; clip is not null; clip = clip.Next)
+            if (!InBounds(Vector2.Transform(at, clip.Inverse), clip.Min, clip.Max - clip.Min)) return false;
         return true;
     }
 

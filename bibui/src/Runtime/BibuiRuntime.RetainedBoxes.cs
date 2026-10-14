@@ -87,7 +87,7 @@ public sealed partial class BibuiRuntime
     /// <see cref="Box.HotT"/>/<see cref="Box.ActiveT"/> (the state a build
     /// function has no way to hold itself).
     ///
-    /// The rule is to zero out per-frame state — style, child links, claims —
+    /// The rule is to zero out per-frame state — style, child links, claims, the draw callback —
     /// while what eases across frames carries on. Without it, "not set this
     /// frame" is
     /// unexpressible: a field assigned under a condition would linger into every
@@ -97,7 +97,11 @@ public sealed partial class BibuiRuntime
     /// The Style is cleared in place rather than replaced, so the retained box
     /// keeps one Style instance for its whole life.
     /// </summary>
-    private static void ResetForBuild(Box box) => ResetNode(box);
+    private static void ResetForBuild(Box box)
+    {
+        ResetNode(box);
+        box.Draw = null;
+    }
 
     /// <summary>What every node a build describes again starts from: no style, no links, no size.</summary>
     private static void ResetNode(UiNode node)
@@ -163,6 +167,7 @@ public sealed partial class BibuiRuntime
 
             animating = StepHotAndActive();
             animating |= StepEased();
+            animating |= StepMotion();
 
             // A box that has gone disabled, or left the tree, cannot release
             // the button itself: the release block needs it to ask, and it
@@ -191,6 +196,8 @@ public sealed partial class BibuiRuntime
             RewindLeaves();
             _dropDowns.EndFrame();
             _eased.EndFrame();
+            _motion.EndFrame();
+            _lists.EndFrame();
         }
         // Outside the lock: RequestFrame wakes the host, and a wake handler is
         // not ours to run with _syncRoot held.
@@ -233,7 +240,7 @@ public sealed partial class BibuiRuntime
         // faster than DrawContext.Animate's 12, since a hover that takes half a
         // second to arrive reads as lag, not as easing.
         var motion = _theme.Motion;
-        float rate = motion.Easing == MotionEasing.None ? 1f : 1f - MathF.Pow(2f, -motion.Hover * Dt);
+        float rate = Instant ? 1f : 1f - MathF.Pow(2f, -motion.Hover * Dt);
         bool animating = false;
 
         foreach (var (id, entry) in _retainedBoxes.Entries)

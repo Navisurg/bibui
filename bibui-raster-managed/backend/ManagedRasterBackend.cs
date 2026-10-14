@@ -2,6 +2,7 @@ extern alias freetype;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using freetype::Bibui.Text.FreeType;
+using Bibui.Raster.Managed.Backend.Damage;
 using BPaintStyle = Bibui.PaintStyle;
 using BStrokeCap = Bibui.StrokeCap;
 using BStrokeJoin = Bibui.StrokeJoin;
@@ -40,7 +41,39 @@ public sealed class ManagedRasterBackend : IRasterBackend
     {
         Antialiasing = antialiasing;
         Text = new TextEngine();
+        Damage = new DamageTracker(this);
     }
+
+    // ── Damage tracking ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Damage tracking. When set, a frame — what a canvas of this backend is
+    /// told between its <see cref="IRasterCanvas.Clear"/> and
+    /// <see cref="EndFrame"/>, which the renderer brackets every frame with — is
+    /// recorded instead of drawn, compared with the frame before it, and
+    /// rasterised onto its surface only where the two differ
+    /// (<see cref="LastRepaint"/>). Pixels are byte-identical to drawing the
+    /// whole frame. The layers above are unchanged: every frame is still built,
+    /// laid out and issued in full.
+    ///
+    /// <para>For a surface whose pixels nobody else writes between frames — the
+    /// Wayland host's shared-memory buffers. It may hold any frame up to seven
+    /// frames old: that is counted here, per surface. Off by default; the
+    /// environment variable <c>BIBUI_DAMAGE=1</c> turns it on.</para>
+    /// </summary>
+    public bool DamageTracking { get; set; } = Environment.GetEnvironmentVariable("BIBUI_DAMAGE") == "1";
+
+    /// <summary>
+    /// The rects (physical px) the last damage-tracked frame was rasterised
+    /// into on its surface. Null when the whole surface was painted
+    /// (<see cref="LastFullRepaintReason"/> says why); empty when nothing changed.
+    /// </summary>
+    public IReadOnlyList<PixelRect>? LastRepaint => Damage.LastRepaint;
+
+    /// <summary>Why the last damage-tracked frame was painted whole, or null when it was not.</summary>
+    public string? LastFullRepaintReason => Damage.LastFullRepaintReason;
+
+    internal DamageTracker Damage { get; }
 
     public string Name => "managed";
 
@@ -162,7 +195,8 @@ public sealed class ManagedRasterBackend : IRasterBackend
         return new ShapedRun(glyphs, advances);
     }
 
-    public void EndFrame() { }
+    /// <summary>The renderer finished a frame: a damage-tracked one is compared with the last and rasterised now.</summary>
+    public void EndFrame() => Damage.End();
 
     public void Dispose() => Text.Dispose();
 }
@@ -175,7 +209,7 @@ public sealed class ManagedRasterSurface : IRasterSurface
     internal ManagedRasterSurface(ManagedRasterBackend backend, Surface native)
     {
         Native = native;
-        _canvas = new ManagedRasterCanvas(backend, new Canvas(native) { Antialiasing = backend.Antialiasing, MaskBlur = backend.MaskBlur });
+        _canvas = new ManagedRasterCanvas(backend, new Canvas(native) { Antialiasing = backend.Antialiasing, MaskBlur = backend.MaskBlur }, native.Width, native.Height);
     }
 
     /// <summary>The managed surface: the backend's own escape hatch.</summary>
@@ -196,29 +230,70 @@ public sealed class ManagedRasterSurface : IRasterSurface
     public void Dispose() { }
 }
 
-/// <summary>A managed path as a bibui path.</summary>
+/// <summary>
+/// A managed path as a bibui path. Change it through these verbs, not through
+/// <see cref="Native"/>: damage tracking signs a path by what the verbs built.
+/// </summary>
 public sealed class ManagedPath : RasterPath
 {
     public MPath Native { get; } = new();
 
-    public override void MoveTo(float x, float y) => Native.MoveTo(x, y);
-    public override void LineTo(float x, float y) => Native.LineTo(x, y);
-    public override void QuadTo(float x1, float y1, float x2, float y2) => Native.QuadTo(x1, y1, x2, y2);
-    public override void CubicTo(float x1, float y1, float x2, float y2, float x3, float y3) => Native.CubicTo(x1, y1, x2, y2, x3, y3);
+    // Damage tracking: a hash of the content, recomputed after a change, and
+    // the recorder of a frame that drew this path and has not replayed it yet.
+    // That recorder takes a copy before the path changes under it.
+    private int _version, _hashedVersion = -1;
+    private ulong _hash;
+    internal DamageRecorder? Holder;
+
+    private void Changing()
+    {
+        if (Holder is { } h)
+        {
+            Holder = null;
+            h.Snapshot(this);
+        }
+        _version++;
+    }
+
+    /// <summary>A hash of the path's verbs, points, conic weights and fill rule.</summary>
+    internal ulong ContentHash()
+    {
+        if (_hashedVersion != _version)
+        {
+            ulong h = Hash64.Mix(Hash64.Seed, (ulong)Native.FillRule);
+            h = Hash64.Mix(h, Native.Verbs);
+            h = Hash64.Mix(h, Native.Points);
+            _hash = Hash64.Mix(h, Native.Weights);
+            _hashedVersion = _version;
+        }
+        return _hash;
+    }
+
+    public override void MoveTo(float x, float y) { Changing(); Native.MoveTo(x, y); }
+    public override void LineTo(float x, float y) { Changing(); Native.LineTo(x, y); }
+    public override void QuadTo(float x1, float y1, float x2, float y2) { Changing(); Native.QuadTo(x1, y1, x2, y2); }
+    public override void CubicTo(float x1, float y1, float x2, float y2, float x3, float y3) { Changing(); Native.CubicTo(x1, y1, x2, y2, x3, y3); }
     public override void ArcTo(float rx, float ry, float xAxisRotate, bool largeArc, bool sweep, float x, float y)
-        => Native.ArcTo(rx, ry, xAxisRotate, largeArc, sweep, x, y);
+    {
+        Changing();
+        Native.ArcTo(rx, ry, xAxisRotate, largeArc, sweep, x, y);
+    }
     public override void AddArc(RectF oval, float startAngle, float sweepAngle)
-        => Native.AddArc(new Rect(oval.Left, oval.Top, oval.Right, oval.Bottom), startAngle, sweepAngle);
-    public override void Close() => Native.Close();
+    {
+        Changing();
+        Native.AddArc(new Rect(oval.Left, oval.Top, oval.Right, oval.Bottom), startAngle, sweepAngle);
+    }
+    public override void Close() { Changing(); Native.Close(); }
 
     public override void AddPath(RasterPath source, in Matrix3x2 transform)
     {
         var src = source as ManagedPath ?? throw new ArgumentException(
             $"A {source.GetType().Name} is not a managed path; it came from another raster backend.", nameof(source));
+        Changing();
         Native.AddPath(src.Native, transform);
     }
 
-    public override void Rewind() => Native.Rewind();
+    public override void Rewind() { Changing(); Native.Rewind(); }
     public override bool IsEmpty => Native.IsEmpty;
 }
 
@@ -270,6 +345,8 @@ public sealed class ManagedImage : RasterImage
 /// <summary>
 /// The canvas calls on the managed <see cref="Canvas"/>. Shapes map one to one;
 /// what is still approximate is listed on <see cref="ManagedRasterBackend"/>.
+/// With <see cref="ManagedRasterBackend.DamageTracking"/> on, a frame's calls go
+/// to the backend's recorder instead, and are rasterised at its end.
 /// </summary>
 public sealed class ManagedRasterCanvas : IRasterCanvas
 {
@@ -277,37 +354,104 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
     private readonly ImageShader _imageShader = new();
     private uint[] _pixelScratch = [];
 
-    internal ManagedRasterCanvas(ManagedRasterBackend backend, Canvas native)
+    // The frame being recorded on this canvas, or null when calls draw directly.
+    // A teed recorder records and the call is drawn as well.
+    private DamageRecorder? _rec;
+
+    internal ManagedRasterCanvas(ManagedRasterBackend backend, Canvas native, int width, int height)
     {
         _backend = backend;
         Native = native;
+        Width = width;
+        Height = height;
     }
 
-    /// <summary>The managed canvas: the backend's own escape hatch.</summary>
+    /// <summary>The managed canvas: the backend's own escape hatch. What is drawn through it is not damage-tracked.</summary>
     public Canvas Native { get; }
 
-    public void Clear(Rgba color) => Native.Clear(color.Argb);
+    internal int Width { get; }
+    internal int Height { get; }
+
+    internal void StopRecording() => _rec = null;
+
+    /// <summary>Clears without starting a frame: a recorded frame's own Clear, replayed.</summary>
+    internal void ClearDirect(Rgba color) => Native.Clear(color.Argb);
+
+    public void Clear(Rgba color)
+    {
+        // Every frame starts with a Clear: damage tracking starts recording here.
+        if (_backend.DamageTracking)
+        {
+            _rec = _backend.Damage.Begin(this, color);
+            _rec.Clear(color);
+            if (!_rec.Tee) return;
+        }
+        else _backend.Damage.Forget();
+        Native.Clear(color.Argb);
+    }
 
     // ── State ────────────────────────────────────────────────────────────────
 
-    public void Save() => Native.Save();
-    public void Restore() => Native.Restore();
-    public void Translate(float dx, float dy) => Native.Translate(dx, dy);
-    public void Scale(float sx, float sy) => Native.Scale(sx, sy);
-    public Matrix3x2 TotalMatrix => Native.Matrix;
-    public void SetMatrix(in Matrix3x2 matrix) => Native.SetMatrix(matrix);
-    public void ClipRect(RectF rect) => Native.ClipRect(ToRect(rect));
-    public void SaveLayerAlpha(byte alpha) => Native.SaveLayer(alpha);
+    public void Save()
+    {
+        if (_rec is { } r) { r.Save(); if (!r.Tee) return; }
+        Native.Save();
+    }
+
+    public void Restore()
+    {
+        if (_rec is { } r) { r.Restore(); if (!r.Tee) return; }
+        Native.Restore();
+    }
+
+    public void Translate(float dx, float dy)
+    {
+        if (_rec is { } r) { r.Translate(dx, dy); if (!r.Tee) return; }
+        Native.Translate(dx, dy);
+    }
+
+    public void Scale(float sx, float sy)
+    {
+        if (_rec is { } r) { r.Scale(sx, sy); if (!r.Tee) return; }
+        Native.Scale(sx, sy);
+    }
+
+    public Matrix3x2 TotalMatrix => _rec is { } r ? r.TotalMatrix : Native.Matrix;
+
+    public void SetMatrix(in Matrix3x2 matrix)
+    {
+        if (_rec is { } r) { r.SetMatrix(matrix); if (!r.Tee) return; }
+        Native.SetMatrix(matrix);
+    }
+
+    public void ClipRect(RectF rect)
+    {
+        if (_rec is { } r) { r.ClipRect(rect); if (!r.Tee) return; }
+        Native.ClipRect(ToRect(rect));
+    }
+
+    public void SaveLayerAlpha(byte alpha)
+    {
+        if (_rec is { } r) { r.SaveLayerAlpha(alpha); if (!r.Tee) return; }
+        Native.SaveLayer(alpha);
+    }
 
     // ── Shapes ───────────────────────────────────────────────────────────────
 
     public void DrawRoundRect(RectF rect, float rx, float ry, in RasterPaint paint)
     {
+        if (_rec is { } r) { r.DrawRoundRect(rect, rx, ry, paint); if (!r.Tee) return; }
         if (!Convert(paint, out var p)) return;
         Native.DrawRoundRect(ToRect(rect).Sorted(), rx, ry, p);
     }
 
     public void DrawLine(float x0, float y0, float x1, float y1, in RasterPaint paint)
+    {
+        if (_rec is { } r) { r.DrawLine(x0, y0, x1, y1, paint); if (!r.Tee) return; }
+        DirectLine(x0, y0, x1, y1, paint);
+    }
+
+    private void DirectLine(float x0, float y0, float x1, float y1, in RasterPaint paint)
     {
         if (!Convert(paint, out var p)) return;
         Native.DrawLine(x0, y0, x1, y1, p);
@@ -315,12 +459,16 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
 
     public void DrawPath(RasterPath path, in RasterPaint paint)
     {
+        var mp = path as ManagedPath ?? throw new ArgumentException(
+            $"A {path.GetType().Name} is not a managed path; it came from another raster backend.", nameof(path));
+        if (_rec is { } r) { r.DrawPath(mp, paint); if (!r.Tee) return; }
         if (!Convert(paint, out var p)) return;
-        Native.DrawPath(Path(path), p);
+        Native.DrawPath(mp.Native, p);
     }
 
     public void DrawPoints(PointMode mode, ReadOnlySpan<Vector2> points, in RasterPaint paint)
     {
+        if (_rec is { } r) { r.DrawPoints(mode, points, paint); if (!r.Tee) return; }
         if (!Convert(paint, out var p)) return;
         p.Style = PaintStyle.Stroke;
         switch (mode)
@@ -332,19 +480,19 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
                 fill.Style = PaintStyle.Fill;
                 foreach (var pt in points)
                 {
-                    var r = new Rect(pt.X - h, pt.Y - h, pt.X + h, pt.Y + h);
-                    if (p.Cap == LineCap.Round) Native.DrawOval(r, fill);
-                    else Native.DrawRect(r, fill);
+                    var rc = new Rect(pt.X - h, pt.Y - h, pt.X + h, pt.Y + h);
+                    if (p.Cap == LineCap.Round) Native.DrawOval(rc, fill);
+                    else Native.DrawRect(rc, fill);
                 }
                 break;
             }
             case PointMode.Lines:
                 for (int i = 0; i + 1 < points.Length; i += 2)
-                    DrawLine(points[i].X, points[i].Y, points[i + 1].X, points[i + 1].Y, paint);
+                    DirectLine(points[i].X, points[i].Y, points[i + 1].X, points[i + 1].Y, paint);
                 break;
             default:
                 for (int i = 0; i + 1 < points.Length; i++)
-                    DrawLine(points[i].X, points[i].Y, points[i + 1].X, points[i + 1].Y, paint);
+                    DirectLine(points[i].X, points[i].Y, points[i + 1].X, points[i + 1].Y, paint);
                 break;
         }
     }
@@ -355,11 +503,13 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
     {
         var img = image as ManagedImage ?? throw new ArgumentException(
             $"A {image.GetType().Name} is not a managed image; it came from another raster backend.", nameof(image));
+        if (_rec is { } r) { r.DrawImage(img, dest, paint); if (!r.Tee) return; }
         DrawBitmap(img.Pixels, img.Width, img.Height, dest, paint);
     }
 
     public void DrawPixels(ReadOnlySpan<byte> rgba, int width, int height, RectF dest, in RasterPaint paint)
     {
+        if (_rec is { } r) { r.DrawPixels(rgba, width, height, dest, paint); if (!r.Tee) return; }
         if (width <= 0 || height <= 0) return;
         if (_pixelScratch.Length < width * height) _pixelScratch = new uint[width * height];
         ManagedImage.Premultiply(rgba, width, height, _pixelScratch);
@@ -406,6 +556,7 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
     /// </summary>
     public void DrawBackdropBlur(PixelRect region, RectF clip, float sigma)
     {
+        if (_rec is { } r) { r.DrawBackdropBlur(region, clip, sigma); if (!r.Tee) return; }
         var m = Native.Matrix;
         float scale = MathF.Sqrt(MathF.Abs(m.GetDeterminant()));
         int dx = (int)MathF.Round(m.M31), dy = (int)MathF.Round(m.M32);
@@ -417,10 +568,24 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
     // ── Text ─────────────────────────────────────────────────────────────────
 
     public float DrawText(string text, float x, float baselineY, in RasterFont font, Rgba color)
-        => DrawText(text.AsSpan(), x, baselineY, font, color);
+    {
+        if (_rec is { } r)
+        {
+            if (!r.Tee) return r.DrawText(text, x, baselineY, font, color, drawn: null);
+            return r.DrawText(text, x, baselineY, font, color, DrawText(text.AsSpan(), x, baselineY, font, color));
+        }
+        return DrawText(text.AsSpan(), x, baselineY, font, color);
+    }
 
     public float DrawText(ReadOnlySpan<byte> utf8, float x, float baselineY, in RasterFont font, Rgba color)
-        => DrawText(_backend.Utf16(utf8), x, baselineY, font, color);
+    {
+        if (_rec is { } r)
+        {
+            if (!r.Tee) return r.DrawText(utf8, x, baselineY, font, color, drawn: null);
+            return r.DrawText(utf8, x, baselineY, font, color, DrawText(_backend.Utf16(utf8), x, baselineY, font, color));
+        }
+        return DrawText(_backend.Utf16(utf8), x, baselineY, font, color);
+    }
 
     private float DrawText(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color)
     {
@@ -444,6 +609,7 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
         float x, float baselineY, in RasterFont font, Rgba color)
     {
         if (glyphs.Length != positions.Length) throw new ArgumentException("One position per glyph.", nameof(positions));
+        if (_rec is { } r) { r.DrawGlyphRun(glyphs, positions, x, baselineY, font, color); if (!r.Tee) return; }
         if (glyphs.IsEmpty || !TextScale(out float s, out var origin, x, baselineY)) return;
         var strike = _backend.Strike(font, s);
         int n = Place(glyphs.Length);
@@ -524,9 +690,6 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
 
     private static Rect ToRect(RectF r) => new(r.Left, r.Top, r.Right, r.Bottom);
 
-    private static MPath Path(RasterPath path)
-        => (path as ManagedPath ?? throw new ArgumentException(
-            $"A {path.GetType().Name} is not a managed path; it came from another raster backend.", nameof(path))).Native;
 }
 
 /// <summary>

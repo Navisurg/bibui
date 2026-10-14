@@ -34,13 +34,25 @@ public abstract class UiNode
 
     /// <summary>
     /// Appends <paramref name="child"/> to <paramref name="parent"/>'s children.
-    /// For a node that is not pushed in any other way.
+    /// A node that already has a parent is moved: it is unlinked from that
+    /// parent first, so a node made under the parent in scope (by
+    /// <c>runtime.Text</c>, <c>runtime.Box</c>, a component) can be pushed
+    /// somewhere else afterwards, as the <c>Arrange</c> expressions do. Pushed
+    /// into the parent it is already in, it moves to the end. Pushing a node
+    /// into itself or into one of its own descendants throws.
     /// </summary>
     public static void PushIntoParent(UiNode parent, UiNode child)
     {
         ArgumentNullException.ThrowIfNull(parent);
         ArgumentNullException.ThrowIfNull(child);
         if (parent == child) throw new InvalidOperationException("A node cannot be pushed into itself.");
+        for (UiNode? a = parent.Parent; a is not null; a = a.Parent)
+        {
+            if (a == child)
+                throw new InvalidOperationException(
+                    $"A node cannot be pushed into its own descendant: '{Describe(child)}' is an ancestor of '{Describe(parent)}'.");
+        }
+        if (child.Parent is not null) Unlink(child);
         child.Parent = parent;
         child.Prev = parent.LastChild;
         child.Next = null;
@@ -48,6 +60,28 @@ public abstract class UiNode
         else parent.FirstChild = child;
         parent.LastChild = child;
     }
+
+    /// <summary>
+    /// Takes <paramref name="node"/> out of its parent's children, mending the
+    /// links around it. A link is mended only where it still points at
+    /// <paramref name="node"/>: links left from an earlier frame (a parent or
+    /// sibling the runtime has since reset and reused) are not the node's to
+    /// change.
+    /// </summary>
+    private static void Unlink(UiNode node)
+    {
+        UiNode parent = node.Parent!;
+        UiNode? prev = node.Prev, next = node.Next;
+        if (prev is not null) { if (prev.Next == node) prev.Next = next; }
+        else if (parent.FirstChild == node) parent.FirstChild = next;
+        if (next is not null) { if (next.Prev == node) next.Prev = prev; }
+        else if (parent.LastChild == node) parent.LastChild = prev;
+        node.Parent = null;
+        node.Prev = null;
+        node.Next = null;
+    }
+
+    private static string Describe(UiNode node) => node.Id ?? node.GetType().Name;
 
     // ── What the build asks for ─────────────────────────────────────────────
 
@@ -123,8 +157,16 @@ public sealed class Box : UiNode
     /// so a custom component costs what a built-in one costs rather than
     /// constructing and destroying native objects on every frame.
     /// Raw SkiaSharp drawing (the old CustomDraw) is <c>SkiaCustomDraw.Of(...)</c> in Bibui.Raster.Skia.
+    ///
+    /// <para>Build state like the rest: set it on the box a build acquired —
+    /// a retained one from <c>BibuiRuntime.BoxFromId</c> as readily as a keyless
+    /// <c>Box()</c> — and it is cleared when the box is acquired again next
+    /// frame, so a box draws only while its build keeps saying so. It runs at
+    /// paint, after the box's decoration and children; resolve theme colours
+    /// there with <see cref="DrawContext.Resolve(UiColor)"/>, not while
+    /// building, so a theme change before the paint is followed.</para>
     /// </summary>
-    public DrawCallback? Draw { get; init; }
+    public DrawCallback? Draw { get; set; }
 
     /// <summary>
     /// How hovered this box is, eased 0..1. Only means
@@ -194,6 +236,84 @@ public sealed class Style
     /// </summary>
     public float? BackdropBlur { get; set; }
 
+    // ── Transform ───────────────────────────────────────────────────────────
+    // Applied when the node is painted and when a pointer is tested against
+    // it, never when it is laid out: a row sliding in, a card scaling up on
+    // hover, moves nothing around it. The order is scale and rotate about
+    // TransformOrigin, then translate — the order CSS applies
+    // `translate(…) rotate(…) scale(…)` in, read right to left.
+    //
+    // Kept off to one side and made on first use, because almost no node has
+    // one: a Style is allocated for every node a build makes, and four more
+    // fields on each would be paid for by every frame of every app.
+
+    private sealed class TransformParts
+    {
+        public Vector2 Translate;
+        public Vector2 Scale = Vector2.One;
+        public float Rotate;
+        public Vector2 Origin = new(0.5f, 0.5f);
+    }
+
+    private TransformParts? _transform;
+    private TransformParts Parts => _transform ??= new TransformParts();
+
+    /// <summary>
+    /// Moves this node and its subtree by this many logical px when it is
+    /// painted, without moving its layout slot. Zero (default) is no move.
+    /// </summary>
+    public Vector2 Translate
+    {
+        get => _transform?.Translate ?? Vector2.Zero;
+        set { if (_transform is not null || value != Vector2.Zero) Parts.Translate = value; }
+    }
+
+    /// <summary>
+    /// Scales this node and its subtree about <see cref="TransformOrigin"/>
+    /// when it is painted. (1, 1) (default) is its own size.
+    /// </summary>
+    public Vector2 Scale
+    {
+        get => _transform?.Scale ?? Vector2.One;
+        set { if (_transform is not null || value != Vector2.One) Parts.Scale = value; }
+    }
+
+    /// <summary>Rotates this node and its subtree about <see cref="TransformOrigin"/>, in degrees clockwise. 0 (default) is upright.</summary>
+    public float Rotate
+    {
+        get => _transform?.Rotate ?? 0f;
+        set { if (_transform is not null || value != 0f) Parts.Rotate = value; }
+    }
+
+    /// <summary>
+    /// The point <see cref="Scale"/> and <see cref="Rotate"/> turn about, as a
+    /// fraction of the node's size: (0.5, 0.5) (default) is its centre,
+    /// (0, 0) its top-left corner.
+    /// </summary>
+    public Vector2 TransformOrigin
+    {
+        get => _transform?.Origin ?? new Vector2(0.5f, 0.5f);
+        set { if (_transform is not null || value != new Vector2(0.5f, 0.5f)) Parts.Origin = value; }
+    }
+
+    /// <summary>Whether any of the transform properties moves the node from where it was laid out.</summary>
+    internal bool HasTransform => _transform is { } t
+        && (t.Translate != Vector2.Zero || t.Scale != Vector2.One || t.Rotate != 0f);
+
+    /// <summary>
+    /// The transform as a matrix over logical px, for a node laid out at
+    /// <paramref name="rect"/> with size <paramref name="extent"/>.
+    /// </summary>
+    internal Matrix3x2 TransformFor(Vector2 rect, Vector2 extent)
+    {
+        var t = Parts;
+        Vector2 origin = rect + extent * t.Origin;
+        var m = Matrix3x2.CreateScale(t.Scale, origin);
+        if (t.Rotate != 0f) m *= Matrix3x2.CreateRotation(t.Rotate * MathF.PI / 180f, origin);
+        if (t.Translate != Vector2.Zero) m *= Matrix3x2.CreateTranslation(t.Translate);
+        return m;
+    }
+
     /// <summary>
     /// Restores every property to the value a freshly constructed Style has, in
     /// place — so a retained box can reuse its Style rather than be handed a new
@@ -225,6 +345,14 @@ public sealed class Style
         BorderRight = null;
         BorderBottom = null;
         BackdropBlur = null;
+        // Reset in place, so a retained box animating a transform keeps the one it made.
+        if (_transform is { } t)
+        {
+            t.Translate = Vector2.Zero;
+            t.Scale = Vector2.One;
+            t.Rotate = 0f;
+            t.Origin = new Vector2(0.5f, 0.5f);
+        }
     }
 }
 

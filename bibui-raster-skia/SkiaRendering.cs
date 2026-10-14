@@ -56,12 +56,6 @@ public static class SkiaCustomDraw
         return ctx =>
         {
             if (ctx.Canvas is SkiaRasterCanvas skia) draw(skia.Native, ctx.Rect.ToSk());
-            else if (ctx.Canvas is IRecordingCanvas recording)
-            {
-                // A recorded frame — draw on the Skia canvas it is replayed onto.
-                var rect = ctx.Rect.ToSk();
-                recording.Defer(c => { if (c is SkiaRasterCanvas s) draw(s.Native, rect); });
-            }
         };
     }
 }

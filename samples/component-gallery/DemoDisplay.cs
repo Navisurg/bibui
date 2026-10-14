@@ -69,7 +69,7 @@ internal static class DemoDisplay
         if (line.Pressed) EllipsisFocused = true;
         if (EllipsisFocused)
             foreach (var handle in runtime.UnconsumedEvents)
-                if (handle.Event is { Kind: Bibui.TextEdit.BibUiEventKind.Press, Key: Bibui.Key.Escape } or { Kind: Bibui.TextEdit.BibUiEventKind.Submit })
+                if (handle.Event is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: Bibui.TextEdit.BibUiEventKind.Submit })
                 {
                     EllipsisFocused = false;
                     handle.Eat();
@@ -808,7 +808,9 @@ internal static class DemoDisplay
     // or the close mark was pressed.
     private static bool Notification(BibuiRuntime runtime, string id, string title, string description, string action)
     {
-        Box panel = runtime.OpenDropDown(id);
+        // Opened in every frame it is built, so no press dismisses it.
+        runtime.OpenDropDown(id);
+        Box panel = runtime.BeginDropDown(id)!;
         panel.ChildLayoutAxis = LayoutAxis.X;
         panel.Px(ToastWidth, ToastHeight);
         panel.At(runtime.SurfaceWidth - ToastWidth - ToastMargin, runtime.SurfaceHeight - ToastHeight - ToastMargin);

@@ -218,14 +218,6 @@ public abstract class RasterPath : IPathBuilder, IDisposable
 
     public abstract bool IsEmpty { get; }
 
-    /// <summary>
-    /// What bibui knows of this path's content — a hash and conservative
-    /// bounds — when bibui built it (<see cref="Renderer.Damage.SignaturePath"/>).
-    /// Null for a path built by anyone else, which a damage-tracked frame cannot
-    /// sign and so repaints whole. A backend never reads or writes it.
-    /// </summary>
-    internal Renderer.Damage.PathSignature? Signature { get; set; }
-
     public void Dispose()
     {
         Dispose(true);

@@ -66,7 +66,7 @@ internal sealed partial class App
         Box[] tiles =
         [
             Kpi(rt, "eye", "Seeing", $"{seeing[^1]:0.00}", "arcsec", Delta(seeing, "0.00", lowerIsBetter: true), Charts.Sparkline(rt, seeing, UiColor.Accent)),
-            Kpi(rt, "sunrise", "Sky darkness", $"{sky[^1]:0.00}", "mag/arcsec²", Delta(sky, "0.00", lowerIsBetter: false), Charts.Sparkline(rt, sky, UiColor.Token(c => c.Info))),
+            Kpi(rt, "moon", "Sky darkness", $"{sky[^1]:0.00}", "mag/arcsec²", Delta(sky, "0.00", lowerIsBetter: false), Charts.Sparkline(rt, sky, UiColor.Token(c => c.Info))),
             Kpi(rt, "download", "Throughput", $"{tput[^1]:0.0}", "GB/h", Delta(tput, "0.0", lowerIsBetter: false), Charts.Sparkline(rt, tput, UiColor.Success)),
             Kpi(rt, "list-checks", "Exposure tonight", $"{exposed / 60.0:0.0}", $"of {planned / 60.0:0} h",
                 ($"{done} done", UiColor.Success), Row(
@@ -207,8 +207,7 @@ internal sealed partial class App
             }
         }
 
-        var pal = new Sky.Palette(Charts.Resolve(rt, UiColor.Accent), Charts.Resolve(rt, UiColor.Success),
-            Charts.Resolve(rt, UiColor.Token(c => c.Warning)), new Rgba(205, 214, 245, 230));
+        var pal = new Sky.Palette(UiColor.Accent, UiColor.Success, UiColor.Token(c => c.Warning), UiColor.Rgba(205, 214, 245, 230));
         float radius = rt.Theme.Radii.Lg + 4f;
         bool reduced = rt.Theme.Motion.Easing == Bibui.Theming.MotionEasing.None;
 
@@ -216,7 +215,10 @@ internal sealed partial class App
         card.Px(w, h);
         card.Style.CornerRadius = radius;
         card.Style.Shadow = rt.Theme.Elevation.Level(2);
-        UiNode.PushIntoParent(card, Sky.Canvas(dome, lst, [.. marks], from, pal, Grid, radius, reduced).Px(w, h));
+        // The sky is the card's first child, so the hit boxes and labels pushed after it paint over it.
+        Box canvas = rt.BoxFromId("sky-canvas", parent: card);
+        canvas.Px(w, h);
+        Sky.PaintOn(canvas, dome, lst, [.. marks], from, pal, Grid, radius, reduced);
         foreach (var hit in hits) UiNode.PushIntoParent(card, hit);
         foreach (var tag in tags) UiNode.PushIntoParent(card, tag);
 
@@ -363,7 +365,7 @@ internal sealed partial class App
         string when = minsAgo == 0 ? "now" : $"{minsAgo} min ago";
         float avg = v.Average();
 
-        var header = CardHeader(rt, metric switch { Metric.Temperature => "settings", Metric.Throughput => "download", _ => "eye" },
+        var header = CardHeader(rt, metric switch { Metric.Temperature => "thermometer", Metric.Throughput => "download", _ => "eye" },
             chart.Title, null, pick is null ? Array.Empty<UiNode>() : new UiNode[] { CentredY(pick) });
         var readout = Row(
             Bold(rt, v[at].ToString(chart.Format, System.Globalization.CultureInfo.InvariantCulture), FontSize.Px(30f), UiColor.TextPrimary),
@@ -403,16 +405,15 @@ internal sealed partial class App
     {
         // The filter's dropdown and the header cells ask before the rows.
         string filterLabel = Array.Find(Filters, f => f.Value == Filter).Label ?? "All targets";
-        var select = Select.Begin(rt, "queue-filter", S(filterLabel), SelectOpen, width: 150f);
+        var select = Select.Begin(rt, "queue-filter", S(filterLabel), width: 150f);
         if (select.Open)
             foreach (var (value, label) in Filters)
                 if (Select.Item(rt, "queue-filter-" + value, S(label), selected: Filter == value).Clicked)
                 {
                     Filter = value;
-                    SelectOpen = false;
+                    select.Close();
                 }
         var filterNode = select.End();
-        if (filterNode.Toggled) SelectOpen = !SelectOpen;
 
         float inner = w - 2 * 18f;
         float fixedW = Columns.Sum(c => c.Width);
@@ -473,7 +474,7 @@ internal sealed partial class App
 
         int imaging = Data.Targets.Count(t => t.Status == TargetStatus.Imaging);
         var card = Column(
-            CardHeader(rt, "list-checks", "Target queue", $"{rows.Count} of {Data.Targets.Length} · {imaging} imaging", filterNode.Node),
+            CardHeader(rt, "list-checks", "Target queue", $"{rows.Count} of {Data.Targets.Length} · {imaging} imaging", filterNode),
             Space(10f),
             head.FillX(),
             frame);
@@ -487,7 +488,7 @@ internal sealed partial class App
         Interaction i = rt.InteractionsFor(row);
         if (i.Clicked) Selected = t.Id;
         if (i.Clicked && i.ClickCount >= 2) { Selected = t.Id; Slew(); }
-        if (i.RightPressed) { Selected = t.Id; MenuFor = t.Id; MenuX = i.X; MenuY = i.Y; }
+        if (i.RightPressed) { Selected = t.Id; MenuFor = t.Id; MenuX = i.X; MenuY = i.Y; rt.OpenDropDown("row-menu"); }
 
         bool chosen = t.Id == Selected;
         row.ChildLayoutAxis = LayoutAxis.X;

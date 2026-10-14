@@ -2,15 +2,14 @@ using System.IO.Hashing;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Bibui.Raster;
 
-namespace Bibui.Renderer.Damage;
+namespace Bibui.Raster.Managed.Backend.Damage;
 
-// The running hash a paint signature is folded into. 64 bits, because a
-// collision is a stale pixel nobody asked for: two different draws at one box
-// that hash the same are taken as unchanged. Only *changed* boxes can collide
-// (an unchanged one hashes the same inputs), so at a few changed boxes a frame
-// the odds are about 2^-64 per box per frame.
+// The running hash a draw's signature is folded into. 64 bits, because a
+// collision is a stale pixel nobody asked for: a changed draw that hashes like
+// the draw it replaced is taken as unchanged. Only *changed* draws can collide
+// (an unchanged one hashes the same inputs), so at a few changed draws a frame
+// the odds are about 2^-64 per draw per frame.
 //
 // Floats go in by bit pattern: -0 and 0 are different draws as far as anyone
 // can prove, and a signature must be an exact function of its inputs.

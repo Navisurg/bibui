@@ -8,10 +8,11 @@ namespace Bibui.Runtime;
 /// A select: a trigger that opens a dropdown, built between
 /// <see cref="Begin"/> and <see cref="SelectScope.End"/>. Whatever the caller
 /// builds in between goes into the dropdown — <see cref="Item"/> rows, or
-/// rows of its own. The select owns nothing: the caller keeps whether it is
-/// open and what is chosen, and applies what <see cref="SelectScope.End"/>
-/// reports. It closes when the caller says: on a press of its trigger, or of
-/// an item.
+/// rows of its own. The caller keeps what is chosen. The list is a dropdown
+/// of the runtime's, named <c>id + "-list"</c>, which the trigger opens and
+/// closes with a click; a press a box outside the select takes, or one nothing
+/// takes, closes it too. The caller closes it with
+/// <see cref="SelectScope.Close"/> when it applies a row's click.
 /// </summary>
 public static class Select
 {
@@ -26,20 +27,27 @@ public static class Select
 
     /// <summary>
     /// Builds the trigger named <paramref name="id"/> showing
-    /// <paramref name="text"/>, under the parent in scope, and — when
-    /// <paramref name="open"/> — opens its dropdown under where the trigger was
-    /// drawn last frame and pushes it, so what is built until
-    /// <see cref="SelectScope.End"/> goes into it.
+    /// <paramref name="text"/>, under the parent in scope, and — while its list
+    /// is open — begins the list under where the trigger was drawn last frame
+    /// and pushes it, so what is built until <see cref="SelectScope.End"/> goes
+    /// into it. A click on the trigger opens the list, or closes it.
     /// </summary>
-    public static SelectScope Begin(BibuiRuntime runtime, string id, BibuiStr text, bool open,
+    public static SelectScope Begin(BibuiRuntime runtime, string id, BibuiStr text,
         float width = 220f, bool disabled = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(text);
 
+        string listId = id + "-list";
         Box trigger = runtime.BoxFromId(id, disabled ? InteractionKinds.Disabled : InteractionKinds.LeftPress);
-        bool toggled = runtime.InteractionsFor(trigger).Clicked;
+        if (runtime.InteractionsFor(trigger).Clicked)
+        {
+            if (runtime.IsDropDownOpen(listId)) runtime.CloseDropDown(listId);
+            else runtime.OpenDropDown(listId, trigger);
+        }
+        if (disabled) runtime.CloseDropDown(listId);
+        bool open = runtime.IsDropDownOpen(listId);
         trigger.ChildLayoutAxis = LayoutAxis.X;
         trigger.SizeX = SemanticSize.Pixels(width);
         trigger.SizeY = SemanticSize.ChildrenSum();
@@ -58,11 +66,10 @@ public static class Select
             chevron.Color = UiColor.TextSecondary;
         }
 
-        if (!open || disabled) return new SelectScope(runtime, trigger, list: null, default, toggled);
+        if (runtime.BeginDropDown(listId) is not { } list) return new SelectScope(runtime, trigger, listId, list: null, default);
 
         // Under the trigger, where it was drawn last frame, and as wide: a
         // container may have stretched it past the width it asked for.
-        Box list = runtime.OpenDropDown(id + "-list");
         list.SizeX = SemanticSize.Pixels(trigger.Extent.X > 0f ? trigger.Extent.X : width);
         list.SizeY = SemanticSize.ChildrenSum();
         list.At(trigger.Rect.X, trigger.Rect.Y + trigger.Extent.Y + Gap);
@@ -72,7 +79,7 @@ public static class Select
         list.Style.Shadow = theme.Elevation.Level(ElevationTokens.Overlay);
         list.Style.BorderColor = UiColor.Border;
         list.Style.BackgroundColor = UiColor.SurfaceRaised;
-        return new SelectScope(runtime, trigger, list, runtime.PushParent(list), toggled);
+        return new SelectScope(runtime, trigger, listId, list, runtime.PushParent(list));
     }
 
     /// <summary>
@@ -105,38 +112,36 @@ public static class Select
     }
 }
 
-/// <summary>What <see cref="SelectScope.End"/> reports: the trigger, and whether it was pressed.</summary>
-// TODO: a press outside the open list does not close it. The runtime could:
-// when the build ends, a press nobody consumed closes the open dropdowns, and
-// the select reports that to its caller next frame.
-public readonly record struct SelectResult(Box Node, bool Toggled);
-
 /// <summary>A select between <see cref="Select.Begin"/> and <see cref="End"/>.</summary>
 public readonly struct SelectScope
 {
     private readonly BibuiRuntime _runtime;
     private readonly Box _trigger;
+    private readonly string _listId;
     private readonly Box? _list;
     private readonly BibuiRuntime.ParentScope _inList;
-    private readonly bool _toggled;
 
-    internal SelectScope(BibuiRuntime runtime, Box trigger, Box? list, BibuiRuntime.ParentScope inList, bool toggled)
+    internal SelectScope(BibuiRuntime runtime, Box trigger, string listId, Box? list, BibuiRuntime.ParentScope inList)
     {
         _runtime = runtime;
         _trigger = trigger;
+        _listId = listId;
         _list = list;
         _inList = inList;
-        _toggled = toggled;
     }
 
-    /// <summary>Whether the dropdown is open, so there is somewhere to build rows into.</summary>
+    /// <summary>Whether the list is open, so there is somewhere to build rows into.</summary>
     public bool Open => _list is not null;
 
+    /// <summary>Closes the list: a row was chosen. It is still built this frame.</summary>
+    public void Close() => _runtime.CloseDropDown(_listId);
+
     /// <summary>
-    /// Stops building into the dropdown. The list asks after its rows, so a
-    /// press on its padding stops there rather than reaching what is beneath.
+    /// Stops building into the list and returns the trigger. The list asks
+    /// after its rows, so a press on its padding stops there rather than
+    /// reaching what is beneath, and dismisses nothing.
     /// </summary>
-    public SelectResult End()
+    public Box End()
     {
         if (_list is not null)
         {
@@ -144,6 +149,6 @@ public readonly struct SelectScope
             _list.Claims = InteractionKinds.Press;
             _runtime.InteractionsFor(_list);
         }
-        return new SelectResult(_trigger, _toggled);
+        return _trigger;
     }
 }

@@ -17,20 +17,20 @@ inside.
 |---|---|---|
 | ![input-filled](images/input-filled.png) | ![input-error](images/input-error.png) | ![input-disabled](images/input-disabled.png) |
 
-| Placeholder | Textarea | Ellipsis |
-|---|---|---|
-| ![input-focused](images/input-focused.png) | ![textarea-multiline](images/textarea-multiline.png) | ![text-ellipsis](images/text-ellipsis.png) |
+| Focused, with a selection | Placeholder | Textarea | Ellipsis |
+|---|---|---|---|
+| ![input-focused](images/input-focused.png) | ![input-placeholder](images/input-placeholder.png) | ![textarea-multiline](images/textarea-multiline.png) | ![text-ellipsis](images/text-ellipsis.png) |
 
 ![text-wrap-default: a multi-line field that takes no events, as a paragraph](images/text-wrap-default.png)
 
 Fixtures: `input-filled`,
-`input-no-error`, `input-error`, `input-disabled`, `input-focused`,
+`input-no-error`, `input-error`, `input-disabled`, `input-focused`, `input-placeholder`,
 `textarea-default`, `textarea-no-error`, `textarea-error`, `textarea-disabled`,
 `textarea-multiline`, `text-ellipsis` and `text-ellipsis-fits`. The wrapped
 paragraphs are `text-wrap-default`, `text-wrapped-autosize-mid` and
-`text-wrapped-autosize-cap`. No fixture draws a
-focused field with its caret yet: `input-focused` is an unfocused, empty field
-showing its placeholder.
+`text-wrapped-autosize-cap`. `input-focused` is focused, with
+"example" selected and the caret at its end; `input-placeholder` is an
+unfocused, empty field showing its placeholder.
 
 ## SingleLine, Ellipsis, Multiline
 
@@ -141,7 +141,7 @@ sealed class EmailInput
 
         // Escape or Enter ends editing.
         foreach (var handle in runtime.UnconsumedEvents)
-            if (_focused && handle.Event is { Kind: BibUiEventKind.Press, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
+            if (_focused && handle.Event is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
             {
                 _focused = false;
                 handle.Eat();

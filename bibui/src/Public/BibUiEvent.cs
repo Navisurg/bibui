@@ -8,7 +8,7 @@ namespace Bibui.TextEdit;
 public enum BibUiEventKind
 {
     Null,       // unset / sentinel — also the default for events not yet tagged
-    Press,      // key down — for global shortcuts
+    Press,      // any other key down. A shortcut filters on BibUiEvent.IsKeyDown, not on this
     Text,       // typed character (layout-resolved, IME-composed); CodePoint is set
     Navigate,   // cursor movement intent (arrows / home / end); Delta is set
     Edit,       // mutating intent (delete / backspace / cut / paste); Flags carry the action
@@ -48,6 +48,26 @@ public sealed class BibUiEvent
 
     // ── Raw OS info ──────────────────────────────────────────────────────────
     public Key Key { get; set; } = Key.Unknown;
+
+    /// <summary>
+    /// A key went down, whatever kind the text fields' translation gave it:
+    /// <see cref="BibUiEventKind.Press"/>, <see cref="BibUiEventKind.Navigate"/>
+    /// (arrows, Home, End, Ctrl+A), <see cref="BibUiEventKind.Submit"/> (Enter),
+    /// <see cref="BibUiEventKind.Edit"/> (Backspace, Delete, Ctrl+X, Ctrl+V) or
+    /// <see cref="BibUiEventKind.Copy"/> (Ctrl+C). What an app's shortcut handler
+    /// filters on before it reads <see cref="Key"/>: filtering on Press alone never
+    /// sees ↑, ↓ or Enter.
+    ///
+    /// <para>A printable key arrives twice: this key-down, and a
+    /// <see cref="BibUiEventKind.Text"/> with the character it typed, which is not a
+    /// key-down. So a key that gives a field the keyboard — <c>/</c> to search —
+    /// must also eat its Text, or the field, focused by the time the Text is read,
+    /// types the <c>/</c>. Both are in the same frame's
+    /// <see cref="Bibui.Runtime.BibuiRuntime.UnconsumedEvents"/>, the key-down first:
+    /// remember that the key focused the field, and eat the Text that follows it.</para>
+    /// </summary>
+    public bool IsKeyDown => Kind is BibUiEventKind.Press or BibUiEventKind.Navigate
+        or BibUiEventKind.Submit or BibUiEventKind.Edit or BibUiEventKind.Copy;
 
     /// <summary>
     /// What was held when this happened, stamped where the event was made.
