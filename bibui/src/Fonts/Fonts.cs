@@ -2,6 +2,7 @@ using Bibui.Theming;
 using Bibui.Renderer;
 using Bibui.Renderer.Components;
 using Bibui.Raster;
+using Bibui.TextEdit;
 
 namespace Bibui;
 
@@ -178,8 +179,8 @@ public sealed class Fonts : IDisposable
 
     /// <summary>
     /// The char offset in <paramref name="text"/> nearest <paramref name="x"/>,
-    /// logical px from where the text starts: a code point boundary, the one
-    /// after a glyph when <paramref name="x"/> is past its middle. 0 at or before
+    /// logical px from where the text starts: a text element boundary, the one
+    /// after a character when <paramref name="x"/> is past its middle. 0 at or before
     /// the start, the length past the end.
     ///
     /// <para>Each candidate is the width of the chars before it, measured as a
@@ -192,8 +193,7 @@ public sealed class Fonts : IDisposable
         float previousWidth = 0f;
         while (previous < text.Length)
         {
-            System.Text.Rune.DecodeFromUtf16(text[previous..], out _, out int length);
-            int next = previous + Math.Max(1, length);
+            int next = previous + TextOp.ScanTextElement(text, previous, +1);
             float width = Measure(text[..next], font);
             if (width >= x) return x - previousWidth < width - x ? previous : next;
             previous = next;
