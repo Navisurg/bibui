@@ -11,7 +11,7 @@ Fixture: `section-default`: a caption, a closed [Select](select.md) and a
 ## Build
 
 ```cs
-public static Box Build(BibuiRuntime runtime, BibuiStr caption)
+public static Box Build(BibuiRuntime runtime, ReadOnlySpan<char> caption)
 
 public const float Spacing = 12f;   // under the caption, and between children
 ```
@@ -39,9 +39,9 @@ using Bibui.Runtime;
 
 sealed class AppearanceSection
 {
-    static readonly BibuiStr Caption = BibuiStr.FromStrLit("APPEARANCE"u8);
-    static readonly BibuiStr Dark = BibuiStr.FromStrLit("Dark mode"u8);
-    static readonly BibuiStr Alpha = BibuiStr.FromStrLit("Alpha"u8);
+    const string Caption = "APPEARANCE";
+    const string Dark = "Dark mode";
+    const string Alpha = "Alpha";
 
     bool _dark = true;     // the caller's state
     float _alpha = 0.67f;

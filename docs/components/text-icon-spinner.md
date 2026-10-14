@@ -21,16 +21,16 @@ Fixtures: `text-label`, `text-align-right`, `text-centered-accent`,
 ## Text
 
 ```cs
-public Text Text(ReadOnlyMemory<byte> text, FontSize? fontSize = null, UiColor? textColor = null, FontSlot? family = null)
-public Text TextFromId(string id, ReadOnlyMemory<byte> text, FontSize? fontSize = null, UiColor? textColor = null, FontSlot? family = null)
+public Text Text(ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null, FontSlot? family = null)
+public Text TextFromId(string id, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null, FontSlot? family = null)
 
 public FontSizeScope PushFontSize(FontSize size)
 public FontFaceScope PushFontFace(FontSlot? family = null, FontWeight? weight = null)
 ```
 
-- `text` is UTF-8 that you own. The node holds your memory and does not copy it,
-  so keep it unchanged until the frame is painted. A `BibuiStr.AsMemory()`, a
-  `u8` literal's array, or a slice of either will do.
+- `text` is copied into the node, so a `string`, a slice of a `BibuiStr` or
+  text formatted into a stack buffer will all do, and may change as soon as the
+  call returns.
 - `fontSize` is a `ComponentSize` step (`Sm`, `Md`, `Lg`, `Xl`, `Xxl`) or
   `FontSize.Px(n)`. Without one, the text uses the size pushed with
   `PushFontSize`, or `Md`.
@@ -125,8 +125,8 @@ using Bibui.Runtime;
 
 sealed class SearchStatus
 {
-    static readonly byte[] Heading = "OVERVIEW"u8.ToArray();
-    static readonly byte[] Searching = "Searching…"u8.ToArray();
+    const string Heading = "OVERVIEW";
+    const string Searching = "Searching…";
 
     public bool Busy { get; set; }   // the caller's state, shown
 

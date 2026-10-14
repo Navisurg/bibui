@@ -68,10 +68,10 @@ using Bibui.Runtime;
 
 sealed class DeleteConfirmation
 {
-    static readonly BibuiStr Delete = BibuiStr.FromStrLit("Delete…"u8);
-    static readonly BibuiStr Cancel = BibuiStr.FromStrLit("Cancel"u8);
-    static readonly BibuiStr Confirm = BibuiStr.FromStrLit("Delete"u8);
-    static readonly byte[] Question = "Delete this case? This cannot be undone."u8.ToArray();
+    const string Delete = "Delete…";
+    const string Cancel = "Cancel";
+    const string Confirm = "Delete";
+    const string Question = "Delete this case? This cannot be undone.";
 
     bool _open;   // the caller's state
 

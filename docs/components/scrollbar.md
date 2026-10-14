@@ -60,7 +60,7 @@ using Bibui.Runtime;
 
 sealed class LogView
 {
-    static readonly byte[][] Lines = [.. Enumerable.Range(1, 40).Select(i => System.Text.Encoding.UTF8.GetBytes($"Line {i}"))];
+    static readonly string[] Lines = [.. Enumerable.Range(1, 40).Select(i => $"Line {i}")];
 
     public UiNode Build(BibuiRuntime runtime)
     {

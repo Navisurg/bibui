@@ -22,7 +22,7 @@ public static BibuiWidget Build(
     BibuiRuntime runtime,
     string id,
     bool on,
-    BibuiStr? label = null,
+    ReadOnlySpan<char> label = default,
     string? icon = null,
     bool disabled = false)
 ```
@@ -47,7 +47,7 @@ public static ToggleGroupWidget Build(
     IReadOnlyList<ToggleOption> items,
     string? value)
 
-public readonly record struct ToggleOption(BibuiStr Label, string Value);
+public readonly record struct ToggleOption(string Label, string Value);
 public readonly record struct ToggleGroupWidget(Box Node, string? Picked);
 ```
 
@@ -83,12 +83,12 @@ using Bibui.Runtime;
 
 sealed class FormatBar
 {
-    static readonly BibuiStr Bold = BibuiStr.FromStrLit("Bold"u8);
+    const string Bold = "Bold";
     static readonly ToggleOption[] Alignments =
     [
-        new(BibuiStr.FromStrLit("Left"u8), "left"),
-        new(BibuiStr.FromStrLit("Centre"u8), "centre"),
-        new(BibuiStr.FromStrLit("Right"u8), "right"),
+        new("Left", "left"),
+        new("Centre", "centre"),
+        new("Right", "right"),
     ];
 
     bool _bold;                 // the caller's state

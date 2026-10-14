@@ -12,7 +12,7 @@ Fixtures: `keyboard-shortcut-chord` and `keyboard-shortcut-single`.
 ## Build
 
 ```cs
-public static Box Build(BibuiRuntime runtime, params ReadOnlySpan<BibuiStr> keys)
+public static Box Build(BibuiRuntime runtime, params ReadOnlySpan<string> keys)
 
 public const float KeyHeight = 24f;
 ```
@@ -45,9 +45,9 @@ using Bibui.Runtime;
 
 sealed class CommandPaletteHint
 {
-    static readonly BibuiStr Ctrl = BibuiStr.FromStrLit("Ctrl"u8);
-    static readonly BibuiStr Shift = BibuiStr.FromStrLit("Shift"u8);
-    static readonly BibuiStr P = BibuiStr.FromStrLit("P"u8);
+    const string Ctrl = "Ctrl";
+    const string Shift = "Shift";
+    const string P = "P";
 
     public UiNode Build(BibuiRuntime runtime) => KeyboardShortcut.Build(runtime, Ctrl, Shift, P);
 }

@@ -39,19 +39,19 @@ public static BibuiWidget SingleLine(
     BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
     uint events = SingleLineEvents,
     TextColor textColor = TextColor.Primary,
-    BibuiStr? placeholder = null)
+    ReadOnlySpan<char> placeholder = default)
 
 public static BibuiWidget Ellipsis(
     BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
     uint events = 0,
     TextColor textColor = TextColor.Primary,
-    BibuiStr? placeholder = null)
+    ReadOnlySpan<char> placeholder = default)
 
 public static BibuiWidget Multiline(
     BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
     uint events = MultiLineEvents,
     TextColor textColor = TextColor.Primary,
-    BibuiStr? placeholder = null,
+    ReadOnlySpan<char> placeholder = default,
     TextWrap wrap = TextWrap.Words)
 
 public static SemanticSize Rows(BibuiRuntime runtime, int rows);
@@ -65,7 +65,7 @@ public const uint MultiLineEvents, MultiLineReadOnlyEvents;
 |---|---|
 | `id` | The field's retained view box, inside the box you pushed. |
 | `text` | Your buffer. A focused field edits it in place. |
-| `edit` | Your caret (`Cursor`) and selection anchor (`Mark`), as byte offsets. A press or drag moves them. |
+| `edit` | Your caret (`Cursor`) and selection anchor (`Mark`), as char offsets (UTF-16 code units), always on a character's boundary. A press or drag moves them. |
 | `focused` | Shows the caret and selection, and applies the frame's text events. |
 | `events` | Which events a focused field takes, as bits of `BibUiEventKind`. `SingleLineEvents` edits, `SingleLineReadOnlyEvents` selects and copies, and 0 only shows the text and takes no press. `MultiLineEvents` also takes `Submit` (Enter) as a new line. |
 | `textColor` | The text's colour. A placeholder is always `TextColor.Secondary`. |
@@ -120,7 +120,7 @@ using Bibui.TextEdit;
 
 sealed class EmailInput
 {
-    static readonly BibuiStr Placeholder = BibuiStr.FromStrLit("Email address"u8);
+    const string Placeholder = "Email address";
 
     readonly BibuiStr _email = new(64);              // the caller's state
     readonly TextEditState _edit = new();
@@ -160,7 +160,7 @@ using Bibui.TextEdit;
 
 sealed class MessageBox
 {
-    static readonly BibuiStr Placeholder = BibuiStr.FromStrLit("Type your message here."u8);
+    const string Placeholder = "Type your message here.";
 
     readonly BibuiStr _message = new(256);           // the caller's state
     readonly TextEditState _edit = new();

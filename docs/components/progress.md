@@ -16,7 +16,7 @@ public static Box Build(
     BibuiRuntime runtime,
     float value,
     float max = 100f,
-    BibuiStr? label = null,
+    ReadOnlySpan<char> label = default,
     float thickness = DefaultThickness,
     UiColor? fill = null,
     UiColor? track = null)
@@ -55,7 +55,7 @@ using Bibui.Runtime;
 
 sealed class UploadProgress
 {
-    static readonly BibuiStr Label = BibuiStr.FromStrLit("Upload progress"u8);
+    const string Label = "Upload progress";
 
     public long Sent { get; set; }          // the caller's state, shown
     public long Total { get; set; } = 1;

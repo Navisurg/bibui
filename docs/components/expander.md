@@ -17,7 +17,7 @@ Fixtures: `expander-closed` and `expander-open`.
 public static ExpanderWidget Build(
     BibuiRuntime runtime,
     string id,
-    BibuiStr title,
+    ReadOnlySpan<char> title,
     bool open)
 
 public readonly record struct ExpanderWidget(Box Node, Box? Body, Interaction Interaction)
@@ -62,8 +62,8 @@ using Bibui.Runtime;
 
 sealed class StarredRepositories
 {
-    static readonly BibuiStr Title = BibuiStr.FromStrLit("Starred repositories"u8);
-    static readonly byte[][] Lines = ["@fernway/primitives"u8.ToArray(), "@fernway/palette"u8.ToArray()];
+    const string Title = "Starred repositories";
+    static readonly string[] Lines = ["@fernway/primitives", "@fernway/palette"];
 
     bool _open;   // the caller's state
 

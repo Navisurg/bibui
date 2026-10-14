@@ -344,7 +344,7 @@ built. Components read those from `runtime.Theme`, which is the theme the frame
 will be painted with:
 
 ```csharp
-public static BibuiWidget Build(BibuiRuntime runtime, string id, BibuiStr label, bool on)
+public static BibuiWidget Build(BibuiRuntime runtime, string id, ReadOnlySpan<char> label, bool on)
 {
     ThemeTokens theme = runtime.Theme;
     Box row = runtime.BoxFromId(id, InteractionKinds.LeftPress);
@@ -364,7 +364,7 @@ public static BibuiWidget Build(BibuiRuntime runtime, string id, BibuiStr label,
     row.Style.BackgroundColor = UiColor.Accent.WithAlpha(0.2f * t);
 
     using (runtime.PushParent(row))
-        runtime.Text(label.AsMemory());
+        runtime.Text(label);
     return new BibuiWidget(row, interaction);
 }
 ```
@@ -439,7 +439,7 @@ look at the PNG:
 ```csharp
 var runtime = new BibuiRuntime();
 ThemeTokens mine = ThemeRegistry.Load(ThemeRegistry.RegisterFile("themes/ocean.json"));
-BibuiStr save = BibuiStr.FromStrLit("Save"u8), sync = BibuiStr.FromStrLit("Sync"u8);
+const string save = "Save", sync = "Sync";
 
 runtime.Mount(() =>
     Arrange.Row(
