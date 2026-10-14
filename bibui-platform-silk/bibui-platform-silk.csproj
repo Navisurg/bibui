@@ -31,10 +31,6 @@
     <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />
     <PackageReference Include="TextCopy" Version="6.2.1" />
   </ItemGroup>
-  <ItemGroup>
-    <!-- SilkPlatformHost.LoadBundledGlfw, which the tests check. -->
-    <InternalsVisibleTo Include="bibui-runtime-tests" />
-  </ItemGroup>
 
   <ItemGroup>
     <!-- The licence and the third-party notices travel with the package. -->

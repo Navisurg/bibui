@@ -99,7 +99,7 @@ public sealed class SilkPlatformHost : ISkiaGpuPlatformHost
     /// Loads the GLFW that NuGet shipped (Ultz.Native.GLFW), by the path it
     /// shipped it to, and returns that path; null when there is none to load.
     /// <see cref="Open"/> calls it; so may anything that creates a Silk.NET
-    /// window of its own, such as a hidden GPU context (InternalsVisibleTo).
+    /// window of its own, such as a hidden GPU context.
     ///
     /// Silk.NET 2.23 tries the bare name first (the system loader path), then
     /// runtimes/&lt;rid&gt;/native under the app — but it takes that RID from
@@ -120,7 +120,7 @@ public sealed class SilkPlatformHost : ISkiaGpuPlatformHost
     /// Best effort by design: if no bundled copy loads, nothing changes and
     /// Silk.NET searches as before.
     /// </summary>
-    internal static string? LoadBundledGlfw()
+    public static string? LoadBundledGlfw()
     {
         if (!OperatingSystem.IsLinux()) return null;
         lock (_glfwLock)
