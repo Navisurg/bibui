@@ -4,7 +4,7 @@ using Bibui.TextEdit;
 namespace Bibui.Runtime;
 
 /// <summary>One option of a <see cref="RadioGroup"/>: what it reads, the value it stands for, and whether it takes a press.</summary>
-public readonly record struct RadioOption(BibuiStr Label, string Value, bool Disabled = false);
+public readonly record struct RadioOption(string Label, string Value, bool Disabled = false);
 
 /// <summary>What a <see cref="RadioGroup"/> built: its box, and the value picked this frame, if any.</summary>
 public readonly record struct RadioGroupWidget(Box Node, string? Picked);
@@ -94,7 +94,7 @@ public static class RadioGroup
                         using (runtime.PushParent(Cell(runtime)))
                         {
                             Arrange.Spring(runtime.ParentInScope);
-                            runtime.Text(item.Label.AsMemory(), textColor: off ? TextColor.Disabled : TextColor.Primary);
+                            runtime.Text(item.Label, textColor: off ? TextColor.Disabled : TextColor.Primary);
                             Arrange.Spring(runtime.ParentInScope);
                         }
                     }

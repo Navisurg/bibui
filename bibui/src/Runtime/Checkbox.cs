@@ -24,7 +24,7 @@ public static class Checkbox
     /// state. <paramref name="indeterminate"/> draws a dash and wins over
     /// <paramref name="on"/>.
     /// </summary>
-    public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, BibuiStr? label = null,
+    public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default,
         bool disabled = false, bool indeterminate = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -77,10 +77,10 @@ public static class Checkbox
                 }
             }
 
-            if (label is { Length: > 0 })
+            if (!label.IsEmpty)
             {
                 runtime.Gap(Gap);
-                runtime.Text(label.AsMemory(), textColor: disabled ? TextColor.Disabled : TextColor.Primary);
+                runtime.Text(label, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
             }
         }
         return new BibuiWidget(row, interaction);

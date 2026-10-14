@@ -23,7 +23,7 @@ public static class Toggle
     /// frame. <paramref name="icon"/> names an icon drawn before the label.
     /// Disabled, it swallows the press rather than reporting it.
     /// </summary>
-    public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, BibuiStr? label = null,
+    public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default,
         string? icon = null, bool disabled = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -45,7 +45,7 @@ public static class Toggle
         if (!disabled) style.HoverBackgroundColor = on ? UiColor.SurfaceRaisedHover : UiColor.SurfaceRaised;
 
         UiColor ink = disabled ? TextColor.Disabled : TextColor.Primary;
-        bool hasLabel = label is { Length: > 0 };
+        bool hasLabel = !label.IsEmpty;
         using (runtime.PushParent(box))
         {
             if (icon is not null)
@@ -63,7 +63,7 @@ public static class Toggle
                 using (runtime.PushParent(Cell(runtime)))
                 {
                     Arrange.Spring(runtime.ParentInScope);
-                    runtime.Text(label!.AsMemory(), textColor: ink);
+                    runtime.Text(label, textColor: ink);
                     Arrange.Spring(runtime.ParentInScope);
                 }
             }

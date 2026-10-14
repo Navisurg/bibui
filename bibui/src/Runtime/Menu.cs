@@ -81,12 +81,11 @@ public static class Menu
     /// <paramref name="disabled"/> — which still takes the press, and reports
     /// nothing, so it does not fall through to what is beneath.
     /// </summary>
-    public static BibuiWidget Item(BibuiRuntime runtime, string id, BibuiStr label,
-        string? icon = null, BibuiStr? shortcut = null, bool disabled = false)
+    public static BibuiWidget Item(BibuiRuntime runtime, string id, ReadOnlySpan<char> label,
+        string? icon = null, ReadOnlySpan<char> shortcut = default, bool disabled = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
-        ArgumentNullException.ThrowIfNull(label);
 
         Box row = runtime.BoxFromId(id, disabled ? InteractionKinds.Disabled : InteractionKinds.LeftPress);
         Interaction interaction = runtime.InteractionsFor(row);
@@ -113,11 +112,11 @@ public static class Menu
                 }
                 runtime.Gap(IconGap);
             }
-            runtime.Text(label.AsMemory(), textColor: ink);
-            if (shortcut is not null)
+            runtime.Text(label, textColor: ink);
+            if (!shortcut.IsEmpty)
             {
                 Arrange.Spring(row);
-                runtime.Text(shortcut.AsMemory(), ComponentSize.Sm, UiColor.TextDisabled);
+                runtime.Text(shortcut, ComponentSize.Sm, UiColor.TextDisabled);
             }
         }
         return new BibuiWidget(row, interaction);
@@ -143,17 +142,16 @@ public static class Menu
     }
 
     /// <summary>A caption over a group of rows: small, bold and quiet. Takes nothing.</summary>
-    public static Box Label(BibuiRuntime runtime, BibuiStr text)
+    public static Box Label(BibuiRuntime runtime, ReadOnlySpan<char> text)
     {
         ArgumentNullException.ThrowIfNull(runtime);
-        ArgumentNullException.ThrowIfNull(text);
         Box band = runtime.Box();
         band.ChildLayoutAxis = LayoutAxis.X;
         band.SizeX = SemanticSize.ParentPct(1f);
         band.SizeY = SemanticSize.ChildrenSum();
         band.Style.Padding = EdgeInsets.Symmetric(horizontal: ItemPadX, vertical: LabelPadY);
         using (runtime.PushParent(band))
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(text.AsMemory(), ComponentSize.Sm, UiColor.TextSecondary);
+            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(text, ComponentSize.Sm, UiColor.TextSecondary);
         return band;
     }
 }
