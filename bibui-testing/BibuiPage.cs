@@ -196,7 +196,7 @@ public sealed class BibuiPage : IBibuiPage
     {
         var node = FindById(id);
         return node is not null && FirstText(node) is { } text
-            ? System.Text.Encoding.UTF8.GetString(text.Content.Span)
+            ? new string(text.Content)
             : null;
 
         // A text's own words, or the first text under the node: a button's label.

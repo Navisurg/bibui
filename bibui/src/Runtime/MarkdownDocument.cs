@@ -31,7 +31,7 @@ public enum MarkdownAlign : byte { None, Left, Center, Right }
 public enum MarkdownTask : byte { None, Unchecked, Checked }
 
 /// <summary>
-/// A piece of inline text in one style: <see cref="Length"/> bytes of
+/// A piece of inline text in one style: <see cref="Length"/> chars of
 /// <see cref="MarkdownDocument.Text"/> from <see cref="Start"/>. <see cref="Link"/>
 /// indexes <see cref="MarkdownDocument.Links"/>, or is -1.
 /// </summary>
@@ -66,7 +66,7 @@ public sealed class MarkdownBlock
     public MarkdownTask Task { get; internal set; }
 
     /// <summary>
-    /// The byte offset in the source of the character between a task item's
+    /// The char offset in the source of the character between a task item's
     /// brackets — the space or the <c>x</c> — or -1. What <see cref="Markdown.ToggleTask"/> rewrites.
     /// </summary>
     public int TaskOffset { get; internal set; } = -1;
@@ -93,25 +93,25 @@ public sealed class MarkdownBlock
     internal int RawStart, RawLength, RawSource = -1;
     internal int ContentIndent;          // list item
     internal bool HasContent;            // list item: a non-blank line has been seen
-    internal byte Marker;                // list: '-', '+', '*', '.', ')'
+    internal char Marker;                // list: '-', '+', '*', '.', ')'
     internal bool PendingBlank;          // list: a blank line since the last content
-    internal byte FenceChar;
+    internal char FenceChar;
     internal int FenceLength, FenceIndent;
     internal bool Fenced;
 }
 
 /// <summary>
 /// A parsed Markdown document: CommonMark's blocks and inlines, with GFM tables,
-/// task items, strikethrough and bare-URL autolinks. Parsed once from UTF-8 and
-/// immutable after; every piece of text is a slice of <see cref="Text"/>, so a
+/// task items, strikethrough and bare-URL autolinks. Parsed once and immutable
+/// after; every piece of text is a slice of <see cref="Text"/>, so a
 /// text node can hold it across frames without a copy.
 /// </summary>
 public sealed class MarkdownDocument
 {
-    private readonly byte[] _text;
+    private readonly char[] _text;
     private readonly MarkdownRun[] _runs;
 
-    internal MarkdownDocument(MarkdownBlock root, byte[] text, MarkdownRun[] runs, string[] links)
+    internal MarkdownDocument(MarkdownBlock root, char[] text, MarkdownRun[] runs, string[] links)
     {
         Root = root;
         _text = text;
@@ -123,7 +123,7 @@ public sealed class MarkdownDocument
     public MarkdownBlock Root { get; }
 
     /// <summary>Every run's text and every code block's, in one buffer.</summary>
-    public ReadOnlyMemory<byte> Text => _text;
+    public ReadOnlyMemory<char> Text => _text;
 
     /// <summary>Every block's inline runs, in one array.</summary>
     public ReadOnlySpan<MarkdownRun> Runs => _runs;
@@ -135,20 +135,13 @@ public sealed class MarkdownDocument
     public ReadOnlySpan<MarkdownRun> RunsOf(MarkdownBlock block) => _runs.AsSpan(block.RunStart, block.RunCount);
 
     /// <summary>A run's text.</summary>
-    public ReadOnlyMemory<byte> TextOf(in MarkdownRun run) => _text.AsMemory(run.Start, run.Length);
+    public ReadOnlyMemory<char> TextOf(in MarkdownRun run) => _text.AsMemory(run.Start, run.Length);
 
     /// <summary>A code block's text.</summary>
-    public ReadOnlyMemory<byte> CodeOf(MarkdownBlock block) => _text.AsMemory(block.TextStart, block.TextLength);
+    public ReadOnlyMemory<char> CodeOf(MarkdownBlock block) => _text.AsMemory(block.TextStart, block.TextLength);
 
-    /// <summary>Parses UTF-8 Markdown.</summary>
-    public static MarkdownDocument Parse(ReadOnlySpan<byte> utf8) => new MarkdownParser().Run(utf8);
-
-    /// <summary>Parses Markdown from a string.</summary>
-    public static MarkdownDocument Parse(string markdown)
-    {
-        ArgumentNullException.ThrowIfNull(markdown);
-        return Parse(Encoding.UTF8.GetBytes(markdown));
-    }
+    /// <summary>Parses Markdown: a string, or a slice of a buffer.</summary>
+    public static MarkdownDocument Parse(ReadOnlySpan<char> markdown) => new MarkdownParser().Run(markdown);
 
     /// <summary>The plain text of a block's runs, for tests and diagnostics.</summary>
     public string PlainText(MarkdownBlock block)
@@ -156,7 +149,7 @@ public sealed class MarkdownDocument
         ArgumentNullException.ThrowIfNull(block);
         var sb = new StringBuilder();
         foreach (var run in RunsOf(block))
-            sb.Append((run.Style & MarkdownStyle.LineBreak) != 0 ? "\n" : Encoding.UTF8.GetString(_text, run.Start, run.Length));
+            sb.Append((run.Style & MarkdownStyle.LineBreak) != 0 ? "\n" : _text.AsSpan(run.Start, run.Length));
         return sb.ToString();
     }
 }
