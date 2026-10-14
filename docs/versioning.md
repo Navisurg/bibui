@@ -36,20 +36,17 @@ what to use instead, and is deprecated first wherever that is practical.
 
 ## What counts as public API
 
-The public API is exactly what `tests/public-api/api/<assembly>.txt` lists: every
-public and protected type and member of the public packages, with its
-signature and attributes. CI fails when the code and those files disagree, so
-any change to the public API shows up in review as a diff of them. If a
-change touches those files, it is an API change, and its version bump follows
-from the diff:
+The public API is every public and protected type and member of the public
+packages, with its signature and attributes. A change to it decides the
+version bump:
 
-| The diff | The release |
+| The change | The release |
 |---|---|
 | none | patch (or minor, for a new behaviour that changes no signature) |
-| only lines added, or `[Obsolete]` added | minor |
-| a line removed or changed | major |
+| only additions, or `[Obsolete]` added | minor |
+| a removal, or a changed signature | major |
 
-Also part of the promise, though no snapshot holds them:
+Also part of the promise:
 
 - the documented behaviour of that API: what a component returns, what an
   ask consumes, what the layout solver does with a size;

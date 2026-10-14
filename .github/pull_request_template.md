@@ -8,7 +8,7 @@
 
 ## Public API and pixels
 
-- [ ] The public API snapshot (`tests/public-api/api/`) is unchanged, or the change is explained here.
+- [ ] The public API is unchanged, or the change is explained here (`docs/versioning.md`).
 - [ ] Pixels are unchanged, or the change is intended: gallery pages affected and before/after screenshots below.
 - [ ] Breaking changes and user-visible additions or fixes have an entry in `CHANGELOG.md` under *Unreleased*.
 - [ ] Tests come with the change (a behaviour or layout test; a gallery page for a new component).
