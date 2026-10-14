@@ -116,7 +116,8 @@ before it was published.
   picks it when the backend implements the new `IGlRasterBackend` (Skia does,
   the managed rasterizer does not) and libEGL loads; `BIBUI_GPU=0` or
   `WaylandHostOptions.Gpu = false` keeps wl_shm, and so does an EGL that fails
-  to set up. `WaylandPlatformHost.GpuRenderer` names the GL renderer and
+  to set up, or a swap EGL refuses later (a lost context): that window goes on
+  drawing on the CPU instead of ending. `WaylandPlatformHost.GpuRenderer` names the GL renderer and
   `GlContext` (a `SkiaGlContext` on Skia, carrying the `GRContext`) is there
   for GPU-resident resources of the app's own.
 - `Icons.Register(name, svgPathData)`: an app adds icons of its own at

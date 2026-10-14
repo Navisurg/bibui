@@ -375,7 +375,20 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
             }
         }
         if (_closing) return default;
-        if (_gpu is not null) return PresentGpu(runtime, _gpu);
+        if (_gpu is not null)
+        {
+            try { return PresentGpu(runtime, _gpu); }
+            catch (GpuPresentException e)
+            {
+                // Printed, not thrown: a window that loses its GL context keeps
+                // running, drawn on the CPU from the next frame on.
+                Console.Error.WriteLine($"[bibui] Wayland host: GPU presentation failed ({e.Message}); drawing on the CPU into wl_shm from now on.");
+                _gpu.Dispose();
+                _gpu = null;
+                runtime.RequestFrame();
+                return default;
+            }
+        }
 
         var buffer = _pool.TryAcquire(_fbW, _fbH);
         if (buffer is null)

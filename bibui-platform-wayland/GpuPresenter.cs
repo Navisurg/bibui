@@ -52,6 +52,9 @@ internal static class GpuSelection
     public static bool Verbose => Environment.GetEnvironmentVariable("BIBUI_GPU_LOG") is "1" or "true";
 }
 
+/// <summary>The GPU path cannot present any more: the host goes back to wl_shm.</summary>
+internal sealed class GpuPresentException(string message, Exception? inner = null) : Exception(message, inner);
+
 /// <summary>
 /// The GPU presentation path: an EGL context on the host's own wl_display, a
 /// wl_egl_window over its wl_surface, and the raster backend bound to that
@@ -200,15 +203,22 @@ internal sealed unsafe class GpuPresenter : IDisposable
             _height = height;
         }
         _target?.Dispose();
-        return _target = _gl!.CreateFramebufferSurface(0, width, height, StencilBits, 0);
+        _target = null;
+        try { return _target = _gl!.CreateFramebufferSurface(0, width, height, StencilBits, 0); }
+        catch (InvalidOperationException e) { throw new GpuPresentException(e.Message, e); }
     }
 
-    /// <summary>Flushes the backend's GL work and swaps: attach, damage, commit (and flush) on the wl_surface.</summary>
+    /// <summary>
+    /// Flushes the backend's GL work and swaps: attach, damage, commit (and
+    /// flush) on the wl_surface. A swap EGL refuses (a lost context, a surface
+    /// the driver dropped) is a <see cref="GpuPresentException"/>, which the
+    /// host answers by going back to wl_shm rather than ending the app.
+    /// </summary>
     public void Swap()
     {
         _gl!.Flush();
         if (Egl.eglSwapBuffers(_display, _eglSurface) == 0)
-            throw new InvalidOperationException($"eglSwapBuffers failed ({Egl.Error()})");
+            throw new GpuPresentException($"eglSwapBuffers failed ({Egl.Error()})");
     }
 
     /// <summary>Releases everything, in the order GL needs: Skia's objects while the context is current, then EGL's.</summary>
