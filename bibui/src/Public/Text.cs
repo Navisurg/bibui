@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 namespace Bibui.TextEdit;
 
 public ref struct TextOp
@@ -12,25 +15,62 @@ public ref struct TextOp
 
     public TextOp() { }
 
-    public static int ScanCodePoint(ReadOnlySpan<char> str, int cursor, int delta)
+    // How far back ScanTextElement looks for a certain boundary, in chars. Only
+    // an element longer than this — stacked marks, a long run of flags — can
+    // put the cursor inside it.
+    public static int MaxLookBehind = 64;
+
+    /// <summary>
+    /// Scan one text element — what reads as one character: 👍🏽, 🇩🇰, e and an
+    /// accent, \r\n — in the direction of <paramref name="delta"/> (sign only).
+    /// Returns the char offset from <paramref name="cursor"/>, negative going
+    /// left, 0 at the edge. The cursor is assumed to be on an element boundary.
+    /// </summary>
+    public static int ScanTextElement(ReadOnlySpan<char> str, int cursor, int delta)
     {
-        int deltaChars;
-        System.Buffers.OperationStatus result;
-        if (delta < 0)
+        if (delta > 0)
+            return cursor < str.Length ? StringInfo.GetNextTextElementLength(str[cursor..]) : 0;
+        if (delta == 0 || cursor == 0) return 0;
+
+        // A line break is a boundary on both sides, and \r\n is one element.
+        if (str[cursor - 1] == '\n') return cursor >= 2 && str[cursor - 2] == '\r' ? -2 : -1;
+
+        // Whether a position is a boundary depends on what comes before it (a
+        // ZWJ sequence, the pairing of flags), so step back, a code point at a
+        // time, to a position no grapheme rule can join across — within the
+        // line and MaxLookBehind — and scan forward from there.
+        int floor = Math.Max(cursor + LineScan(str, cursor, -1), cursor - MaxLookBehind);
+        int start = cursor;
+        while (true)
         {
-            result = System.Text.Rune.DecodeLastFromUtf16(str[..cursor], out _, out deltaChars);
-        }
-        else
-        {
-            result = System.Text.Rune.DecodeFromUtf16(str[cursor..], out _, out deltaChars);
+            Rune.DecodeLastFromUtf16(str[..start], out _, out int length);
+            start -= Math.Max(1, length);
+            if (start <= floor) break;
+
+            Rune.DecodeLastFromUtf16(str[..start], out Rune before, out _);
+            Rune.DecodeFromUtf16(str[start..], out Rune after, out _);
+
+            // Before can join what follows it: ZWJ and other format chars (most
+            // Prepend), marks (an Indic virama), a regional indicator, a Hangul
+            // leading jamo.
+            bool beforeJoins = before.Value is (>= 0x1F1E6 and <= 0x1F1FF) or (>= 0x1100 and <= 0x115F) or (>= 0xA960 and <= 0xA97F)
+                || Rune.GetUnicodeCategory(before) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark
+                    or UnicodeCategory.EnclosingMark or UnicodeCategory.Format;
+            // After can join what precedes it: marks, format chars (ZWJ, tags), a
+            // skin tone, a regional indicator, a Hangul vowel or trailing jamo,
+            // a halfwidth voiced mark.
+            bool afterJoins = after.Value is (>= 0x1F1E6 and <= 0x1F1FF) or (>= 0x1F3FB and <= 0x1F3FF)
+                    or (>= 0x1160 and <= 0x11FF) or (>= 0xD7B0 and <= 0xD7FF) or 0xFF9E or 0xFF9F
+                || Rune.GetUnicodeCategory(after) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark
+                    or UnicodeCategory.EnclosingMark or UnicodeCategory.Format;
+            if (!beforeJoins && !afterJoins) break;
         }
 
-        // TODO(k): What should we do with NeedMoreData - for now we just ignore it
-        if (result == System.Buffers.OperationStatus.InvalidData)
-        {
-            throw new NotImplementedException("Can't handle these strings");
-        }
-        return deltaChars * delta; // Convert to negative or positive delta
+        // The last element boundary before the cursor.
+        int boundary = start;
+        for (int i = start; i < cursor; i += StringInfo.GetNextTextElementLength(str[i..cursor]))
+            boundary = i;
+        return boundary - cursor;
     }
 
     /// <summary>
@@ -127,7 +167,7 @@ public ref struct TextOp
         int charsDelta =
               ev.Flags.HasFlag(TextActionFlags.WordScan) ? WordScan(str.Str, state.Cursor, ev.Delta)
             : ev.Flags.HasFlag(TextActionFlags.LineScan) ? LineScan(str.Str, state.Cursor, ev.Delta)
-            : ScanCodePoint(str.Str, state.Cursor, ev.Delta);
+            : ScanTextElement(str.Str, state.Cursor, ev.Delta);
 
         // On this type of select we don't move the cursor since this
         // would for delete delete the point also before the cursor
