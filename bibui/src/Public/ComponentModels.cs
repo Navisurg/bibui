@@ -15,15 +15,13 @@ public sealed class Text : UiComponent
 
     // Its own copy of what it shows: a pooled text keeps the buffer from frame
     // to frame, so it is allocated again only for a longer text.
-    private readonly BibuiStr _content = new(0);
+    internal readonly BibuiStr ContentStr = new(0);
 
     /// <summary>
     /// What it shows: a copy of the text it was built with, so what the
     /// caller passed may change as soon as the call returns.
     /// </summary>
-    public ReadOnlySpan<char> Content => _content.Str;
-
-    internal void SetContent(ReadOnlySpan<char> text) => _content.ReplaceRange((0, (int)_content.Length), text);
+    public ReadOnlySpan<char> Content => ContentStr.Str;
 
     /// <summary>
     /// Its size, always said: what it was built with, or the size pushed with
