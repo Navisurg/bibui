@@ -13,8 +13,8 @@ public sealed class BibuiStr
     // Has 1/4 of the memory used
     internal readonly Int32 ShrinkThreshold = 2; // bitshift
 
-    public long Capacity => _memory.Length;    
-    public long Length { get; private set; }
+    public long Capacity => _memory.Length;  // In chars
+    public long Length { get; private set; }  // In chars
 
     private char[] _memory;
 
