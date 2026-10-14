@@ -40,13 +40,13 @@ internal static class DemoDisplay
         box.Style.Padding = EdgeInsets.All(8);
         using (runtime.PushParent(box))
         using (runtime.PushSizeY(rows is { } r ? TextField.Rows(runtime, r) : SemanticSize.ChildrenSum()))
-            TextField.Multiline(runtime, id, Str(text), NoEdit, focused: false, events: 0);
+            TextField.Multiline(runtime, id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0);
         return box;
     }
 
     // The editable ellipsis: what an application would hold for it.
     private static readonly BibuiStr EllipsisText = BibuiStr.FromStrLit(
-        "This is a very long label that gets truncated with an ellipsis character"u8);
+        "This is a very long label that gets truncated with an ellipsis character");
     private static readonly Bibui.TextEdit.TextEditState EllipsisEdit = new();
     private static bool EllipsisFocused;
 
@@ -80,29 +80,29 @@ internal static class DemoDisplay
     internal static UiNode Build(BibuiRuntime runtime, string route, DisplayState state, Action<DisplayState> set) => route switch
     {
     "Text" => Arrange.Column(
-        Bold(runtime, U8("Heading (Xxl, Bold)"), ComponentSize.Xxl),
+        Bold(runtime, "Heading (Xxl, Bold)", ComponentSize.Xxl),
         Arrange.Space(10f),
-        runtime.Text(U8("Large text (Xl)"), ComponentSize.Xl),
+        runtime.Text("Large text (Xl)", ComponentSize.Xl),
         Arrange.Space(10f),
-        runtime.Text(U8("Body text (Md) — the default"), ComponentSize.Md),
+        runtime.Text("Body text (Md) — the default", ComponentSize.Md),
         Arrange.Space(10f),
-        runtime.Text(U8("Small text (Sm)"), ComponentSize.Sm),
+        runtime.Text("Small text (Sm)", ComponentSize.Sm),
         Arrange.Space(10f),
-        runtime.Text(U8("Secondary color"), textColor: TextColor.Secondary),
+        runtime.Text("Secondary color", textColor: TextColor.Secondary),
         Arrange.Space(10f),
-        runtime.Text(U8("Accent / brand color"), textColor: TextColor.Accent),
+        runtime.Text("Accent / brand color", textColor: TextColor.Accent),
         Arrange.Space(10f),
-        runtime.Text(U8("Disabled / muted"), textColor: TextColor.Disabled),
+        runtime.Text("Disabled / muted", textColor: TextColor.Disabled),
         Arrange.Space(18f),
-        Bold(runtime, U8("Ellipsis overflow: press to edit, Enter or Escape to stop"), ComponentSize.Sm, TextColor.Secondary),
+        Bold(runtime, "Ellipsis overflow: press to edit, Enter or Escape to stop", ComponentSize.Sm, TextColor.Secondary),
         Arrange.Space(10f),
         EllipsisField(runtime, "demo-text-ellipsis", 220f),
         Arrange.Space(10f),
-        Bold(runtime, U8("Two lines tall, scrolling to the rest"), ComponentSize.Sm, TextColor.Secondary),
+        Bold(runtime, "Two lines tall, scrolling to the rest", ComponentSize.Sm, TextColor.Secondary),
         Arrange.Space(10f),
         Paragraph(runtime, "demo-text-two-rows", "This paragraph wraps to multiple lines. The box is two lines tall, and the lines past the second are below its edge: scroll the wheel over it to bring them into view.", 280f, rows: 2),
         Arrange.Space(22f),
-        Bold(runtime, U8("Hugging its text, or scrolling past a height"), ComponentSize.Sm, TextColor.Secondary),
+        Bold(runtime, "Hugging its text, or scrolling past a height", ComponentSize.Sm, TextColor.Secondary),
         Arrange.Space(10f),
         Paragraph(runtime, "demo-text-hug-short", "Hi!", 320f),
         Arrange.Space(10f),
@@ -111,16 +111,16 @@ internal static class DemoDisplay
         Paragraph(runtime, "demo-text-six-rows", LongFiller, 320f, rows: 6)),
 
     "Badge" => Arrange.Column(
-        Bold(runtime, U8("Status indicators"), ComponentSize.Sm, TextColor.Secondary),
+        Bold(runtime, "Status indicators", ComponentSize.Sm, TextColor.Secondary),
         Arrange.Space(16f),
         Arrange.Row(
-            Badge.Build(runtime, Str("Default")),
+            Badge.Build(runtime, "Default"),
             Arrange.Space(8f),
-            Badge.Build(runtime, Str("Primary"), BadgeVariant.Primary),
+            Badge.Build(runtime, "Primary", BadgeVariant.Primary),
             Arrange.Space(8f),
-            Badge.Build(runtime, Str("Success"), BadgeVariant.Success),
+            Badge.Build(runtime, "Success", BadgeVariant.Success),
             Arrange.Space(8f),
-            Badge.Build(runtime, Str("Destructive"), BadgeVariant.Destructive))),
+            Badge.Build(runtime, "Destructive", BadgeVariant.Destructive))),
 
     "Avatar" => AvatarPage(runtime),
 
@@ -131,7 +131,7 @@ internal static class DemoDisplay
     "Separator" => SeparatorPage(runtime),
 
     "Label" => Arrange.Column(
-        Bold(runtime, U8("Form labels paired with inputs"), ComponentSize.Sm, TextColor.Secondary),
+        Bold(runtime, "Form labels paired with inputs", ComponentSize.Sm, TextColor.Secondary),
         Arrange.Space(12f),
         DemoInputs.FieldLabel(runtime, "Email address"),
         Arrange.Space(12f),
@@ -146,7 +146,7 @@ internal static class DemoDisplay
     "Skeleton" => SkeletonPage(runtime),
 
     "Spinner" => Arrange.Column(
-        Bold(runtime, U8("Loading spinner"), ComponentSize.Sm, TextColor.Secondary),
+        Bold(runtime, "Loading spinner", ComponentSize.Sm, TextColor.Secondary),
         Arrange.Space(20f),
         Arrange.Row(
             Arrange.CentredY(new Spinner { Size = ComponentSize.Sm }.Px(16f, 16f)),
@@ -158,7 +158,7 @@ internal static class DemoDisplay
         Arrange.Row(
             Arrange.CentredY(new Spinner { Size = ComponentSize.Sm }.Px(16f, 16f)),
             Arrange.Space(8f),
-            Arrange.CentredY(runtime.Text(U8("Loading data…"), ComponentSize.Sm, TextColor.Secondary))).Px(height: 40f)),
+            Arrange.CentredY(runtime.Text("Loading data…", ComponentSize.Sm, TextColor.Secondary))).Px(height: 40f)),
 
     "RatioBox" => RatioBoxPage(runtime),
 
@@ -178,7 +178,7 @@ internal static class DemoDisplay
 
     "Toast" => ToastPage(runtime, state, set),
 
-        _ => runtime.Text(U8("Select a component from the sidebar."), textColor: TextColor.Secondary),
+        _ => runtime.Text("Select a component from the sidebar.", textColor: TextColor.Secondary),
     };
 
     // ── Shared by the pages below ───────────────────────────────────────────
@@ -193,7 +193,7 @@ internal static class DemoDisplay
 
     // A small bold caption above a demo.
     private static Text Caption(BibuiRuntime runtime, string text)
-        => Bold(runtime, U8(text), ComponentSize.Sm, TextColor.Secondary);
+        => Bold(runtime, text, ComponentSize.Sm, TextColor.Secondary);
 
     private static float LineHeight(BibuiRuntime runtime, ComponentSize size, FontWeight weight = FontWeight.Regular)
     {
@@ -247,7 +247,7 @@ internal static class DemoDisplay
         using (runtime.PushParent(box))
         {
             Arrange.Spring(box);
-            if (width is null) runtime.Text(U8(label), size, ink);
+            if (width is null) runtime.Text(label, size, ink);
             else
             {
                 Box row = runtime.Box();
@@ -257,7 +257,7 @@ internal static class DemoDisplay
                 using (runtime.PushParent(row))
                 {
                     Arrange.Spring(row);
-                    runtime.Text(U8(label), size, ink);
+                    runtime.Text(label, size, ink);
                     Arrange.Spring(row);
                 }
             }
@@ -280,7 +280,7 @@ internal static class DemoDisplay
             using (runtime.PushParent(column))
             {
                 Arrange.Spring(column);
-                runtime.Text(U8(label), size, color);
+                runtime.Text(label, size, color);
                 Arrange.Spring(column);
             }
             Arrange.Spring(box);
@@ -304,13 +304,13 @@ internal static class DemoDisplay
         Caption(runtime, "User avatars with initials fallback"),
         Arrange.Space(20f),
         Arrange.Row(
-            Avatar.Build(runtime, Str("JD"), 56f),
+            Avatar.Build(runtime, "JD", 56f),
             Arrange.Space(12f),
-            Avatar.Build(runtime, Str("AB"), 56f),
+            Avatar.Build(runtime, "AB", 56f),
             Arrange.Space(12f),
-            Avatar.Build(runtime, Str("MK"), 56f),
+            Avatar.Build(runtime, "MK", 56f),
             Arrange.Space(12f),
-            Avatar.Build(runtime, Str("TC"), 56f)));
+            Avatar.Build(runtime, "TC", 56f)));
 
     // ── Card ────────────────────────────────────────────────────────────────
 
@@ -329,9 +329,9 @@ internal static class DemoDisplay
         card.Style.Padding = EdgeInsets.All(16f);
         using (runtime.PushParent(card))
         {
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8(title), ComponentSize.Lg);
+            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, ComponentSize.Lg);
             Advance(runtime, 16f * 1.8f, ComponentSize.Lg, FontWeight.Bold);
-            runtime.Text(U8(description), ComponentSize.Md, TextColor.Secondary);
+            runtime.Text(description, ComponentSize.Md, TextColor.Secondary);
             if (body is not null)
             {
                 Advance(runtime, 14f * 1.8f + 18f - 14f * 0.4f, ComponentSize.Md);
@@ -340,7 +340,7 @@ internal static class DemoDisplay
                 lines.SizeY = SemanticSize.ChildrenSum();
                 using (runtime.PushParent(lines))
                 using (runtime.PushSizeY(SemanticSize.ChildrenSum()))
-                    TextField.Multiline(runtime, id, Str(body), NoEdit, focused: false, events: 0);
+                    TextField.Multiline(runtime, id, GalleryHelpers.Held(id, body), NoEdit, focused: false, events: 0);
             }
         }
         return card;
@@ -385,9 +385,9 @@ internal static class DemoDisplay
             using (runtime.PushParent(text))
             {
                 runtime.Gap(12f);
-                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8(title), ComponentSize.Md);
+                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, ComponentSize.Md);
                 Advance(runtime, 14f * 1.4f + 4f, ComponentSize.Md, FontWeight.Bold);
-                runtime.Text(U8(description), ComponentSize.Sm, TextColor.Secondary);
+                runtime.Text(description, ComponentSize.Sm, TextColor.Secondary);
             }
         }
         return alert;
@@ -407,20 +407,20 @@ internal static class DemoDisplay
     private static UiNode SeparatorPage(BibuiRuntime runtime) => Arrange.Column(
         Caption(runtime, "Horizontal separator"),
         Arrange.Space(16f),
-        runtime.Text(U8("Content above")),
+        runtime.Text("Content above"),
         Arrange.Space(16f),
         Separator.Build(runtime),
         Arrange.Space(16f),
-        runtime.Text(U8("Content below")),
+        runtime.Text("Content below"),
         Arrange.Space(16f),
         Caption(runtime, "Vertical separator (inline)"),
         Arrange.Space(16f),
         Arrange.Row(
-            Arrange.CentredY(runtime.Text(U8("Left"))),
+            Arrange.CentredY(runtime.Text("Left")),
             Arrange.Space(16f),
             Arrange.CentredY(Separator.Build(runtime, vertical: true).Px(height: 20f)),
             Arrange.Space(16f),
-            Arrange.CentredY(runtime.Text(U8("Right")))).Px(height: 24f)).FillX();
+            Arrange.CentredY(runtime.Text("Right"))).Px(height: 24f)).FillX();
 
     // ── Progress ────────────────────────────────────────────────────────────
 
@@ -434,13 +434,13 @@ internal static class DemoDisplay
         return Arrange.Column(
             Caption(runtime, "Task completion indicator"),
             Arrange.Space(16f),
-            Progress.Build(runtime, state.ProgressValue, 100f, Str("Upload progress")).Px(width: 400f),
+            Progress.Build(runtime, state.ProgressValue, 100f, "Upload progress").Px(width: 400f),
             Arrange.Space(16f),
-            runtime.Text(U8($"{state.ProgressValue:0}% complete"), ComponentSize.Sm, TextColor.Accent),
+            runtime.Text($"{state.ProgressValue:0}% complete", ComponentSize.Sm, TextColor.Accent),
             Arrange.Space(16f),
             Arrange.Row(minus.Node, Arrange.Space(8f), plus.Node),
             Arrange.Space(16f),
-            Progress.Build(runtime, 100f, 100f, Str("Completed")).Px(width: 400f));
+            Progress.Build(runtime, 100f, 100f, "Completed").Px(width: 400f));
     }
 
     // ── Skeleton ────────────────────────────────────────────────────────────
@@ -495,13 +495,13 @@ internal static class DemoDisplay
         Caption(runtime, "One key cap per key, in the order they are pressed"),
         Arrange.Space(20f),
         Arrange.Row(
-            KeyboardShortcut.Build(runtime, Str("⌘"), Str("K")),
+            KeyboardShortcut.Build(runtime, "⌘", "K"),
             Arrange.Space(12f),
-            KeyboardShortcut.Build(runtime, Str("Ctrl"), Str("Shift"), Str("P")),
+            KeyboardShortcut.Build(runtime, "Ctrl", "Shift", "P"),
             Arrange.Space(12f),
-            KeyboardShortcut.Build(runtime, Str("Escape")),
+            KeyboardShortcut.Build(runtime, "Escape"),
             Arrange.Space(12f),
-            KeyboardShortcut.Build(runtime, Str("↑"), Str("↓"))));
+            KeyboardShortcut.Build(runtime, "↑", "↓")));
 
     // ── Table and PagedTable ────────────────────────────────────────────────
 
@@ -569,7 +569,7 @@ internal static class DemoDisplay
         {
             Arrange.Spring(cell);
             using (runtime.PushFontFace(weight: weight))
-                runtime.Text(U8(text), ComponentSize.Sm, color);
+                runtime.Text(text, ComponentSize.Sm, color);
             Arrange.Spring(cell);
         }
     }
@@ -640,7 +640,7 @@ internal static class DemoDisplay
             Table(runtime, ["Name", "Email", "Role", "Status"], rows, width),
             Arrange.Space(10f),
             Arrange.Row(
-                Arrange.CentredY(runtime.Text(U8($"Page {page} of {PageCount}"), ComponentSize.Sm, TextColor.Secondary)),
+                Arrange.CentredY(runtime.Text($"Page {page} of {PageCount}", ComponentSize.Sm, TextColor.Secondary)),
                 Arrange.Spring(),
                 previous.Node,
                 Arrange.Space(4f),
@@ -660,18 +660,18 @@ internal static class DemoDisplay
         field.SizeY = SemanticSize.ChildrenSum();
         using (runtime.PushParent(field))
         {
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8(required ? label + " *" : label), ComponentSize.Sm);
+            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(required ? label + " *" : label, ComponentSize.Sm);
             Advance(runtime, 12f * 1.4f + 4f, ComponentSize.Sm, FontWeight.Bold);
             Box frame = runtime.Box();
             frame.SizeX = SemanticSize.ParentPct(1f);
             frame.SizeY = SemanticSize.Pixels(40f);
             TextField.InputStyle(runtime, frame, focused: false, error: error is not null);
             runtime.Gap(4f);
-            runtime.Text(U8(description), ComponentSize.Sm, TextColor.Secondary);
+            runtime.Text(description, ComponentSize.Sm, TextColor.Secondary);
             if (error is not null)
             {
                 Advance(runtime, 12f * 1.4f + 4f, ComponentSize.Sm);
-                runtime.Text(U8(error), ComponentSize.Sm, UiColor.Destructive);
+                runtime.Text(error, ComponentSize.Sm, UiColor.Destructive);
             }
         }
         return field;
@@ -719,7 +719,7 @@ internal static class DemoDisplay
             using (runtime.PushParent(text))
             {
                 Arrange.Spring(text);
-                runtime.Text(U8(label), ComponentSize.Md, ink);
+                runtime.Text(label, ComponentSize.Md, ink);
                 Arrange.Spring(text);
             }
         }
@@ -747,7 +747,7 @@ internal static class DemoDisplay
             Arrange.Space(8f),
             ListItem(runtime, "demo-item-billing", "Billing (disabled)", "file-text", active: false, disabled: true).Node,
             Arrange.Space(8f),
-            runtime.TextFromId("demo-item-state", U8($"Active: {state.ActiveItem ?? "none"}"), ComponentSize.Sm, TextColor.Secondary)).FillX();
+            runtime.TextFromId("demo-item-state", $"Active: {state.ActiveItem ?? "none"}", ComponentSize.Sm, TextColor.Secondary)).FillX();
         if (picked is not null) set(state with { ActiveItem = picked });
         return page;
     }
@@ -766,9 +766,9 @@ internal static class DemoDisplay
                 Arrange.Spring(),
                 Arrange.CentredX(icon),
                 Arrange.Space(12f),
-                Arrange.CentredX(Bold(runtime, U8("No workspaces yet"), ComponentSize.Lg)),
+                Arrange.CentredX(Bold(runtime, "No workspaces yet", ComponentSize.Lg)),
                 Arrange.Space(4f),
-                Arrange.CentredX(runtime.Text(U8("Make one to start adding files."), ComponentSize.Sm, TextColor.Secondary)),
+                Arrange.CentredX(runtime.Text("Make one to start adding files.", ComponentSize.Sm, TextColor.Secondary)),
                 Arrange.Space(12f),
                 Arrange.CentredX(create.Node),
                 Arrange.Spring()).Px(400f, 160f));
@@ -799,7 +799,7 @@ internal static class DemoDisplay
             Arrange.Space(12f),
             trigger.Node,
             Arrange.Space(12f),
-            runtime.Text(U8($"Toast: {(visible ? "visible" : "hidden")}"), ComponentSize.Sm, TextColor.Secondary));
+            runtime.Text($"Toast: {(visible ? "visible" : "hidden")}", ComponentSize.Sm, TextColor.Secondary));
     }
 
     // A notification panel in a root of its own, drawn over everything: a
@@ -845,9 +845,9 @@ internal static class DemoDisplay
             text.SizeX = text.SizeY = SemanticSize.ChildrenSum();
             using (runtime.PushParent(text))
             {
-                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8(title), ComponentSize.Md);
+                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, ComponentSize.Md);
                 Advance(runtime, 14f * 1.4f + 4f, ComponentSize.Md, FontWeight.Bold);
-                runtime.Text(U8(description), ComponentSize.Sm, TextColor.Secondary);
+                runtime.Text(description, ComponentSize.Sm, TextColor.Secondary);
                 Advance(runtime, 12f * 1.4f + 8f, ComponentSize.Sm);
                 var undo = PageButton(runtime, id + "-action", action, primary: false, height: 26f,
                     size: ComponentSize.Sm, radius: 4f, padX: 6f);

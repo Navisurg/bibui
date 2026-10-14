@@ -40,11 +40,11 @@ internal static class DemoInputs
     "TextField" => TextFieldPage(runtime),
 
     "Switch" => Arrange.Column(
-        Bold(runtime, U8("Toggle a setting on or off"), ComponentSize.Sm, TextColor.Secondary),
+        Bold(runtime, "Toggle a setting on or off", ComponentSize.Sm, TextColor.Secondary),
         Arrange.Space(16f),
         SwitchToggle(runtime, state, set),
         Arrange.Space(16f),
-        runtime.Text(U8(state.SwitchChecked ? "Notifications enabled" : "Notifications disabled"), ComponentSize.Sm, state.SwitchChecked ? TextColor.Accent : TextColor.Secondary),
+        runtime.Text(state.SwitchChecked ? "Notifications enabled" : "Notifications disabled", ComponentSize.Sm, state.SwitchChecked ? TextColor.Accent : TextColor.Secondary),
         Arrange.Space(16f),
         DisabledSwitch(runtime)),
 
@@ -66,7 +66,7 @@ internal static class DemoInputs
 
     "ColorPicker" => ColorPickerPage(runtime, state, set),
 
-        _ => runtime.Text(U8("Select a component from the sidebar."), textColor: TextColor.Secondary),
+        _ => runtime.Text("Select a component from the sidebar.", textColor: TextColor.Secondary),
     };
 
     /// <summary>
@@ -76,14 +76,14 @@ internal static class DemoInputs
     /// </summary>
     private static UiNode SwitchToggle(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var sw = Switch.Build(runtime, "demo-switch", state.SwitchChecked, label: Str("Enable notifications"));
+        var sw = Switch.Build(runtime, "demo-switch", state.SwitchChecked, label: "Enable notifications");
         if (sw.Clicked) set(state with { SwitchChecked = !state.SwitchChecked });
         return sw.Node;
     }
 
     private static UiNode DisabledSwitch(BibuiRuntime runtime)
     {
-        return Switch.Build(runtime, "demo-switch-disabled", false, label: Str("Disabled switch"), disabled: true).Node;
+        return Switch.Build(runtime, "demo-switch-disabled", false, label: "Disabled switch", disabled: true).Node;
     }
 
     private static readonly (string Label, string Value, bool Disabled)[] Fruits =
@@ -102,15 +102,15 @@ internal static class DemoInputs
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Drag to select a value in a range");
-            var volume = Slider.Build(runtime, "demo-slider", state.SliderValue, 0f, 100f, 5f, Str("Volume"));
+            var volume = Slider.Build(runtime, "demo-slider", state.SliderValue, 0f, 100f, 5f, "Volume");
             volume.Node.Px(width: 380f);
             if (volume.Value != state.SliderValue) set(state with { SliderValue = volume.Value });
 
             Arrange.Gap(page, 16f);
-            runtime.Text(U8($"Value: {volume.Value:0}"), ComponentSize.Sm, TextColor.Accent);
+            runtime.Text($"Value: {volume.Value:0}", ComponentSize.Sm, TextColor.Accent);
 
             Arrange.Gap(page, 16f);
-            Slider.Build(runtime, "demo-slider-disabled", 30f, 0f, 100f, label: Str("Disabled"), disabled: true).Node.Px(width: 380f);
+            Slider.Build(runtime, "demo-slider-disabled", 30f, 0f, 100f, label: "Disabled", disabled: true).Node.Px(width: 380f);
         }
         return page;
     }
@@ -122,10 +122,10 @@ internal static class DemoInputs
         {
             Heading(runtime, "Choose one from a list");
             var chosen = Fruits.FirstOrDefault(f => f.Value == state.SelectValue);
-            var select = Select.Begin(runtime, "demo-select", Str(chosen.Label ?? "Pick a fruit…"));
+            var select = Select.Begin(runtime, "demo-select", chosen.Label ?? "Pick a fruit…");
             if (select.Open)
                 foreach (var fruit in Fruits)
-                    if (Select.Item(runtime, $"demo-select-option-{fruit.Value}", Str(fruit.Label),
+                    if (Select.Item(runtime, $"demo-select-option-{fruit.Value}", fruit.Label,
                             fruit.Value == state.SelectValue, fruit.Disabled).Clicked)
                     {
                         select.Close();
@@ -134,21 +134,21 @@ internal static class DemoInputs
             select.End();
 
             Arrange.Gap(page, 16f);
-            runtime.Text(U8(state.SelectValue is null ? "Nothing selected" : $"Selected: {state.SelectValue}"), ComponentSize.Sm, state.SelectValue is null ? TextColor.Secondary : TextColor.Accent);
+            runtime.Text(state.SelectValue is null ? "Nothing selected" : $"Selected: {state.SelectValue}", ComponentSize.Sm, state.SelectValue is null ? TextColor.Secondary : TextColor.Accent);
 
             Arrange.Gap(page, 24f);
             CountrySelect(runtime, state, set);
 
             Arrange.Gap(page, 24f);
             Heading(runtime, "Disabled");
-            Select.Begin(runtime, "demo-select-disabled", Str("Choose a plan"), disabled: true).End();
+            Select.Begin(runtime, "demo-select-disabled", "Choose a plan", disabled: true).End();
         }
         return page;
     }
 
     private static void Heading(BibuiRuntime runtime, string text)
     {
-        Text heading = Bold(runtime, U8(text), ComponentSize.Sm, TextColor.Secondary);
+        Text heading = Bold(runtime, text, ComponentSize.Sm, TextColor.Secondary);
         Arrange.Gap((UiNode)heading.Parent!, 16f);
     }
 
@@ -158,20 +158,20 @@ internal static class DemoInputs
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Interactive checkbox");
-            if (Checkbox.Build(runtime, "demo-checkbox", state.CheckboxChecked, Str("Accept terms and conditions")).Clicked)
+            if (Checkbox.Build(runtime, "demo-checkbox", state.CheckboxChecked, "Accept terms and conditions").Clicked)
                 set(state with { CheckboxChecked = !state.CheckboxChecked });
             Arrange.Gap(page, 16f);
-            Badge.Build(runtime, Str(state.CheckboxChecked ? "Accepted" : "Not accepted"),
+            Badge.Build(runtime, state.CheckboxChecked ? "Accepted" : "Not accepted",
                 state.CheckboxChecked ? BadgeVariant.Success : BadgeVariant.Default);
             Arrange.Gap(page, 16f);
-            Checkbox.Build(runtime, "demo-checkbox-disabled", false, Str("Disabled (unchecked)"), disabled: true);
+            Checkbox.Build(runtime, "demo-checkbox-disabled", false, "Disabled (unchecked)", disabled: true);
             Arrange.Gap(page, 16f);
-            Checkbox.Build(runtime, "demo-checkbox-disabled-checked", true, Str("Disabled (checked)"), disabled: true);
+            Checkbox.Build(runtime, "demo-checkbox-disabled-checked", true, "Disabled (checked)", disabled: true);
             Arrange.Gap(page, 24f);
             Heading(runtime, "Indeterminate");
-            Checkbox.Build(runtime, "demo-checkbox-mixed", false, Str("Select all (mixed)"), indeterminate: true);
+            Checkbox.Build(runtime, "demo-checkbox-mixed", false, "Select all (mixed)", indeterminate: true);
             Arrange.Gap(page, 16f);
-            runtime.Text(U8("Tri-state — dash instead of checkmark. Typical for \"some items selected\"."), ComponentSize.Sm, TextColor.Secondary);
+            runtime.Text("Tri-state — dash instead of checkmark. Typical for \"some items selected\".", ComponentSize.Sm, TextColor.Secondary);
         }
         return page;
     }
@@ -183,11 +183,11 @@ internal static class DemoInputs
         {
             Heading(runtime, "Group of toggles (single-select)");
             var group = ToggleGroup.Build(runtime, "demo-toggle-group",
-                [new ToggleOption(Str("Bold"), "bold"), new ToggleOption(Str("Italic"), "italic"), new ToggleOption(Str("Underline"), "underline")],
+                [new ToggleOption("Bold", "bold"), new ToggleOption("Italic", "italic"), new ToggleOption("Underline", "underline")],
                 state.ToggleGroupValue);
             if (group.Picked is { } picked) set(state with { ToggleGroupValue = picked });
             Arrange.Gap(page, 16f);
-            runtime.Text(U8($"Active: {state.ToggleGroupValue}"), ComponentSize.Sm, TextColor.Accent);
+            runtime.Text($"Active: {state.ToggleGroupValue}", ComponentSize.Sm, TextColor.Accent);
         }
         return page;
     }
@@ -201,15 +201,15 @@ internal static class DemoInputs
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Live: press to focus, then type");
-            LiveField(runtime, "demo-textfield", LiveText, LiveEdit, Str("Type here"));
+            LiveField(runtime, "demo-textfield", LiveText, LiveEdit, "Type here");
             Arrange.Gap(page, 8f);
-            runtime.Text(U8(
-                $"\"{System.Text.Encoding.UTF8.GetString(LiveText.Str)}\" — cursor {LiveEdit.Cursor}, mark {LiveEdit.Mark}, "
-                + $"{LiveText.Length} bytes, focus {Focused ?? "none"}"), ComponentSize.Sm, TextColor.Secondary);
+            runtime.Text(
+                $"\"{LiveText.ToString()}\" — cursor {LiveEdit.Cursor}, mark {LiveEdit.Mark}, "
+                + $"{LiveText.Length} bytes, focus {Focused ?? "none"}", ComponentSize.Sm, TextColor.Secondary);
             Arrange.Gap(page, 8f);
-            LiveField(runtime, "demo-textfield-2", SecondText, SecondEdit, Str("A second field"));
+            LiveField(runtime, "demo-textfield-2", SecondText, SecondEdit, "A second field");
             Arrange.Gap(page, 8f);
-            LiveField(runtime, "demo-textfield-multi", MultiText, MultiEdit, Str("Several lines"), lines: true, rows: 3);
+            LiveField(runtime, "demo-textfield-multi", MultiText, MultiEdit, "Several lines", lines: true, rows: 3);
             Arrange.Gap(page, 8f);
             using (runtime.PushParent(InputBox(runtime, "demo-textfield-readonly", Focused == "demo-textfield-readonly", lines: true)))
             using (runtime.PushFontSize(ComponentSize.Sm))
@@ -240,36 +240,36 @@ internal static class DemoInputs
             Heading(runtime, "Caret at the start and at the end");
             DrawnState(runtime, "demo-textfield-state-5", Sample(), At(0, 0), focused: true);
             Arrange.Gap(page, 8f);
-            DrawnState(runtime, "demo-textfield-state-6", Sample(), At(SampleBytes.Length, SampleBytes.Length), focused: true);
+            DrawnState(runtime, "demo-textfield-state-6", Sample(), At(SampleText.Length, SampleText.Length), focused: true);
             Arrange.Gap(page, 16f);
             Heading(runtime, "Empty, with a placeholder");
-            DrawnState(runtime, "demo-textfield-state-7", new BibuiStr(16), At(0, 0), focused: false, placeholder: Str("Search cases"));
+            DrawnState(runtime, "demo-textfield-state-7", new BibuiStr(16), At(0, 0), focused: false, placeholder: "Search cases");
             Arrange.Gap(page, 8f);
-            DrawnState(runtime, "demo-textfield-state-8", new BibuiStr(16), At(0, 0), focused: true, placeholder: Str("Search cases"));
+            DrawnState(runtime, "demo-textfield-state-8", new BibuiStr(16), At(0, 0), focused: true, placeholder: "Search cases");
         }
         return page;
     }
 
     // A field shown in one state: a single line in its frame, never focused by a press.
     private static void DrawnState(BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit,
-        bool focused, BibuiStr? placeholder = null)
+        bool focused, ReadOnlySpan<char> placeholder = default)
     {
         using (runtime.PushParent(InputBox(runtime, id, focused)))
             TextField.SingleLine(runtime, id, text, edit, focused, placeholder: placeholder);
     }
 
     // The live fields' state: what an application would hold for them.
-    private static readonly BibuiStr LiveText = BibuiStr.FromStrLit("Hello"u8);
+    private static readonly BibuiStr LiveText = BibuiStr.FromStrLit("Hello");
     private static readonly TextEditState LiveEdit = new();
     private static string? Focused;      // which live field is being edited
     private static readonly BibuiStr SecondText = new(16);
-    private static readonly BibuiStr MultiText = BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes(
+    private static readonly BibuiStr MultiText = BibuiStr.FromStrLit(
         "A field that wraps by itself: type past the edge and the words move down a line. "
         + "It is three lines tall, and this text runs to more than that, so the lines past the "
-        + "third are below its edge: scroll the wheel over it to bring them into view."));
+        + "third are below its edge: scroll the wheel over it to bring them into view.");
     private static readonly TextEditState MultiEdit = new();
-    private static readonly BibuiStr ReadOnlyText = BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes(
-        "A read-only field: press, drag and double-click to select, arrow keys to move, but typing changes nothing."));
+    private static readonly BibuiStr ReadOnlyText = BibuiStr.FromStrLit(
+        "A read-only field: press, drag and double-click to select, arrow keys to move, but typing changes nothing.");
     private static readonly TextEditState ReadOnlyEdit = new();
     private static readonly TextEditState SecondEdit = new();
 
@@ -291,7 +291,7 @@ internal static class DemoInputs
 
     // A framed field the page keeps focus for: a press focuses it.
     private static void LiveField(BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit,
-        BibuiStr? placeholder = null, bool lines = false, int rows = 3, float width = 320f)
+        ReadOnlySpan<char> placeholder = default, bool lines = false, int rows = 3, float width = 320f)
     {
         bool focused = Focused == id;
         BibuiWidget field;
@@ -313,13 +313,13 @@ internal static class DemoInputs
     /// </summary>
     // What names a field: a small semibold text.
     internal static Text FieldLabel(BibuiRuntime runtime, string text)
-        => Bold(runtime, U8(text), ComponentSize.Sm);
+        => Bold(runtime, text, ComponentSize.Sm);
 
     internal static UiNode StaticInput(BibuiRuntime runtime, string id, string placeholder, float width = 320f)
     {
         Box box = InputBox(runtime, id, focused: false, width);
         using (runtime.PushParent(box))
-            TextField.SingleLine(runtime, id, new BibuiStr(16), new TextEditState(), focused: false, placeholder: Str(placeholder));
+            TextField.SingleLine(runtime, id, new BibuiStr(16), new TextEditState(), focused: false, placeholder: placeholder);
         return box;
     }
 
@@ -336,7 +336,6 @@ internal static class DemoInputs
             }
     }
 
-    private static BibuiStr Utf8(string text) => BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes(text));
 
     // ── Input and Textarea: fields in the input look ────────────────────────
 
@@ -344,7 +343,7 @@ internal static class DemoInputs
     private static readonly TextEditState InputEdit = new();
     private static readonly BibuiStr TextareaText = new(64);
     private static readonly TextEditState TextareaEdit = new();
-    private static readonly BibuiStr TextareaLog = Utf8(
+    private static readonly BibuiStr TextareaLog = BibuiStr.FromStrLit(
         "input dir:  /tmp/job-42/in\noutput dir: /tmp/job-42/out\n--- stdout ---\nframes processed: 128\n"
         + "frames dropped:   0\nelapsed:          1.42s\n--- stderr ---\n(empty)");
     private static readonly TextEditState TextareaLogEdit = new();
@@ -355,24 +354,24 @@ internal static class DemoInputs
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Basic input");
-            LiveField(runtime, "demo-input", InputText, InputEdit, Str("Enter text…"));
+            LiveField(runtime, "demo-input", InputText, InputEdit, "Enter text…");
             Arrange.Gap(page, 16f);
-            string value = System.Text.Encoding.UTF8.GetString(InputText.Str);
-            runtime.Text(U8(value.Length > 0 ? $"Value: \"{value}\"" : "Start typing above"), ComponentSize.Sm, value.Length > 0 ? TextColor.Accent : TextColor.Secondary);
+            string value = InputText.ToString();
+            runtime.Text(value.Length > 0 ? $"Value: \"{value}\"" : "Start typing above", ComponentSize.Sm, value.Length > 0 ? TextColor.Accent : TextColor.Secondary);
             Arrange.Gap(page, 24f);
 
             Heading(runtime, "Disabled");
             // Disabled: it shows its placeholder and takes nothing, so a press is swallowed, not answered.
             using (runtime.PushParent(InputBox(runtime, "demo-input-disabled", focused: false, disabled: true)))
                 TextField.SingleLine(runtime, "demo-input-disabled", new BibuiStr(16), new TextEditState(), focused: false,
-                    events: 0, textColor: TextColor.Disabled, placeholder: Str("Disabled input"));
+                    events: 0, textColor: TextColor.Disabled, placeholder: "Disabled input");
             Arrange.Gap(page, 24f);
 
             Heading(runtime, "Error");
             using (runtime.PushParent(InputBox(runtime, "demo-input-error", focused: false, error: true)))
-                TextField.SingleLine(runtime, "demo-input-error", Utf8("not-an-email"), new TextEditState(), focused: false);
+                TextField.SingleLine(runtime, "demo-input-error", BibuiStr.FromStrLit("not-an-email"), new TextEditState(), focused: false);
             Arrange.Gap(page, 16f);
-            runtime.Text(U8("Destructive border signals validation failure."), ComponentSize.Sm, TextColor.Secondary);
+            runtime.Text("Destructive border signals validation failure.", ComponentSize.Sm, TextColor.Secondary);
 
             EndEditing(runtime);
         }
@@ -385,16 +384,16 @@ internal static class DemoInputs
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Multi-line text input");
-            LiveField(runtime, "demo-textarea", TextareaText, TextareaEdit, Str("Write something…"), lines: true, rows: 4, width: 400f);
+            LiveField(runtime, "demo-textarea", TextareaText, TextareaEdit, "Write something…", lines: true, rows: 4, width: 400f);
             Arrange.Gap(page, 16f);
-            runtime.Text(U8($"{System.Text.Encoding.UTF8.GetCharCount(TextareaText.Str)} characters"), ComponentSize.Sm, TextColor.Secondary);
+            runtime.Text($"{TextareaText.Length} characters", ComponentSize.Sm, TextColor.Secondary);
             Arrange.Gap(page, 24f);
 
             Heading(runtime, "Error");
             using (runtime.PushParent(InputBox(runtime, "demo-textarea-error", focused: false, width: 400f, lines: true, error: true)))
             using (runtime.PushSizeY(TextField.Rows(runtime, 3)))
-                TextField.Multiline(runtime, "demo-textarea-error", Utf8("too short"), new TextEditState(), focused: false,
-                    placeholder: Str("Describe the issue"));
+                TextField.Multiline(runtime, "demo-textarea-error", BibuiStr.FromStrLit("too short"), new TextEditState(), focused: false,
+                    placeholder: "Describe the issue");
             Arrange.Gap(page, 24f);
 
             Heading(runtime, "Multi-line content (press and drag across rows to select)");
@@ -405,8 +404,8 @@ internal static class DemoInputs
         return page;
     }
 
-    private static readonly byte[] SampleBytes = "The quick brown fox jumps"u8.ToArray();
-    private static BibuiStr Sample() => BibuiStr.FromStrLit(SampleBytes);
+    private const string SampleText = "The quick brown fox jumps";
+    private static BibuiStr Sample() => BibuiStr.FromStrLit(SampleText);
     private static TextEditState At(int cursor, int mark) => new() { Cursor = cursor, Mark = mark };
 
     // ── Shared: centring in a row of fixed height ───────────────────────────
@@ -422,7 +421,7 @@ internal static class DemoInputs
         return runtime.PushParent(cell);
     }
 
-    private static Text CentredText(BibuiRuntime runtime, ReadOnlyMemory<byte> text, ComponentSize? size = null,
+    private static Text CentredText(BibuiRuntime runtime, ReadOnlySpan<char> text, ComponentSize? size = null,
         UiColor? color = null, FontWeight weight = FontWeight.Regular)
     {
         using (CentredCell(runtime))
@@ -461,7 +460,7 @@ internal static class DemoInputs
     // A caption above a row of buttons, 12 px above it.
     private static void Caption(BibuiRuntime runtime, string text, bool accent = false)
     {
-        using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8(text), ComponentSize.Sm, accent ? TextColor.Accent : TextColor.Secondary);
+        using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(text, ComponentSize.Sm, accent ? TextColor.Accent : TextColor.Secondary);
         runtime.Gap(12f);
     }
 
@@ -475,22 +474,22 @@ internal static class DemoInputs
             {
                 DemoButton(runtime, "demo-btn-primary", "Primary", Look.Primary);
                 runtime.Gap(10f);
-                Tall(runtime, Button.Build(runtime, "demo-btn-secondary", Str("Secondary")));
+                Tall(runtime, Button.Build(runtime, "demo-btn-secondary", "Secondary"));
                 runtime.Gap(10f);
-                Tall(runtime, Button.Build(runtime, "demo-btn-ghost", Str("Ghost"), ghost: true));
+                Tall(runtime, Button.Build(runtime, "demo-btn-ghost", "Ghost", ghost: true));
                 runtime.Gap(10f);
-                Tall(runtime, Button.Build(runtime, "demo-btn-disabled", Str("Disabled"), disabled: true));
+                Tall(runtime, Button.Build(runtime, "demo-btn-disabled", "Disabled", disabled: true));
             }
             runtime.Gap(12f);
 
             Caption(runtime, "Sizes");
             using (runtime.PushParent(Row(runtime)))
             {
-                Tall(runtime, Button.Build(runtime, "demo-btn-sm", Str("Small"), size: ComponentSize.Sm), ComponentSize.Sm);
+                Tall(runtime, Button.Build(runtime, "demo-btn-sm", "Small", size: ComponentSize.Sm), ComponentSize.Sm);
                 runtime.Gap(10f);
-                Tall(runtime, Button.Build(runtime, "demo-btn-md", Str("Medium"), size: ComponentSize.Md));
+                Tall(runtime, Button.Build(runtime, "demo-btn-md", "Medium", size: ComponentSize.Md));
                 runtime.Gap(10f);
-                Tall(runtime, Button.Build(runtime, "demo-btn-lg", Str("Large"), size: ComponentSize.Lg), ComponentSize.Lg);
+                Tall(runtime, Button.Build(runtime, "demo-btn-lg", "Large", size: ComponentSize.Lg), ComponentSize.Lg);
             }
             runtime.Gap(12f);
 
@@ -535,7 +534,7 @@ internal static class DemoInputs
                 if (DemoButton(runtime, "demo-click-btn", $"Clicked {state.DemoButtonClickCount}×", Look.Primary).Clicked)
                     set(state with { DemoButtonClickCount = state.DemoButtonClickCount + 1 });
                 runtime.Gap(10f);
-                runtime.Text(U8("Press, hold, release — watch the label count up and the fill darken while pressed."),
+                runtime.Text("Press, hold, release — watch the label count up and the fill darken while pressed.",
                     ComponentSize.Sm, TextColor.Secondary);
             }
         }
@@ -595,11 +594,11 @@ internal static class DemoInputs
             ink = UiColor.TextPrimary;
         }
 
-        ReadOnlyMemory<byte> text = U8(label);
+        ReadOnlySpan<char> text = label;
         if (loading)
         {
             // As wide as icon and label would be, the spinner centred across it.
-            float width = runtime.Fonts.Measure(text.Span, runtime.FontInScope(ComponentSize.Md)) + 32f;
+            float width = runtime.Fonts.Measure(text, runtime.FontInScope(ComponentSize.Md)) + 32f;
             if (icon is not null) width += 24f;
             box.SizeX = SemanticSize.Pixels(width);
             using (runtime.PushParent(box))
@@ -633,10 +632,10 @@ internal static class DemoInputs
 
     private static readonly RadioOption[] RadioOptions =
     [
-        new(Str("Option A"), "option-a"),
-        new(Str("Option B"), "option-b"),
-        new(Str("Option C"), "option-c"),
-        new(Str("Disabled"), "option-d", Disabled: true),
+        new("Option A", "option-a"),
+        new("Option B", "option-b"),
+        new("Option C", "option-c"),
+        new("Disabled", "option-d", Disabled: true),
     ];
 
     private static UiNode RadioGroupPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
@@ -648,7 +647,7 @@ internal static class DemoInputs
             if (RadioGroup.Build(runtime, "demo-radio", RadioOptions, state.RadioValue).Picked is { } picked)
                 set(state with { RadioValue = picked });
             runtime.Gap(16f);
-            runtime.Text(U8($"Selected: {state.RadioValue}"), ComponentSize.Sm, TextColor.Accent);
+            runtime.Text($"Selected: {state.RadioValue}", ComponentSize.Sm, TextColor.Accent);
         }
         return page;
     }
@@ -664,11 +663,11 @@ internal static class DemoInputs
     {
         Heading(runtime, "A set width, and taller rows");
         var chosen = Countries.FirstOrDefault(c => c.Value == state.CountryValue);
-        var select = Select.Begin(runtime, "demo-select-country", Str(chosen.Label ?? "Choose a country…"), width: 240f);
+        var select = Select.Begin(runtime, "demo-select-country", chosen.Label ?? "Choose a country…", width: 240f);
         if (select.Open)
             foreach (var country in Countries)
             {
-                var item = Select.Item(runtime, $"demo-select-country-{country.Value}", Str(country.Label),
+                var item = Select.Item(runtime, $"demo-select-country-{country.Value}", country.Label,
                     country.Value == state.CountryValue);
                 Tall(runtime, item.Node, 36f);
                 if (item.Clicked)
@@ -680,7 +679,7 @@ internal static class DemoInputs
         Tall(runtime, select.End(), TriggerHeight);
 
         runtime.Gap(16f);
-        runtime.Text(U8(state.CountryValue is null ? "No country selected" : $"Country: {state.CountryValue}"),
+        runtime.Text(state.CountryValue is null ? "No country selected" : $"Country: {state.CountryValue}",
             ComponentSize.Sm, state.CountryValue is null ? TextColor.Secondary : TextColor.Accent);
     }
 
@@ -699,16 +698,16 @@ internal static class DemoInputs
                 using (CentredCell(runtime))
                 {
                     Arrange.Spring(runtime.ParentInScope);
-                    if (Toggle.Build(runtime, "demo-toggle", state.TogglePressed, Str("Star"), icon: "star").Clicked)
+                    if (Toggle.Build(runtime, "demo-toggle", state.TogglePressed, "Star", icon: "star").Clicked)
                         set(state with { TogglePressed = !state.TogglePressed });
                     Arrange.Spring(runtime.ParentInScope);
                 }
                 runtime.Gap(10f);
-                CentredText(runtime, U8(state.TogglePressed ? "Pressed" : "Not pressed"), ComponentSize.Sm,
+                CentredText(runtime, state.TogglePressed ? "Pressed" : "Not pressed", ComponentSize.Sm,
                     state.TogglePressed ? TextColor.Accent : TextColor.Secondary);
             }
             runtime.Gap(16f);
-            Toggle.Build(runtime, "demo-toggle-disabled", false, Str("Disabled"), disabled: true);
+            Toggle.Build(runtime, "demo-toggle-disabled", false, "Disabled", disabled: true);
         }
         return page;
     }
@@ -801,7 +800,7 @@ internal static class DemoInputs
             {
                 if (NavButton(runtime, id + "-prev", "chevron-left")) step = -1;
                 Arrange.Spring(caption);
-                CentredText(runtime, U8($"{month:MMMM yyyy}"), weight: FontWeight.Bold);
+                CentredText(runtime, $"{month:MMMM yyyy}", weight: FontWeight.Bold);
                 Arrange.Spring(caption);
                 if (NavButton(runtime, id + "-next", "chevron-right")) step = 1;
             }
@@ -811,7 +810,7 @@ internal static class DemoInputs
             weekdays.SizeY = SemanticSize.Pixels(DayCell);
             using (runtime.PushParent(weekdays))
                 foreach (var day in Weekdays)
-                    DayBox(runtime, runtime.Box(), U8(day), TextColor.Primary);
+                    DayBox(runtime, runtime.Box(), day, TextColor.Primary);
 
             var first = new DateOnly(month.Year, month.Month, 1);
             int lead = (int)first.DayOfWeek;
@@ -834,7 +833,7 @@ internal static class DemoInputs
                         bool isSelected = date == selected;
                         Box cell = runtime.BoxFromId($"{id}-day-{d}", InteractionKinds.LeftPress);
                         if (runtime.InteractionsFor(cell).Clicked) picked = date;
-                        DayBox(runtime, cell, U8($"{d}"), isSelected ? TextColor.AccentForeground : TextColor.Primary);
+                        DayBox(runtime, cell, $"{d}", isSelected ? TextColor.AccentForeground : TextColor.Primary);
                         cell.Style.CornerRadius = 6f;
                         if (isSelected) cell.Style.BackgroundColor = UiColor.Accent;
                         else cell.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
@@ -845,7 +844,7 @@ internal static class DemoInputs
     }
 
     // A 36 px cell, text centred in it.
-    private static Box DayBox(BibuiRuntime runtime, Box box, ReadOnlyMemory<byte> text, UiColor color)
+    private static Box DayBox(BibuiRuntime runtime, Box box, ReadOnlySpan<char> text, UiColor color)
     {
         box.ChildLayoutAxis = LayoutAxis.X;
         box.Px(DayCell, DayCell);
@@ -901,7 +900,7 @@ internal static class DemoInputs
             if (result.Picked is { } day) set(state with { CalendarSelected = day });
 
             runtime.Gap(16f);
-            runtime.Text(U8(state.CalendarSelected is null ? "No date selected" : $"Selected: {state.CalendarSelected:MMMM d, yyyy}"),
+            runtime.Text(state.CalendarSelected is null ? "No date selected" : $"Selected: {state.CalendarSelected:MMMM d, yyyy}",
                 ComponentSize.Sm, state.CalendarSelected is null ? TextColor.Secondary : TextColor.Accent);
         }
         return page;
@@ -923,7 +922,7 @@ internal static class DemoInputs
             {
                 CentredIcon(runtime, "calendar", 16f, UiColor.TextSecondary);
                 runtime.Gap(8f);
-                CentredText(runtime, U8(state.DatePickerValue is { } v ? $"{v:MMMM d, yyyy}" : "Pick a date"),
+                CentredText(runtime, state.DatePickerValue is { } v ? $"{v:MMMM d, yyyy}" : "Pick a date",
                     color: state.DatePickerValue is null ? TextColor.Secondary : TextColor.Primary);
             }
 
@@ -943,7 +942,7 @@ internal static class DemoInputs
             }
 
             runtime.Gap(16f);
-            runtime.Text(U8(state.DatePickerValue is null ? "No date selected" : $"Selected: {state.DatePickerValue:yyyy-MM-dd}"),
+            runtime.Text(state.DatePickerValue is null ? "No date selected" : $"Selected: {state.DatePickerValue:yyyy-MM-dd}",
                 ComponentSize.Sm, state.DatePickerValue is null ? TextColor.Secondary : TextColor.Accent);
         }
         return page;
@@ -985,7 +984,7 @@ internal static class DemoInputs
                 set(state with { TimePickerHour = hour, TimePickerMinute = minute });
 
             runtime.Gap(16f);
-            runtime.Text(U8($"Selected: {state.TimePickerHour:D2}:{state.TimePickerMinute:D2}"), ComponentSize.Sm, TextColor.Accent);
+            runtime.Text($"Selected: {state.TimePickerHour:D2}:{state.TimePickerMinute:D2}", ComponentSize.Sm, TextColor.Accent);
             runtime.Gap(16f);
             Heading(runtime, "12-hour format");
             int h12 = state.TimePickerHour % 12 == 0 ? 12 : state.TimePickerHour % 12;
@@ -1004,7 +1003,7 @@ internal static class DemoInputs
         {
             CentredIcon(runtime, "clock", 16f, disabled ? UiColor.TextDisabled : UiColor.TextSecondary);
             runtime.Gap(8f);
-            CentredText(runtime, U8(text), color: disabled ? TextColor.Disabled : TextColor.Primary);
+            CentredText(runtime, text, color: disabled ? TextColor.Disabled : TextColor.Primary);
         }
         return trigger;
     }
@@ -1026,7 +1025,7 @@ internal static class DemoInputs
             using (runtime.PushParent(row))
             {
                 Arrange.Spring(row);
-                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8(name), ComponentSize.Sm, TextColor.Secondary);
+                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(name, ComponentSize.Sm, TextColor.Secondary);
                 Arrange.Spring(row);
             }
             runtime.Gap(12f);
@@ -1042,7 +1041,7 @@ internal static class DemoInputs
             using (runtime.PushParent(row))
             {
                 Arrange.Spring(row);
-                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(U8($"{value:D2}"), ComponentSize.Lg);
+                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text($"{value:D2}", ComponentSize.Lg);
                 Arrange.Spring(row);
             }
             runtime.Gap(8f);
@@ -1090,7 +1089,7 @@ internal static class DemoInputs
                 set(state with { ColorPickerValue = color });
 
             runtime.Gap(16f);
-            runtime.Text(U8(state.ColorPickerValue is null ? "No color selected" : $"Color: {state.ColorPickerValue}"),
+            runtime.Text(state.ColorPickerValue is null ? "No color selected" : $"Color: {state.ColorPickerValue}",
                 ComponentSize.Sm, state.ColorPickerValue is null ? TextColor.Secondary : TextColor.Accent);
             runtime.Gap(16f);
             Heading(runtime, "Custom palette");
@@ -1122,7 +1121,7 @@ internal static class DemoInputs
                 Arrange.Spring(runtime.ParentInScope);
             }
             runtime.Gap(8f);
-            CentredText(runtime, U8(value ?? "Pick a color"),
+            CentredText(runtime, value ?? "Pick a color",
                 color: disabled ? TextColor.Disabled : value is null ? TextColor.Secondary : TextColor.Primary);
             Arrange.Spring(trigger);
             CentredIcon(runtime, "chevron-down", 14f, UiColor.TextSecondary);

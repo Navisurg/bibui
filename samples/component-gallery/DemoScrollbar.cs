@@ -30,7 +30,7 @@ internal static class DemoScrollbar
             row.Style.Padding = new EdgeInsets(0, 12, 0, 12);
             row.Style.BackgroundColor = i % 2 == 0 ? (UiColor?)UiColor.Surface : null;
             using (runtime.PushParent(row))
-                runtime.Text(U8($"Row {i}"), ComponentSize.Sm, TextColor.Primary);
+                runtime.Text($"Row {i}", ComponentSize.Sm, TextColor.Primary);
         }
         using (runtime.PushParent(panel))
             Scrollbar.Build(runtime, "sb-v-bar", view, LayoutAxis.Y);
@@ -56,7 +56,7 @@ internal static class DemoScrollbar
             card.Style.CornerRadius = 6f;
             card.Style.Draw = DrawFlags.Background;
             using (runtime.PushParent(card))
-                runtime.Text(U8($"Card {i}"), ComponentSize.Sm, TextColor.Primary);
+                runtime.Text($"Card {i}", ComponentSize.Sm, TextColor.Primary);
         }
         using (runtime.PushParent(panel))
             Scrollbar.Build(runtime, "sb-h-bar", view, LayoutAxis.X);
@@ -78,5 +78,5 @@ internal static class DemoScrollbar
     }
 
     private static Text Caption(BibuiRuntime runtime, string text) =>
-        Bold(runtime, U8(text), ComponentSize.Sm, TextColor.Secondary);
+        Bold(runtime, text, ComponentSize.Sm, TextColor.Secondary);
 }
