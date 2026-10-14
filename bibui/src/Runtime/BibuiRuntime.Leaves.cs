@@ -191,7 +191,7 @@ public sealed partial class BibuiRuntime
         text.SizeX = _sizeXStack.Count > 0 ? _sizeXStack[^1] : SemanticSize.Text();
         text.SizeY = _sizeYStack.Count > 0 ? _sizeYStack[^1] : SemanticSize.Text();
         LinkUnder(text, parent: null);
-        text.SetContent(content);
+        text.ContentStr.ReplaceRange((0, (int)text.ContentStr.Length), content);
         text.Size = fontSize ?? SizeInScope();
         text.Color = textColor;
         var face = FaceInScope();
