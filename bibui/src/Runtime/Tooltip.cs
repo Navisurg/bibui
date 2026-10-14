@@ -26,10 +26,9 @@ public static class Tooltip
     /// <see cref="Gap"/> px clear of it; with no anchor, by the mouse, where
     /// <see cref="BibuiRuntime.DefaultToolTipOffset"/> puts it.
     /// </summary>
-    public static Box Build(BibuiRuntime runtime, BibuiStr text, Box? anchor = null)
+    public static Box Build(BibuiRuntime runtime, ReadOnlySpan<char> text, Box? anchor = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
-        ArgumentNullException.ThrowIfNull(text);
 
         Box root = runtime.OpenToolTip();
         if (anchor is null) runtime.DefaultToolTipOffset(root);
@@ -38,7 +37,7 @@ public static class Tooltip
             // Its size is its text's and its padding, known before it is laid
             // out, so it can be centred on the first frame it is shown.
             Font font = runtime.FontInScope(ComponentSize.Sm);
-            float width = runtime.Fonts.Measure(text.Str, font) + 2f * PadX;
+            float width = runtime.Fonts.Measure(text, font) + 2f * PadX;
             float height = runtime.Fonts.LineHeight(font) + 2f * PadY;
             root.At(anchor.Rect.X + (anchor.Extent.X - width) / 2f, anchor.Rect.Y - height - Gap);
         }
@@ -54,7 +53,7 @@ public static class Tooltip
             pill.Style.BackgroundColor = UiColor.TextPrimary;
             pill.Style.Shadow = runtime.Theme.Elevation.Level(ElevationTokens.Tooltip);
             using (runtime.PushParent(pill))
-                runtime.Text(text.AsMemory(), ComponentSize.Sm, UiColor.Background);
+                runtime.Text(text, ComponentSize.Sm, UiColor.Background);
         }
         return pill;
     }

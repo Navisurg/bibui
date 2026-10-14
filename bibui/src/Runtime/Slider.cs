@@ -39,19 +39,19 @@ public static class Slider
     /// <paramref name="step"/> 0 is continuous.
     /// </summary>
     public static SliderWidget Build(BibuiRuntime runtime, string id, float value,
-        float min = 0f, float max = 1f, float step = 0f, BibuiStr? label = null, bool disabled = false)
+        float min = 0f, float max = 1f, float step = 0f, ReadOnlySpan<char> label = default, bool disabled = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
 
-        Box? column = label is { Length: > 0 } ? runtime.Box() : null;
+        Box? column = !label.IsEmpty ? runtime.Box() : null;
         using var inColumn = column is not null ? runtime.PushParent(column) : default;
         if (column is not null)
         {
             column.ChildLayoutAxis = LayoutAxis.Y;
             column.SizeX = SemanticSize.ParentPct(1f);
             column.SizeY = SemanticSize.ChildrenSum();
-            runtime.Text(label!.AsMemory(), ComponentSize.Sm, TextColor.Secondary);
+            runtime.Text(label, ComponentSize.Sm, TextColor.Secondary);
             runtime.Gap(LabelGap);
         }
 

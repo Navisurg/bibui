@@ -32,12 +32,11 @@ public static class Select
     /// and pushes it, so what is built until <see cref="SelectScope.End"/> goes
     /// into it. A click on the trigger opens the list, or closes it.
     /// </summary>
-    public static SelectScope Begin(BibuiRuntime runtime, string id, BibuiStr text,
+    public static SelectScope Begin(BibuiRuntime runtime, string id, ReadOnlySpan<char> text,
         float width = 220f, bool disabled = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
-        ArgumentNullException.ThrowIfNull(text);
 
         string listId = id + "-list";
         Box trigger = runtime.BoxFromId(id, disabled ? InteractionKinds.Disabled : InteractionKinds.LeftPress);
@@ -60,7 +59,7 @@ public static class Select
         style.BackgroundColor = disabled ? UiColor.SurfaceRaised : UiColor.Surface;
         using (runtime.PushParent(trigger))
         {
-            runtime.Text(text.AsMemory(), textColor: disabled ? TextColor.Disabled : TextColor.Primary);
+            runtime.Text(text, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
             Arrange.Spring(trigger);
             Icon chevron = runtime.Icon(open ? "chevron-up" : "chevron-down", size: 16f);
             chevron.Color = UiColor.TextSecondary;
@@ -88,12 +87,11 @@ public static class Select
     /// <paramref name="disabled"/>. Built between <see cref="Begin"/> and
     /// <see cref="SelectScope.End"/>.
     /// </summary>
-    public static BibuiWidget Item(BibuiRuntime runtime, string id, BibuiStr label,
+    public static BibuiWidget Item(BibuiRuntime runtime, string id, ReadOnlySpan<char> label,
         bool selected = false, bool disabled = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
-        ArgumentNullException.ThrowIfNull(label);
 
         Box row = runtime.BoxFromId(id, disabled ? InteractionKinds.Disabled : InteractionKinds.LeftPress);
         Interaction interaction = runtime.InteractionsFor(row);
@@ -106,7 +104,7 @@ public static class Select
         row.Style.HoverBackgroundColor = disabled ? (UiColor?)null : UiColor.SurfaceRaisedHover;
         using (runtime.PushParent(row))
         {
-            runtime.Text(label.AsMemory(), textColor: disabled ? TextColor.Disabled : TextColor.Primary);
+            runtime.Text(label, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
         }
         return new BibuiWidget(row, interaction);
     }

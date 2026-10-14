@@ -22,19 +22,19 @@ public static class Progress
     /// the column holding the label and the track, or the track alone.
     /// A value outside 0..max is drawn clamped to it.
     /// </summary>
-    public static Box Build(BibuiRuntime runtime, float value, float max = 100f, BibuiStr? label = null,
+    public static Box Build(BibuiRuntime runtime, float value, float max = 100f, ReadOnlySpan<char> label = default,
         float thickness = DefaultThickness, UiColor? fill = null, UiColor? track = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
 
-        Box? column = label is { Length: > 0 } ? runtime.Box() : null;
+        Box? column = !label.IsEmpty ? runtime.Box() : null;
         using var inColumn = column is not null ? runtime.PushParent(column) : default;
         if (column is not null)
         {
             column.ChildLayoutAxis = LayoutAxis.Y;
             column.SizeX = SemanticSize.ParentPct(1f);
             column.SizeY = SemanticSize.ChildrenSum();
-            runtime.Text(label!.AsMemory(), ComponentSize.Sm, TextColor.Secondary);
+            runtime.Text(label, ComponentSize.Sm, TextColor.Secondary);
             runtime.Gap(LabelGap);
         }
 

@@ -21,7 +21,7 @@ public static class KeyboardShortcut
     /// order, under the parent in scope and returns the row: as wide as the
     /// keycaps and the gaps between them, and one keycap tall.
     /// </summary>
-    public static Box Build(BibuiRuntime runtime, params ReadOnlySpan<BibuiStr> keys)
+    public static Box Build(BibuiRuntime runtime, params ReadOnlySpan<string> keys)
     {
         ArgumentNullException.ThrowIfNull(runtime);
 
@@ -39,9 +39,8 @@ public static class KeyboardShortcut
     }
 
     // One keycap: the key's name centred down a box as wide as it and its padding.
-    private static void Key(BibuiRuntime runtime, BibuiStr key)
+    private static void Key(BibuiRuntime runtime, ReadOnlySpan<char> key)
     {
-        ArgumentNullException.ThrowIfNull(key);
         Box cap = runtime.Box();
         cap.ChildLayoutAxis = LayoutAxis.Y;
         cap.SizeX = SemanticSize.ChildrenSum();
@@ -55,7 +54,7 @@ public static class KeyboardShortcut
         using (runtime.PushParent(cap))
         {
             Arrange.Spring(cap);
-            runtime.Text(key.AsMemory(), ComponentSize.Sm, TextColor.Primary);
+            runtime.Text(key, ComponentSize.Sm, TextColor.Primary);
             Arrange.Spring(cap);
         }
     }

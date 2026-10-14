@@ -16,10 +16,9 @@ public static class Section
     /// Builds the section's column under the parent in scope, its caption
     /// already in it. Push the column to build its children into it.
     /// </summary>
-    public static Box Build(BibuiRuntime runtime, BibuiStr caption)
+    public static Box Build(BibuiRuntime runtime, ReadOnlySpan<char> caption)
     {
         ArgumentNullException.ThrowIfNull(runtime);
-        ArgumentNullException.ThrowIfNull(caption);
 
         var column = runtime.Box();
         column.ChildLayoutAxis = LayoutAxis.Y;
@@ -27,7 +26,7 @@ public static class Section
         column.SizeY = SemanticSize.ChildrenSum();
         using (runtime.PushParent(column))
         {
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(caption.AsMemory(), ComponentSize.Sm, TextColor.Secondary);
+            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(caption, ComponentSize.Sm, TextColor.Secondary);
             runtime.Gap(Spacing);
         }
         return column;
