@@ -226,8 +226,10 @@ Run("WordScan backward jumps to the start of the current word", () =>
 // ── An emoji of several code points ───────────────────────────────────────────
 //
 // 👨‍👩‍👧 is five code points — man, ZWJ, woman, ZWJ, girl — and 8 UTF-16 chars,
-// drawn as one character. An arrow key crosses it whole, and Ctrl+Arrow treats
-// it as a word like any other run of non-whitespace. Offsets are in chars.
+// drawn as one character. An arrow key or Backspace crosses it whole, and
+// Ctrl+Arrow treats it as a word like any other run of non-whitespace.
+// Offsets are in chars, not code points: in "go 👨‍👩‍👧 now" the family is
+// chars [3..11), though only code points [3..8).
 
 const string Family = "👨‍👩‍👧";   // [0..8)
 
@@ -254,6 +256,21 @@ Run("ArrowLeft over a multi-code-point emoji crosses all 8 chars of it", () =>
 
     Eq(3, op.NewCursor, "cursor should land just before the family");
     Eq(3, op.NewMark,   "mark should collapse to cursor");
+});
+
+Run("Backspace after a multi-code-point emoji deletes all 8 chars of it", () =>
+{
+    var str   = BibuiStr.FromStrLit($"go {Family} now");
+    var state = new TextEditState { Cursor = 11, Mark = 11 };
+    var ev = new BibUiEvent { Delta = -1, Flags = TextActionFlags.Delete | TextActionFlags.NoNavigationWithSelection };
+
+    var op = TextOp.FromStateAndEvent(str, state, ev, codePointBuf);
+    str.ReplaceRange(op.Range, op.ReplaceString);
+
+    Eq((3, 11), op.Range,   "the op should cover the whole family");
+    Eq("go  now", str.ToString(), "the family should be gone, and nothing else");
+    Eq(3, op.NewCursor,     "cursor should land where the family began");
+    Eq(3, op.NewMark,       "mark should collapse to cursor");
 });
 
 Run("WordScan forward over a multi-code-point emoji lands past it", () =>
