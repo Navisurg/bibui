@@ -46,10 +46,10 @@ runtime.Mount(() =>
     float t = (MathF.Sin(frame / 40f) + 1f) / 2f;
 
     // ── Ask, innermost and topmost first ────────────────────────────────────
-    var toggle = Switch.Build(runtime, "anim", animate, label: S(animate ? "Animating (click to stop)" : "Still (click to animate)"));
+    var toggle = Switch.Build(runtime, "anim", animate, label: animate ? "Animating (click to stop)" : "Still (click to animate)");
     if (toggle.Clicked) { animate = !animate; runtime.RequestFrame(); }
 
-    var hello = Button.Build(runtime, "hello", S(clicks == 0 ? "Click me" : $"Clicked {clicks}×"));
+    var hello = Button.Build(runtime, "hello", clicks == 0 ? "Click me" : $"Clicked {clicks}×");
     if (hello.Clicked) clicks++;
 
     // A press focuses the field; Escape or Enter lets it go.
@@ -59,7 +59,7 @@ runtime.Mount(() =>
     BibuiWidget line;
     using (runtime.PushParent(field))
         line = TextField.SingleLine(runtime, "typed", typed, typedEdit, typing,
-            placeholder: S("Type here: dead keys, AltGr, held keys repeat, Ctrl+A, Ctrl+Left"));
+            placeholder: "Type here: dead keys, AltGr, held keys repeat, Ctrl+A, Ctrl+Left");
     if (line.Pressed) typing = true;
     foreach (var handle in runtime.UnconsumedEvents)
         if (typing && handle.Event is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
@@ -88,13 +88,13 @@ runtime.Mount(() =>
     pad.Style.BackgroundColor = UiColor.SurfaceRaised;
     using (runtime.PushParent(pad))
     {
-        runtime.Text(U8(p.Hovering ? $"pointer at {p.X:0.#}, {p.Y:0.#}" : "Move over this pad, press any button, scroll (Shift+wheel too)"),
+        runtime.Text(p.Hovering ? $"pointer at {p.X:0.#}, {p.Y:0.#}" : "Move over this pad, press any button, scroll (Shift+wheel too)",
             ComponentSize.Sm);
         runtime.Gap(6f);
-        runtime.Text(U8($"last press: {lastButton}    wheel total: x {wheelX:0.#} px, y {wheelY:0.#} px (a notch is 32 px)"),
+        runtime.Text($"last press: {lastButton}    wheel total: x {wheelX:0.#} px, y {wheelY:0.#} px (a notch is 32 px)",
             ComponentSize.Sm, TextColor.Secondary);
         runtime.Gap(6f);
-        runtime.Text(U8($"modifiers with the last event: {lastModifiers}"), ComponentSize.Sm, TextColor.Secondary);
+        runtime.Text($"modifiers with the last event: {lastModifiers}", ComponentSize.Sm, TextColor.Secondary);
     }
 
     // The bar a frame moves: a groove and a fill inside it.
@@ -111,9 +111,9 @@ runtime.Mount(() =>
     }
 
     return Column(
-            Bold(runtime, U8("Hello from raw Wayland"), ComponentSize.Xxl, TextColor.Primary),
+            Bold(runtime, "Hello from raw Wayland", ComponentSize.Xxl, TextColor.Primary),
             Space(16f),
-            runtime.Text(U8("wl_shm buffers, CPU raster, frame-callback pacing, xkbcommon input. No GLFW, no GL."),
+            runtime.Text("wl_shm buffers, CPU raster, frame-callback pacing, xkbcommon input. No GLFW, no GL.",
                 textColor: TextColor.Secondary),
             Space(16f),
             toggle.Node,
@@ -126,7 +126,7 @@ runtime.Mount(() =>
             Space(16f),
             pad,
             Space(16f),
-            runtime.Text(U8($"frame {frame} · {runtime.SurfaceWidth}×{runtime.SurfaceHeight} at {runtime.ScaleFactor:0.###}×"),
+            runtime.Text($"frame {frame} · {runtime.SurfaceWidth}×{runtime.SurfaceHeight} at {runtime.ScaleFactor:0.###}×",
                 ComponentSize.Sm, TextColor.Secondary))
         .FillX().FillY()
         .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(28f) });
@@ -148,14 +148,9 @@ new BibuiWindow(runtime, new WaylandPlatformHost(new WaylandHostOptions { AppId 
     .Run("bibui — wayland-hello");
 return 0;
 
-// A text holds UTF-8 bytes; formatted per frame, encoded per frame.
-static ReadOnlyMemory<byte> U8(string s) => System.Text.Encoding.UTF8.GetBytes(s);
-
 // A text at the bold weight, where a PushFontFace scope cannot go: inside an expression.
-static Text Bold(BibuiRuntime runtime, ReadOnlyMemory<byte> text, FontSize? fontSize = null, UiColor? textColor = null)
+static Text Bold(BibuiRuntime runtime, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null)
 {
     using (runtime.PushFontFace(weight: FontWeight.Bold))
         return runtime.Text(text, fontSize, textColor);
 }
-// A component's label.
-static BibuiStr S(string s) => BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes(s));

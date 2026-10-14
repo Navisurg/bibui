@@ -43,12 +43,12 @@ static class MarkdownTests
             _ => block.Kind.ToString(),
         });
         if (block.Kind == MarkdownBlockKind.CodeBlock)
-            sb.Append(' ').Append(Quote(Encoding.UTF8.GetString(doc.CodeOf(block).Span)));
+            sb.Append(' ').Append(Quote(new string(doc.CodeOf(block).Span)));
         foreach (var run in doc.RunsOf(block))
         {
             sb.Append(' ');
             if ((run.Style & MarkdownStyle.LineBreak) != 0) { sb.Append("<br>"); continue; }
-            string text = Quote(Encoding.UTF8.GetString(doc.TextOf(run).Span));
+            string text = Quote(new string(doc.TextOf(run).Span));
             var style = run.Style & ~MarkdownStyle.Link;
             string tag = style == MarkdownStyle.None ? "" : style.ToString().Replace(", ", "+") + " ";
             if (run.Link >= 0) tag += $"->{doc.Links[run.Link]} ";
@@ -254,7 +254,7 @@ static class MarkdownTests
             var source = string.Join(' ', Enumerable.Repeat("lorem", words));
             var (runtime, root) = Show(source, width);
             Font font = runtime.FontInScope();
-            float word = runtime.Fonts.Measure("lorem"u8, font), space = runtime.Fonts.Measure(" "u8, font);
+            float word = runtime.Fonts.Measure("lorem", font), space = runtime.Fonts.Measure(" ", font);
             int perLine = (int)MathF.Floor((width + space + 0.01f) / (word + space));
             var rows = Rows(root);
             Equal((words + perLine - 1) / perLine, rows.Count, "lines");
@@ -291,7 +291,7 @@ static class MarkdownTests
 
         run("Markdown: a clicked link reports its destination, and the viewer writes nothing", () =>
         {
-            var source = BibuiStr.FromStrLit("Go to [the docs](https://example.com/docs) now."u8);
+            var source = BibuiStr.FromStrLit("Go to [the docs](https://example.com/docs) now.");
             MarkdownWidget last = default;
             var runtime = new BibuiRuntime();
             runtime.Mount(() =>
@@ -305,12 +305,12 @@ static class MarkdownTests
             using var page = Bibui.Testing.BibuiPage.From(runtime);
             page.Click("md/0");
             Equal("https://example.com/docs", last.ClickedLink, "clicked link");
-            Equal("Go to [the docs](https://example.com/docs) now.", System.Text.Encoding.UTF8.GetString(source.Str), "source");
+            Equal("Go to [the docs](https://example.com/docs) now.", source.ToString(), "source");
         });
 
         run("Markdown: a clicked task box reports the offset ToggleTask flips", () =>
         {
-            var source = BibuiStr.FromStrLit("- [ ] write it\n- [x] test it"u8);
+            var source = BibuiStr.FromStrLit("- [ ] write it\n- [x] test it");
             MarkdownWidget last = default;
             var runtime = new BibuiRuntime();
             runtime.Mount(() =>
@@ -324,7 +324,7 @@ static class MarkdownTests
             page.Click("tasks/0");
             IsTrue(last.TaskClicked, "the first task box should report its click");
             Markdown.ToggleTask(source, last.ToggledTask);
-            Equal("- [x] write it\n- [x] test it", System.Text.Encoding.UTF8.GetString(source.Str), "source after toggling");
+            Equal("- [x] write it\n- [x] test it", source.ToString(), "source after toggling");
         });
 
         // The runtime's own cost per text drawn is the yardstick: a frame of the
@@ -333,7 +333,7 @@ static class MarkdownTests
         run("Markdown: a steady frame neither parses again nor allocates beyond its texts", () =>
         {
             var text = string.Concat(Enumerable.Repeat("## Section\n\nSome *text* with `code` and a [link](https://x.dev).\n\n- one\n- two\n\n", 20));
-            var bytes = Encoding.UTF8.GetBytes(text);
+            var bytes = text.ToCharArray();
             var surface = new SurfaceOptions { Width = 500, Height = 2000, ScaleFactor = 1f };
 
             var source = BibuiStr.FromStrLit(bytes);
@@ -378,7 +378,7 @@ static class MarkdownTests
     private static (BibuiRuntime Runtime, UiNode Root) Show(string markdown, float width)
     {
         var runtime = new BibuiRuntime();
-        var source = BibuiStr.FromStrLit(Encoding.UTF8.GetBytes(markdown));
+        var source = BibuiStr.FromStrLit(markdown);
         runtime.Mount(() => Arrange.Column(Markdown.Build(runtime, "md", source, width: width).Node).FillX().FillY(),
             new SurfaceOptions { Width = (int)width + 40, Height = 1200, ScaleFactor = 1f });
         runtime.Render();

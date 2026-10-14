@@ -36,9 +36,8 @@ namespace Bibui.Raster.Skia
         public Bibui.Raster.RasterTypeface? LoadTypeface(System.ReadOnlySpan<byte> data) { }
         public Bibui.Raster.RasterTypeface? MatchCharacter(int codepoint, int weight) { }
         public Bibui.Raster.RasterTypeface? MatchFamily(string family, int weight) { }
-        public float MeasureText(in Bibui.Raster.RasterFont font, System.ReadOnlySpan<byte> utf8) { }
-        public float MeasureText(in Bibui.Raster.RasterFont font, string text) { }
-        public Bibui.Raster.ShapedRun ShapeText(in Bibui.Raster.RasterFont font, string text) { }
+        public float MeasureText(in Bibui.Raster.RasterFont font, System.ReadOnlySpan<char> text) { }
+        public Bibui.Raster.ShapedRun ShapeText(in Bibui.Raster.RasterFont font, System.ReadOnlySpan<char> text) { }
         public Bibui.Raster.IRasterSurface Wrap(SkiaSharp.SKSurface surface) { }
     }
     public sealed class SkiaRasterCanvas : Bibui.Raster.IRasterCanvas
@@ -55,8 +54,7 @@ namespace Bibui.Raster.Skia
         public void DrawPixels(System.ReadOnlySpan<byte> rgba, int width, int height, Bibui.RectF dest, in Bibui.Raster.RasterPaint paint) { }
         public void DrawPoints(Bibui.Raster.PointMode mode, System.ReadOnlySpan<System.Numerics.Vector2> points, in Bibui.Raster.RasterPaint paint) { }
         public void DrawRoundRect(Bibui.RectF rect, float rx, float ry, in Bibui.Raster.RasterPaint paint) { }
-        public float DrawText(System.ReadOnlySpan<byte> utf8, float x, float baselineY, in Bibui.Raster.RasterFont font, Bibui.Rgba color) { }
-        public float DrawText(string text, float x, float baselineY, in Bibui.Raster.RasterFont font, Bibui.Rgba color) { }
+        public float DrawText(System.ReadOnlySpan<char> text, float x, float baselineY, in Bibui.Raster.RasterFont font, Bibui.Rgba color) { }
         public void Restore() { }
         public void Save() { }
         public void SaveLayerAlpha(byte alpha) { }

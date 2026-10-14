@@ -59,7 +59,7 @@ static (BibuiRuntime Rt, ManagedRasterBackend Backend, IRasterSurface Target) Ri
             for (int c = 0; c < 4; c++)
             {
                 if (c > 0) cells.Add(Arrange.Space(6f));
-                cells.Add(Button.Build(rt, $"d{r * 4 + c}", BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes($"Item {r * 4 + c}"))).Node);
+                cells.Add(Button.Build(rt, $"d{r * 4 + c}", $"Item {r * 4 + c}").Node);
             }
             if (r > 0) rows.Add(Arrange.Space(6f));
             rows.Add(Arrange.Row([.. cells]));

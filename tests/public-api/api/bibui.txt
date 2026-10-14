@@ -56,14 +56,15 @@ namespace Bibui
         public BibuiStr(int capacity) { }
         public long Capacity { get; }
         public long Length { get; }
-        public System.Span<byte> Str { get; }
+        public System.Span<char> Str { get; }
         public void AlignedResize(long newSize) { }
-        public System.ReadOnlyMemory<byte> AsMemory() { }
+        public System.ReadOnlyMemory<char> AsMemory() { }
         public void Grow() { }
-        public void ReplaceRange(System.ValueTuple<int, int> range, System.ReadOnlySpan<byte> replace) { }
+        public void ReplaceRange(System.ValueTuple<int, int> range, System.ReadOnlySpan<char> replace) { }
         public void Resize(long newSize) { }
         public void Shrink() { }
-        public static Bibui.BibuiStr FromStrLit(System.ReadOnlySpan<byte> strLit) { }
+        public override string ToString() { }
+        public static Bibui.BibuiStr FromStrLit(System.ReadOnlySpan<char> strLit) { }
     }
     public readonly struct BibuiWidget : System.IEquatable<Bibui.BibuiWidget>
     {
@@ -302,9 +303,9 @@ namespace Bibui
         public void Dispose() { }
         public float LineAdvance(in Bibui.Font font) { }
         public float LineHeight(in Bibui.Font font) { }
-        public float Measure(System.ReadOnlySpan<byte> utf8, in Bibui.Font font) { }
-        public int OffsetAt(System.ReadOnlySpan<byte> utf8, in Bibui.Font font, float x) { }
-        public Bibui.TextLine? Wrap(System.ReadOnlySpan<byte> utf8, in Bibui.Font font, float width, Bibui.TextWrap wrap = 0) { }
+        public float Measure(System.ReadOnlySpan<char> text, in Bibui.Font font) { }
+        public int OffsetAt(System.ReadOnlySpan<char> text, in Bibui.Font font, float x) { }
+        public Bibui.TextLine? Wrap(System.ReadOnlySpan<char> text, in Bibui.Font font, float width, Bibui.TextWrap wrap = 0) { }
     }
     public sealed class FrameInput : System.IEquatable<Bibui.FrameInput>
     {
@@ -734,7 +735,7 @@ namespace Bibui
     public sealed class Text : Bibui.UiComponent
     {
         public Bibui.UiColor? Color { get; }
-        public System.ReadOnlyMemory<byte> Content { get; }
+        public System.ReadOnlySpan<char> Content { get; }
         public Bibui.FontSlot Family { get; }
         public Bibui.FontSize Size { get; set; }
         public Bibui.FontWeight Weight { get; }
@@ -936,9 +937,8 @@ namespace Bibui.Raster
         Bibui.Raster.RasterTypeface? LoadTypeface(System.ReadOnlySpan<byte> data);
         Bibui.Raster.RasterTypeface? MatchCharacter(int codepoint, int weight);
         Bibui.Raster.RasterTypeface? MatchFamily(string family, int weight);
-        float MeasureText(in Bibui.Raster.RasterFont font, System.ReadOnlySpan<byte> utf8);
-        float MeasureText(in Bibui.Raster.RasterFont font, string text);
-        Bibui.Raster.ShapedRun ShapeText(in Bibui.Raster.RasterFont font, string text);
+        float MeasureText(in Bibui.Raster.RasterFont font, System.ReadOnlySpan<char> text);
+        Bibui.Raster.ShapedRun ShapeText(in Bibui.Raster.RasterFont font, System.ReadOnlySpan<char> text);
     }
     public interface IRasterCanvas
     {
@@ -953,8 +953,7 @@ namespace Bibui.Raster
         void DrawPixels(System.ReadOnlySpan<byte> rgba, int width, int height, Bibui.RectF dest, in Bibui.Raster.RasterPaint paint);
         void DrawPoints(Bibui.Raster.PointMode mode, System.ReadOnlySpan<System.Numerics.Vector2> points, in Bibui.Raster.RasterPaint paint);
         void DrawRoundRect(Bibui.RectF rect, float rx, float ry, in Bibui.Raster.RasterPaint paint);
-        float DrawText(System.ReadOnlySpan<byte> utf8, float x, float baselineY, in Bibui.Raster.RasterFont font, Bibui.Rgba color);
-        float DrawText(string text, float x, float baselineY, in Bibui.Raster.RasterFont font, Bibui.Rgba color);
+        float DrawText(System.ReadOnlySpan<char> text, float x, float baselineY, in Bibui.Raster.RasterFont font, Bibui.Rgba color);
         void Restore();
         void Save();
         void SaveLayerAlpha(byte alpha);
@@ -1119,11 +1118,11 @@ namespace Bibui.Runtime
     public static class Avatar
     {
         public const float DefaultSize = 40F;
-        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, Bibui.BibuiStr initials, float size = 40, Bibui.UiColor? fill = default, Bibui.UiColor? ink = default, Bibui.ComponentSize fontSize = 2) { }
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, System.ReadOnlySpan<char> initials, float size = 40, Bibui.UiColor? fill = default, Bibui.UiColor? ink = default, Bibui.ComponentSize fontSize = 2) { }
     }
     public static class Badge
     {
-        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, Bibui.BibuiStr label, Bibui.BadgeVariant variant = 0, bool leadingDot = false) { }
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, System.ReadOnlySpan<char> label, Bibui.BadgeVariant variant = 0, bool leadingDot = false) { }
     }
     public sealed class BibUiEventHandle
     {
@@ -1196,8 +1195,8 @@ namespace Bibui.Runtime
         public void SetTheme(Bibui.Theming.ThemeTokens theme) { }
         public void SetTheme(Bibui.Theming.ThemeTokens theme, Bibui.Transition crossfade) { }
         public Bibui.Spinner Spinner(float diameter = 24) { }
-        public Bibui.Text Text(System.ReadOnlyMemory<byte> text, Bibui.FontSize? fontSize = default, Bibui.UiColor? textColor = default, Bibui.FontSlot? family = default) { }
-        public Bibui.Text TextFromId(string id, System.ReadOnlyMemory<byte> text, Bibui.FontSize? fontSize = default, Bibui.UiColor? textColor = default, Bibui.FontSlot? family = default) { }
+        public Bibui.Text Text(System.ReadOnlySpan<char> text, Bibui.FontSize? fontSize = default, Bibui.UiColor? textColor = default, Bibui.FontSlot? family = default) { }
+        public Bibui.Text TextFromId(string id, System.ReadOnlySpan<char> text, Bibui.FontSize? fontSize = default, Bibui.UiColor? textColor = default, Bibui.FontSlot? family = default) { }
         public readonly struct AxisScope : System.IDisposable
         {
             public void Dispose() { }
@@ -1245,11 +1244,11 @@ namespace Bibui.Runtime
     }
     public static class Button
     {
-        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr label, bool ghost = false, bool disabled = false, Bibui.ComponentSize size = 1) { }
+        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, System.ReadOnlySpan<char> label, bool ghost = false, bool disabled = false, Bibui.ComponentSize size = 1) { }
     }
     public static class Checkbox
     {
-        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, bool on, Bibui.BibuiStr? label = null, bool disabled = false, bool indeterminate = false) { }
+        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, bool on, System.ReadOnlySpan<char> label = default, bool disabled = false, bool indeterminate = false) { }
     }
     public static class Dialog
     {
@@ -1278,7 +1277,7 @@ namespace Bibui.Runtime
     public static class Expander
     {
         public const float HeaderHeight = 44F;
-        public static Bibui.Runtime.ExpanderWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr title, bool open) { }
+        public static Bibui.Runtime.ExpanderWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, System.ReadOnlySpan<char> title, bool open) { }
     }
     public readonly struct ExpanderWidget : System.IEquatable<Bibui.Runtime.ExpanderWidget>
     {
@@ -1297,7 +1296,7 @@ namespace Bibui.Runtime
     public static class KeyboardShortcut
     {
         public const float KeyHeight = 24F;
-        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, [System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<Bibui.BibuiStr> keys) { }
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, [System.Runtime.CompilerServices.ParamCollection] [System.Runtime.CompilerServices.ScopedRef] System.ReadOnlySpan<string> keys) { }
     }
     public static class Markdown
     {
@@ -1347,13 +1346,12 @@ namespace Bibui.Runtime
         public System.Collections.Generic.IReadOnlyList<string> Links { get; }
         public Bibui.Runtime.MarkdownBlock Root { get; }
         public System.ReadOnlySpan<Bibui.Runtime.MarkdownRun> Runs { get; }
-        public System.ReadOnlyMemory<byte> Text { get; }
-        public System.ReadOnlyMemory<byte> CodeOf(Bibui.Runtime.MarkdownBlock block) { }
+        public System.ReadOnlyMemory<char> Text { get; }
+        public System.ReadOnlyMemory<char> CodeOf(Bibui.Runtime.MarkdownBlock block) { }
         public string PlainText(Bibui.Runtime.MarkdownBlock block) { }
         public System.ReadOnlySpan<Bibui.Runtime.MarkdownRun> RunsOf(Bibui.Runtime.MarkdownBlock block) { }
-        public System.ReadOnlyMemory<byte> TextOf(in Bibui.Runtime.MarkdownRun run) { }
-        public static Bibui.Runtime.MarkdownDocument Parse(System.ReadOnlySpan<byte> utf8) { }
-        public static Bibui.Runtime.MarkdownDocument Parse(string markdown) { }
+        public System.ReadOnlyMemory<char> TextOf(in Bibui.Runtime.MarkdownRun run) { }
+        public static Bibui.Runtime.MarkdownDocument Parse(System.ReadOnlySpan<char> markdown) { }
     }
     public readonly struct MarkdownRun : System.IEquatable<Bibui.Runtime.MarkdownRun>
     {
@@ -1396,8 +1394,8 @@ namespace Bibui.Runtime
     {
         public static Bibui.Runtime.MenuScope? Begin(Bibui.Runtime.BibuiRuntime runtime, string id, float x, float y, float width = 220) { }
         public static Bibui.Runtime.MenuScope? BeginBelow(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.UiNode anchor, float width = 220, float gap = 4) { }
-        public static Bibui.BibuiWidget Item(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr label, string? icon = null, Bibui.BibuiStr? shortcut = null, bool disabled = false) { }
-        public static Bibui.Box Label(Bibui.Runtime.BibuiRuntime runtime, Bibui.BibuiStr text) { }
+        public static Bibui.BibuiWidget Item(Bibui.Runtime.BibuiRuntime runtime, string id, System.ReadOnlySpan<char> label, string? icon = null, System.ReadOnlySpan<char> shortcut = default, bool disabled = false) { }
+        public static Bibui.Box Label(Bibui.Runtime.BibuiRuntime runtime, System.ReadOnlySpan<char> text) { }
         public static Bibui.Box Separator(Bibui.Runtime.BibuiRuntime runtime) { }
     }
     public readonly struct MenuScope
@@ -1415,7 +1413,7 @@ namespace Bibui.Runtime
     public static class Progress
     {
         public const float DefaultThickness = 8F;
-        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, float value, float max = 100, Bibui.BibuiStr? label = null, float thickness = 8, Bibui.UiColor? fill = default, Bibui.UiColor? track = default) { }
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, float value, float max = 100, System.ReadOnlySpan<char> label = default, float thickness = 8, Bibui.UiColor? fill = default, Bibui.UiColor? track = default) { }
     }
     public static class RadioGroup
     {
@@ -1429,9 +1427,9 @@ namespace Bibui.Runtime
     }
     public readonly struct RadioOption : System.IEquatable<Bibui.Runtime.RadioOption>
     {
-        public RadioOption(Bibui.BibuiStr Label, string Value, bool Disabled = false) { }
+        public RadioOption(string Label, string Value, bool Disabled = false) { }
         public bool Disabled { get; init; }
-        public Bibui.BibuiStr Label { get; init; }
+        public string Label { get; init; }
         public string Value { get; init; }
     }
     public static class Scrollbar
@@ -1442,12 +1440,12 @@ namespace Bibui.Runtime
     public static class Section
     {
         public const float Spacing = 12F;
-        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, Bibui.BibuiStr caption) { }
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, System.ReadOnlySpan<char> caption) { }
     }
     public static class Select
     {
-        public static Bibui.Runtime.SelectScope Begin(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, float width = 220, bool disabled = false) { }
-        public static Bibui.BibuiWidget Item(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr label, bool selected = false, bool disabled = false) { }
+        public static Bibui.Runtime.SelectScope Begin(Bibui.Runtime.BibuiRuntime runtime, string id, System.ReadOnlySpan<char> text, float width = 220, bool disabled = false) { }
+        public static Bibui.BibuiWidget Item(Bibui.Runtime.BibuiRuntime runtime, string id, System.ReadOnlySpan<char> label, bool selected = false, bool disabled = false) { }
     }
     public readonly struct SelectScope
     {
@@ -1468,7 +1466,7 @@ namespace Bibui.Runtime
     public static class Slider
     {
         public const float Height = 16F;
-        public static Bibui.Runtime.SliderWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, float value, float min = 0, float max = 1, float step = 0, Bibui.BibuiStr? label = null, bool disabled = false) { }
+        public static Bibui.Runtime.SliderWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, float value, float min = 0, float max = 1, float step = 0, System.ReadOnlySpan<char> label = default, bool disabled = false) { }
     }
     public readonly struct SliderWidget : System.IEquatable<Bibui.Runtime.SliderWidget>
     {
@@ -1481,12 +1479,12 @@ namespace Bibui.Runtime
     }
     public static class Switch
     {
-        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, bool on, Bibui.BibuiStr? label = null, bool disabled = false, float height = 24) { }
+        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, bool on, System.ReadOnlySpan<char> label = default, bool disabled = false, float height = 24) { }
     }
     public readonly struct TabOption : System.IEquatable<Bibui.Runtime.TabOption>
     {
-        public TabOption(Bibui.BibuiStr Label, string Value) { }
-        public Bibui.BibuiStr Label { get; init; }
+        public TabOption(string Label, string Value) { }
+        public string Label { get; init; }
         public string Value { get; init; }
     }
     public static class Tabs
@@ -1510,18 +1508,18 @@ namespace Bibui.Runtime
         public const uint MultiLineReadOnlyEvents = 2056u;
         public const uint SingleLineEvents = 2076u;
         public const uint SingleLineReadOnlyEvents = 2056u;
-        public static Bibui.BibuiWidget Ellipsis(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, Bibui.TextEdit.TextEditState edit, bool focused, uint events = 0, Bibui.TextColor textColor = 0, Bibui.BibuiStr? placeholder = null) { }
+        public static Bibui.BibuiWidget Ellipsis(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, Bibui.TextEdit.TextEditState edit, bool focused, uint events = 0, Bibui.TextColor textColor = 0, System.ReadOnlySpan<char> placeholder = default) { }
         [System.Obsolete("Pass the runtime, so the theme\'s border width, focus ring and density reach the f" +
             "ield: InputStyle(runtime, box, ...).")]
         public static void InputStyle(Bibui.Box box, bool focused, bool error = false, bool disabled = false) { }
         public static void InputStyle(Bibui.Runtime.BibuiRuntime runtime, Bibui.Box box, bool focused, bool error = false, bool disabled = false) { }
-        public static Bibui.BibuiWidget Multiline(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, Bibui.TextEdit.TextEditState edit, bool focused, uint events = 3100, Bibui.TextColor textColor = 0, Bibui.BibuiStr? placeholder = null, Bibui.TextWrap wrap = 0) { }
+        public static Bibui.BibuiWidget Multiline(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, Bibui.TextEdit.TextEditState edit, bool focused, uint events = 3100, Bibui.TextColor textColor = 0, System.ReadOnlySpan<char> placeholder = default, Bibui.TextWrap wrap = 0) { }
         public static Bibui.SemanticSize Rows(Bibui.Runtime.BibuiRuntime runtime, int rows) { }
-        public static Bibui.BibuiWidget SingleLine(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, Bibui.TextEdit.TextEditState edit, bool focused, uint events = 2076, Bibui.TextColor textColor = 0, Bibui.BibuiStr? placeholder = null) { }
+        public static Bibui.BibuiWidget SingleLine(Bibui.Runtime.BibuiRuntime runtime, string id, Bibui.BibuiStr text, Bibui.TextEdit.TextEditState edit, bool focused, uint events = 2076, Bibui.TextColor textColor = 0, System.ReadOnlySpan<char> placeholder = default) { }
     }
     public static class Toggle
     {
-        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, bool on, Bibui.BibuiStr? label = null, string? icon = null, bool disabled = false) { }
+        public static Bibui.BibuiWidget Build(Bibui.Runtime.BibuiRuntime runtime, string id, bool on, System.ReadOnlySpan<char> label = default, string? icon = null, bool disabled = false) { }
     }
     public static class ToggleGroup
     {
@@ -1535,13 +1533,13 @@ namespace Bibui.Runtime
     }
     public readonly struct ToggleOption : System.IEquatable<Bibui.Runtime.ToggleOption>
     {
-        public ToggleOption(Bibui.BibuiStr Label, string Value) { }
-        public Bibui.BibuiStr Label { get; init; }
+        public ToggleOption(string Label, string Value) { }
+        public string Label { get; init; }
         public string Value { get; init; }
     }
     public static class Tooltip
     {
-        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, Bibui.BibuiStr text, Bibui.Box? anchor = null) { }
+        public static Bibui.Box Build(Bibui.Runtime.BibuiRuntime runtime, System.ReadOnlySpan<char> text, Bibui.Box? anchor = null) { }
     }
 }
 namespace Bibui.Runtime.Platform
@@ -1642,7 +1640,7 @@ namespace Bibui.TextEdit
         public Bibui.Key Key { get; set; }
         public Bibui.TextEdit.BibUiEventKind Kind { get; set; }
         public Bibui.KeyModifiers Modifiers { get; set; }
-        public byte[]? PasteData { get; set; }
+        public string? PasteData { get; set; }
         public float ScrollX { get; set; }
         public float ScrollY { get; set; }
         public bool Shift { get; set; }
@@ -1686,16 +1684,17 @@ namespace Bibui.TextEdit
     }
     public ref struct TextOp
     {
-        public System.ReadOnlySpan<byte> CopyString;
+        public System.ReadOnlySpan<char> CopyString;
         public int NewCursor;
         public int NewMark;
         public System.ValueTuple<int, int> Range;
-        public System.ReadOnlySpan<byte> ReplaceString;
-        public static int MaxCodePointSize;
+        public System.ReadOnlySpan<char> ReplaceString;
+        public static int MaxCharsPerCodePoint;
+        public static int MaxLookBehind;
         public TextOp() { }
-        public static Bibui.TextEdit.TextOp FromStateAndEvent(Bibui.BibuiStr str, Bibui.TextEdit.TextEditState state, Bibui.TextEdit.BibUiEvent ev, System.Span<byte> buf) { }
-        public static int ScanCodePoint(System.ReadOnlySpan<byte> str, int cursor, int delta) { }
-        public static int WordScan(System.ReadOnlySpan<byte> str, int cursor, int delta) { }
+        public static Bibui.TextEdit.TextOp FromStateAndEvent(Bibui.BibuiStr str, Bibui.TextEdit.TextEditState state, Bibui.TextEdit.BibUiEvent ev, System.Span<char> buf) { }
+        public static int ScanTextElement(System.ReadOnlySpan<char> str, int cursor, int delta) { }
+        public static int WordScan(System.ReadOnlySpan<char> str, int cursor, int delta) { }
     }
 }
 namespace Bibui.Theming
