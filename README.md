@@ -36,34 +36,42 @@ dotnet add package Bibui.Platform.Silk
 A window with a button and a counter. Replace `Program.cs` with:
 
 ```csharp
-using Bibui;
 using Bibui.Raster.Skia;
 using Bibui.Runtime;
 using Bibui.Runtime.Platform;
-using static Bibui.Arrange;
 
 var runtime = BibuiRuntime.Create().WithSkia();
 int count = 0;
 
 runtime.Mount(() =>
 {
-    var add = runtime.Button("add", "Add one");
-    if (add.Clicked) count++;
-    var text = runtime.Text($"Clicked {count} times");
-    return Column(text, Space(12f), add).FillX().FillY().Padded(EdgeInsets.All(24f));
+    var column = runtime.ColumnFit();
+    using (runtime.PushParent(column))
+    {
+        runtime.Text($"Clicked {count} times");
+
+        var button = runtime.Button(id: "add", "Add one");
+        if (button.Clicked)
+            count++;
+    }
+    return column;
 });
 
-BibuiWindow.Create(runtime).WithSilk().Run("Counter");
+BibuiWindow.Create(runtime).WithSilk().Run(title: "Counter");
 ```
 
 ```bash
 dotnet run
 ```
 
-The build function runs every frame. `runtime.Button` reports whether the
-button was clicked, so the app changes its own state right there. There are no
-callbacks. Labels and texts are plain strings, and the window is cleared to the
-theme's background colour before each frame is painted.
+![The quick start's window after three clicks: "Clicked 3 times" above an "Add one" button](docs/images/quick-start-counter.png)
+
+The build function runs every frame. `runtime.ColumnFit()` makes a column as
+large as what it holds, and everything built while it is pushed goes into it,
+in order. `runtime.Button` reports whether the button was clicked, so the app
+changes its own state right there. There are no callbacks. Labels and texts
+are plain strings, and the window is cleared to the theme's background colour
+before each frame is painted.
 
 ## Two routes
 
