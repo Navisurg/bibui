@@ -43,7 +43,7 @@ runtime.Mount(() =>
     runtime.RequestFrame(); // animate: the compositor's frame callbacks set the pace
     float t = (MathF.Sin(frame / 40f) + 1f) / 2f;
 
-    var hello = Button.Build(runtime, "hello", S(clicks == 0 ? "Click me" : $"Clicked {clicks}×"));
+    var hello = Button.Build(runtime, "hello", clicks == 0 ? "Click me" : $"Clicked {clicks}×");
     if (hello.Clicked) clicks++;
 
     Box groove = runtime.Box().FillX().Px(height: 14f);
@@ -62,15 +62,15 @@ runtime.Mount(() =>
         ? $"GPU: {host.GpuRenderer}"
         : "CPU: Skia into wl_shm buffers";
     return Column(
-            runtime.Text(U8("Skia on the GPU, on raw Wayland"), ComponentSize.Xxl),
+            runtime.Text("Skia on the GPU, on raw Wayland", ComponentSize.Xxl),
             Space(16f),
-            runtime.Text(U8(path), textColor: TextColor.Secondary),
+            runtime.Text(path, textColor: TextColor.Secondary),
             Space(16f),
             hello.Node,
             Space(16f),
             groove,
             Space(16f),
-            runtime.Text(U8($"frame {frame} · {runtime.SurfaceWidth}×{runtime.SurfaceHeight} at {runtime.ScaleFactor:0.###}×"),
+            runtime.Text($"frame {frame} · {runtime.SurfaceWidth}×{runtime.SurfaceHeight} at {runtime.ScaleFactor:0.###}×",
                 ComponentSize.Sm, TextColor.Secondary))
         .FillX().FillY()
         .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(28f) });
@@ -89,5 +89,3 @@ if (!WaylandPlatformHost.IsSupported)
 new BibuiWindow(runtime, host).Run("bibui — wayland-gpu-hello");
 return 0;
 
-static ReadOnlyMemory<byte> U8(string s) => System.Text.Encoding.UTF8.GetBytes(s);
-static BibuiStr S(string s) => BibuiStr.FromStrLit(System.Text.Encoding.UTF8.GetBytes(s));
