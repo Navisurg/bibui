@@ -100,6 +100,17 @@ This appends each node to `column`'s children.
 with a `Text` inside. `button.Clicked` reports a click, so the app reacts to it
 inline, with no callbacks.
 
+## Component Library
+
+bibui comes with components built from the same `Box` and `Text` primitives:
+buttons, switches, toggles, sliders, text fields, tabs, menus, dialogs, a
+Markdown viewer and more. Below, a multiline text field holds Markdown source,
+`runtime.Markdown` draws it as it is typed, and a switch changes the theme.
+
+![A Markdown editor built with bibui: typing in a multiline field updates a live Markdown preview, ticking a task box in the preview ticks it in the source, and a switch changes between the dark and light themes](docs/images/component-library.gif)
+
+Every component, with pictures, is in [Components](docs/components/index.md).
+
 ## Two routes
 
 bibui draws through a raster backend and runs in a window that a host
