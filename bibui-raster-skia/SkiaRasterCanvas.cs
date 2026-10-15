@@ -37,6 +37,17 @@ public sealed class SkiaRasterCanvas : IRasterCanvas
 
     public void ClipRect(RectF rect) => Native.ClipRect(rect.ToSk());
 
+    public void ClipRoundRect(RectF rect, CornerRadii radii)
+    {
+        using var rr = new SKRoundRect();
+        rr.SetRectRadii(rect.ToSk(),
+        [
+            new SKPoint(radii.TopLeft, radii.TopLeft), new SKPoint(radii.TopRight, radii.TopRight),
+            new SKPoint(radii.BottomRight, radii.BottomRight), new SKPoint(radii.BottomLeft, radii.BottomLeft),
+        ]);
+        Native.ClipRoundRect(rr, SKClipOperation.Intersect, antialias: true);
+    }
+
     public void SaveLayerAlpha(byte alpha)
         => Native.SaveLayer(_backend.Paint(new PaintSpec { Color = new Rgba(0, 0, 0, alpha) }));
 

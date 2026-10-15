@@ -35,7 +35,7 @@ public readonly record struct PaintSpec
 /// Discriminates cached geometry whose keys would otherwise be the same few
 /// floats. The path table is one key space, so unrelated shapes must not alias.
 /// </summary>
-internal enum PathKind { CheckMark, Arc, Polyline, FilledPath, Edge }
+internal enum PathKind { CheckMark, Arc, Polyline, FilledPath, Edge, RoundRect }
 
 /// <summary>
 /// What a <c>Box.Draw</c> callback is handed: the canvas, where it may paint,
@@ -122,6 +122,52 @@ public readonly ref partial struct DrawContext
         }
     }
 
+    /// <summary>
+    /// Fills and/or strokes a rect whose corners each have their own radius
+    /// (physical px), first <see cref="CornerRadii.Fit"/> to the rect. Equal
+    /// radii draw exactly what <see cref="DrawRoundRect(RectF, float, RasterPaint?, RasterPaint?)"/>
+    /// draws; others are a path, built once per size and shape and drawn
+    /// where the rect is, so a list of bubbles shares one.
+    /// </summary>
+    public void DrawRoundRect(RectF rect, CornerRadii radii, RasterPaint? fill = null, RasterPaint? stroke = null)
+    {
+        float w = MathF.Abs(rect.Right - rect.Left), h = MathF.Abs(rect.Bottom - rect.Top);
+        radii = radii.Fit(w, h);
+        if (radii.IsUniform)
+        {
+            DrawRoundRect(rect, radii.TopLeft, fill, stroke);
+            return;
+        }
+
+        var path = Path(
+            CacheKey.Of([
+                CacheKey.Bits(w), CacheKey.Bits(h),
+                CacheKey.Bits(radii.TopLeft), CacheKey.Bits(radii.TopRight),
+                CacheKey.Bits(radii.BottomRight), CacheKey.Bits(radii.BottomLeft),
+                (int)PathKind.RoundRect]),
+            (w, h, radii),
+            static (p, path) => p.radii.AddTo(path, new RectF(0f, 0f, p.w, p.h)));
+
+        // The path is at the origin, so the canvas is moved to the rect, and a
+        // gradient given where the rect is moves back by the same amount.
+        var origin = new Vector2(MathF.Min(rect.Left, rect.Right), MathF.Min(rect.Top, rect.Bottom));
+        Canvas.Save();
+        Canvas.Translate(origin.X, origin.Y);
+        if (fill is { } f) Canvas.DrawPath(path, Local(f, origin));
+        if (stroke is { } s) Canvas.DrawPath(path, Local(s, origin));
+        Canvas.Restore();
+    }
+
+    /// <summary><paramref name="paint"/> with its gradient moved by -<paramref name="origin"/>.</summary>
+    private static RasterPaint Local(RasterPaint paint, Vector2 origin)
+    {
+        if (paint.Shader is not { } sh) return paint;
+        var moved = sh.Type == GradientType.Radial
+            ? RasterShader.Radial(sh.Start - origin, sh.Radius, sh.Colors, sh.Stops)
+            : RasterShader.Linear(sh.Start - origin, sh.End - origin, sh.Colors, sh.Stops);
+        return paint with { Shader = moved };
+    }
+
     public void DrawLine(float x1, float y1, float x2, float y2, in RasterPaint paint)
         => Canvas.DrawLine(x1, y1, x2, y2, paint);
 
@@ -139,6 +185,20 @@ public readonly ref partial struct DrawContext
     {
         Canvas.Save();
         Canvas.ClipRect(rect);
+    }
+
+    /// <summary>
+    /// Clips to a physical rect rounded by <paramref name="radii"/> (physical
+    /// px, <see cref="CornerRadii.Fit"/> to it), antialiased, until the
+    /// matching <see cref="PopClip"/>. Square corners all round is
+    /// <see cref="PushClip(RectF)"/>'s pixel-aligned rect.
+    /// </summary>
+    public void PushClip(RectF rect, CornerRadii radii)
+    {
+        radii = radii.Fit(rect.Right - rect.Left, rect.Bottom - rect.Top);
+        Canvas.Save();
+        if (radii.IsZero) Canvas.ClipRect(rect);
+        else Canvas.ClipRoundRect(rect, radii);
     }
 
     public void PopClip() => Canvas.Restore();
@@ -268,6 +328,21 @@ public readonly ref partial struct DrawContext
                 : Paint(PaintSpec.Stroke(strokeColor.Value, (strokeWidth ?? 1f) * Scale)));
     }
 
+    /// <summary>
+    /// <see cref="DrawRRect(float, float, float, float, float, Rgba?, Rgba?, float?)"/>
+    /// with a radius for each corner (logical px).
+    /// </summary>
+    public void DrawRRect(float x, float y, float w, float h, CornerRadii radii,
+        Rgba? fillColor, Rgba? strokeColor, float? strokeWidth)
+    {
+        DrawRoundRect(
+            ToPhysical(x, y, w, h), radii.Scaled(Scale),
+            fill: fillColor is null ? null : Paint(PaintSpec.Fill(fillColor.Value)),
+            stroke: strokeColor is null
+                ? null
+                : Paint(PaintSpec.Stroke(strokeColor.Value, (strokeWidth ?? 1f) * Scale)));
+    }
+
     public void DrawShadow(float x, float y, float w, float h, float radius,
         float offsetX, float offsetY, float blur, float spread, ReadOnlySpan<char> color)
         => DrawShadow(x, y, w, h, radius, offsetX, offsetY, blur, spread, Color(color));
@@ -285,6 +360,29 @@ public readonly ref partial struct DrawContext
 
         DrawRoundRect(new RectF(px, py, px + pw, py + ph), pr,
             fill: Paint(PaintSpec.Fill(color), blurSigma: sigma));
+    }
+
+    /// <summary>
+    /// <see cref="DrawShadow(float, float, float, float, float, float, float, float, float, Rgba)"/>
+    /// for a box with a radius for each corner. <paramref name="spread"/> grows
+    /// each round corner with the box; a square corner casts a square shadow.
+    /// </summary>
+    public void DrawShadow(float x, float y, float w, float h, CornerRadii radii,
+        float offsetX, float offsetY, float blur, float spread, Rgba color)
+    {
+        float px = (x + offsetX - spread) * Scale;
+        float py = (y + offsetY - spread) * Scale;
+        float pw = (w + 2f * spread) * Scale;
+        float ph = (h + 2f * spread) * Scale;
+        var pr = new CornerRadii(Grow(radii.TopLeft), Grow(radii.TopRight), Grow(radii.BottomRight), Grow(radii.BottomLeft))
+            .Scaled(Scale);
+
+        float sigma = MathF.Max(0.01f, blur * Scale * 0.5f);
+
+        DrawRoundRect(new RectF(px, py, px + pw, py + ph), pr,
+            fill: Paint(PaintSpec.Fill(color), blurSigma: sigma));
+
+        float Grow(float r) => r > 0f ? MathF.Max(0f, r + spread) : 0f;
     }
 
 
@@ -494,6 +592,47 @@ public readonly ref partial struct DrawContext
                 : Paint(PaintSpec.Stroke(strokeColor.Value, (strokeWidth ?? 1f) * Scale)));
     }
 
+    /// <summary>
+    /// <see cref="DrawRRectGradient(float, float, float, float, float, IReadOnlyList{ValueTuple{float, string}}, ValueTuple{float, float}, ValueTuple{float, float}, Rgba?, float?, GradientType)"/>
+    /// with a radius for each corner (logical px).
+    /// </summary>
+    public void DrawRRectGradient(float x, float y, float w, float h, CornerRadii radii,
+        IReadOnlyList<(float Stop, string Color)> stops,
+        (float X, float Y) start, (float X, float Y) end,
+        Rgba? strokeColor, float? strokeWidth, GradientType type)
+    {
+        if (stops.Count == 0)
+        {
+            return;
+        }
+
+        var rect = ToPhysical(x, y, w, h);
+        DrawRoundRect(rect, radii.Scaled(Scale),
+            fill: Paint(PaintSpec.Fill(Rgba.Black), shader: GradientIn(rect, w * Scale, h * Scale, stops, start, end, type)),
+            stroke: strokeColor is null
+                ? null
+                : Paint(PaintSpec.Stroke(strokeColor.Value, (strokeWidth ?? 1f) * Scale)));
+    }
+
+    /// <summary>A gradient over a physical rect, its endpoints given as fractions of it.</summary>
+    private RasterShader GradientIn(RectF rect, float pw, float ph,
+        IReadOnlyList<(float Stop, string Color)> stops,
+        (float X, float Y) start, (float X, float Y) end, GradientType type)
+    {
+        var a = new Vector2(rect.Left + start.X * pw, rect.Top + start.Y * ph);
+        var b = new Vector2(rect.Left + end.X * pw, rect.Top + end.Y * ph);
+        var colors = new Rgba[stops.Count];
+        var positions = new float[stops.Count];
+        for (int i = 0; i < stops.Count; i++)
+        {
+            colors[i] = Color(stops[i].Color);
+            positions[i] = stops[i].Stop;
+        }
+        return type == GradientType.Radial
+            ? RadialGradient(a, MathF.Max(0.01f, Distance(a, b)), colors, positions)
+            : LinearGradient(a, b, colors, positions);
+    }
+
     private static float Distance(Vector2 a, Vector2 b)
         => MathF.Sqrt(MathF.Pow(b.X - a.X, 2) + MathF.Pow(b.Y - a.Y, 2));
 
@@ -563,6 +702,13 @@ public readonly ref partial struct DrawContext
 
     /// <summary>Clips to this logical rect until the matching <see cref="PopClip"/>.</summary>
     public void PushClip(float x, float y, float w, float h) => PushClip(Physical(x, y, w, h));
+
+    /// <summary>
+    /// Clips to this logical rect rounded by <paramref name="radii"/> (logical
+    /// px), antialiased, until the matching <see cref="PopClip"/>.
+    /// </summary>
+    public void PushClip(float x, float y, float w, float h, CornerRadii radii)
+        => PushClip(Physical(x, y, w, h), radii.Scaled(Scale));
 
     /// <summary>Composites everything until <see cref="PopOpacityLayer"/> at the given opacity.</summary>
     public void PushOpacityLayer(float opacity)
