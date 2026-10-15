@@ -1936,6 +1936,47 @@ Run("Select: its open list takes the press over a button built after it", () =>
     Eq(0, buttonClicks, "the button beneath does not");
 });
 
+Run("Select: in a dialog, a row is picked by a press and a release in frames of their own", () =>
+{
+    var runtime = BibuiRuntime.Create().WithSkia();
+    var state = new SelectState();
+    runtime.Mount(() =>
+    {
+        var page = Arrange.Column().FillX().FillY();
+        using (runtime.PushParent(page))
+        {
+            var dialog = Bibui.Runtime.Dialog.Begin(runtime, "sheet", shown: 1f, DialogSide.Right, width: 320f);
+            BuildSelect(runtime, state, "sel");
+            dialog.End();
+        }
+        return page;
+    }, new SurfaceOptions { Width = 800, Height = 500 });
+    runtime.Render();
+    runtime.Render();
+    ClickCentre(runtime, "sel");
+    IsTrue(runtime.IsDropDownOpen("sel-list"), "the trigger opens it");
+    runtime.Render();
+
+    var b = BibuiPage.From(runtime).GetBounds("sel-option-b");
+    float x = b.X + b.Width / 2f, y = b.Y + b.Height / 2f;
+    runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x, Y = y });
+    runtime.Render();
+    runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = x, Y = y });
+    runtime.Render();
+    IsTrue(runtime.IsDropDownOpen("sel-list"), "the press on a row leaves the list open");
+    runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Left, X = x, Y = y });
+    runtime.Render();
+    Eq("b", state.Value, "the row takes the click, not the dialog's panel");
+    IsTrue(!runtime.IsDropDownOpen("sel-list"), "and picking closes it");
+
+    runtime.Render();
+    ClickCentre(runtime, "sel");
+    IsTrue(runtime.IsDropDownOpen("sel-list"), "it opens again");
+    runtime.Render();
+    ClickCentre(runtime, "sheet-panel");
+    IsTrue(!runtime.IsDropDownOpen("sel-list"), "a press elsewhere on the panel still closes it");
+});
+
 // ── SetState.Update: stale-closure regression ────────────────────────────────
 //
 // Reproduces the React stale-closure bug. An async handler captures `state` at
