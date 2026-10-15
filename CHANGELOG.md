@@ -152,6 +152,12 @@ before it was published.
   styles it further, and the scope converts to the box, so a build can
   `return` it.
 
+- `Arrange.Column` and `Arrange.Row` are obsolete: build into
+  `runtime.Column()`/`runtime.Row()` instead, which take their box from the
+  runtime's pool rather than allocating one a frame. They still work; the
+  repository's own call sites are being moved over and build with CS0618
+  warnings until then.
+
 - `Icons.Register(name, svgPathData)`: an app adds icons of its own at
   start-up, drawn by `runtime.Icon` and known to `Icon.IsKnown` like the
   built-in Lucide set (24×24 viewBox, stroke 2, round caps and joins). The

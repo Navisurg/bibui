@@ -38,15 +38,19 @@ public static class Arrange
     }
 
     /// <summary>A node laying <paramref name="items"/> out along X, in order, sized by them.</summary>
+    [Obsolete("Build into runtime.Row() instead: using (runtime.Row()) { ... } links what is built inside into a pooled row.")]
     public static Box Row(params ReadOnlySpan<Item> items) => Group(null, LayoutAxis.X, items);
 
     /// <summary>A node laying <paramref name="items"/> out along Y, in order, sized by them.</summary>
+    [Obsolete("Build into runtime.Column() instead: using (runtime.Column()) { ... } links what is built inside into a pooled column.")]
     public static Box Column(params ReadOnlySpan<Item> items) => Group(null, LayoutAxis.Y, items);
 
     /// <summary>The same as <see cref="Row(ReadOnlySpan{Item})"/>, named <paramref name="id"/>.</summary>
+    [Obsolete("Build into runtime.Row() instead: using (runtime.Row()) { ... } links what is built inside into a pooled row.")]
     public static Box Row(string? id, params ReadOnlySpan<Item> items) => Group(id, LayoutAxis.X, items);
 
     /// <summary>The same as <see cref="Column(ReadOnlySpan{Item})"/>, named <paramref name="id"/>.</summary>
+    [Obsolete("Build into runtime.Column() instead: using (runtime.Column()) { ... } links what is built inside into a pooled column.")]
     public static Box Column(string? id, params ReadOnlySpan<Item> items) => Group(id, LayoutAxis.Y, items);
 
     /// <summary>A gap of <paramref name="pixels"/> along the axis of the row or column it is in.</summary>
@@ -78,10 +82,10 @@ public static class Arrange
     }
 
     /// <summary><paramref name="node"/> centred across a column: a row of a spring, it, and a spring, all the column's width.</summary>
-    public static Box CentredX(UiNode node) => Row(Spring(), node, Spring()).FillX();
+    public static Box CentredX(UiNode node) => Group(null, LayoutAxis.X, [Spring(), node, Spring()]).FillX();
 
     /// <summary><paramref name="node"/> centred across a row: a column of a spring, it, and a spring, all the row's height.</summary>
-    public static Box CentredY(UiNode node) => Column(Spring(), node, Spring()).FillY();
+    public static Box CentredY(UiNode node) => Group(null, LayoutAxis.Y, [Spring(), node, Spring()]).FillY();
 
     // ── Sizes, set on the node and handed back ─────────────────────────────
 
