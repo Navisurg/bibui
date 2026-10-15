@@ -6,15 +6,17 @@
 </p>
 
 bibui is an immediate-mode UI library for .NET.
-The library consists of a few UI components such as a `Box` and `Text` and
-everything you build is a composition of these simple primitives.
 
-A clauded demo app can be used as inspiration for what bibui can build:
+The library consists of a few UI node types such as a `Box` and `Text`,
+and everything you build is a composition of these simple primitives.
+
+Zenith is a clauded showcase app provided as a reference for inspiration on how you build
+applications with bibui.
 
 ![Zenith, the showcase app, built with bibui](samples/showcase/screenshots/overview-dark.png)
 
 **Platforms:** the first release supports Linux on x64. Other platforms are not
-psupported yet.
+supported yet.
 
 ## Install
 
@@ -62,7 +64,7 @@ runtime.Mount(() =>
 BibuiWindow.Create(runtime).WithSilk().Run(title: "Counter");
 ```
 
-Run it in a empty console app with
+Run it from the project created above:
 
 ```bash
 dotnet run
@@ -70,13 +72,17 @@ dotnet run
 
 ![The quick start's window after three clicks: "Clicked 3 times" above an "Add one" button](docs/images/quick-start-counter.png)
 
-bibui has no dedicated `Column` type that contains a list of children.
-Instead the `Box` type contains `Next, Prev, Parent, FirstChild` pointers
-to define a subtree rooted at the `Box` node.
+bibui has no dedicated `Column` type that contains a list of its children.
+Instead every node (`UiNode`, which `Box` and `Text` derive from) links to its
+`Parent`, its `FirstChild`/`LastChild` and its siblings `Prev`/`Next`, so any
+box holds a subtree.
 `ColumnFit` is a fast path for a `Box` that lays its children out on the
 y-axis and is sized to fit its children.
 
-Any `Box` in bibui may have children added to it like so:
+In the sample, we use `runtime.PushParent` to define a scope where all boxes
+built through the runtime are added as children of `column`.
+
+You may also explicitly append the children to the `column` `Box`:
 
 ```csharp
 var column = runtime.ColumnFit();
@@ -88,15 +94,11 @@ var button = runtime.Button(id: "add", "Add one");
 UiNode.PushIntoParent(column, button);
 ```
 
-This updates the `Next/Prev` pointers between the children of the `column`
-node.
+This appends each node to `column`'s children.
 
-In the example, we use a scope through `runtime.PushParent` that within
-the scope adds the parent to the `column`. Any UI nodes defines outside,
-will not hang off of the `column` subtree.
-
-`Button` is another box composition that consumed left presses,
-and we can react on these events inline with the UI builder code.
+`runtime.Button` is itself a composition: a `Box` that claims left presses,
+with a `Text` inside. `button.Clicked` reports a click, so the app reacts to it
+inline, with no callbacks.
 
 ## Two routes
 
