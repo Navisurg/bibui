@@ -6,24 +6,30 @@ namespace Bibui.Runtime;
 
 public sealed partial class BibuiRuntime
 {
-    // A dropdown's root, and the build it was last begun in.
+    // A dropdown's root, and the build it was last built in.
     private sealed class DropDown
     {
         public required Box Root;
         public ulong Build;
-        public DropDown? Next;      // _dropDowns: the order drawn last frame
-        public DropDown? NextBegun; // _begun: the order begun this build
+        public DropDown? NextDrawn; // _drawnDropDowns
+        public DropDown? NextBuilt; // _builtDropDowns
     }
 
-    // The dropdowns drawn last frame, bottom first: while a build runs, their
-    // rects are what they occupy and their order is which is over which. One
-    // begun for the first time goes on the end, with no rect yet. When the
-    // build returns, the list is _begun: a dropdown not begun is pruned.
-    private DropDown? _dropDowns, _dropDownsLast;
+    // A list of dropdowns, by NextDrawn or by NextBuilt: whichever the list is.
+    private struct DropDownList
+    {
+        public DropDown? First, Last;
+    }
 
-    // The dropdowns begun this build, in the order begun: the order they are
-    // linked in, so drawn in.
-    private DropDown? _begun, _begunLast;
+    // The dropdowns on screen: drawn last frame, bottom first. While a build
+    // runs their rects are what they occupy, and their order is which is over
+    // which. One built for the first time goes on the end, with no rect yet.
+    private DropDownList _drawnDropDowns;
+
+    // The dropdowns built this frame, in the order built: the order they are
+    // linked in, so drawn in. When the build returns they are the drawn ones,
+    // and a dropdown not built is pruned.
+    private DropDownList _builtDropDowns;
     private ulong _dropDownBuild;
 
     // The dropdowns open, each with its anchor or none, and those opened
@@ -101,19 +107,19 @@ public sealed partial class BibuiRuntime
         {
             if (!_openDropDowns.ContainsKey(id)) return null;
             var dropDown = DropDownFromId(id);
-            bool again = dropDown?.Build == _dropDownBuild;
             if (dropDown is null)
             {
                 dropDown = new DropDown { Root = new Box { Id = id } };
-                if (_dropDownsLast is null) _dropDowns = dropDown; else _dropDownsLast.Next = dropDown;
-                _dropDownsLast = dropDown;
+                if (_drawnDropDowns.Last is null) _drawnDropDowns.First = dropDown; else _drawnDropDowns.Last.NextDrawn = dropDown;
+                _drawnDropDowns.Last = dropDown;
             }
-            if (!again)
+            // A build counts from 1, so a new dropdown is not yet built in it.
+            if (dropDown.Build != _dropDownBuild)
             {
                 dropDown.Build = _dropDownBuild;
-                dropDown.NextBegun = null;
-                if (_begunLast is null) _begun = dropDown; else _begunLast.NextBegun = dropDown;
-                _begunLast = dropDown;
+                dropDown.NextBuilt = null;
+                if (_builtDropDowns.Last is null) _builtDropDowns.First = dropDown; else _builtDropDowns.Last.NextBuilt = dropDown;
+                _builtDropDowns.Last = dropDown;
             }
             var root = dropDown.Root;
             ResetForBuild(root);
@@ -182,7 +188,7 @@ public sealed partial class BibuiRuntime
             EmptyToolTip(_toolTip);
             _openedThisFrame.Clear();
             _dropDownBuild++;
-            _begun = _begunLast = null;
+            _builtDropDowns = default;
         }
     }
 
@@ -198,10 +204,10 @@ public sealed partial class BibuiRuntime
 
     // After the build. A press nobody took dismisses every open dropdown but
     // those opened since it came, and one neither begun nor opened this frame
-    // closes: its caller stopped building it. Then every dropdown begun this
-    // frame goes last, in the order begun, so it is drawn over everything
-    // built before it; then the tooltip, over them. Last, the order begun is
-    // the list, and a dropdown not begun is pruned from it.
+    // closes: its caller stopped building it. Then every dropdown built this
+    // frame goes last, in the order built, so it is drawn over everything
+    // built before it; then the tooltip, over them. The built dropdowns are
+    // the drawn ones from here on.
     private void EndDropDowns(UiNode tree)
     {
         lock (_syncRoot)
@@ -211,23 +217,21 @@ public sealed partial class BibuiRuntime
                 untaken |= !handle.Consumed && handle.Event.Kind == BibUiEventKind.MouseDown;
             List<string>? closing = null;
             foreach (var id in _openDropDowns.Keys)
-            {
-                bool begun = DropDownFromId(id)?.Build == _dropDownBuild;
-                if (!_openedThisFrame.Contains(id) && (untaken || !begun)) (closing ??= new()).Add(id);
-            }
+                if (!_openedThisFrame.Contains(id) && (untaken || DropDownFromId(id)?.Build != _dropDownBuild))
+                    (closing ??= new()).Add(id);
             if (closing is not null)
             {
                 foreach (var id in closing) _openDropDowns.Remove(id);
                 RequestFrame();
             }
 
-            for (var d = _begun; d is not null; d = d.NextBegun)
+            for (var d = _builtDropDowns.First; d is not null; d = d.NextBuilt)
+            {
                 if (d.Root.Parent is null && d.Root != tree) UiNode.PushIntoParent(tree, d.Root);
+                d.NextDrawn = d.NextBuilt;
+            }
+            _drawnDropDowns = _builtDropDowns;
             if (_toolTip.FirstChild is not null && _toolTip.Parent is null) UiNode.PushIntoParent(tree, _toolTip);
-
-            for (var d = _begun; d is not null; d = d.NextBegun) d.Next = d.NextBegun;
-            (_dropDowns, _dropDownsLast) = (_begun, _begunLast);
-            _begun = _begunLast = null;
         }
     }
 
@@ -242,24 +246,23 @@ public sealed partial class BibuiRuntime
     {
         lock (_syncRoot)
         {
-            // Bottom first: a rect under the box's own dropdown stops counting
-            // there. Which dropdown that is matters only once a rect holds pos,
-            // so the walk to the top waits until then.
+            // Bottom first: a rect that holds pos covers the box, until the
+            // box's own dropdown comes, which is over what came before. Which
+            // dropdown that is matters only once something covers, so the walk
+            // to the top waits until then.
             UiNode? top = null;
             bool covered = false;
-            for (var d = _dropDowns; d is not null; d = d.Next)
+            for (var d = _drawnDropDowns.First; d is not null; d = d.NextDrawn)
             {
                 var root = d.Root;
-                bool holds = pos.X >= root.Rect.X && pos.Y >= root.Rect.Y
-                    && pos.X < root.Rect.X + root.Extent.X && pos.Y < root.Rect.Y + root.Extent.Y;
-                if (!holds && !covered) continue;
+                if (!covered && !(pos.X >= root.Rect.X && pos.Y >= root.Rect.Y
+                    && pos.X < root.Rect.X + root.Extent.X && pos.Y < root.Rect.Y + root.Extent.Y)) continue;
                 if (top is null)
                 {
                     top = box;
                     while (top.Parent is not null) top = top.Parent;
                 }
-                if (root == top) covered = false;
-                else covered |= holds;
+                covered = root != top;
             }
             return covered;
         }
@@ -268,7 +271,7 @@ public sealed partial class BibuiRuntime
     // Called under _syncRoot.
     private DropDown? DropDownFromId(string id)
     {
-        for (var d = _dropDowns; d is not null; d = d.Next)
+        for (var d = _drawnDropDowns.First; d is not null; d = d.NextDrawn)
             if (d.Root.Id == id) return d;
         return null;
     }
