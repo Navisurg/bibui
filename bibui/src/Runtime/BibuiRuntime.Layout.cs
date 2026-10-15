@@ -21,6 +21,46 @@ public sealed partial class BibuiRuntime
     }
 
     /// <summary>
+    /// A keyless box that lays its children out top to bottom, linked under the
+    /// parent in scope and pushed as the parent until the scope is disposed, so
+    /// what is built inside goes into it, in order:
+    /// <code>
+    /// using (runtime.Column())
+    /// {
+    ///     runtime.Text("Title");
+    ///     runtime.Button("ok", "OK");
+    /// }
+    /// </code>
+    /// Each axis is as large as the children's sum unless a size is given
+    /// (or pushed with <see cref="PushSizeX"/>/<see cref="PushSizeY"/>), so the
+    /// usual change is the width: <c>runtime.Column(sizeX: SemanticSize.ParentPct(1f))</c>.
+    /// For anything else, style the box: <c>using var column = runtime.Column();
+    /// column.Box.Padded(...)</c>.
+    /// </summary>
+    public BoxScope Column(SemanticSize? sizeX = null, SemanticSize? sizeY = null)
+        => PushGroup(LayoutAxis.Y, sizeX, sizeY);
+
+    /// <summary>The same as <see cref="Column"/>, laying its children out left to right.</summary>
+    public BoxScope Row(SemanticSize? sizeX = null, SemanticSize? sizeY = null)
+        => PushGroup(LayoutAxis.X, sizeX, sizeY);
+
+    private BoxScope PushGroup(LayoutAxis axis, SemanticSize? sizeX, SemanticSize? sizeY)
+    {
+        Box box = Box();
+        lock (_syncRoot)
+        {
+            box.ChildLayoutAxis = axis;
+            // Sized by its children: a fill would need a parent sized by
+            // something else, and the children's sum always has an answer.
+            if (sizeX is { } x) box.SizeX = x;
+            else if (_sizeXStack.Count == 0) box.SizeX = SemanticSize.ChildrenSum();
+            if (sizeY is { } y) box.SizeY = y;
+            else if (_sizeYStack.Count == 0) box.SizeY = SemanticSize.ChildrenSum();
+        }
+        return new BoxScope(box, PushParent(box));
+    }
+
+    /// <summary>
     /// Boxes acquired with <see cref="BoxFromId"/> until the scope is disposed
     /// lay their children out along <paramref name="axis"/>.
     /// </summary>
@@ -116,6 +156,33 @@ public sealed partial class BibuiRuntime
                 stack.RemoveAt(stack.Count - 1);
             }
         }
+    }
+
+    /// <summary>
+    /// The box <see cref="Column"/> or <see cref="Row"/> made, pushed as the
+    /// parent until this is disposed. It stands for the box where a node is
+    /// wanted, so a build can return it: <c>using (var column = runtime.Column())
+    /// { ...; return column; }</c>.
+    /// </summary>
+    public readonly struct BoxScope : IDisposable
+    {
+        private readonly ParentScope _pushed;
+
+        internal BoxScope(Box box, ParentScope pushed)
+        {
+            Box = box;
+            _pushed = pushed;
+        }
+
+        /// <summary>The column or row, to size or style further.</summary>
+        public Box Box { get; }
+
+        /// <summary>Stops building into the box.</summary>
+        public void Dispose() => _pushed.Dispose();
+
+        public static implicit operator Box(BoxScope scope) => scope.Box;
+        public static implicit operator UiNode(BoxScope scope) => scope.Box;
+        public static implicit operator Arrange.Item(BoxScope scope) => scope.Box;
     }
 
     /// <summary>Pops <see cref="PushSizeX"/> or <see cref="PushSizeY"/> when disposed.</summary>

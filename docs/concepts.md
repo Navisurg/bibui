@@ -241,6 +241,30 @@ using (runtime.PushParent(card))
 }
 ```
 
+For the common case, a column or row whose contents you build in place,
+`runtime.Column()` and `runtime.Row()` make the box, link it under the parent
+in scope and push it, in one call. Each axis is the sum of the children unless
+you give a size, and the scope stands for the box, so a build can return it:
+
+```csharp
+runtime.Mount(() =>
+{
+    using (var page = runtime.Column(sizeX: SemanticSize.ParentPct(1f)))
+    {
+        runtime.Text(title);
+        using (runtime.Row())
+        {
+            if (runtime.Button("ok", "OK").Clicked) Save();
+            runtime.Gap(8f);
+            if (runtime.Button("cancel", "Cancel", ghost: true).Clicked) Close();
+        }
+        return page;
+    }
+});
+```
+
+Style it further through `page.Box` (`page.Box.Padded(EdgeInsets.All(24f))`).
+
 The two forms mix. A node has one parent, and pushing it somewhere else
 (`Row`, `Column`, `CentredY`, `UiNode.PushIntoParent`) **moves** it: it is
 taken out of the parent it was linked under and appended to the new one. So

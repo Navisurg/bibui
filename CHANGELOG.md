@@ -144,6 +144,14 @@ before it was published.
 
 ### Added
 
+- `runtime.Column()` and `runtime.Row()`: a pooled box along Y or X, linked
+  under the parent in scope and pushed until the returned scope is disposed,
+  so `using (runtime.Column()) { runtime.Text(...); runtime.Button(...); }`
+  builds into it. Both axes are the children's sum unless given
+  (`sizeX:`/`sizeY:`) or pushed (`PushSizeX`/`PushSizeY`). The scope's `Box`
+  styles it further, and the scope converts to the box, so a build can
+  `return` it.
+
 - `Icons.Register(name, svgPathData)`: an app adds icons of its own at
   start-up, drawn by `runtime.Icon` and known to `Icon.IsKnown` like the
   built-in Lucide set (24×24 viewBox, stroke 2, round caps and joins). The

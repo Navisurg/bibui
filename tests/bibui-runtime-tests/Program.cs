@@ -255,6 +255,66 @@ Run("Create: runtime.Button built while a column is pushed is inserted into it",
     IsTrue(ReferenceEquals(column!.LastChild, button), "after the text, in the order built");
 });
 
+Run("runtime.Column: what is built inside goes into it, in order, and the build can return it", () =>
+{
+    var runtime = BibuiRuntime.Create().WithSkia();
+    Box? column = null, row = null;
+    runtime.Mount(() =>
+    {
+        using (var c = runtime.Column())
+        {
+            column = c.Box;
+            runtime.Text("Clicked 0 times");
+            using (var r = runtime.Row())
+            {
+                row = r.Box;
+                runtime.Button(id: "a", "A");
+                runtime.Button(id: "b", "B");
+            }
+            runtime.Button(id: "add", "Add one");
+            return c;
+        }
+    }, new SurfaceOptions { Width = 400, Height = 200 });
+    runtime.Render();
+
+    Eq(LayoutAxis.Y, column!.ChildLayoutAxis, "a column lays out along Y");
+    Eq(LayoutAxis.X, row!.ChildLayoutAxis, "a row lays out along X");
+    IsTrue(ReferenceEquals(row.Parent, column), "the row is in the column");
+    IsTrue(ReferenceEquals(runtime.FindById("a")?.Parent, row) && ReferenceEquals(runtime.FindById("b")?.Parent, row),
+        "the row's buttons are in the row");
+    IsTrue(ReferenceEquals(column.LastChild, runtime.FindById("add")), "after the row closes, building goes back into the column");
+    Eq(SemanticSize.ChildrenSum(), column.SizeX, "as wide as its children by default");
+    Eq(SemanticSize.ChildrenSum(), column.SizeY, "as tall as its children by default");
+    IsTrue(column.Extent.Y > row.Extent.Y, "laid out: the column holds the text, the row and a button");
+});
+
+Run("runtime.Column: a size given, or pushed, replaces the children's sum on that axis", () =>
+{
+    var runtime = BibuiRuntime.Create().WithSkia();
+    Box? given = null, pushed = null, page2 = null;
+    runtime.Mount(() =>
+    {
+        using var page = runtime.Column();   // the root: stretched to the surface
+        page2 = page.Box;
+        using (var c = runtime.Column(sizeX: SemanticSize.ParentPct(1f)))
+        {
+            given = c.Box;
+            runtime.Text("given");
+        }
+        using (runtime.PushSizeX(SemanticSize.Pixels(120f)))
+        using (var c = runtime.Column())
+        {
+            pushed = c.Box;
+        }
+        return page;
+    }, new SurfaceOptions { Width = 400, Height = 200 });
+    runtime.Render();
+    Eq(400f, page2!.Extent.X, "the root is as wide as the surface");
+    Eq(page2.Extent.X, given!.Extent.X, "ParentPct(1) of the page");
+    Eq(SemanticSize.ChildrenSum(), given.SizeY, "the axis not given is still the children's sum");
+    Eq(120f, pushed!.Extent.X, "a pushed width is used when none is given");
+});
+
 Run("Create: runtime.Button is a button the caller asks about", () =>
 {
     var runtime = BibuiRuntime.Create().WithSkia();
