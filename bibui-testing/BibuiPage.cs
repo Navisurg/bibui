@@ -43,7 +43,7 @@ public sealed class BibuiPage : IBibuiPage
         SurfaceOptions? surface = null,
         string theme = "bibui-dark")
     {
-        var runtime = new BibuiRuntime(new SkiaRasterBackend());
+        var runtime = BibuiRuntime.Create().WithSkia();
         runtime.MountStateful(initialState, build, surface, theme);
         return new BibuiPage(runtime);
     }
@@ -58,7 +58,7 @@ public sealed class BibuiPage : IBibuiPage
         ThemeTokens theme,
         SurfaceOptions? surface = null)
     {
-        var runtime = new BibuiRuntime(new SkiaRasterBackend());
+        var runtime = BibuiRuntime.Create().WithSkia();
         runtime.MountStateful(initialState, build, theme, surface);
         return new BibuiPage(runtime);
     }
@@ -72,7 +72,7 @@ public sealed class BibuiPage : IBibuiPage
         SurfaceOptions? surface = null,
         string theme = "bibui-dark")
     {
-        var runtime = new BibuiRuntime(new SkiaRasterBackend());
+        var runtime = BibuiRuntime.Create().WithSkia();
         runtime.Mount(build, surface, theme);
         return new BibuiPage(runtime);
     }
@@ -86,7 +86,7 @@ public sealed class BibuiPage : IBibuiPage
         ThemeTokens theme,
         SurfaceOptions? surface = null)
     {
-        var runtime = new BibuiRuntime(new SkiaRasterBackend());
+        var runtime = BibuiRuntime.Create().WithSkia();
         runtime.Mount(build, theme, surface);
         return new BibuiPage(runtime);
     }

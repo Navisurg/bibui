@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Bibui;
 using Bibui.Runtime;
+using Bibui.Raster.Skia;
 
 /// <summary>
 /// Icon names. A name bibui's icon set does not have is drawn as its
@@ -23,7 +24,7 @@ static partial class IconNameTests
 
         run("runtime.Icon: an unknown name throws in a debug build and draws a letter in release", () =>
         {
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             Exception? thrown = null;
             runtime.Mount(
                 () =>
@@ -59,8 +60,8 @@ static partial class IconNameTests
                         rt.Icon(open ? "t-icon-a" : "t-icon-b", 16f);
                         Helper(rt, "not-an-icon", "t-helper");
                         CentredIcon(rt, "t-centred", 14f);
-                        Menu.Item(rt, "id", Str("Open"), "t-menu");
-                        Toggle.Build(rt, "id", false, Str("x"), icon: "t-named");
+                        rt.MenuItem("id", Str("Open"), "t-menu");
+                        rt.Toggle("id", false, Str("x"), icon: "t-named");
                         Text("t-u8"u8);
                     }
                 }
@@ -141,7 +142,7 @@ static partial class IconNameTests
     // Icon names are spelled out in five ways, and each is read:
     //   1. runtime.Icon("name", …): every literal in the first argument;
     //   2. a named argument icon: "name";
-    //   3. Menu.Item's and Toggle.Build's icon argument by position;
+    //   3. runtime.MenuItem's and runtime.Toggle's icon argument by position;
     //   4. a call of a method declared with a string parameter called icon or
     //      iconName — or name, when the method's own name has Icon in it — at
     //      that parameter's position (a helper such as Entry("Settings", "settings"));
@@ -164,10 +165,12 @@ static partial class IconNameTests
     internal static IEnumerable<(string Name, int Offset)> Scan(string text)
     {
         var found = new List<(string, int)>();
-        var positional = new Dictionary<string, HashSet<int>>
+        var positional = new Dictionary<string, HashSet<int>>();
+        // Called on the runtime, whatever the runtime is called.
+        var onRuntime = new Dictionary<string, int>
         {
-            ["Menu.Item"] = [3],
-            ["Toggle.Build"] = [4],
+            ["MenuItem"] = 2,
+            ["Toggle"] = 3,
         };
 
         // Declarations first, so a helper declared below its first call is known.
@@ -197,13 +200,16 @@ static partial class IconNameTests
             if (method == "Icon" && qualifier.Length > 0 && args.Count > 0)
                 Literals(args[0], found);
 
-            // Qualified by an object (runtime.Foo) or a type (Menu.Item): a
+            // Qualified by an object (runtime.Foo) or a type (runtime.MenuItem): a
             // type is looked up by its name, an object's call is rule 1's.
             string key = qualifier.Length > 0 ? qualifier + "." + method : method;
             if (positional.TryGetValue(key, out var places))
                 foreach (int i in places)
                     if (i < args.Count && !NamedArgument().IsMatch(args[i].Text))
                         Literals(args[i], found);
+            if (qualifier.Length > 0 && onRuntime.TryGetValue(method, out int at)
+                && at < args.Count && !NamedArgument().IsMatch(args[at].Text))
+                Literals(args[at], found);
 
             foreach (var arg in args)
                 if (IconNamedArgument().IsMatch(arg.Text))

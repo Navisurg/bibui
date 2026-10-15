@@ -14,8 +14,8 @@ Fixtures: `expander-closed` and `expander-open`.
 ## Build
 
 ```cs
-public static ExpanderWidget Build(
-    BibuiRuntime runtime,
+public static ExpanderWidget Expander(
+    this BibuiRuntime runtime,
     string id,
     ReadOnlySpan<char> title,
     bool open)
@@ -75,7 +75,7 @@ sealed class StarredRepositories
         column.SizeY = SemanticSize.ChildrenSum();
         using (runtime.PushParent(column))
         {
-            var section = Expander.Build(runtime, "starred", Title, _open);
+            var section = runtime.Expander("starred", Title, _open);
             if (section.Toggled) _open = !_open;
             if (section.Body is { } body)
                 using (runtime.PushParent(body))

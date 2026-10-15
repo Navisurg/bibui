@@ -31,22 +31,26 @@ public static class Arrange
 
         /// <summary>
         /// A built component goes into a row or column as its node, so
-        /// <c>Row(Button.Build(...), ...)</c> needs no <c>.Node</c>.
+        /// <c>Row((...).Button(), ...)</c> needs no <c>.Node</c>.
         /// </summary>
         public static implicit operator Item(BibuiWidget widget) => new(widget.Node, default);
         internal static Item Of(SemanticSize spacer) => new(null, spacer);
     }
 
     /// <summary>A node laying <paramref name="items"/> out along X, in order, sized by them.</summary>
+    [Obsolete("Push a runtime row instead: var row = runtime.RowFit(); using (runtime.PushParent(row)) { ... } builds into a pooled row.")]
     public static Box Row(params ReadOnlySpan<Item> items) => Group(null, LayoutAxis.X, items);
 
     /// <summary>A node laying <paramref name="items"/> out along Y, in order, sized by them.</summary>
+    [Obsolete("Push a runtime column instead: var column = runtime.ColumnFit(); using (runtime.PushParent(column)) { ... } builds into a pooled column.")]
     public static Box Column(params ReadOnlySpan<Item> items) => Group(null, LayoutAxis.Y, items);
 
     /// <summary>The same as <see cref="Row(ReadOnlySpan{Item})"/>, named <paramref name="id"/>.</summary>
+    [Obsolete("Push a runtime row instead: var row = runtime.RowFit(); using (runtime.PushParent(row)) { ... } builds into a pooled row.")]
     public static Box Row(string? id, params ReadOnlySpan<Item> items) => Group(id, LayoutAxis.X, items);
 
     /// <summary>The same as <see cref="Column(ReadOnlySpan{Item})"/>, named <paramref name="id"/>.</summary>
+    [Obsolete("Push a runtime column instead: var column = runtime.ColumnFit(); using (runtime.PushParent(column)) { ... } builds into a pooled column.")]
     public static Box Column(string? id, params ReadOnlySpan<Item> items) => Group(id, LayoutAxis.Y, items);
 
     /// <summary>A gap of <paramref name="pixels"/> along the axis of the row or column it is in.</summary>
@@ -70,6 +74,7 @@ public static class Arrange
     /// along the parent's axis: the room it does not take is split between a
     /// spacer before and after it.
     /// </summary>
+    [Obsolete("Build into runtime.Centred() instead: using (runtime.Centred()) { ... } centres what is built inside along the parent in scope.")]
     public static void Centred(UiNode parent, UiNode node)
     {
         Spacer(parent, SemanticSize.ParentPct(1f, 0f));
@@ -78,10 +83,12 @@ public static class Arrange
     }
 
     /// <summary><paramref name="node"/> centred across a column: a row of a spring, it, and a spring, all the column's width.</summary>
-    public static Box CentredX(UiNode node) => Row(Spring(), node, Spring()).FillX();
+    [Obsolete("Push a full-width runtime row and centre in it: using (runtime.PushParent(runtime.RowFillX())) using (runtime.Centred()) { ... }.")]
+    public static Box CentredX(UiNode node) => Group(null, LayoutAxis.X, [Spring(), node, Spring()]).FillX();
 
     /// <summary><paramref name="node"/> centred across a row: a column of a spring, it, and a spring, all the row's height.</summary>
-    public static Box CentredY(UiNode node) => Column(Spring(), node, Spring()).FillY();
+    [Obsolete("Push a full-height runtime column and centre in it: using (runtime.PushParent(runtime.ColumnFillY())) using (runtime.Centred()) { ... }.")]
+    public static Box CentredY(UiNode node) => Group(null, LayoutAxis.Y, [Spring(), node, Spring()]).FillY();
 
     // ── Sizes, set on the node and handed back ─────────────────────────────
 

@@ -6,7 +6,7 @@ bounds and text, clicks, types and presses keys, and takes screenshots.
 `WorkflowClient` drives a running app the same way over its test server.
 
 ```csharp
-var runtime = new BibuiRuntime(new SkiaRasterBackend());
+var runtime = BibuiRuntime.Create().WithSkia();
 runtime.Mount(() => MyScreen.Build(runtime));
 
 using var page = BibuiPage.From(runtime);

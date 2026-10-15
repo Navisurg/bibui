@@ -9,6 +9,16 @@
   </PropertyGroup>
 
   <!--
+    Arrange.Column and Arrange.Row are obsolete in favour of runtime.Column()
+    and runtime.Row(). Their remaining call sites are reported as warnings
+    (CS0618) rather than failing the build while they are moved over; remove
+    this once none are left, and the build is back to 0 warnings.
+  -->
+  <PropertyGroup>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);CS0618</WarningsNotAsErrors>
+  </PropertyGroup>
+
+  <!--
     Release packs are reproducible and name no machine: the same commit packs
     to the same DLLs wherever it is checked out, and no absolute path of the
     machine that built it (the PDB path in the DLL's debug directory, a source

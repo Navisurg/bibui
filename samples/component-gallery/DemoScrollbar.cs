@@ -33,7 +33,7 @@ internal static class DemoScrollbar
                 runtime.Text($"Row {i}", ComponentSize.Sm, TextColor.Primary);
         }
         using (runtime.PushParent(panel))
-            Scrollbar.Build(runtime, "sb-v-bar", view, LayoutAxis.Y);
+            runtime.Scrollbar("sb-v-bar", view, LayoutAxis.Y);
         runtime.InteractionsFor(view);
 
         (view.SizeX, view.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
@@ -59,7 +59,7 @@ internal static class DemoScrollbar
                 runtime.Text($"Card {i}", ComponentSize.Sm, TextColor.Primary);
         }
         using (runtime.PushParent(panel))
-            Scrollbar.Build(runtime, "sb-h-bar", view, LayoutAxis.X);
+            runtime.Scrollbar("sb-h-bar", view, LayoutAxis.X);
         runtime.InteractionsFor(view);
 
         (view.SizeX, view.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));

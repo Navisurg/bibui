@@ -1,8 +1,9 @@
 using Bibui.Raster.Skia;
 using Bibui.Runtime;
 using BibuiApp;
+using Bibui.Runtime.Platform;
 
-BibuiRuntime runtime = new(new SkiaRasterBackend());   // the backend, named
+var runtime = BibuiRuntime.Create().WithSkia();   // the backend, named
 HotReloadListener.Register(runtime.RequestFrame);
 
 // The whole UI: App.cs builds it, and the runtime tests drive the same build headless.
@@ -14,5 +15,5 @@ if (args.Contains("--first-frame")) { runtime.Render(); return; }
 // Off unless asked for: BIBUI_TEST_SERVER=1.
 using var testServer = BibuiTestServer.StartIfEnabled(runtime);
 
-var window = new BibuiWindow(runtime, new Bibui.Runtime.Platform.SilkPlatformHost());
+var window = BibuiWindow.Create(runtime).WithSilk();
 window.Run("bibui — interactive demo");

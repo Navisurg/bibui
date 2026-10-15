@@ -3,6 +3,7 @@ using Bibui.Platform.Wayland;
 using Bibui.Platform.Wayland.Protocol;
 using Bibui.Runtime;
 using Bibui.Runtime.Platform;
+using Bibui.Raster.Skia;
 
 namespace Bibui.WaylandTests;
 
@@ -70,7 +71,7 @@ internal static unsafe class ScaleTests
 
         t.Run("scale: ResizeSurface at 1.25 keeps an odd logical size, and Render is the buffer's size", () =>
         {
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() => Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box())),
                 new Bibui.SurfaceOptions { Width = 100, Height = 100, ScaleFactor = 1f });
             var (w, h) = WaylandPlatformHost.FramebufferSize(1001, 202, 150);
@@ -240,7 +241,7 @@ internal static unsafe class ScaleTests
             var (physW, physH) = WaylandPlatformHost.FramebufferSize(202, 101, scale120);
             Assert.Eq((253, 126), (physW, physH), "physical size");
 
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() =>
             {
                 var box = Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box())).Styled(new Bibui.Style

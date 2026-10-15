@@ -1,5 +1,6 @@
 using System.Numerics;
 using Bibui;
+using static Bibui.Runtime.Scrollbar;
 
 namespace Bibui.Runtime;
 
@@ -22,15 +23,42 @@ public static class Scrollbar
     /// <summary>How wide a lane the bar takes, and so how wide a strip catches its presses.</summary>
     public const float Lane = 12f;
 
-    private const float Thickness = 6f;
-    private const float MinThumb = 24f;
+    internal const float Thickness = 6f;
+    internal const float MinThumb = 24f;
 
+
+    // The lane across the axis, all of the parent along it.
+    internal static void DescribeTrack(Box track, bool y)
+    {
+        float inset = (Lane - Thickness) / 2f;
+        var lane = SemanticSize.Pixels(Lane);
+        var along = SemanticSize.ParentPct(1f);
+        (track.SizeX, track.SizeY) = y ? (lane, along) : (along, lane);
+        track.Style.Padding = y ? new EdgeInsets(0f, inset, 0f, inset) : new EdgeInsets(inset, 0f, inset, 0f);
+    }
+
+    // A share of the track along the axis, and all of it across.
+    internal static void Share(Box box, bool y, float share)
+    {
+        var along = SemanticSize.ParentPct(share);
+        var across = SemanticSize.ParentPct(1f);
+        (box.SizeX, box.SizeY) = y ? (across, along) : (along, across);
+    }
+
+    internal static float Along(Vector2 v, bool y) => y ? v.Y : v.X;
+
+    internal static Vector2 With(Vector2 v, bool y, float along) => y ? v with { Y = along } : v with { X = along };
+}
+
+/// <summary>The Scrollbar component, called on the runtime that builds it.</summary>
+public static class ScrollbarExtensions
+{
     /// <summary>
     /// Builds the bar named <paramref name="id"/> for <paramref name="view"/>,
     /// along <paramref name="axis"/>, and returns its track with what happened
     /// to the thumb this frame.
     /// </summary>
-    public static BibuiWidget Build(BibuiRuntime runtime, string id, Box view, LayoutAxis axis = LayoutAxis.Y)
+    public static BibuiWidget Scrollbar(this BibuiRuntime runtime, string id, Box view, LayoutAxis axis = LayoutAxis.Y)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -79,26 +107,4 @@ public static class Scrollbar
 
         return new BibuiWidget(track, drag);
     }
-
-    // The lane across the axis, all of the parent along it.
-    private static void DescribeTrack(Box track, bool y)
-    {
-        float inset = (Lane - Thickness) / 2f;
-        var lane = SemanticSize.Pixels(Lane);
-        var along = SemanticSize.ParentPct(1f);
-        (track.SizeX, track.SizeY) = y ? (lane, along) : (along, lane);
-        track.Style.Padding = y ? new EdgeInsets(0f, inset, 0f, inset) : new EdgeInsets(inset, 0f, inset, 0f);
-    }
-
-    // A share of the track along the axis, and all of it across.
-    private static void Share(Box box, bool y, float share)
-    {
-        var along = SemanticSize.ParentPct(share);
-        var across = SemanticSize.ParentPct(1f);
-        (box.SizeX, box.SizeY) = y ? (across, along) : (along, across);
-    }
-
-    private static float Along(Vector2 v, bool y) => y ? v.Y : v.X;
-
-    private static Vector2 With(Vector2 v, bool y, float along) => y ? v with { Y = along } : v with { X = along };
 }

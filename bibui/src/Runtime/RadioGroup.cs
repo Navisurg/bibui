@@ -15,7 +15,7 @@ public readonly record struct RadioGroupWidget(Box Node, string? Picked);
 /// takes its own press, so the label is as much a target as the ring; the
 /// group reports which value was picked and the caller applies it.
 /// </summary>
-public static class RadioGroup
+public static class RadioGroupExtensions
 {
     private const float RowHeight = 32f;
     private const float RowGap = 4f;
@@ -32,7 +32,7 @@ public static class RadioGroup
     /// <paramref name="value"/> is drawn, not kept: the caller applies
     /// <see cref="RadioGroupWidget.Picked"/> to its own state.
     /// </summary>
-    public static RadioGroupWidget Build(BibuiRuntime runtime, string id,
+    public static RadioGroupWidget RadioGroup(this BibuiRuntime runtime, string id,
         IReadOnlyList<RadioOption> items, string? value, bool disabled = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);

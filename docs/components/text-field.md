@@ -35,20 +35,20 @@ unfocused, empty field showing its placeholder.
 ## SingleLine, Ellipsis, Multiline
 
 ```cs
-public static BibuiWidget SingleLine(
-    BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
+public static BibuiWidget TextField(
+    this BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
     uint events = SingleLineEvents,
     TextColor textColor = TextColor.Primary,
     ReadOnlySpan<char> placeholder = default)
 
-public static BibuiWidget Ellipsis(
-    BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
+public static BibuiWidget EllipsisTextField(
+    this BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
     uint events = 0,
     TextColor textColor = TextColor.Primary,
     ReadOnlySpan<char> placeholder = default)
 
-public static BibuiWidget Multiline(
-    BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
+public static BibuiWidget MultilineTextField(
+    this BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
     uint events = MultiLineEvents,
     TextColor textColor = TextColor.Primary,
     ReadOnlySpan<char> placeholder = default,
@@ -136,7 +136,7 @@ sealed class EmailInput
 
         BibuiWidget line;
         using (runtime.PushParent(frame))
-            line = TextField.SingleLine(runtime, "email", _email, _edit, _focused, placeholder: Placeholder);
+            line = runtime.TextField("email", _email, _edit, _focused, placeholder: Placeholder);
         if (line.Pressed) _focused = true;
 
         // Escape or Enter ends editing.
@@ -175,7 +175,7 @@ sealed class MessageBox
 
         using (runtime.PushParent(frame))
         using (runtime.PushSizeY(TextField.Rows(runtime, 3)))
-            if (TextField.Multiline(runtime, "message", _message, _edit, _focused, placeholder: Placeholder).Pressed)
+            if (runtime.MultilineTextField("message", _message, _edit, _focused, placeholder: Placeholder).Pressed)
                 _focused = true;
         return frame;
     }

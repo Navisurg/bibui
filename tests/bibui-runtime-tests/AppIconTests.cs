@@ -1,5 +1,6 @@
 using Bibui;
 using Bibui.Runtime;
+using Bibui.Raster.Skia;
 
 /// <summary>
 /// Icons an app registers with <see cref="Icons.Register"/>: drawn by
@@ -63,7 +64,7 @@ static class AppIconTests
     // A 40×40 frame with the icon at 24 px in the middle, or nothing.
     static byte[] Render(string? icon)
     {
-        var runtime = new BibuiRuntime();
+        var runtime = BibuiRuntime.Create().WithSkia();
         runtime.Mount(
             () =>
             {

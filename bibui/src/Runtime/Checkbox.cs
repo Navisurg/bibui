@@ -8,7 +8,7 @@ namespace Bibui.Runtime;
 /// and a label beside it. The row claims the press, so the label is as much
 /// a target as the square.
 /// </summary>
-public static class Checkbox
+public static class CheckboxExtensions
 {
     private const float Square = 18f;
     private const float Gap = 12f;      // Spacing.Md
@@ -24,7 +24,7 @@ public static class Checkbox
     /// state. <paramref name="indeterminate"/> draws a dash and wins over
     /// <paramref name="on"/>.
     /// </summary>
-    public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default,
+    public static BibuiWidget Checkbox(this BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default,
         bool disabled = false, bool indeterminate = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);

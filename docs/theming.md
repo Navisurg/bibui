@@ -437,15 +437,15 @@ The quickest check is to render a few components headless with your theme and
 look at the PNG:
 
 ```csharp
-var runtime = new BibuiRuntime();
+var runtime = BibuiRuntime.Create().WithSkia();
 ThemeTokens mine = ThemeRegistry.Load(ThemeRegistry.RegisterFile("themes/ocean.json"));
 const string save = "Save", sync = "Sync";
 
 runtime.Mount(() =>
     Arrange.Row(
-        Button.Build(runtime, "save", save),
+        runtime.Button("save", save),
         Arrange.Space(12f),
-        Switch.Build(runtime, "sync", on: true, label: sync))
+        runtime.Switch("sync", on: true, label: sync))
     .Px(360f, 80f)
     .Padded(EdgeInsets.All(24f)),
     mine, new SurfaceOptions { Width = 360, Height = 80, ScaleFactor = 1f });

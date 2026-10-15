@@ -46,7 +46,7 @@ sealed class CopyButton
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        var copy = Button.Build(runtime, "copy", Copy, ghost: true);
+        var copy = runtime.Button("copy", Copy, ghost: true);
         if (copy.Hovering) Tooltip.Build(runtime, Tip, (Box)copy.Node);
         if (copy.Clicked) runtime.ClipboardSet("copied text");
         return copy;

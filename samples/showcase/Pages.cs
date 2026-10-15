@@ -2,7 +2,6 @@ using Bibui;
 using Bibui.Runtime;
 using static Bibui.Arrange;
 using static Showcase.Ui;
-using Button = Bibui.Runtime.Button;
 
 namespace Showcase;
 
@@ -160,16 +159,16 @@ internal sealed partial class App
         Box? frost = null;
         if (glass)
         {
-            slew = Button.Build(rt, "slew", Pointing == Selected ? "On target" : "Slew here", disabled: Pointing == Selected, size: ComponentSize.Sm);
+            slew = rt.Button("slew", Pointing == Selected ? "On target" : "Slew here", disabled: Pointing == Selected, size: ComponentSize.Sm);
             if (slew.Clicked) Slew();
-            open = Button.Build(rt, "open-log", "Open log", ghost: true, size: ComponentSize.Sm);
+            open = rt.Button("open-log", "Open log", ghost: true, size: ComponentSize.Sm);
             if (open.Clicked) Page = Page.Journal;
             frost = rt.BoxFromId("sky-glass", InteractionKinds.LeftPress);
             rt.InteractionsFor(frost);
         }
-        var grid = Toggle.Build(rt, "sky-grid", Grid, icon: "grid");
+        var grid = rt.Toggle("sky-grid", Grid, icon: "grid");
         if (grid.Clicked) Grid = !Grid;
-        var labels = Toggle.Build(rt, "sky-labels", Labels, icon: "tag");
+        var labels = rt.Toggle("sky-labels", Labels, icon: "tag");
         if (labels.Clicked) Labels = !Labels;
 
         var marks = new List<Sky.Mark>();
@@ -352,7 +351,7 @@ internal sealed partial class App
         UiNode? pick = null;
         if (picker)
         {
-            var group = ToggleGroup.Build(rt, id + "-metric", MetricOptions,
+            var group = rt.ToggleGroup(id + "-metric", MetricOptions,
                 metric switch { Metric.Temperature => "temp", Metric.Throughput => "data", _ => "seeing" });
             if (group.Picked is { } p) Metric = p switch { "temp" => Metric.Temperature, "data" => Metric.Throughput, _ => Metric.Seeing };
             pick = group.Node;
@@ -408,7 +407,7 @@ internal sealed partial class App
         var select = Select.Begin(rt, "queue-filter", filterLabel, width: 150f);
         if (select.Open)
             foreach (var (value, label) in Filters)
-                if (Select.Item(rt, "queue-filter-" + value, label, selected: Filter == value).Clicked)
+                if (rt.SelectItem("queue-filter-" + value, label, selected: Filter == value).Clicked)
                 {
                     Filter = value;
                     select.Close();
@@ -469,7 +468,7 @@ internal sealed partial class App
         if (rows.Count == 0)
             UiNode.PushIntoParent(list, Column(Space(32f), CentredX(T(rt, "Nothing matches. Try another filter or search.", ComponentSize.Sm, UiColor.TextSecondary))).FillX());
         using (rt.PushParent(frame))
-            Scrollbar.Build(rt, "queue-bar", list);
+            rt.Scrollbar("queue-bar", list);
         rt.InteractionsFor(list);
 
         int imaging = Data.Targets.Count(t => t.Status == TargetStatus.Imaging);
@@ -537,10 +536,10 @@ internal sealed partial class App
         view.AllowOverflowY = true;
         MarkdownWidget md;
         using (rt.PushParent(view))
-            md = Markdown.Build(rt, "log-md", source, width: w - 2 * 18f - Scrollbar.Lane - 8f, textSize: textSize);
+            md = rt.Markdown("log-md", source, width: w - 2 * 18f - Scrollbar.Lane - 8f, textSize: textSize);
         if (md.TaskClicked) Markdown.ToggleTask(source, md.ToggledTask);
         using (rt.PushParent(frame))
-            Scrollbar.Build(rt, "log-bar", view);
+            rt.Scrollbar("log-bar", view);
         rt.InteractionsFor(view);
 
         var card = Column(

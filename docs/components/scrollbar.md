@@ -14,7 +14,7 @@ both axes.
 ## Build
 
 ```cs
-public static BibuiWidget Build(BibuiRuntime runtime, string id, Box view, LayoutAxis axis = LayoutAxis.Y)
+public static BibuiWidget Scrollbar(this BibuiRuntime runtime, string id, Box view, LayoutAxis axis = LayoutAxis.Y)
 
 public const float Lane = 12f;   // the width of the bar's lane, which catches its presses
 ```
@@ -82,7 +82,7 @@ sealed class LogView
 
         // The bar asks before the view, so the view's wheel claim does not take its presses.
         using (runtime.PushParent(panel))
-            Scrollbar.Build(runtime, "log-bar", view);
+            runtime.Scrollbar("log-bar", view);
         runtime.InteractionsFor(view);
         return panel;
     }

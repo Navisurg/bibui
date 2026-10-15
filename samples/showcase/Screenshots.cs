@@ -91,7 +91,7 @@ internal static class Screenshots
 
     public static byte[] Render(IRasterBackend backend, App app, int w, int h, Action<BibuiRuntime, int> script, int frames = 10)
     {
-        var rt = new BibuiRuntime(backend);
+        var rt = BibuiRuntime.Create().WithRaster(backend);
         rt.Mount(() => app.Build(rt), app.Theme(), new SurfaceOptions { Width = w, Height = h, ScaleFactor = 1f });
         byte[] png = [];
         for (int f = 0; f < frames; f++)

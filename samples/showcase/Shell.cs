@@ -2,7 +2,6 @@ using Bibui;
 using Bibui.Runtime;
 using static Bibui.Arrange;
 using static Showcase.Ui;
-using Button = Bibui.Runtime.Button;
 
 namespace Showcase;
 
@@ -32,7 +31,7 @@ internal sealed partial class App
         }
         var fold = IconButton(rt, "sidebar-fold", open > 0.5f ? "chevron-left" : "chevron-right", 30f);
         if (fold.Clicked) SidebarWanted = !SidebarWanted;
-        var live = Switch.Build(rt, "live", Live, label: open > 0.6f ? "Live feed" : null, height: 20f);
+        var live = rt.Switch("live", Live, label: open > 0.6f ? "Live feed" : null, height: 20f);
         if (live.Clicked) Live = !Live;
 
         Box side = rt.BoxFromId("sidebar", InteractionKinds.Clip);
@@ -249,7 +248,7 @@ internal sealed partial class App
         UiNode.PushIntoParent(view, page);
 
         using (rt.PushParent(wrap))
-            Scrollbar.Build(rt, "page-bar", view);
+            rt.Scrollbar("page-bar", view);
         rt.InteractionsFor(view);   // after everything inside it
 
         return Column(bar, wrap).Px(w, h);
@@ -327,7 +326,7 @@ internal sealed partial class App
         TextField.InputStyle(rt, field, SearchFocused);
         field.ChildLayoutAxis = LayoutAxis.X;
         field.Px(width, 36f);
-        var line = TextField.SingleLine(rt, "search", Search, SearchEdit, SearchFocused, placeholder: "Search targets");
+        var line = rt.TextField("search", Search, SearchEdit, SearchFocused, placeholder: "Search targets");
         if (line.Pressed) { SearchFocused = true; NoteFocused = false; }
         UiNode.PushIntoParent(field, CentredY(Icon(rt, "search", 15f, UiColor.TextSecondary)));
         Gap(field, 8f);

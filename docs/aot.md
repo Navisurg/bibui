@@ -67,12 +67,12 @@ using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
 using static Bibui.Arrange;
 
-var runtime = new BibuiRuntime(new ManagedRasterBackend());
+var runtime = BibuiRuntime.Create().WithManagedRasterizer();
 int count = 0;
 
 runtime.Mount(() =>
 {
-    var add = Button.Build(runtime, "add", "Add one");
+    var add = runtime.Button("add", "Add one");
     if (add.Clicked) count++;
     var text = runtime.Text($"Clicked {count} times");
     return Column(text, Space(12f), add).FillX().FillY().Padded(EdgeInsets.All(24f));
@@ -83,19 +83,16 @@ if (!WaylandPlatformHost.IsSupported)
     Console.Error.WriteLine("This app needs a Wayland session.");
     return 1;
 }
-new BibuiWindow(runtime, new WaylandPlatformHost(new WaylandHostOptions { AppId = "dev.example.counter" }))
+BibuiWindow.Create(runtime).WithWayland(new WaylandHostOptions { AppId = "dev.example.counter" })
     .Run("Counter");
 return 0;
 ```
 
-The parameterless `new BibuiRuntime()` finds the default backend, Skia, by
-loading its assembly by name. The trimmer cannot follow a name, so it keeps the
-assembly only when the app happens to name one of its types. That constructor is
-marked `[RequiresUnreferencedCode]`, and calling it in an AOT project fails the
-build with IL2026 and a message that says which backend to pass instead. The
-same holds for `new BibuiRenderer()`.
+There is no default backend: `BibuiRuntime.Create()` is followed by the
+backend you choose (`.WithManagedRasterizer()`, `.WithSkia()` or
+`.WithRaster(backend)`), so the trimmer sees the type you name and keeps it.
 
-The host is passed the same way. bibui looks nothing up at run time: no
+The host is chosen the same way, after `BibuiWindow.Create(runtime)`. bibui looks nothing up at run time: no
 platform discovery, no plug-in loading, no reflection over your types.
 
 ## Publish

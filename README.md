@@ -5,10 +5,13 @@
   </picture>
 </p>
 
-bibui is a code-first UI library for .NET: each frame, your code describes the
-window as a tree of boxes in plain C#, and bibui lays it out and paints it.
-Components are ordinary functions that return what happened to them, and each
-one is checked pixel by pixel against a reference picture.
+bibui is an immediate-mode UI library for .NET.
+
+The library consists of a few UI node types such as a `Box` and `Text`,
+and everything you build is a composition of these simple primitives.
+
+Zenith is a clauded showcase app provided as a reference for inspiration on how you build
+applications with bibui.
 
 ![Zenith, the showcase app, built with bibui](samples/showcase/screenshots/overview-dark.png)
 
@@ -33,37 +36,80 @@ dotnet add package Bibui.Platform.Silk
 
 ## Quick start
 
-A window with a button and a counter. Replace `Program.cs` with:
+Below, a simple bibui app with a label and a button is shown.
+It sets up Skia for rendering and Silk to handle input and window events:
 
 ```csharp
-using Bibui;
 using Bibui.Raster.Skia;
 using Bibui.Runtime;
 using Bibui.Runtime.Platform;
-using static Bibui.Arrange;
 
-var runtime = new BibuiRuntime(new SkiaRasterBackend());
+var runtime = BibuiRuntime.Create().WithSkia();
 int count = 0;
 
 runtime.Mount(() =>
 {
-    var add = Button.Build(runtime, "add", "Add one");
-    if (add.Clicked) count++;
-    var text = runtime.Text($"Clicked {count} times");
-    return Column(text, Space(12f), add).FillX().FillY().Padded(EdgeInsets.All(24f));
+    var column = runtime.ColumnFit();
+    using (runtime.PushParent(column))
+    {
+        runtime.Text($"Clicked {count} times");
+
+        var button = runtime.Button(id: "add", "Add one");
+        if (button.Clicked)
+            count++;
+    }
+    return column;
 });
 
-new BibuiWindow(runtime, new SilkPlatformHost()).Run("Counter");
+BibuiWindow.Create(runtime).WithSilk().Run(title: "Counter");
 ```
+
+Run it from the project created above:
 
 ```bash
 dotnet run
 ```
 
-The build function runs every frame. `Button.Build` reports whether the
-button was clicked, so the app changes its own state right there. There are no
-callbacks. Labels and texts are plain strings, and the window is cleared to the
-theme's background colour before each frame is painted.
+![The quick start's window after three clicks: "Clicked 3 times" above an "Add one" button](docs/images/quick-start-counter.png)
+
+bibui has no dedicated `Column` type that contains a list of its children.
+Instead every node (`UiNode`, which `Box` and `Text` derive from) links to its
+`Parent`, its `FirstChild`/`LastChild` and its siblings `Prev`/`Next`, so any
+box holds a subtree.
+`ColumnFit` is a fast path for a `Box` that lays its children out on the
+y-axis and is sized to fit its children.
+
+In the sample, we use `runtime.PushParent` to define a scope where all boxes
+built through the runtime are added as children of `column`.
+
+You may also explicitly append the children to the `column` `Box`:
+
+```csharp
+var column = runtime.ColumnFit();
+
+var text = runtime.Text($"Clicked {count} times");
+UiNode.PushIntoParent(column, text);
+
+var button = runtime.Button(id: "add", "Add one");
+UiNode.PushIntoParent(column, button);
+```
+
+This appends each node to `column`'s children.
+
+`runtime.Button` is itself a composition: a `Box` that claims left presses,
+with a `Text` inside. `button.Clicked` reports a click, so the app reacts to it
+inline, with no callbacks.
+
+## Component Library
+
+bibui comes with components built from the same `Box` and `Text` primitives:
+buttons, switches, toggles, sliders, text fields, tabs, menus, dialogs, a
+Markdown viewer and more. Below, a multiline text field holds Markdown source,
+`runtime.Markdown` draws it as it is typed, and a switch changes the theme.
+
+![A Markdown editor built with bibui: typing in a multiline field updates a live Markdown preview, ticking a task box in the preview ticks it in the source, and a switch changes between the dark and light themes](docs/images/component-library.gif)
+
+Every component, with pictures, is in [Components](docs/components/index.md).
 
 ## Two routes
 
@@ -84,9 +130,9 @@ provides. You pick both explicitly, and nothing is discovered at run time.
   using Bibui.Platform.Wayland;
   using Bibui.Raster.Managed.Backend;
 
-  var runtime = new BibuiRuntime(new ManagedRasterBackend());
+  var runtime = BibuiRuntime.Create().WithManagedRasterizer();
   // ... runtime.Mount(...) as above ...
-  new BibuiWindow(runtime, new WaylandPlatformHost(new WaylandHostOptions { AppId = "dev.example.counter" }))
+  BibuiWindow.Create(runtime).WithWayland(new WaylandHostOptions { AppId = "dev.example.counter" })
       .Run("Counter");
   ```
 
@@ -96,6 +142,23 @@ provides. You pick both explicitly, and nothing is discovered at run time.
 
 Your build code is the same on both routes. [Publishing with Native
 AOT](docs/aot.md) has the details.
+
+## Dependencies
+
+bibui uses .NET 10, and the platform + rasterizer route your application uses
+decides which other dependencies it needs. In every case the dependency tree is small:
+
+| Package | NuGet dependencies | System libraries |
+|---|---|---|
+| `Bibui` | `System.IO.Hashing` | none |
+| `Bibui.Raster.Skia` | `SkiaSharp` (with its Linux native assets) | `libfontconfig1` |
+| `Bibui.Platform.Silk` | `Silk.NET` windowing, input and OpenGL (GLFW), `TextCopy`, `Bibui.Raster.Skia` | an OpenGL driver for the GPU path (the CPU fallback works without one); GLFW itself ships with Silk.NET |
+| `Bibui.Platform.Wayland` | none | `libwayland-client`, `libwayland-cursor`, `libxkbcommon` |
+| `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`, `Bibui.Text.FreeType`) | `libfreetype6`, `libharfbuzz0b` |
+
+The Wayland + managed route has no third-party NuGet dependencies at all, and
+it is the route that publishes with Native AOT; Silk.NET keeps the other on the
+JIT for now.
 
 ## Documentation
 

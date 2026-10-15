@@ -5,7 +5,7 @@ through the managed rasterizer (`Bibui.Raster.Managed`), and text through
 FreeType and HarfBuzz (`Bibui.Text.FreeType`).
 
 ```csharp
-var runtime = new BibuiRuntime(new ManagedRasterBackend());
+var runtime = BibuiRuntime.Create().WithManagedRasterizer();
 ```
 
 With `Bibui.Platform.Wayland` this is bibui's Native AOT route: an app that

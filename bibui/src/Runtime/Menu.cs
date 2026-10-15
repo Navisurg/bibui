@@ -1,6 +1,7 @@
 using Bibui;
 using Bibui.TextEdit;
 using Bibui.Theming;
+using static Bibui.Runtime.Menu;
 
 namespace Bibui.Runtime;
 
@@ -23,16 +24,16 @@ namespace Bibui.Runtime;
 /// </summary>
 public static class Menu
 {
-    private const float Radius = 8f;
-    private const float ListPad = 4f;
-    private const float ItemPadX = 8f;
-    private const float ItemPadY = 7.5f;   // a 32 px row around a body line
-    private const float ItemRadius = 4f;
-    private const float LabelPadY = 4f;
-    private const float IconSize = 14f;
-    private const float IconGap = 8f;
-    private const float RuleInset = 4f;
-    private const float RuleGap = 2f;
+    internal const float Radius = 8f;
+    internal const float ListPad = 4f;
+    internal const float ItemPadX = 8f;
+    internal const float ItemPadY = 7.5f;   // a 32 px row around a body line
+    internal const float ItemRadius = 4f;
+    internal const float LabelPadY = 4f;
+    internal const float IconSize = 14f;
+    internal const float IconGap = 8f;
+    internal const float RuleInset = 4f;
+    internal const float RuleGap = 2f;
 
     /// <summary>
     /// Begins the menu named <paramref name="id"/>, when it is open, at
@@ -74,6 +75,44 @@ public static class Menu
         return Begin(runtime, id, anchor.Rect.X, anchor.Rect.Y + anchor.Extent.Y + gap, width);
     }
 
+
+    /// <summary>A rule across the menu, between groups of rows.</summary>
+    public static Box Separator(BibuiRuntime runtime)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        Box band = runtime.Box();
+        band.ChildLayoutAxis = LayoutAxis.X;
+        band.SizeX = SemanticSize.ParentPct(1f);
+        band.SizeY = SemanticSize.ChildrenSum();
+        band.Style.Padding = EdgeInsets.Symmetric(horizontal: RuleInset, vertical: RuleGap);
+        using (runtime.PushParent(band))
+        {
+            Box rule = runtime.Box();
+            rule.SizeX = SemanticSize.ParentPct(1f);
+            rule.SizeY = SemanticSize.Pixels(runtime.Theme.Borders.Width);
+            rule.Style.BackgroundColor = UiColor.Border;
+        }
+        return band;
+    }
+
+    /// <summary>A caption over a group of rows: small, bold and quiet. Takes nothing.</summary>
+    public static Box Label(BibuiRuntime runtime, ReadOnlySpan<char> text)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        Box band = runtime.Box();
+        band.ChildLayoutAxis = LayoutAxis.X;
+        band.SizeX = SemanticSize.ParentPct(1f);
+        band.SizeY = SemanticSize.ChildrenSum();
+        band.Style.Padding = EdgeInsets.Symmetric(horizontal: ItemPadX, vertical: LabelPadY);
+        using (runtime.PushParent(band))
+            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(text, ComponentSize.Sm, UiColor.TextSecondary);
+        return band;
+    }
+}
+
+/// <summary>The Menu component, called on the runtime that builds it.</summary>
+public static class MenuExtensions
+{
     /// <summary>
     /// A row of the menu: an optional <paramref name="icon"/>, the
     /// <paramref name="label"/>, and an optional <paramref name="shortcut"/>
@@ -81,7 +120,7 @@ public static class Menu
     /// <paramref name="disabled"/> — which still takes the press, and reports
     /// nothing, so it does not fall through to what is beneath.
     /// </summary>
-    public static BibuiWidget Item(BibuiRuntime runtime, string id, ReadOnlySpan<char> label,
+    public static BibuiWidget MenuItem(this BibuiRuntime runtime, string id, ReadOnlySpan<char> label,
         string? icon = null, ReadOnlySpan<char> shortcut = default, bool disabled = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -121,47 +160,14 @@ public static class Menu
         }
         return new BibuiWidget(row, interaction);
     }
-
-    /// <summary>A rule across the menu, between groups of rows.</summary>
-    public static Box Separator(BibuiRuntime runtime)
-    {
-        ArgumentNullException.ThrowIfNull(runtime);
-        Box band = runtime.Box();
-        band.ChildLayoutAxis = LayoutAxis.X;
-        band.SizeX = SemanticSize.ParentPct(1f);
-        band.SizeY = SemanticSize.ChildrenSum();
-        band.Style.Padding = EdgeInsets.Symmetric(horizontal: RuleInset, vertical: RuleGap);
-        using (runtime.PushParent(band))
-        {
-            Box rule = runtime.Box();
-            rule.SizeX = SemanticSize.ParentPct(1f);
-            rule.SizeY = SemanticSize.Pixels(runtime.Theme.Borders.Width);
-            rule.Style.BackgroundColor = UiColor.Border;
-        }
-        return band;
-    }
-
-    /// <summary>A caption over a group of rows: small, bold and quiet. Takes nothing.</summary>
-    public static Box Label(BibuiRuntime runtime, ReadOnlySpan<char> text)
-    {
-        ArgumentNullException.ThrowIfNull(runtime);
-        Box band = runtime.Box();
-        band.ChildLayoutAxis = LayoutAxis.X;
-        band.SizeX = SemanticSize.ParentPct(1f);
-        band.SizeY = SemanticSize.ChildrenSum();
-        band.Style.Padding = EdgeInsets.Symmetric(horizontal: ItemPadX, vertical: LabelPadY);
-        using (runtime.PushParent(band))
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(text, ComponentSize.Sm, UiColor.TextSecondary);
-        return band;
-    }
 }
 
 /// <summary>A menu between <see cref="Menu.Begin"/> and <see cref="End"/>.</summary>
 public readonly struct MenuScope
 {
-    private readonly BibuiRuntime _runtime;
-    private readonly Box _list;
-    private readonly BibuiRuntime.ParentScope _inList;
+    internal readonly BibuiRuntime _runtime;
+    internal readonly Box _list;
+    internal readonly BibuiRuntime.ParentScope _inList;
 
     internal MenuScope(BibuiRuntime runtime, Box list, BibuiRuntime.ParentScope inList)
     {

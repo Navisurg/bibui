@@ -77,7 +77,7 @@ sealed class DeleteConfirmation
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        var trigger = Button.Build(runtime, "delete-open", Delete);
+        var trigger = runtime.Button("delete-open", Delete);
         if (trigger.Clicked) _open = true;
 
         float shown = runtime.Animate("delete-dialog", "open", _open ? 1f : 0f);
@@ -86,9 +86,9 @@ sealed class DeleteConfirmation
             var dialog = Dialog.Begin(runtime, "delete-dialog", shown, width: 400f);
             runtime.Text(Question);
             runtime.Gap(24f);
-            bool close = Button.Build(runtime, "delete-cancel", Cancel, ghost: true).Clicked;
+            bool close = runtime.Button("delete-cancel", Cancel, ghost: true).Clicked;
             runtime.Gap(8f);
-            close |= Button.Build(runtime, "delete-confirm", Confirm).Clicked;
+            close |= runtime.Button("delete-confirm", Confirm).Clicked;
             if (dialog.End().Dismissed || close) _open = false;
         }
         return trigger;

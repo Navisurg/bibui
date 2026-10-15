@@ -9,7 +9,8 @@ namespace Bibui.Runtime;
 ///
 /// The window itself — creating it, its event pump, its framebuffer, how a
 /// frame reaches the screen, the clipboard — belongs to an
-/// <see cref="IPlatformHost"/>, passed in: <c>new BibuiWindow(runtime, host)</c>.
+/// <see cref="IPlatformHost"/>, chosen after <see cref="Create"/>:
+/// <c>BibuiWindow.Create(runtime).WithSilk()</c>, or <c>.WithHost(host)</c>.
 /// The cross-platform host is SilkPlatformHost (GLFW + OpenGL, with a CPU
 /// fallback under BIBUI_GPU=0) in Bibui.Platform.Silk; the raw Wayland
 /// one is WaylandPlatformHost in Bibui.Platform.Wayland.
@@ -26,7 +27,8 @@ namespace Bibui.Runtime;
 public sealed class BibuiWindow
 {
     private readonly BibuiRuntime _runtime;
-    private readonly IPlatformHost _host;
+    // Chosen after Create, with WithHost (WithSilk, WithWayland).
+    private IPlatformHost? _host;
 
     // ── The event queue ──────────────────────────────────────────────────────
     // The host's callbacks translate what happened into a WindowEvent and append
@@ -80,21 +82,44 @@ public sealed class BibuiWindow
         return _clickStreak;
     }
 
-    /// <summary>The platform this window runs on.</summary>
-    public IPlatformHost Host => _host;
+    /// <summary>The platform this window runs on, chosen with <see cref="WithHost"/>.</summary>
+    public IPlatformHost Host => _host ?? throw new InvalidOperationException(
+        "No platform host: choose one after BibuiWindow.Create(runtime) — .WithSilk() (Bibui.Platform.Silk), " +
+        ".WithWayland() (Bibui.Platform.Wayland) or .WithHost(host).");
+
+    private BibuiWindow(BibuiRuntime runtime) => _runtime = runtime;
 
     /// <summary>
-    /// A window on <paramref name="host"/>. Chosen explicitly — there is no
-    /// discovery, so nothing here needs reflection, and the host an app names is
-    /// the only one it links. The cross-platform one is
-    /// <c>new BibuiWindow(runtime, new SilkPlatformHost())</c> (Bibui.Platform.Silk:
-    /// GLFW + OpenGL); on Wayland, <c>new WaylandPlatformHost()</c>
-    /// (Bibui.Platform.Wayland). The runtime's wake-up and its default clipboard
-    /// go through the host from here on.
+    /// A window for <paramref name="runtime"/>, with no host yet: choose one
+    /// before it runs — <c>BibuiWindow.Create(runtime).WithSilk()</c>
+    /// (Bibui.Platform.Silk: GLFW + OpenGL, cross-platform),
+    /// <c>.WithWayland()</c> (Bibui.Platform.Wayland) or <c>.WithHost(host)</c>.
+    /// Chosen explicitly — there is no discovery, so nothing here needs
+    /// reflection, and the host an app names is the only one it links.
     /// </summary>
-    public BibuiWindow(BibuiRuntime runtime, IPlatformHost host)
+    public static BibuiWindow Create(BibuiRuntime runtime)
     {
-        _runtime = runtime;
+        ArgumentNullException.ThrowIfNull(runtime);
+        return new BibuiWindow(runtime);
+    }
+
+    /// <summary>
+    /// Makes <paramref name="host"/> the platform this window opens on. Returns
+    /// the window, so it chains after <see cref="Create"/>. The runtime's wake-up
+    /// and its default clipboard go through the host from here on. Once only.
+    /// </summary>
+    public BibuiWindow WithHost(IPlatformHost host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        if (_host is not null)
+            throw new InvalidOperationException(
+                "This window already has its platform host: choose it once, after BibuiWindow.Create(runtime).");
+        Attach(host);
+        return this;
+    }
+
+    private void Attach(IPlatformHost host)
+    {
         _host = host;
 
         // How anything that is not an OS event gets the loop moving again.
@@ -326,7 +351,7 @@ public sealed class BibuiWindow
         // Render() calls hit Runtime's clean-output cache and are cheap.
         _runtime.Render();
 
-        var host = _host;
+        var host = Host;
         try
         {
             host.Open(_runtime, new PlatformWindowOptions(title, logicalW, logicalH));
@@ -433,7 +458,7 @@ public sealed class BibuiWindow
     /// </summary>
     private KeyModifiers CurrentModifiers()
     {
-        var m = _host.HeldModifiers;
+        var m = Host.HeldModifiers;
         if ((m & KeyModifiers.Super) != 0) m |= KeyModifiers.Ctrl;
         return m;
     }

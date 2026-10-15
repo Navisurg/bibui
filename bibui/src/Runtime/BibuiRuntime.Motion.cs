@@ -83,7 +83,7 @@ public sealed partial class BibuiRuntime
         {
             // A transition left at its defaults still has to move.
             TransitionKind.Exponential when transition.Speed <= 0f => transition with { Speed = _theme.Motion.Default },
-            TransitionKind.Spring when transition.Spring.Stiffness <= 0f || transition.Spring.Mass <= 0f => transition with { Spring = Spring.Snappy },
+            TransitionKind.Spring when transition.Spring.Stiffness <= 0f || transition.Spring.Mass <= 0f => transition with { Spring = Bibui.Spring.Snappy },
             _ => transition,
         };
         cell.Epsilon = epsilon;

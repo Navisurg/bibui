@@ -30,7 +30,7 @@ public static class App
 
             build: (state, setState) =>
             {
-                var subscribe = Checkbox.Build(runtime, "subscribe-checkbox", state.Subscribed, Labels.Subscribe);
+                var subscribe = runtime.Checkbox("subscribe-checkbox", state.Subscribed, Labels.Subscribe);
                 if (subscribe.Clicked) setState.Set(state with { Subscribed = !state.Subscribed });
 
                 // A press focuses the name field; Escape or Enter ends editing.
@@ -39,7 +39,7 @@ public static class App
                 nameField.SizeX = SemanticSize.ParentPct(1f);
                 nameField.SizeY = SemanticSize.Pixels(44f);
                 BibuiWidget nameLine;
-                using (runtime.PushParent(nameField)) nameLine = TextField.SingleLine(runtime, "name-input", nameText, nameEdit, nameFocused,
+                using (runtime.PushParent(nameField)) nameLine = runtime.TextField("name-input", nameText, nameEdit, nameFocused,
                     placeholder: Labels.NamePlaceholder);
                 if (nameLine.Pressed) nameFocused = true;
                 foreach (var handle in runtime.UnconsumedEvents)
@@ -48,9 +48,9 @@ public static class App
                         nameFocused = false;
                         handle.Eat();
                     }
-                var decrement = Button.Build(runtime, "decrement-btn", Labels.Minus);
+                var decrement = runtime.Button("decrement-btn", Labels.Minus);
                 if (decrement.Clicked) setState.Set(state with { Counter = state.Counter - 1 });
-                var increment = Button.Build(runtime, "increment-btn", Labels.Plus);
+                var increment = runtime.Button("increment-btn", Labels.Plus);
                 if (increment.Clicked) setState.Set(state with { Counter = state.Counter + 1 });
 
                 var weight = Slider(runtime, "weight-slider", state.LeftWeight, min: 5f, max: 95f, step: 1f);

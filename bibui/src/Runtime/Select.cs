@@ -1,6 +1,7 @@
 using Bibui;
 using Bibui.TextEdit;
 using Bibui.Theming;
+using static Bibui.Runtime.Select;
 
 namespace Bibui.Runtime;
 
@@ -16,14 +17,14 @@ namespace Bibui.Runtime;
 /// </summary>
 public static class Select
 {
-    private const float PadX = 12f;
-    private const float PadY = 10f;
-    private const float Radius = 6f;
-    private const float Gap = 4f;
-    private const float ListPad = 4f;
-    private const float ItemPadX = 8f;
-    private const float ItemPadY = 8f;
-    private const float ItemRadius = 4f;
+    internal const float PadX = 12f;
+    internal const float PadY = 10f;
+    internal const float Radius = 6f;
+    internal const float Gap = 4f;
+    internal const float ListPad = 4f;
+    internal const float ItemPadX = 8f;
+    internal const float ItemPadY = 8f;
+    internal const float ItemRadius = 4f;
 
     /// <summary>
     /// Builds the trigger named <paramref name="id"/> showing
@@ -81,13 +82,19 @@ public static class Select
         return new SelectScope(runtime, trigger, listId, list, runtime.PushParent(list));
     }
 
+
+}
+
+/// <summary>The Select component, called on the runtime that builds it.</summary>
+public static class SelectExtensions
+{
     /// <summary>
     /// A plain row of the dropdown: <paramref name="label"/>, raised when
     /// <paramref name="selected"/>, taking the press unless
     /// <paramref name="disabled"/>. Built between <see cref="Begin"/> and
     /// <see cref="SelectScope.End"/>.
     /// </summary>
-    public static BibuiWidget Item(BibuiRuntime runtime, string id, ReadOnlySpan<char> label,
+    public static BibuiWidget SelectItem(this BibuiRuntime runtime, string id, ReadOnlySpan<char> label,
         bool selected = false, bool disabled = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -113,11 +120,11 @@ public static class Select
 /// <summary>A select between <see cref="Select.Begin"/> and <see cref="End"/>.</summary>
 public readonly struct SelectScope
 {
-    private readonly BibuiRuntime _runtime;
-    private readonly Box _trigger;
-    private readonly string _listId;
-    private readonly Box? _list;
-    private readonly BibuiRuntime.ParentScope _inList;
+    internal readonly BibuiRuntime _runtime;
+    internal readonly Box _trigger;
+    internal readonly string _listId;
+    internal readonly Box? _list;
+    internal readonly BibuiRuntime.ParentScope _inList;
 
     internal SelectScope(BibuiRuntime runtime, Box trigger, string listId, Box? list, BibuiRuntime.ParentScope inList)
     {

@@ -76,14 +76,14 @@ internal static class DemoInputs
     /// </summary>
     private static UiNode SwitchToggle(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var sw = Switch.Build(runtime, "demo-switch", state.SwitchChecked, label: "Enable notifications");
+        var sw = runtime.Switch("demo-switch", state.SwitchChecked, label: "Enable notifications");
         if (sw.Clicked) set(state with { SwitchChecked = !state.SwitchChecked });
         return sw.Node;
     }
 
     private static UiNode DisabledSwitch(BibuiRuntime runtime)
     {
-        return Switch.Build(runtime, "demo-switch-disabled", false, label: "Disabled switch", disabled: true).Node;
+        return runtime.Switch("demo-switch-disabled", false, label: "Disabled switch", disabled: true).Node;
     }
 
     private static readonly (string Label, string Value, bool Disabled)[] Fruits =
@@ -95,14 +95,14 @@ internal static class DemoInputs
     ];
 
     // A select, and one that is disabled. The rows of the dropdown are the
-    // page's to build; these are plain Select.Item rows.
+    // page's to build; these are plain runtime.SelectItem rows.
     private static UiNode SliderPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
         var page = Arrange.Column();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Drag to select a value in a range");
-            var volume = Slider.Build(runtime, "demo-slider", state.SliderValue, 0f, 100f, 5f, "Volume");
+            var volume = runtime.Slider("demo-slider", state.SliderValue, 0f, 100f, 5f, "Volume");
             volume.Node.Px(width: 380f);
             if (volume.Value != state.SliderValue) set(state with { SliderValue = volume.Value });
 
@@ -110,7 +110,7 @@ internal static class DemoInputs
             runtime.Text($"Value: {volume.Value:0}", ComponentSize.Sm, TextColor.Accent);
 
             Arrange.Gap(page, 16f);
-            Slider.Build(runtime, "demo-slider-disabled", 30f, 0f, 100f, label: "Disabled", disabled: true).Node.Px(width: 380f);
+            runtime.Slider("demo-slider-disabled", 30f, 0f, 100f, label: "Disabled", disabled: true).Node.Px(width: 380f);
         }
         return page;
     }
@@ -125,7 +125,7 @@ internal static class DemoInputs
             var select = Select.Begin(runtime, "demo-select", chosen.Label ?? "Pick a fruit…");
             if (select.Open)
                 foreach (var fruit in Fruits)
-                    if (Select.Item(runtime, $"demo-select-option-{fruit.Value}", fruit.Label,
+                    if (runtime.SelectItem($"demo-select-option-{fruit.Value}", fruit.Label,
                             fruit.Value == state.SelectValue, fruit.Disabled).Clicked)
                     {
                         select.Close();
@@ -158,18 +158,18 @@ internal static class DemoInputs
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Interactive checkbox");
-            if (Checkbox.Build(runtime, "demo-checkbox", state.CheckboxChecked, "Accept terms and conditions").Clicked)
+            if (runtime.Checkbox("demo-checkbox", state.CheckboxChecked, "Accept terms and conditions").Clicked)
                 set(state with { CheckboxChecked = !state.CheckboxChecked });
             Arrange.Gap(page, 16f);
             Badge.Build(runtime, state.CheckboxChecked ? "Accepted" : "Not accepted",
                 state.CheckboxChecked ? BadgeVariant.Success : BadgeVariant.Default);
             Arrange.Gap(page, 16f);
-            Checkbox.Build(runtime, "demo-checkbox-disabled", false, "Disabled (unchecked)", disabled: true);
+            runtime.Checkbox("demo-checkbox-disabled", false, "Disabled (unchecked)", disabled: true);
             Arrange.Gap(page, 16f);
-            Checkbox.Build(runtime, "demo-checkbox-disabled-checked", true, "Disabled (checked)", disabled: true);
+            runtime.Checkbox("demo-checkbox-disabled-checked", true, "Disabled (checked)", disabled: true);
             Arrange.Gap(page, 24f);
             Heading(runtime, "Indeterminate");
-            Checkbox.Build(runtime, "demo-checkbox-mixed", false, "Select all (mixed)", indeterminate: true);
+            runtime.Checkbox("demo-checkbox-mixed", false, "Select all (mixed)", indeterminate: true);
             Arrange.Gap(page, 16f);
             runtime.Text("Tri-state — dash instead of checkmark. Typical for \"some items selected\".", ComponentSize.Sm, TextColor.Secondary);
         }
@@ -182,7 +182,7 @@ internal static class DemoInputs
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Group of toggles (single-select)");
-            var group = ToggleGroup.Build(runtime, "demo-toggle-group",
+            var group = runtime.ToggleGroup("demo-toggle-group",
                 [new ToggleOption("Bold", "bold"), new ToggleOption("Italic", "italic"), new ToggleOption("Underline", "underline")],
                 state.ToggleGroupValue);
             if (group.Picked is { } picked) set(state with { ToggleGroupValue = picked });
@@ -215,7 +215,7 @@ internal static class DemoInputs
             using (runtime.PushFontSize(ComponentSize.Sm))
             using (runtime.PushSizeY(TextField.Rows(runtime, 2)))
             {
-                var field = TextField.Multiline(runtime, "demo-textfield-readonly", ReadOnlyText, ReadOnlyEdit,
+                var field = runtime.MultilineTextField("demo-textfield-readonly", ReadOnlyText, ReadOnlyEdit,
                     focused: Focused == "demo-textfield-readonly", events: TextField.MultiLineReadOnlyEvents,
                     textColor: TextColor.Secondary);
                 if (field.Pressed) Focused = "demo-textfield-readonly";
@@ -255,7 +255,7 @@ internal static class DemoInputs
         bool focused, ReadOnlySpan<char> placeholder = default)
     {
         using (runtime.PushParent(InputBox(runtime, id, focused)))
-            TextField.SingleLine(runtime, id, text, edit, focused, placeholder: placeholder);
+            runtime.TextField(id, text, edit, focused, placeholder: placeholder);
     }
 
     // The live fields' state: what an application would hold for them.
@@ -300,9 +300,9 @@ internal static class DemoInputs
             if (lines)
             {
                 using (runtime.PushSizeY(TextField.Rows(runtime, rows)))
-                    field = TextField.Multiline(runtime, id, text, edit, focused, placeholder: placeholder);
+                    field = runtime.MultilineTextField(id, text, edit, focused, placeholder: placeholder);
             }
-            else field = TextField.SingleLine(runtime, id, text, edit, focused, placeholder: placeholder);
+            else field = runtime.TextField(id, text, edit, focused, placeholder: placeholder);
         }
         if (field.Pressed) Focused = id;
     }
@@ -319,7 +319,7 @@ internal static class DemoInputs
     {
         Box box = InputBox(runtime, id, focused: false, width);
         using (runtime.PushParent(box))
-            TextField.SingleLine(runtime, id, new BibuiStr(16), new TextEditState(), focused: false, placeholder: placeholder);
+            runtime.TextField(id, new BibuiStr(16), new TextEditState(), focused: false, placeholder: placeholder);
         return box;
     }
 
@@ -363,13 +363,13 @@ internal static class DemoInputs
             Heading(runtime, "Disabled");
             // Disabled: it shows its placeholder and takes nothing, so a press is swallowed, not answered.
             using (runtime.PushParent(InputBox(runtime, "demo-input-disabled", focused: false, disabled: true)))
-                TextField.SingleLine(runtime, "demo-input-disabled", new BibuiStr(16), new TextEditState(), focused: false,
+                runtime.TextField("demo-input-disabled", new BibuiStr(16), new TextEditState(), focused: false,
                     events: 0, textColor: TextColor.Disabled, placeholder: "Disabled input");
             Arrange.Gap(page, 24f);
 
             Heading(runtime, "Error");
             using (runtime.PushParent(InputBox(runtime, "demo-input-error", focused: false, error: true)))
-                TextField.SingleLine(runtime, "demo-input-error", BibuiStr.FromStrLit("not-an-email"), new TextEditState(), focused: false);
+                runtime.TextField("demo-input-error", BibuiStr.FromStrLit("not-an-email"), new TextEditState(), focused: false);
             Arrange.Gap(page, 16f);
             runtime.Text("Destructive border signals validation failure.", ComponentSize.Sm, TextColor.Secondary);
 
@@ -392,7 +392,7 @@ internal static class DemoInputs
             Heading(runtime, "Error");
             using (runtime.PushParent(InputBox(runtime, "demo-textarea-error", focused: false, width: 400f, lines: true, error: true)))
             using (runtime.PushSizeY(TextField.Rows(runtime, 3)))
-                TextField.Multiline(runtime, "demo-textarea-error", BibuiStr.FromStrLit("too short"), new TextEditState(), focused: false,
+                runtime.MultilineTextField("demo-textarea-error", BibuiStr.FromStrLit("too short"), new TextEditState(), focused: false,
                     placeholder: "Describe the issue");
             Arrange.Gap(page, 24f);
 
@@ -474,22 +474,22 @@ internal static class DemoInputs
             {
                 DemoButton(runtime, "demo-btn-primary", "Primary", Look.Primary);
                 runtime.Gap(10f);
-                Tall(runtime, Button.Build(runtime, "demo-btn-secondary", "Secondary"));
+                Tall(runtime, runtime.Button("demo-btn-secondary", "Secondary"));
                 runtime.Gap(10f);
-                Tall(runtime, Button.Build(runtime, "demo-btn-ghost", "Ghost", ghost: true));
+                Tall(runtime, runtime.Button("demo-btn-ghost", "Ghost", ghost: true));
                 runtime.Gap(10f);
-                Tall(runtime, Button.Build(runtime, "demo-btn-disabled", "Disabled", disabled: true));
+                Tall(runtime, runtime.Button("demo-btn-disabled", "Disabled", disabled: true));
             }
             runtime.Gap(12f);
 
             Caption(runtime, "Sizes");
             using (runtime.PushParent(Row(runtime)))
             {
-                Tall(runtime, Button.Build(runtime, "demo-btn-sm", "Small", size: ComponentSize.Sm), ComponentSize.Sm);
+                Tall(runtime, runtime.Button("demo-btn-sm", "Small", size: ComponentSize.Sm), ComponentSize.Sm);
                 runtime.Gap(10f);
-                Tall(runtime, Button.Build(runtime, "demo-btn-md", "Medium", size: ComponentSize.Md));
+                Tall(runtime, runtime.Button("demo-btn-md", "Medium", size: ComponentSize.Md));
                 runtime.Gap(10f);
-                Tall(runtime, Button.Build(runtime, "demo-btn-lg", "Large", size: ComponentSize.Lg), ComponentSize.Lg);
+                Tall(runtime, runtime.Button("demo-btn-lg", "Large", size: ComponentSize.Lg), ComponentSize.Lg);
             }
             runtime.Gap(12f);
 
@@ -541,7 +541,7 @@ internal static class DemoInputs
         return page;
     }
 
-    // A Button.Build as tall as the reference button of its size — 32, 40 or 48 —
+    // A runtime.Button as tall as the reference button of its size — 32, 40 or 48 —
     // said by the caller: a height, and the padding that centres the label in it.
     private static void Tall(BibuiRuntime runtime, BibuiWidget button, ComponentSize size = ComponentSize.Md)
     {
@@ -559,7 +559,7 @@ internal static class DemoInputs
         node.Style.Padding = new EdgeInsets((height - line) / 2f, pad.Right, 0f, pad.Left);
     }
 
-    // What Button.Build does not draw — the primary fill, an icon, a colour of
+    // What runtime.Button does not draw — the primary fill, an icon, a colour of
     // the page's own, a spinner while loading — composed here: 40 px tall, the
     // label and icon centred down it. Loading keeps the label's width and shows
     // a spinner in its place.
@@ -644,7 +644,7 @@ internal static class DemoInputs
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Select one option");
-            if (RadioGroup.Build(runtime, "demo-radio", RadioOptions, state.RadioValue).Picked is { } picked)
+            if (runtime.RadioGroup("demo-radio", RadioOptions, state.RadioValue).Picked is { } picked)
                 set(state with { RadioValue = picked });
             runtime.Gap(16f);
             runtime.Text($"Selected: {state.RadioValue}", ComponentSize.Sm, TextColor.Accent);
@@ -667,7 +667,7 @@ internal static class DemoInputs
         if (select.Open)
             foreach (var country in Countries)
             {
-                var item = Select.Item(runtime, $"demo-select-country-{country.Value}", country.Label,
+                var item = runtime.SelectItem($"demo-select-country-{country.Value}", country.Label,
                     country.Value == state.CountryValue);
                 Tall(runtime, item.Node, 36f);
                 if (item.Clicked)
@@ -698,7 +698,7 @@ internal static class DemoInputs
                 using (CentredCell(runtime))
                 {
                     Arrange.Spring(runtime.ParentInScope);
-                    if (Toggle.Build(runtime, "demo-toggle", state.TogglePressed, "Star", icon: "star").Clicked)
+                    if (runtime.Toggle("demo-toggle", state.TogglePressed, "Star", icon: "star").Clicked)
                         set(state with { TogglePressed = !state.TogglePressed });
                     Arrange.Spring(runtime.ParentInScope);
                 }
@@ -707,7 +707,7 @@ internal static class DemoInputs
                     state.TogglePressed ? TextColor.Accent : TextColor.Secondary);
             }
             runtime.Gap(16f);
-            Toggle.Build(runtime, "demo-toggle-disabled", false, "Disabled", disabled: true);
+            runtime.Toggle("demo-toggle-disabled", false, "Disabled", disabled: true);
         }
         return page;
     }

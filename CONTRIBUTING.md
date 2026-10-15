@@ -94,10 +94,12 @@ lays nothing out, and the solver draws nothing.
 ### Components are functions that compose boxes
 
 A component is a plain static function, not a renderer or a class with
-state. `Switch.Build` (`bibui/src/Runtime/Switch.cs`) is the pattern:
+state, written as an extension method on the runtime so it is called as
+`runtime.Switch(...)`. `SwitchExtensions.Switch` (`bibui/src/Runtime/Switch.cs`)
+is the pattern:
 
 ```csharp
-public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default, bool disabled = false)
+public static BibuiWidget Switch(this BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default, bool disabled = false)
 ```
 
 - Compose it from `runtime.Box()` (pooled, keyless), `runtime.BoxFromId(id,

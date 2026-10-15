@@ -14,6 +14,40 @@ before it was published.
 
 ### Changed
 
+- **Runtimes and windows are made with `Create`, and the backend and host are
+  always chosen (breaking).**
+  `BibuiWindow.Create(BibuiRuntime.Create().WithSkia()).WithSilk().Run(title: "App")`.
+  - `BibuiRuntime` and `BibuiWindow` have no public constructors. Instead of
+    `new BibuiRuntime(backend)`, write `BibuiRuntime.Create()` followed by
+    `.WithSkia()` (Bibui.Raster.Skia), `.WithManagedRasterizer()`
+    (Bibui.Raster.Managed.Backend) or `.WithRaster(backend)`, before the
+    runtime first draws or measures. Instead of `new BibuiWindow(runtime, host)`,
+    write `BibuiWindow.Create(runtime)` followed by `.WithSilk()`
+    (Bibui.Platform.Silk), `.WithWayland(options)` (Bibui.Platform.Wayland) or
+    `.WithHost(host)`.
+  - There is no default backend: `new BibuiRuntime()`, `new BibuiRenderer()`
+    and `RasterBackends` are gone, and Bibui.Raster.Skia no longer registers
+    itself. Nothing is loaded by name, so nothing warns under trimming or AOT.
+    A runtime with no backend throws when it first draws, and a window with no
+    host throws when it runs, each saying what to call.
+- **Components are called on the runtime (breaking).** Every component named
+  by an id is an extension method on `BibuiRuntime`, and its static function
+  is gone: `runtime.Button(id, "Save")` for `Button.Build(runtime, id, "Save")`.
+  - `runtime.Button`, `Checkbox`, `Switch`, `Toggle`, `Slider`, `RadioGroup`,
+    `ToggleGroup`, `Tabs`, `Expander`, `Scrollbar` and `Markdown` replace
+    their `Build`; `runtime.MenuItem` replaces `Menu.Item`, `runtime.SelectItem`
+    replaces `Select.Item`, and `runtime.TextField`, `MultilineTextField` and
+    `EllipsisTextField` replace `TextField.SingleLine`, `Multiline` and
+    `Ellipsis`.
+  - The types `Button`, `Checkbox`, `Switch`, `Toggle`, `RadioGroup` and
+    `ToggleGroup` are gone (the methods live on `ButtonExtensions` and so on).
+    `Slider`, `Tabs`, `Expander`, `Scrollbar`, `Markdown`, `Menu`, `Select` and
+    `TextField` keep their constants and other members.
+  - Like any box the runtime builds, a component is linked under the parent
+    in scope, so building it inside `using (runtime.PushParent(column))` puts
+    it in the column. Layout (`Arrange`), the keyless leaves and the scopes
+    (`Dialog`, `Popover`, `Menu.Begin`, `Select.Begin`) keep their spelling.
+
 - **Text is UTF-16, not UTF-8 (since 0.9.1, breaking).** bibui now holds,
   measures and draws .NET's own chars, so a `string` goes straight in:
   `runtime.Text("Party 🎉")`, `Button.Build(runtime, "b", "Save")`.
@@ -109,6 +143,27 @@ before it was published.
   (`BIBUI_TEST_SERVER_OUT`). The constructor takes that directory.
 
 ### Added
+
+- `runtime.Column()` and `runtime.Row()`: a pooled box along Y or X, linked
+  under the parent in scope; push it to build into it:
+  `var column = runtime.ColumnFit(); using (runtime.PushParent(column)) { ... }`.
+  The bare forms are sized like `Box()`, by the sizes pushed; the sized forms
+  set the box's own: `ColumnFit`/`RowFit` (children), `ColumnFillX`/`RowFillX`,
+  `ColumnFillY`/`RowFillY`, `ColumnFill`/`RowFill` (parent), `ColumnWidth(px)`,
+  `RowHeight(px)`, `RowFillX(height)` and `ColumnPx`/`RowPx`; an axis a form
+  does not name fits its children. They return the box, so `Padded`, `Styled`
+  and the other helpers chain on it.
+
+- `runtime.Spring()`, and the `runtime.Centred()` scope: a spring before what
+  is built inside and one after it, along the parent in scope, from the
+  runtime's pool. Centred across a row:
+  `using (runtime.PushParent(runtime.RowFillX())) using (runtime.Centred()) { ... }`.
+- `Arrange.Column`, `Arrange.Row`, `Arrange.CentredX`, `Arrange.CentredY` and
+  `Arrange.Centred` are obsolete: they allocate a box a frame and move nodes
+  the runtime has already linked. Push a `runtime` row or column instead, and
+  centre with `runtime.Centred()`. They still work; the repository's own call sites build with
+  CS0618 warnings until they are moved over. `Arrange`'s size helpers
+  (`FillX`, `Px`, `Padded`, ...) and `Space`/`Spring`/`Gap` are unchanged.
 
 - `Icons.Register(name, svgPathData)`: an app adds icons of its own at
   start-up, drawn by `runtime.Icon` and known to `Icon.IsKnown` like the

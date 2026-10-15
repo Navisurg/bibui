@@ -40,7 +40,7 @@ whole frame every time. Most nodes come from pools and cost no allocation (see
 A whole frame, rendered headless to a PNG:
 
 ```csharp
-var runtime = new BibuiRuntime();          // Skia, when Bibui.Raster.Skia is referenced
+var runtime = BibuiRuntime.Create().WithSkia();          // Skia, when Bibui.Raster.Skia is referenced
 const string hello = "Hello, bibui";
 const string ok = "OK";
 
@@ -48,7 +48,7 @@ runtime.Mount(() =>
     Column(
         runtime.Text(hello),
         Space(12f),
-        Button.Build(runtime, "ok", ok))
+        runtime.Button("ok", ok))
     .FillX().FillY()
     .Padded(EdgeInsets.All(24f)),
     new SurfaceOptions { Width = 320, Height = 160, ScaleFactor = 1f });
@@ -93,9 +93,9 @@ row, `LayoutAxis.Y` for a column. `Arrange` gives the common shapes:
 Box toolbar = Row(
         runtime.Text(title),
         Spring(),                                   // takes the room left, pushing what follows to the end
-        Button.Build(runtime, "save", save),
+        runtime.Button("save", save),
         Space(8f),                                  // a fixed 8 px gap
-        Button.Build(runtime, "close", close))
+        runtime.Button("close", close))
     .FillX()                                        // as wide as the parent
     .Px(height: 40f);                               // and exactly 40 px tall
 ```
@@ -241,6 +241,49 @@ using (runtime.PushParent(card))
 }
 ```
 
+For the common case, a column or row, `runtime.Column()` and `runtime.Row()`
+make a pooled box with its axis set, linked under the parent in scope like
+any other; push it to build into it. Like `Box()`, they are sized by the sizes
+pushed, and with none, not at all, so you usually call a sized form. Each
+names the rule for the axes it names, and an axis it does not name is as large
+as its children:
+
+| Column | Row | Width | Height |
+|---|---|---|---|
+| `ColumnFit()` | `RowFit()` | children | children |
+| `ColumnFillX()` | `RowFillX()` | parent | children |
+| `ColumnFillY()` | `RowFillY()` | children | parent |
+| `ColumnFill()` | `RowFill()` | parent | parent |
+| `ColumnWidth(px)` | | pixels | children |
+| | `RowHeight(px)` | children | pixels |
+| | `RowFillX(height)` | parent | pixels |
+| `ColumnPx(w, h)` | `RowPx(w, h)` | pixels | pixels |
+
+They return the box, so the size helpers chain on it and a build can return it:
+
+```csharp
+runtime.Mount(() =>
+{
+    var page = runtime.ColumnFillX().Padded(EdgeInsets.All(24f));
+    using (runtime.PushParent(page))
+    {
+        runtime.Text(title);
+        using (runtime.PushParent(runtime.RowFit()))
+        {
+            if (runtime.Button("ok", "OK").Clicked) Save();
+            runtime.Gap(8f);
+            if (runtime.Button("cancel", "Cancel", ghost: true).Clicked) Close();
+        }
+    }
+    return page;
+});
+```
+
+`runtime.Spring()` takes the room left along the parent in scope, and
+`using (runtime.Centred()) { ... }` puts a spring before and after what is
+built inside: centred across a row, that is
+`using (runtime.PushParent(runtime.RowFillX())) using (runtime.Centred()) runtime.Text(empty);`.
+
 The two forms mix. A node has one parent, and pushing it somewhere else
 (`Row`, `Column`, `CentredY`, `UiNode.PushIntoParent`) **moves** it: it is
 taken out of the parent it was linked under and appended to the new one. So
@@ -350,7 +393,7 @@ SelectScope select = Select.Begin(runtime, "fruit", current);
 if (select.Open)
 {
     foreach (var (id, label) in fruits)
-        if (Select.Item(runtime, id, label, selected: id == chosen).Clicked) { chosen = id; select.Close(); }
+        if (runtime.SelectItem(id, label, selected: id == chosen).Clicked) { chosen = id; select.Close(); }
 }
 select.End();
 ```
@@ -370,7 +413,7 @@ work there:
   while it is still linked under the parent in scope; `Row`, `CentredY` and
   the rest move it afterwards. Keep the dropdown (or something in it) as the
   parent in scope while the arguments are built, and push the result inside
-  the dropdown: `UiNode.PushIntoParent(panel, Row(label, Spring(), Button.Build(...)))`.
+  the dropdown: `UiNode.PushIntoParent(panel, Row(label, Spring(), (...).Button()))`.
 
 What that rules out is asking a box **after** it has been moved into a row
 or column that is not yet linked under the dropdown, for example acquiring a
@@ -605,7 +648,7 @@ protocol and files.
 
 - `runtime.Text(ReadOnlySpan<char> text, ...)` shows a text, and a component
   label is a `ReadOnlySpan<char>`. A `string` converts to it, so
-  `runtime.Text("Save")` and `Button.Build(runtime, "save", "Save")` just work.
+  `runtime.Text("Save")` and `runtime.Button("save", "Save")` just work.
 - The text is **copied** into the node, so it may change as soon as the call
   returns. A literal costs nothing, since literals are made once. To show a
   number without making a string each frame, format it into a stack buffer:
@@ -677,25 +720,27 @@ connect it to the outside:
 - An **`IPlatformHost`** owns the native window, the event pump, the
   framebuffer, presenting, the clipboard and the cursor. `BibuiWindow` runs the
   frame loop on top of a host: it paces frames, translates input and sleeps
-  while nothing is happening. You always pass the host explicitly. bibui does
-  no discovery and no reflection.
+  while nothing is happening. You always choose the host:
+  `BibuiWindow.Create(runtime).WithSilk()`, `.WithWayland()` or
+  `.WithHost(host)`. bibui does no discovery and no reflection.
 - An **`IRasterBackend`** draws: surfaces, clipping, transforms, shapes, paths,
-  images, text and PNG encoding. The parameterless `new BibuiRuntime()` uses
-  the default backend. `new BibuiRuntime(backend)` uses the one you pass.
+  images, text and PNG encoding. There is no default: choose one after
+  `BibuiRuntime.Create()` with `.WithSkia()`, `.WithManagedRasterizer()` or
+  `.WithRaster(backend)`.
 
 There are two complete combinations.
 
 **Cross-platform: Silk host and Skia raster.** `SilkPlatformHost` (package
 `Bibui.Platform.Silk`) opens a window through GLFW and renders with OpenGL when
 it can, falling back to the CPU otherwise (`BIBUI_GPU=0` forces the CPU). It
-brings in `Bibui.Raster.Skia`, which registers Skia as the default backend:
+brings in `Bibui.Raster.Skia`, which gives the runtime `.WithSkia()`:
 
 ```csharp
 using Bibui.Runtime.Platform;
 
-var runtime = new BibuiRuntime();
+var runtime = BibuiRuntime.Create().WithSkia();
 runtime.Mount(() => BuildUi(runtime));
-new BibuiWindow(runtime, new SilkPlatformHost()).Run("My app");
+BibuiWindow.Create(runtime).WithSilk().Run("My app");
 ```
 
 **Linux, pure managed: Wayland host and managed raster.** `WaylandPlatformHost`
@@ -710,10 +755,10 @@ explicitly:
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 
-var runtime = new BibuiRuntime(new ManagedRasterBackend());
+var runtime = BibuiRuntime.Create().WithManagedRasterizer();
 runtime.Mount(() => BuildUi(runtime));
 if (WaylandPlatformHost.IsSupported)
-    new BibuiWindow(runtime, new WaylandPlatformHost(new WaylandHostOptions { AppId = "my-app" })).Run("My app");
+    BibuiWindow.Create(runtime).WithWayland(new WaylandHostOptions { AppId = "my-app" }).Run("My app");
 ```
 
 **Damage tracking.** The managed rasterizer can rasterise only what changed.
@@ -745,7 +790,5 @@ dotnet publish -c Release -r linux-x64 -p:PublishAot=true
 The Silk + Skia route is JIT-only for now: Silk.NET itself warns under AOT,
 so Native AOT is promised for the Wayland + managed route only.
 
-An AOT app passes its backend, for example
-`new BibuiRuntime(new ManagedRasterBackend())`. The parameterless
-`new BibuiRuntime()` loads the default (Skia) backend by name, which an AOT
-build may have dropped, so an AOT publish that calls it warns (IL2026).
+An AOT app chooses its backend like any other, for example
+`BibuiRuntime.Create().WithManagedRasterizer()`. Nothing is loaded by name.

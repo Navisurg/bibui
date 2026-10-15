@@ -17,15 +17,15 @@ Fixtures: `markdown-basic`, `markdown-table` and `markdown-narrow`.
 ## Build
 
 ```cs
-public static MarkdownWidget Build(
-    BibuiRuntime runtime,
+public static MarkdownWidget Markdown(
+    this BibuiRuntime runtime,
     string id,
     BibuiStr source,
     float? width = null,
     ComponentSize textSize = ComponentSize.Md)
 
-public static MarkdownWidget Build(
-    BibuiRuntime runtime,
+public static MarkdownWidget Markdown(
+    this BibuiRuntime runtime,
     string id,
     MarkdownDocument document,
     float? width = null,
@@ -96,7 +96,7 @@ sealed class ReleaseNotes
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        var notes = Markdown.Build(runtime, "release-notes", _source, width: 480f);
+        var notes = runtime.Markdown("release-notes", _source, width: 480f);
         if (notes.TaskClicked) Markdown.ToggleTask(_source, notes.ToggledTask);
         if (notes.LinkClicked) OpenedLink = notes.ClickedLink;
         return notes;

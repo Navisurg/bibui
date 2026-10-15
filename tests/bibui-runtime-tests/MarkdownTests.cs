@@ -2,6 +2,7 @@ using System.Text;
 using Bibui;
 using Bibui.Runtime;
 using Bibui.TextEdit;
+using Bibui.Raster.Skia;
 
 /// <summary>
 /// The Markdown parser and viewer: what a source parses to, written as a short
@@ -293,10 +294,10 @@ static class MarkdownTests
         {
             var source = BibuiStr.FromStrLit("Go to [the docs](https://example.com/docs) now.");
             MarkdownWidget last = default;
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() =>
             {
-                last = Markdown.Build(runtime, "md", source, width: 400f);
+                last = runtime.Markdown("md", source, width: 400f);
                 return Arrange.Column(last.Node).FillX().FillY();
             }, new SurfaceOptions { Width = 500, Height = 200, ScaleFactor = 1f });
             runtime.Render();
@@ -312,10 +313,10 @@ static class MarkdownTests
         {
             var source = BibuiStr.FromStrLit("- [ ] write it\n- [x] test it");
             MarkdownWidget last = default;
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() =>
             {
-                last = Markdown.Build(runtime, "tasks", source, width: 300f);
+                last = runtime.Markdown("tasks", source, width: 300f);
                 return Arrange.Column(last.Node).FillX().FillY();
             }, new SurfaceOptions { Width = 400, Height = 200, ScaleFactor = 1f });
             runtime.Render();
@@ -337,12 +338,12 @@ static class MarkdownTests
             var surface = new SurfaceOptions { Width = 500, Height = 2000, ScaleFactor = 1f };
 
             var source = BibuiStr.FromStrLit(bytes);
-            var runtime = new BibuiRuntime();
-            runtime.Mount(() => Arrange.Column(Markdown.Build(runtime, "same", source, width: 400f).Node).FillX().FillY(), surface);
+            var runtime = BibuiRuntime.Create().WithSkia();
+            runtime.Mount(() => Arrange.Column(runtime.Markdown("same", source, width: 400f).Node).FillX().FillY(), surface);
             long frame = SteadyFrame(runtime);
             var texts = Descendants(runtime.FindById("same")!).OfType<Text>().Select(t => t.Content.ToArray()).ToArray();
 
-            var plain = new BibuiRuntime();
+            var plain = BibuiRuntime.Create().WithSkia();
             plain.Mount(() =>
             {
                 var column = plain.Box();
@@ -377,9 +378,9 @@ static class MarkdownTests
     // second frame breaks lines at the width the first one measured.
     private static (BibuiRuntime Runtime, UiNode Root) Show(string markdown, float width)
     {
-        var runtime = new BibuiRuntime();
+        var runtime = BibuiRuntime.Create().WithSkia();
         var source = BibuiStr.FromStrLit(markdown);
-        runtime.Mount(() => Arrange.Column(Markdown.Build(runtime, "md", source, width: width).Node).FillX().FillY(),
+        runtime.Mount(() => Arrange.Column(runtime.Markdown("md", source, width: width).Node).FillX().FillY(),
             new SurfaceOptions { Width = (int)width + 40, Height = 1200, ScaleFactor = 1f });
         runtime.Render();
         runtime.Render();

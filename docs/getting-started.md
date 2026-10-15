@@ -47,18 +47,18 @@ using Bibui.Runtime;
 using Bibui.Runtime.Platform;
 using static Bibui.Arrange;
 
-var runtime = new BibuiRuntime(new SkiaRasterBackend());
+var runtime = BibuiRuntime.Create().WithSkia();
 var hello = "Hello, bibui";
 
 runtime.Mount(() =>
     Column(runtime.Text(hello)).FillX().FillY().Padded(EdgeInsets.All(24f)));
 
-new BibuiWindow(runtime, new SilkPlatformHost()).Run("Stepper");
+BibuiWindow.Create(runtime).WithSilk().Run("Stepper");
 ```
 
 `dotnet run` opens an 800 × 600 window.
 
-- `new BibuiRuntime(new SkiaRasterBackend())` names the raster backend that
+- `BibuiRuntime.Create().WithSkia()` names the raster backend that
   draws. bibui never looks one up at run time; you pass it.
 - `Mount` takes a build function. bibui calls it whenever a frame is needed,
   lays out the tree it returns, and paints it.
@@ -95,8 +95,8 @@ public static class Stepper
 
     public static StepperWidget Build(BibuiRuntime runtime, string id, int value)
     {
-        var down = Button.Build(runtime, id + "-down", Minus);
-        var up = Button.Build(runtime, id + "-up", Plus);
+        var down = runtime.Button(id + "-down", Minus);
+        var up = runtime.Button(id + "-up", Plus);
         if (down.Clicked) value--;
         if (up.Clicked) value++;
 
@@ -169,9 +169,9 @@ using Bibui.Raster.Skia;
 using Bibui.Runtime;
 using Bibui.Runtime.Platform;
 
-var runtime = new BibuiRuntime(new SkiaRasterBackend());
+var runtime = BibuiRuntime.Create().WithSkia();
 App.Mount(runtime);
-new BibuiWindow(runtime, new SilkPlatformHost()).Run("Stepper");
+BibuiWindow.Create(runtime).WithSilk().Run("Stepper");
 ```
 
 `setState.Set` stores the new state and asks for a frame, and the next build
@@ -180,7 +180,7 @@ app without a window (section 6).
 
 ## 4. Using an interaction
 
-`Button.Build` is built from the same pieces you can use yourself, as the reset
+`runtime.Button` is built from the same pieces you can use yourself, as the reset
 box above shows:
 
 1. **Acquire** a box with an id and say what it takes:
@@ -244,7 +244,7 @@ public class StepperTests
     [Fact]
     public void Plus_adds_one_and_reset_returns_to_zero()
     {
-        var runtime = new BibuiRuntime(new SkiaRasterBackend());
+        var runtime = BibuiRuntime.Create().WithSkia();
         App.Mount(runtime);
         using var page = BibuiPage.From(runtime);
 
@@ -259,7 +259,7 @@ public class StepperTests
     [Fact]
     public void The_first_frame_renders()
     {
-        var runtime = new BibuiRuntime(new SkiaRasterBackend());
+        var runtime = BibuiRuntime.Create().WithSkia();
         App.Mount(runtime, theme: "default-light");
         using var page = BibuiPage.From(runtime);
 
@@ -297,11 +297,11 @@ using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
 
-var runtime = new BibuiRuntime(new ManagedRasterBackend());
+var runtime = BibuiRuntime.Create().WithManagedRasterizer();
 App.Mount(runtime);
 
 var host = new WaylandPlatformHost(new WaylandHostOptions { AppId = "dev.example.stepper" });
-new BibuiWindow(runtime, host).Run("Stepper");
+BibuiWindow.Create(runtime).WithHost(host).Run("Stepper");
 ```
 
 Publish:

@@ -13,8 +13,8 @@ Fixtures: `checkbox-default`, `checkbox-disabled` and `checkbox-indeterminate`.
 ## Build
 
 ```cs
-public static BibuiWidget Build(
-    BibuiRuntime runtime,
+public static BibuiWidget Checkbox(
+    this BibuiRuntime runtime,
     string id,
     bool on,
     ReadOnlySpan<char> label = default,
@@ -71,12 +71,12 @@ sealed class NotificationSettings
         {
             // "All" is indeterminate while only some are on, and turns them all on or off.
             bool some = _email != _push;
-            if (Checkbox.Build(runtime, "notify-all", _email && _push, All, indeterminate: some).Clicked)
+            if (runtime.Checkbox("notify-all", _email && _push, All, indeterminate: some).Clicked)
                 _email = _push = !(_email && _push);
             runtime.Gap(12f);
-            if (Checkbox.Build(runtime, "notify-email", _email, Email).Clicked) _email = !_email;
+            if (runtime.Checkbox("notify-email", _email, Email).Clicked) _email = !_email;
             runtime.Gap(12f);
-            if (Checkbox.Build(runtime, "notify-push", _push, Push).Clicked) _push = !_push;
+            if (runtime.Checkbox("notify-push", _push, Push).Clicked) _push = !_push;
         }
         return column;
     }

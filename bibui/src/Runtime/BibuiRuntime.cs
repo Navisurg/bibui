@@ -17,29 +17,66 @@ namespace Bibui.Runtime;
 /// </summary>
 public sealed partial class BibuiRuntime
 {
-    private readonly BibuiRenderer _renderer;
+    // Made on first use, from the backend WithRaster chose: the backend is
+    // chosen after Create(), and its fonts and caches are made with it.
+    private BibuiRenderer? _renderer;
+    private IRasterBackend? _chosenRaster;
+    private readonly object _rendererLock = new();
+
+    private BibuiRenderer Renderer
+    {
+        get
+        {
+            if (Volatile.Read(ref _renderer) is { } renderer) return renderer;
+            lock (_rendererLock)
+            {
+                if (_renderer is null)
+                {
+                    var raster = _chosenRaster ?? throw new InvalidOperationException(
+                        "No raster backend: choose one after BibuiRuntime.Create() — .WithSkia() (Bibui.Raster.Skia), " +
+                        ".WithManagedRasterizer() (Bibui.Raster.Managed.Backend) or .WithRaster(backend).");
+                    _chosenRaster = null;
+                    Volatile.Write(ref _renderer, new BibuiRenderer(raster));
+                }
+                return _renderer!;
+            }
+        }
+    }
+
+    private BibuiRuntime() { }
 
     /// <summary>
-    /// A runtime that paints with the default raster backend (<see cref="RasterBackends"/>):
-    /// Skia, when the app references Bibui.Raster.Skia, the cross-platform default.
-    /// Under Native AOT pass the backend instead —
-    /// <c>new BibuiRuntime(new ManagedRasterBackend())</c>: the default is loaded
-    /// by name, which a trimmed publish may have dropped, so a publish that
-    /// calls this warns (IL2026).
+    /// A runtime, with no raster backend yet: choose one before it first draws
+    /// or measures — <c>BibuiRuntime.Create().WithSkia()</c> (Bibui.Raster.Skia),
+    /// <c>.WithManagedRasterizer()</c> (Bibui.Raster.Managed.Backend) or
+    /// <c>.WithRaster(backend)</c>. Chosen explicitly — no discovery, so nothing
+    /// here needs reflection.
     /// </summary>
-    [RequiresUnreferencedCode(RasterBackends.TrimMessage)]
-    public BibuiRuntime() : this(new BibuiRenderer()) { }
+    public static BibuiRuntime Create() => new();
 
     /// <summary>
-    /// A runtime that paints with <paramref name="raster"/>, which it now owns.
-    /// Chosen explicitly — no discovery, so nothing here needs reflection.
+    /// Makes <paramref name="raster"/>, which the runtime now owns, the backend
+    /// it draws with. Returns the runtime, so it chains after <see cref="Create"/>;
+    /// a second choice replaces the first. Only before the runtime first draws or
+    /// measures: after that its fonts and caches belong to the backend it has.
     /// </summary>
-    public BibuiRuntime(IRasterBackend raster) : this(new BibuiRenderer(raster)) { }
-
-    private BibuiRuntime(BibuiRenderer renderer) => _renderer = renderer;
+    public BibuiRuntime WithRaster(IRasterBackend raster)
+    {
+        ArgumentNullException.ThrowIfNull(raster);
+        lock (_rendererLock)
+        {
+            if (_renderer is not null)
+                throw new InvalidOperationException(
+                    "The raster backend is chosen before the runtime first draws or measures: " +
+                    "call WithRaster (WithSkia, WithManagedRasterizer) straight after BibuiRuntime.Create().");
+            _chosenRaster?.Dispose();
+            _chosenRaster = raster;
+        }
+        return this;
+    }
 
     /// <summary>The raster backend frames are painted with.</summary>
-    public IRasterBackend Raster => _renderer.Raster;
+    public IRasterBackend Raster => Renderer.Raster;
     private readonly object _syncRoot = new();
     // Held around the build+Skia portion of Render(). Without this, two threads
     // (the window's render loop and the test server) can race and corrupt Skia
@@ -296,18 +333,18 @@ public sealed partial class BibuiRuntime
             EndDropDowns(tree);
             var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
             // Every rect is solved before anything is painted.
-            _renderer.Layout(tree, surface, theme);
+            Renderer.Layout(tree, surface, theme);
             var pointerTransforms = transformed ? PointerTransforms(tree) : null;
 
             // Capture after build() so state the host sets while building
             // lands in this frame, matching the readback path's capture timing.
             FrameInput input;
             lock (_syncRoot) input = CaptureFrameInput();
-            _renderer.RenderTo(target, tree, surface, theme, input);
+            Renderer.RenderTo(target, tree, surface, theme, input);
 
             // Every path repaints unconditionally, so the only thing keeping an
             // animation going is the loop being told to iterate.
-            if (_renderer.IsAnimating) RequestFrame();
+            if (Renderer.IsAnimating) RequestFrame();
 
             int physW = SurfaceOptions.PhysicalSize(surface.Width, surface.ScaleFactor);
             int physH = SurfaceOptions.PhysicalSize(surface.Height, surface.ScaleFactor);
@@ -329,7 +366,7 @@ public sealed partial class BibuiRuntime
             {
                 var capturedRaw = rawPixels;
                 int cw = physW, ch = physH;
-                var raster = _renderer.Raster;
+                var raster = Renderer.Raster;
                 // PNG encoding is pure CPU work over the captured buffer — safe to
                 // run lazily on whatever thread first asks for PngBytes.
                 pngFactory = () => raster.EncodePng(capturedRaw, cw, ch);
@@ -387,14 +424,14 @@ public sealed partial class BibuiRuntime
         var t1 = Stopwatch.GetTimestamp();
         var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
         // Every rect is solved before anything is painted.
-        _renderer.Layout(tree, surface, theme);
+        Renderer.Layout(tree, surface, theme);
         var pointerTransforms = transformed ? PointerTransforms(tree) : null;
         var t2 = Stopwatch.GetTimestamp();
         // Capture after build() so state the host sets while building
         // lands in this frame.
         FrameInput input;
         lock (_syncRoot) input = CaptureFrameInput();
-        var output = _renderer.Render(tree, surface, theme, input);
+        var output = Renderer.Render(tree, surface, theme, input);
         var t3 = Stopwatch.GetTimestamp();
 
         if (_profile)
@@ -410,7 +447,7 @@ public sealed partial class BibuiRuntime
         // knows because it stepped the values, instead of by hunting the tree
         // for one hardcoded component kind — that scan could never see a hover
         // fade, an easing height, or a client CustomDraw calling ctx.Animate.
-        bool animating = _renderer.IsAnimating;
+        bool animating = Renderer.IsAnimating;
 
         lock (_syncRoot)
         {

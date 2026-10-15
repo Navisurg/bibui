@@ -23,7 +23,7 @@ namespace Bibui.Runtime;
 /// can only draw the knob at one end or the other; the crossing is the
 /// affordance, and it needs a value that remembers where it was last frame.
 /// </summary>
-public static class Switch
+public static class SwitchExtensions
 {
     /// <summary>
     /// Builds the switch named <paramref name="id"/> and returns it together
@@ -38,7 +38,7 @@ public static class Switch
     /// <paramref name="height"/> is the track's height in pixels, and the
     /// height of the row with its label; every other size is a fraction of it.
     /// </summary>
-    public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default, bool disabled = false,
+    public static BibuiWidget Switch(this BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default, bool disabled = false,
         float height = 24f)
     {
         ArgumentNullException.ThrowIfNull(runtime);
