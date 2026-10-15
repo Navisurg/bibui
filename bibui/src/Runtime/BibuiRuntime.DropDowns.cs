@@ -19,7 +19,7 @@ public sealed partial class BibuiRuntime
     // rects are what they occupy and their order is which is over which. One
     // begun for the first time goes on the end, with no rect yet. When the
     // build returns, the list is _begun: a dropdown not begun is pruned.
-    private DropDown? _dropDowns;
+    private DropDown? _dropDowns, _dropDownsLast;
 
     // The dropdowns begun this build, in the order begun: the order they are
     // linked in, so drawn in.
@@ -105,13 +105,8 @@ public sealed partial class BibuiRuntime
             if (dropDown is null)
             {
                 dropDown = new DropDown { Root = new Box { Id = id } };
-                if (_dropDowns is null) _dropDowns = dropDown;
-                else
-                {
-                    var last = _dropDowns;
-                    while (last.Next is not null) last = last.Next;
-                    last.Next = dropDown;
-                }
+                if (_dropDownsLast is null) _dropDowns = dropDown; else _dropDownsLast.Next = dropDown;
+                _dropDownsLast = dropDown;
             }
             if (!again)
             {
@@ -231,7 +226,7 @@ public sealed partial class BibuiRuntime
             if (_toolTip.FirstChild is not null && _toolTip.Parent is null) UiNode.PushIntoParent(tree, _toolTip);
 
             for (var d = _begun; d is not null; d = d.NextBegun) d.Next = d.NextBegun;
-            _dropDowns = _begun;
+            (_dropDowns, _dropDownsLast) = (_begun, _begunLast);
             _begun = _begunLast = null;
         }
     }
