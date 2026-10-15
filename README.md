@@ -5,15 +5,16 @@
   </picture>
 </p>
 
-bibui is a code-first UI library for .NET: each frame, your code describes the
-window as a tree of boxes in plain C#, and bibui lays it out and paints it.
-Components are ordinary functions that return what happened to them, and each
-one is checked pixel by pixel against a reference picture.
+bibui is an immediate-mode UI library for .NET.
+The library consists of a few UI components such as a `Box` and `Text` and
+everything you build is a composition of these simple primitives.
+
+A clauded demo app can be used as inspiration for what bibui can build:
 
 ![Zenith, the showcase app, built with bibui](samples/showcase/screenshots/overview-dark.png)
 
 **Platforms:** the first release supports Linux on x64. Other platforms are not
-supported yet.
+psupported yet.
 
 ## Install
 
@@ -33,7 +34,8 @@ dotnet add package Bibui.Platform.Silk
 
 ## Quick start
 
-A window with a button and a counter. Replace `Program.cs` with:
+Below, a simple bibui app with a label and a button is shown.
+It sets up Skia for rendering and Silk to handle input and window events:
 
 ```csharp
 using Bibui.Raster.Skia;
@@ -60,18 +62,41 @@ runtime.Mount(() =>
 BibuiWindow.Create(runtime).WithSilk().Run(title: "Counter");
 ```
 
+Run it in a empty console app with
+
 ```bash
 dotnet run
 ```
 
 ![The quick start's window after three clicks: "Clicked 3 times" above an "Add one" button](docs/images/quick-start-counter.png)
 
-The build function runs every frame. `runtime.ColumnFit()` makes a column as
-large as what it holds, and everything built while it is pushed goes into it,
-in order. `runtime.Button` reports whether the button was clicked, so the app
-changes its own state right there. There are no callbacks. Labels and texts
-are plain strings, and the window is cleared to the theme's background colour
-before each frame is painted.
+bibui has no dedicated `Column` type that contains a list of children.
+Instead the `Box` type contains `Next, Prev, Parent, FirstChild` pointers
+to define a subtree rooted at the `Box` node.
+`ColumnFit` is a fast path for a `Box` that lays its children out on the
+y-axis and is sized to fit its children.
+
+Any `Box` in bibui may have children added to it like so:
+
+```csharp
+var column = runtime.ColumnFit();
+
+var text = runtime.Text($"Clicked {count} times");
+UiNode.PushIntoParent(column, text);
+
+var button = runtime.Button(id: "add", "Add one");
+UiNode.PushIntoParent(column, button);
+```
+
+This updates the `Next/Prev` pointers between the children of the `column`
+node.
+
+In the example, we use a scope through `runtime.PushParent` that within
+the scope adds the parent to the `column`. Any UI nodes defines outside,
+will not hang off of the `column` subtree.
+
+`Button` is another box composition that consumed left presses,
+and we can react on these events inline with the UI builder code.
 
 ## Two routes
 
