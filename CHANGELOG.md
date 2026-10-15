@@ -152,11 +152,15 @@ before it was published.
   styles it further, and the scope converts to the box, so a build can
   `return` it.
 
-- `Arrange.Column` and `Arrange.Row` are obsolete: build into
-  `runtime.Column()`/`runtime.Row()` instead, which take their box from the
-  runtime's pool rather than allocating one a frame. They still work; the
-  repository's own call sites are being moved over and build with CS0618
-  warnings until then.
+- `runtime.Spring()`, and `runtime.CentredX()`, `runtime.CentredY()` and
+  `runtime.Centred()` scopes: `using (runtime.CentredX()) { ... }` centres what
+  is built inside, with springs from the runtime's pool.
+- `Arrange.Column`, `Arrange.Row`, `Arrange.CentredX`, `Arrange.CentredY` and
+  `Arrange.Centred` are obsolete: they allocate a box a frame and move nodes
+  the runtime has already linked. Build into the `runtime` scopes of the same
+  names instead. They still work; the repository's own call sites build with
+  CS0618 warnings until they are moved over. `Arrange`'s size helpers
+  (`FillX`, `Px`, `Padded`, ...) and `Space`/`Spring`/`Gap` are unchanged.
 
 - `Icons.Register(name, svgPathData)`: an app adds icons of its own at
   start-up, drawn by `runtime.Icon` and known to `Icon.IsKnown` like the

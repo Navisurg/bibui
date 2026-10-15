@@ -315,6 +315,50 @@ Run("runtime.Column: a size given, or pushed, replaces the children's sum on tha
     Eq(120f, pushed!.Extent.X, "a pushed width is used when none is given");
 });
 
+Run("runtime.CentredX / Centred / Spring: the contents land in the middle, between two springs", () =>
+{
+    var runtime = BibuiRuntime.Create().WithSkia();
+    Box? across = null, row = null;
+    runtime.Mount(() =>
+    {
+        using (var page = runtime.Column(sizeX: SemanticSize.ParentPct(1f), sizeY: SemanticSize.ParentPct(1f)))
+        {
+            using (var c = runtime.CentredX())
+            {
+                across = c.Box;
+                runtime.BoxFromId("mid-x").Px(100f, 20f);
+            }
+            using (var r = runtime.Row(sizeX: SemanticSize.ParentPct(1f)))
+            {
+                row = r.Box;
+                using (runtime.Centred()) runtime.BoxFromId("mid-row").Px(40f, 10f);
+            }
+            using (runtime.Row(sizeX: SemanticSize.ParentPct(1f)))
+            {
+                runtime.Box().Px(30f, 10f);
+                runtime.Spring();
+                runtime.BoxFromId("far-end").Px(30f, 10f);
+            }
+            return page;
+        }
+    }, new SurfaceOptions { Width = 400, Height = 200 });
+    runtime.Render();
+
+    Eq(400f, across!.Extent.X, "CentredX's row is as wide as its parent");
+    Eq(150f, runtime.FindById("mid-x")!.Rect.X, "a 100 px box centred in 400 px");
+    Eq(3, CountChildren(across), "spring, contents, spring");
+    Eq(180f, runtime.FindById("mid-row")!.Rect.X, "Centred() centres along the row in scope, in no box of its own");
+    IsTrue(ReferenceEquals(runtime.FindById("mid-row")!.Parent, row), "the contents stay the row's children");
+    Eq(370f, runtime.FindById("far-end")!.Rect.X, "a spring pushes what follows it to the far end");
+});
+
+static int CountChildren(UiNode node)
+{
+    int n = 0;
+    for (var c = node.FirstChild; c is not null; c = c.Next) n++;
+    return n;
+}
+
 Run("Create: runtime.Button is a button the caller asks about", () =>
 {
     var runtime = BibuiRuntime.Create().WithSkia();

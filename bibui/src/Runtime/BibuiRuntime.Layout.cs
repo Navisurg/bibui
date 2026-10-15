@@ -44,7 +44,7 @@ public sealed partial class BibuiRuntime
     public BoxScope Row(SemanticSize? sizeX = null, SemanticSize? sizeY = null)
         => PushGroup(LayoutAxis.X, sizeX, sizeY);
 
-    private BoxScope PushGroup(LayoutAxis axis, SemanticSize? sizeX, SemanticSize? sizeY)
+    private BoxScope PushGroup(LayoutAxis axis, SemanticSize? sizeX, SemanticSize? sizeY, bool closingSpring = false)
     {
         Box box = Box();
         lock (_syncRoot)
@@ -57,7 +57,56 @@ public sealed partial class BibuiRuntime
             if (sizeY is { } y) box.SizeY = y;
             else if (_sizeYStack.Count == 0) box.SizeY = SemanticSize.ChildrenSum();
         }
-        return new BoxScope(box, PushParent(box));
+        var pushed = PushParent(box);
+        if (closingSpring) Spring();
+        return new BoxScope(this, box, pushed, closingSpring);
+    }
+
+    /// <summary>
+    /// A spacer that takes whatever room its siblings leave along the axis of
+    /// the parent in scope, and gives all of it up first when they do not fit:
+    /// what pushes the nodes built after it to the far end.
+    /// <c>using (runtime.Row()) { runtime.Text(title); runtime.Spring(); runtime.Button(...); }</c>
+    /// </summary>
+    public Box Spring()
+    {
+        lock (_syncRoot)
+        {
+            var parent = _parentStack.Count > 0 ? _parentStack[^1]
+                : throw new InvalidOperationException("A spring is along its parent's axis, and there is no parent in scope.");
+            var spring = Box();
+            bool along = parent.ChildLayoutAxis == LayoutAxis.X;
+            spring.SizeX = along ? SemanticSize.ParentPct(1f, 0f) : SemanticSize.Pixels(0f);
+            spring.SizeY = along ? SemanticSize.Pixels(0f) : SemanticSize.ParentPct(1f, 0f);
+            return spring;
+        }
+    }
+
+    /// <summary>
+    /// What is built inside is centred across the parent in scope's width: a
+    /// row as wide as the parent and as tall as what it holds, with a spring
+    /// before and after it. <c>using (runtime.CentredX()) runtime.Text("Empty");</c>
+    /// </summary>
+    public BoxScope CentredX()
+        => PushGroup(LayoutAxis.X, SemanticSize.ParentPct(1f), SemanticSize.ChildrenSum(), closingSpring: true);
+
+    /// <summary>
+    /// What is built inside is centred across the parent in scope's height: a
+    /// column as tall as the parent and as wide as what it holds, with a spring
+    /// before and after it.
+    /// </summary>
+    public BoxScope CentredY()
+        => PushGroup(LayoutAxis.Y, SemanticSize.ChildrenSum(), SemanticSize.ParentPct(1f), closingSpring: true);
+
+    /// <summary>
+    /// What is built inside is centred along the parent in scope's own axis: a
+    /// spring before it now, and one after it when the scope is disposed. No
+    /// box of its own; the contents stay children of the parent.
+    /// </summary>
+    public CentredScope Centred()
+    {
+        Spring();
+        return new CentredScope(this);
     }
 
     /// <summary>
@@ -158,27 +207,46 @@ public sealed partial class BibuiRuntime
         }
     }
 
+    /// <summary>Closes <see cref="Centred"/> with its second spring when disposed.</summary>
+    public readonly struct CentredScope : IDisposable
+    {
+        private readonly BibuiRuntime _runtime;
+
+        internal CentredScope(BibuiRuntime runtime) => _runtime = runtime;
+
+        public void Dispose() => _runtime.Spring();
+    }
+
     /// <summary>
-    /// The box <see cref="Column"/> or <see cref="Row"/> made, pushed as the
+    /// The box <see cref="Column"/>, <see cref="Row"/>, <see cref="CentredX"/>
+    /// or <see cref="CentredY"/> made, pushed as the
     /// parent until this is disposed. It stands for the box where a node is
     /// wanted, so a build can return it: <c>using (var column = runtime.Column())
     /// { ...; return column; }</c>.
     /// </summary>
     public readonly struct BoxScope : IDisposable
     {
+        private readonly BibuiRuntime _runtime;
         private readonly ParentScope _pushed;
+        private readonly bool _closingSpring;
 
-        internal BoxScope(Box box, ParentScope pushed)
+        internal BoxScope(BibuiRuntime runtime, Box box, ParentScope pushed, bool closingSpring)
         {
+            _runtime = runtime;
             Box = box;
             _pushed = pushed;
+            _closingSpring = closingSpring;
         }
 
         /// <summary>The column or row, to size or style further.</summary>
         public Box Box { get; }
 
-        /// <summary>Stops building into the box.</summary>
-        public void Dispose() => _pushed.Dispose();
+        /// <summary>Stops building into the box (closing a centred one with its second spring).</summary>
+        public void Dispose()
+        {
+            if (_closingSpring) _runtime.Spring();
+            _pushed.Dispose();
+        }
 
         public static implicit operator Box(BoxScope scope) => scope.Box;
         public static implicit operator UiNode(BoxScope scope) => scope.Box;

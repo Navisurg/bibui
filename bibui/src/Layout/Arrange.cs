@@ -74,6 +74,7 @@ public static class Arrange
     /// along the parent's axis: the room it does not take is split between a
     /// spacer before and after it.
     /// </summary>
+    [Obsolete("Build into runtime.Centred() instead: using (runtime.Centred()) { ... } centres what is built inside along the parent in scope.")]
     public static void Centred(UiNode parent, UiNode node)
     {
         Spacer(parent, SemanticSize.ParentPct(1f, 0f));
@@ -82,9 +83,11 @@ public static class Arrange
     }
 
     /// <summary><paramref name="node"/> centred across a column: a row of a spring, it, and a spring, all the column's width.</summary>
+    [Obsolete("Build into runtime.CentredX() instead: using (runtime.CentredX()) { ... } centres what is built inside across a pooled full-width row.")]
     public static Box CentredX(UiNode node) => Group(null, LayoutAxis.X, [Spring(), node, Spring()]).FillX();
 
     /// <summary><paramref name="node"/> centred across a row: a column of a spring, it, and a spring, all the row's height.</summary>
+    [Obsolete("Build into runtime.CentredY() instead: using (runtime.CentredY()) { ... } centres what is built inside across a pooled full-height column.")]
     public static Box CentredY(UiNode node) => Group(null, LayoutAxis.Y, [Spring(), node, Spring()]).FillY();
 
     // ── Sizes, set on the node and handed back ─────────────────────────────
