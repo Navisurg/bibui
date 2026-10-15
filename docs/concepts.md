@@ -243,16 +243,31 @@ using (runtime.PushParent(card))
 
 For the common case, a column or row whose contents you build in place,
 `runtime.Column()` and `runtime.Row()` make the box, link it under the parent
-in scope and push it, in one call. Each axis is the sum of the children unless
-you give a size, and the scope stands for the box, so a build can return it:
+in scope and push it, in one call. Like `Box()`, they are sized by the sizes
+pushed, and with none, not at all, so you usually call a sized form. Each
+names the rule for the axes it names, and an axis it does not name is as large
+as its children:
+
+| Column | Row | Width | Height |
+|---|---|---|---|
+| `ColumnFit()` | `RowFit()` | children | children |
+| `ColumnFillX()` | `RowFillX()` | parent | children |
+| `ColumnFillY()` | `RowFillY()` | children | parent |
+| `ColumnFill()` | `RowFill()` | parent | parent |
+| `ColumnWidth(px)` | | pixels | children |
+| | `RowHeight(px)` | children | pixels |
+| | `RowFillX(height)` | parent | pixels |
+| `ColumnPx(w, h)` | `RowPx(w, h)` | pixels | pixels |
+
+The scope stands for the box, so a build can return it:
 
 ```csharp
 runtime.Mount(() =>
 {
-    using (var page = runtime.Column(sizeX: SemanticSize.ParentPct(1f)))
+    using (var page = runtime.ColumnFillX())
     {
         runtime.Text(title);
-        using (runtime.Row())
+        using (runtime.RowFit())
         {
             if (runtime.Button("ok", "OK").Clicked) Save();
             runtime.Gap(8f);

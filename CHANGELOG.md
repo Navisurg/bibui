@@ -146,11 +146,14 @@ before it was published.
 
 - `runtime.Column()` and `runtime.Row()`: a pooled box along Y or X, linked
   under the parent in scope and pushed until the returned scope is disposed,
-  so `using (runtime.Column()) { runtime.Text(...); runtime.Button(...); }`
-  builds into it. Both axes are the children's sum unless given
-  (`sizeX:`/`sizeY:`) or pushed (`PushSizeX`/`PushSizeY`). The scope's `Box`
-  styles it further, and the scope converts to the box, so a build can
-  `return` it.
+  so `using (runtime.ColumnFit()) { runtime.Text(...); runtime.Button(...); }`
+  builds into it. The bare forms are sized like `Box()`, by the sizes pushed;
+  the sized forms set the box's own: `ColumnFit`/`RowFit` (children),
+  `ColumnFillX`/`RowFillX`, `ColumnFillY`/`RowFillY`, `ColumnFill`/`RowFill`
+  (parent), `ColumnWidth(px)`, `RowHeight(px)`, `RowFillX(height)` and
+  `ColumnPx`/`RowPx`; an axis a form does not name fits its children. The
+  scope's `Box` styles it further, and the scope converts to the box, so a
+  build can `return` it.
 
 - `runtime.Spring()`, and `runtime.CentredX()`, `runtime.CentredY()` and
   `runtime.Centred()` scopes: `using (runtime.CentredX()) { ... }` centres what
