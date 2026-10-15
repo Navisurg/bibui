@@ -28,6 +28,7 @@ internal sealed class DamageRecorder(ManagedRasterBackend backend)
     {
         public Matrix3x2 M;
         public float CL, CT, CR, CB;   // device clip, conservative (rounded out)
+        public ulong Shape;            // the rounded clips in force, signed; 0 for none
         public ulong Layers;
         public int LayerOp;            // the SaveLayer op this level opened, or -1
     }
@@ -171,6 +172,26 @@ internal sealed class DamageRecorder(ManagedRasterBackend backend)
         _stateDirty = true;
     }
 
+    /// <summary>
+    /// A rounded clip: its bounds narrow the clip as a rect's would, and its
+    /// shape is signed into the state, so a draw under a different shape is a
+    /// different draw.
+    /// </summary>
+    internal void ClipRoundRect(RectF rect, CornerRadii radii)
+    {
+        ref var op = ref _f.NewOp(OpKind.ClipRoundRect);
+        op.Rect = rect;
+        op.A = radii.TopLeft; op.B = radii.TopRight; op.C = radii.BottomRight; op.D = radii.BottomLeft;
+        var d = DeviceBounds(rect);
+        _s.CL = MathF.Max(_s.CL, MathF.Floor(d.Left));
+        _s.CT = MathF.Max(_s.CT, MathF.Floor(d.Top));
+        _s.CR = MathF.Min(_s.CR, MathF.Ceiling(d.Right));
+        _s.CB = MathF.Min(_s.CB, MathF.Ceiling(d.Bottom));
+        ulong shape = Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(0x2CUL, _s.M), rect), op.A, op.B), op.C, op.D);
+        _s.Shape = Hash64.Mix(_s.Shape == 0 ? Hash64.Seed : _s.Shape, shape) | 1UL;
+        _stateDirty = true;
+    }
+
     internal void SaveLayerAlpha(byte alpha)
     {
         ref var op = ref _f.NewOp(OpKind.SaveLayer);
@@ -200,8 +221,9 @@ internal sealed class DamageRecorder(ManagedRasterBackend backend)
     /// </summary>
     private PixelRect Covered(RectF rect, float rx, float ry, in RasterPaint paint)
     {
+        // Under a rounded clip the corners it cuts are not written: nothing is surely covered.
         if (paint.Spec.Style != Bibui.PaintStyle.Fill || paint.MaskBlurSigma > 0f || paint.ImageBlurSigma > 0f
-            || _s.Layers != 0 || paint.Spec.Color.A != 255 || !AxisAligned) return default;
+            || _s.Layers != 0 || _s.Shape != 0 || paint.Spec.Color.A != 255 || !AxisAligned) return default;
         if (paint.Shader is { } sh)
             foreach (var c in sh.Colors) if (c.A != 255) return default;
         var d = DeviceBounds(rect);
@@ -358,7 +380,7 @@ internal sealed class DamageRecorder(ManagedRasterBackend backend)
         if (_stateDirty)
         {
             _stateHash = Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Seed, _s.M), _s.CL, _s.CT), _s.CR, _s.CB);
-            _stateHash = Hash64.Mix(_stateHash, _s.Layers);
+            _stateHash = Hash64.Mix(Hash64.Mix(_stateHash, _s.Layers), _s.Shape);
             _stateDirty = false;
         }
         op.Hash = Hash64.Mix(_stateHash, contentHash);

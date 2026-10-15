@@ -415,6 +415,27 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
         Native.ClipRect(ToRect(rect));
     }
 
+    // The outline a rounded clip is cut to, rebuilt for each one. Never drawn
+    // through this canvas, so damage tracking never holds it.
+    private ManagedPath? _clipPath;
+
+    public void ClipRoundRect(RectF rect, CornerRadii radii)
+    {
+        if (_rec is { } r) { r.ClipRoundRect(rect, radii); if (!r.Tee) return; }
+        DirectClipRoundRect(rect, radii);
+    }
+
+    private void DirectClipRoundRect(RectF rect, CornerRadii radii)
+    {
+        radii = radii.Fit(rect.Right - rect.Left, rect.Bottom - rect.Top);
+        if (radii.IsZero) { Native.ClipRect(ToRect(rect).Sorted(), antiAlias: true); return; }
+        if (radii.IsUniform) { Native.ClipRRect(new RRect(ToRect(rect), radii.TopLeft)); return; }
+        var path = _clipPath ??= new ManagedPath();
+        path.Rewind();
+        radii.AddTo(path, rect);
+        Native.ClipPath(path.Native);
+    }
+
     public void SaveLayerAlpha(byte alpha)
     {
         if (_rec is { } r) { r.SaveLayerAlpha(alpha); if (!r.Tee) return; }

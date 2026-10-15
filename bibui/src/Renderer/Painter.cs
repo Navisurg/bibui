@@ -112,7 +112,14 @@ internal sealed class Painter
             // cuts their presses (InteractionsFor), so what is drawn and what
             // is pressed agree. Nothing else clips.
             bool clips = node is Box { Claims: var claims } && (claims & InteractionKinds.Clip) != 0;
-            if (clips) ctx.PushClip(frame.X, frame.Y, frame.Width, frame.Height);
+            // With CornerRadii the cut follows the corners; CornerRadius alone
+            // keeps the pixel-aligned rect it always had.
+            if (clips)
+            {
+                if (node.Style.CornerRadii is { } corners)
+                    ctx.PushClip(frame.X, frame.Y, frame.Width, frame.Height, corners);
+                else ctx.PushClip(frame.X, frame.Y, frame.Width, frame.Height);
+            }
             for (var child = node.FirstChild; child is not null; child = child.Next == child ? null : child.Next)
                 Node(child, theme, ctx);
             if (clips) ctx.PopClip();
@@ -243,13 +250,22 @@ internal sealed class Painter
         if (!hasFill && border is null && style.Shadow is null && !hasEdgeBorders)
             return;
 
+        // Corners set one by one take the per-corner overloads; a box with only
+        // CornerRadius takes exactly the calls it always did.
+        CornerRadii? corners = style.CornerRadii;
+
         // Shadow paints first, behind the fill.
         if (style.Shadow is { } shadow)
         {
-            ctx.DrawShadow(
-                frame.X, frame.Y, frame.Width, frame.Height, style.CornerRadius,
-                shadow.OffsetX, shadow.OffsetY, shadow.Blur, shadow.Spread,
-                ResolveRgba(shadow.Color, theme));
+            var shadowColor = ResolveRgba(shadow.Color, theme);
+            if (corners is { } c)
+                ctx.DrawShadow(
+                    frame.X, frame.Y, frame.Width, frame.Height, c,
+                    shadow.OffsetX, shadow.OffsetY, shadow.Blur, shadow.Spread, shadowColor);
+            else
+                ctx.DrawShadow(
+                    frame.X, frame.Y, frame.Width, frame.Height, style.CornerRadius,
+                    shadow.OffsetX, shadow.OffsetY, shadow.Blur, shadow.Spread, shadowColor);
         }
 
         // Straight to the typed overloads: the blend already produced colours,
@@ -264,9 +280,22 @@ internal sealed class Painter
             for (int i = 0; i < gradient.Stops.Count; i++)
                 stops[i] = (gradient.Stops[i].Offset, gradient.Stops[i].Color.Resolve(theme.Colors));
 
-            ctx.DrawRRectGradient(
-                frame.X, frame.Y, frame.Width, frame.Height, style.CornerRadius,
-                stops, gradient.Start, gradient.End, border, strokeWidth, gradient.Type);
+            if (corners is { } c)
+                ctx.DrawRRectGradient(
+                    frame.X, frame.Y, frame.Width, frame.Height, c,
+                    stops, gradient.Start, gradient.End, border, strokeWidth, gradient.Type);
+            else
+                ctx.DrawRRectGradient(
+                    frame.X, frame.Y, frame.Width, frame.Height, style.CornerRadius,
+                    stops, gradient.Start, gradient.End, border, strokeWidth, gradient.Type);
+        }
+        else if ((background is not null || border is not null) && corners is { } c)
+        {
+            ctx.DrawRRect(
+                frame.X, frame.Y, frame.Width, frame.Height, c,
+                fillColor: background,
+                strokeColor: border,
+                strokeWidth: strokeWidth);
         }
         else if (background is not null || border is not null)
         {

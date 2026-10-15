@@ -604,6 +604,42 @@ internal static class DamageOracle
             return (Build, f => { frame = f; Move(rt, 40 + (f * 7) % 200, 270); });
         });
 
+        // Chat bubbles with a radius per corner: fills, borders, shadows and a
+        // gradient take the shape, and a bubble that clips cuts what slides
+        // inside it to its corners, so a rounded clip must replay exactly.
+        yield return new Scene("corner-radii", 520, 360, 1f, 60, rt =>
+        {
+            int frame = 0;
+            UiNode Bubble(int i, int f)
+            {
+                bool mine = i % 2 == 1;
+                var b = rt.Box().Px(200f, 56f);
+                b.Style.CornerRadii = mine
+                    ? CornerRadii.All(18f) with { BottomRight = 4f }
+                    : CornerRadii.All(18f) with { BottomLeft = (f / 6 + i) % 3 == 0 ? 0f : 4f };
+                b.Style.BackgroundColor = UiColor.Hex(mine ? "#3b82f6" : "#27272a");
+                if (i % 3 == 0) { b.Style.BorderColor = UiColor.Hex("#a1a1aa"); b.Style.BorderWidth = 1.5f; }
+                if (i == 2) b.Style.Shadow = BoxShadow.Elevation(y: 6f, blur: 16f);
+                if (i == 4) b.Style.BackgroundGradient = Gradient.Diagonal(new ColorStop(0f, "#7c3aed"), new ColorStop(1f, "#0ea5e9"));
+                if (i == 1 || i == 3)
+                {
+                    b.Clipped();
+                    var slide = rt.Box().Px(90f, 80f).At(-30f + (f * 7 + i * 40) % 180, -10f);
+                    slide.Style.BackgroundColor = UiColor.Hex("#f97316");
+                    UiNode.PushIntoParent(b, slide);
+                }
+                return b;
+            }
+            UiNode Build()
+            {
+                int f = frame;
+                var bubbles = new UiNode[6];
+                for (int i = 0; i < 6; i++) bubbles[i] = Bubble(i, f);
+                return Page(Grid(bubbles, 2, 16f), 20f);
+            }
+            return (Build, f => { frame = f; var (x, y) = Wander(f, 520, 360); Move(rt, x, y); });
+        });
+
         // The dense case damage tracking is for: 600 solid buttons filling a HiDPI surface.
         yield return new Scene("solid-grid-2x", 900, 700, 2f, 40, rt =>
         {

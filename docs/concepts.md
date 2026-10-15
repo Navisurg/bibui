@@ -683,6 +683,25 @@ nothing back for the next frame. So the picture is a pure function of the tree
 and the theme. Given the same tree, theme, surface size and scale factor, a
 frame is the same image, byte for byte, every time.
 
+### Corners
+
+`Style.CornerRadius` rounds every corner of a box alike. `Style.CornerRadii`
+gives each corner its own radius, clockwise from the top left, and replaces
+`CornerRadius` while it is set. A record, so a shape that differs from a
+uniform one in one corner says so with `with`, as a chat bubble's tail does:
+
+```csharp
+Box bubble = runtime.Box().Px(width: 240f).FillY();
+bubble.Style.BackgroundColor = mine ? UiColor.Accent : UiColor.SurfaceRaised;
+bubble.Style.CornerRadii = CornerRadii.All(18f) with { BottomRight = mine ? 4f : 18f };
+```
+
+The shadow, background, gradient and border all take the shape. Radii too
+large for the box are scaled down together, as CSS scales `border-radius`, so
+two corners on one side never overlap. A box that claims `Clip` with
+`CornerRadii` set clips its children to the rounded shape, antialiased; one
+with only `CornerRadius` keeps its pixel-aligned rect clip.
+
 ### Custom drawing
 
 A box can paint itself: set `Box.Draw` to a callback, and the painter calls it

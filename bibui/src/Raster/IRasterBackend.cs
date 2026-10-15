@@ -154,6 +154,14 @@ public interface IRasterCanvas
     void ClipRect(RectF rect);
 
     /// <summary>
+    /// Intersects the clip with <paramref name="rect"/> rounded by
+    /// <paramref name="radii"/> (physical px, already <see cref="CornerRadii.Fit"/>
+    /// to the rect), antialiased. A backend that cannot clip to a curve may
+    /// leave this to the default, which clips to the rect.
+    /// </summary>
+    void ClipRoundRect(RectF rect, CornerRadii radii) => ClipRect(rect);
+
+    /// <summary>
     /// Starts an offscreen layer; the matching <see cref="Restore"/> composites
     /// it back at <paramref name="alpha"/>/255 opacity.
     /// </summary>

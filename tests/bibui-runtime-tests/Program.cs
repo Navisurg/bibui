@@ -2210,6 +2210,178 @@ Run("Style.BorderBottom: a dashed edge is broken into dashes", () =>
     IsTrue(on > 20 && on < 280, $"some of the bottom row is dash and some is gap: {on} of 300 painted");
 });
 
+// ── Per-corner radii (Style.CornerRadii) ──────────────────────────────────────
+// Each runs on both raster backends: the shape is bibui's, and both must draw it.
+
+RenderOutput CornerFrame(string raster, Func<UiNode> box, int width = 200, int height = 120, float scale = 1f)
+{
+    var runtime = raster == "skia" ? BibuiRuntime.Create().WithSkia() : BibuiRuntime.Create().WithManagedRasterizer();
+    runtime.Mount(() =>
+    {
+        var root = new Box { Style = new Style { BackgroundColor = "#FFFFFF" } }.Px(width, height);
+        UiNode.PushIntoParent(root, box());
+        return root;
+    }, new SurfaceOptions { Width = width, Height = height, ScaleFactor = scale });
+    return runtime.Render();
+}
+
+(byte R, byte G, byte B) White = (255, 255, 255), Red = (255, 0, 0);
+
+foreach (var raster in new[] { "skia", "managed" })
+{
+    Run($"CornerRadii ({raster}): equal radii draw exactly what CornerRadius draws", () =>
+    {
+        // Fill, border, shadow and gradient, at two scales: not one byte moves.
+        foreach (float scale in new[] { 1f, 2f })
+        {
+            UiNode Card(Style style) => new Box { Style = style }.Px(120f, 70f).At(30f, 20f);
+            Style Plain() => new() { BackgroundColor = "#2563EB", BorderColor = "#F97316", BorderWidth = 2f, Shadow = BoxShadow.Elevation(y: 6f, blur: 12f) };
+            var uniform = CornerFrame(raster, () => { var st = Plain(); st.CornerRadius = 14f; return Card(st); }, scale: scale);
+            var radii = CornerFrame(raster, () => { var st = Plain(); st.CornerRadii = CornerRadii.All(14f); return Card(st); }, scale: scale);
+            IsTrue(uniform.RawBgraBytes.AsSpan().SequenceEqual(radii.RawBgraBytes), $"a filled, bordered, shadowed card at {scale}x");
+
+            Style Glow() => new() { BackgroundGradient = Gradient.Diagonal(new ColorStop(0f, "#2A1B2E"), new ColorStop(1f, "#E8836B")) };
+            var g1 = CornerFrame(raster, () => { var st = Glow(); st.CornerRadius = 30f; return Card(st); }, scale: scale);
+            var g2 = CornerFrame(raster, () => { var st = Glow(); st.CornerRadii = CornerRadii.All(30f); return Card(st); }, scale: scale);
+            IsTrue(g1.RawBgraBytes.AsSpan().SequenceEqual(g2.RawBgraBytes), $"a gradient card at {scale}x");
+        }
+    });
+
+    Run($"CornerRadii ({raster}): a square corner is filled to its corner pixel, a round one is not", () =>
+    {
+        // A chat bubble's tail: three corners round, the bottom right square.
+        var frame = CornerFrame(raster, () => new Box
+        {
+            Style = new Style { BackgroundColor = "#FF0000", CornerRadii = CornerRadii.All(20f) with { BottomRight = 0f } },
+        }.Px(100f, 60f).At(20f, 20f));
+        Eq(Red, Pixel(frame, 119, 79), "the square bottom-right corner reaches its corner pixel");
+        Eq(White, Pixel(frame, 20, 20), "the round top left does not");
+        Eq(White, Pixel(frame, 119, 20), "nor the round top right");
+        Eq(White, Pixel(frame, 20, 79), "nor the round bottom left");
+        Eq(Red, Pixel(frame, 70, 50), "the middle is filled");
+        Eq(Red, Pixel(frame, 70, 20), "and so is the straight part of the top edge");
+        Eq(Red, Pixel(frame, 20, 50), "and of the left edge");
+
+        // The same tail on the other side, and at 2x, where a corner pixel is a physical one.
+        var hi = CornerFrame(raster, () => new Box
+        {
+            Style = new Style { BackgroundColor = "#FF0000", CornerRadii = new CornerRadii(0f, 16f, 16f, 16f) },
+        }.Px(80f, 50f).At(10f, 10f), width: 100, height: 70, scale: 2f);
+        Eq(Red, Pixel(hi, 20, 20), "at 2x the square top-left corner's first physical pixel is filled");
+        Eq(White, Pixel(hi, 179, 20), "and the round top right's is not");
+        Eq(White, Pixel(hi, 179, 119), "nor the bottom right's");
+        Eq(White, Pixel(hi, 20, 119), "nor the bottom left's");
+    });
+
+    Run($"CornerRadii ({raster}): radii too large for the box are scaled down together", () =>
+    {
+        // Two top corners of 100 on a 100 x 80 box: CSS scales every radius by
+        // min(100 / 200, 80 / 100) = 0.5, so 50 and 50, the bottom ones square.
+        var big = CornerFrame(raster, () => new Box
+        {
+            Style = new Style { BackgroundColor = "#FF0000", CornerRadii = new CornerRadii(100f, 100f, 0f, 0f) },
+        }.Px(100f, 80f).At(20f, 20f));
+        var fitted = CornerFrame(raster, () => new Box
+        {
+            Style = new Style { BackgroundColor = "#FF0000", CornerRadii = new CornerRadii(50f, 50f, 0f, 0f) },
+        }.Px(100f, 80f).At(20f, 20f));
+        IsTrue(big.RawBgraBytes.AsSpan().SequenceEqual(fitted.RawBgraBytes), "oversized radii draw as the fitted ones");
+        Eq(Red, Pixel(big, 20, 99), "the bottom corners stay square");
+        Eq(Red, Pixel(big, 119, 99), "both of them");
+        Eq(Red, Pixel(big, 70, 21), "the two top arcs meet in the middle of the top edge and do not overlap");
+        Eq(White, Pixel(big, 24, 24), "the top left is round");
+
+        // Equal radii past half the shorter side clamp to a pill, as CornerRadius always did.
+        var pillRadii = CornerFrame(raster, () => new Box { Style = new Style { BackgroundColor = "#FF0000", CornerRadii = CornerRadii.All(1000f) } }.Px(100f, 40f).At(20f, 20f));
+        var pill = CornerFrame(raster, () => new Box { Style = new Style { BackgroundColor = "#FF0000", CornerRadius = 1000f } }.Px(100f, 40f).At(20f, 20f));
+        IsTrue(pillRadii.RawBgraBytes.AsSpan().SequenceEqual(pill.RawBgraBytes), "a huge uniform radius is the same pill either way");
+    });
+
+    Run($"CornerRadii ({raster}): the border follows the corners", () =>
+    {
+        // Border only, 2px: round at the top left, square elsewhere.
+        var frame = CornerFrame(raster, () => new Box
+        {
+            Style = new Style { BorderColor = "#FF0000", BorderWidth = 2f, CornerRadii = new CornerRadii(24f, 0f, 0f, 0f) },
+        }.Px(100f, 60f).At(20f, 20f));
+        Eq(White, Pixel(frame, 20, 20), "the stroke leaves the round corner's pixel alone");
+        Eq(Red, Pixel(frame, 119, 79), "and runs into the square bottom-right corner");
+        Eq(Red, Pixel(frame, 119, 20), "and the square top-right one");
+        // On the arc, 45 degrees round from the top-left corner's centre (44, 44): 24 / sqrt 2 = 17 in.
+        var onArc = Pixel(frame, 27, 27);
+        IsTrue(onArc.R > 200 && onArc.G < 140, $"the stroke follows the arc ({onArc})");
+        Eq(White, Pixel(frame, 70, 50), "and nothing is filled");
+    });
+
+    Run($"CornerRadii ({raster}): a box that clips cuts its children to its corners", () =>
+    {
+        UiNode Clipper(Style style)
+        {
+            var clipper = new Box { Style = style }.Clipped().Px(100f, 60f).At(20f, 20f);
+            UiNode.PushIntoParent(clipper, new Box { Style = new Style { BackgroundColor = "#FF0000" } }.Px(140f, 100f).At(-20f, -20f));
+            return clipper;
+        }
+        var rounded = CornerFrame(raster, () => Clipper(new Style { CornerRadii = CornerRadii.All(24f) with { BottomRight = 0f } }));
+        Eq(White, Pixel(rounded, 21, 21), "the child is cut at the round top left");
+        Eq(White, Pixel(rounded, 118, 21), "and the round top right");
+        Eq(White, Pixel(rounded, 21, 78), "and the round bottom left");
+        Eq(Red, Pixel(rounded, 119, 79), "but fills the square bottom-right corner");
+        Eq(White, Pixel(rounded, 125, 50), "and stays inside the box");
+        Eq(Red, Pixel(rounded, 70, 50), "inside it paints");
+
+        // CornerRadius alone keeps the pixel-aligned rect clip it always had.
+        var rect = CornerFrame(raster, () => Clipper(new Style { CornerRadius = 24f }));
+        Eq(Red, Pixel(rect, 21, 21), "a box with only CornerRadius clips to its rect, as before");
+        Eq(White, Pixel(rect, 125, 50), "and still clips");
+    });
+
+    Run($"CornerRadii ({raster}): a gradient stays where the box is", () =>
+    {
+        // The per-corner shape is drawn from the origin and moved into place;
+        // the gradient must not move with it twice.
+        Style Glow(Style st) { st.BackgroundGradient = Gradient.Horizontal(new ColorStop(0f, "#000000"), new ColorStop(1f, "#FFFFFF")); return st; }
+        var round = CornerFrame(raster, () => new Box { Style = Glow(new Style { CornerRadius = 12f }) }.Px(120f, 70f).At(50f, 30f));
+        var tail = CornerFrame(raster, () => new Box { Style = Glow(new Style { CornerRadii = CornerRadii.All(12f) with { BottomRight = 0f } }) }.Px(120f, 70f).At(50f, 30f));
+        foreach (int x in new[] { 60, 90, 110, 130, 160 })
+        {
+            var (a, b) = (Pixel(round, x, 65), Pixel(tail, x, 65));
+            IsTrue(Math.Abs(a.R - b.R) <= 2, $"at x={x} the gradient is where it was: {a} vs {b}");
+        }
+        IsTrue(Pixel(tail, 165, 65).R > 200 && Pixel(tail, 55, 65).R < 40, "dark at the left, light at the right");
+    });
+
+    Run($"CornerRadii ({raster}): the shadow takes the shape", () =>
+    {
+        // A sharp shadow 20px down and right: only its own corners show past the box.
+        var frame = CornerFrame(raster, () => new Box
+        {
+            Style = new Style
+            {
+                BackgroundColor = "#FFFFFF",
+                CornerRadii = CornerRadii.All(30f) with { BottomRight = 0f },
+                Shadow = new BoxShadow { OffsetX = 20f, OffsetY = 20f, Blur = 0f, Color = "#000000" },
+            },
+        }.Px(100f, 60f).At(20f, 20f), width: 200, height: 120);
+        var square = Pixel(frame, 138, 98);
+        IsTrue(square.R < 40, $"the square bottom-right corner casts a square shadow ({square})");
+        Eq(White, Pixel(frame, 41, 98), "the round bottom left casts a round one");
+        Eq(White, Pixel(frame, 138, 41), "and so does the round top right");
+        IsTrue(Pixel(frame, 100, 90).R < 40, "the shadow is there between them");
+    });
+}
+
+Run("CornerRadii.Fit: negatives are square and each side's pair fits its length", () =>
+{
+    Eq(new CornerRadii(40f, 40f, 0f, 0f), new CornerRadii(100f, 100f, 0f, 0f).Fit(100f, 40f), "scaled by the tightest side");
+    Eq(new CornerRadii(10f, 0f, 5f, 0f), new CornerRadii(10f, -3f, 5f, float.NaN).Fit(100f, 100f), "negative and NaN are square, the rest untouched");
+    Eq(CornerRadii.All(20f), CornerRadii.All(50f).Fit(80f, 40f), "uniform clamps to half the shorter side");
+    Eq(CornerRadii.Zero, CornerRadii.All(8f).Fit(0f, 40f), "an empty box has no corners");
+    IsTrue((CornerRadii.All(18f) with { BottomRight = 4f }) == new CornerRadii(18f, 18f, 4f, 18f), "with changes one corner");
+    IsTrue(CornerRadii.All(3f).IsUniform && !new CornerRadii(3f, 3f, 3f, 0f).IsUniform, "IsUniform");
+    Eq(new CornerRadii(6f, 6f, 2f, 2f), CornerRadii.Vertical(6f, 2f), "Vertical: top, then bottom");
+    Eq(new CornerRadii(6f, 2f, 2f, 6f), CornerRadii.Horizontal(6f, 2f), "Horizontal: left, then right");
+});
+
 Run("Style.BackdropBlur: a glass chip still paints its own fill on top of the blurred region", () =>
 {
     using var page = BibuiPage.Launch(
@@ -5378,6 +5550,7 @@ Run("Style.Clear: restores every property", () =>
         if (u == typeof(bool)) return !(bool)(current ?? false);
         if (u == typeof(UiColor)) return UiColor.Hex("#123456");
         if (u == typeof(EdgeInsets)) return new EdgeInsets(9f, 9f, 9f, 9f);
+        if (u == typeof(CornerRadii)) return new CornerRadii(1f, 2f, 3f, 4f);
         if (u == typeof(Gradient)) return new Gradient();
         if (u == typeof(BoxShadow)) return new BoxShadow();
         if (u == typeof(EdgeBorder)) return new EdgeBorder();

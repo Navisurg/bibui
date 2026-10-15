@@ -167,6 +167,18 @@ before it was published.
   CS0618 warnings until they are moved over. `Arrange`'s size helpers
   (`FillX`, `Px`, `Padded`, ...) and `Space`/`Spring`/`Gap` are unchanged.
 
+- `Style.CornerRadii`: a radius for each corner of a box, in place of the
+  one `CornerRadius`, so a chat bubble can keep its tail corner square:
+  `style.CornerRadii = CornerRadii.All(18f) with { BottomRight = 4f }`.
+  `CornerRadii` (`TopLeft`, `TopRight`, `BottomRight`, `BottomLeft`, with
+  `All`, `Vertical`, `Horizontal`, `Fit` and `AddTo`) scales radii that do not
+  fit down together, as CSS does. The shadow, fill, gradient and border take
+  the shape on both raster backends, and a box that claims `Clip` with radii
+  set clips its children to it; `CornerRadius` alone draws and clips exactly
+  as before. `DrawContext` has per-corner `DrawRoundRect`, `DrawRRect`,
+  `DrawRRectGradient`, `DrawShadow` and `PushClip`, and `IRasterCanvas` has
+  `ClipRoundRect`, whose default clips to the rect.
+
 - `Icons.Register(name, svgPathData)`: an app adds icons of its own at
   start-up, drawn by `runtime.Icon` and known to `Icon.IsKnown` like the
   built-in Lucide set (24×24 viewBox, stroke 2, round caps and joins). The

@@ -205,7 +205,27 @@ public sealed class Style
     /// Same tracking requirement as <see cref="HoverBackgroundColor"/>. Null = no hover-specific border.</summary>
     public UiColor? HoverBorderColor { get; set; }
     public float BorderWidth { get; set; } = 1f;
+
+    /// <summary>
+    /// The radius of every corner, in logical px. 0 (default) is square.
+    /// <see cref="CornerRadii"/>, when set, says each corner's instead.
+    /// </summary>
     public float CornerRadius { get; set; }
+
+    /// <summary>
+    /// A radius for each corner, in logical px, in place of
+    /// <see cref="CornerRadius"/>. Null (default) leaves the corners to
+    /// <see cref="CornerRadius"/>. A chat bubble's tail is three round corners
+    /// and one square: <c>CornerRadii.All(18f) with { BottomRight = 4f }</c>.
+    ///
+    /// <para>The fill, the border, the gradient and the shadow all take the
+    /// shape, and radii too large for the box are scaled down together, as CSS
+    /// does, so adjacent corners never overlap. A box that claims
+    /// <see cref="InteractionKinds.Clip"/> with radii set clips its children to
+    /// the same rounded shape; one with only <see cref="CornerRadius"/> keeps
+    /// the pixel-aligned rect clip it always had.</para>
+    /// </summary>
+    public CornerRadii? CornerRadii { get; set; }
 
     /// <summary>Group opacity in 0..1 applied to this node and its entire subtree. 1 = fully opaque (default).</summary>
     public float Opacity { get; set; } = 1f;
@@ -337,6 +357,7 @@ public sealed class Style
         HoverBorderColor = null;
         BorderWidth = 1f;
         CornerRadius = 0f;
+        CornerRadii = null;
         Opacity = 1f;
         BackgroundGradient = null;
         Shadow = null;
@@ -449,4 +470,95 @@ public readonly record struct EdgeInsets(float Top, float Right, float Bottom, f
     public static EdgeInsets Zero => new(0f, 0f, 0f, 0f);
     public static EdgeInsets All(float value) => new(value, value, value, value);
     public static EdgeInsets Symmetric(float horizontal, float vertical) => new(vertical, horizontal, vertical, horizontal);
+}
+
+/// <summary>
+/// A radius for each corner of a box, in logical px, clockwise from the top
+/// left: what <see cref="Style.CornerRadii"/> takes. A record, so one corner
+/// changes with <c>with</c>: <c>CornerRadii.All(18f) with { BottomRight = 4f }</c>.
+/// </summary>
+public readonly record struct CornerRadii(float TopLeft, float TopRight, float BottomRight, float BottomLeft)
+{
+    /// <summary>Every corner square.</summary>
+    public static CornerRadii Zero => default;
+
+    /// <summary>Every corner the same radius.</summary>
+    public static CornerRadii All(float radius) => new(radius, radius, radius, radius);
+
+    /// <summary>The top corners one radius and the bottom corners another.</summary>
+    public static CornerRadii Vertical(float top, float bottom) => new(top, top, bottom, bottom);
+
+    /// <summary>The left corners one radius and the right corners another.</summary>
+    public static CornerRadii Horizontal(float left, float right) => new(left, right, right, left);
+
+    /// <summary>Whether all four corners have the same radius.</summary>
+    public bool IsUniform => TopLeft == TopRight && TopRight == BottomRight && BottomRight == BottomLeft;
+
+    /// <summary>Whether every corner is square.</summary>
+    public bool IsZero => TopLeft == 0f && TopRight == 0f && BottomRight == 0f && BottomLeft == 0f;
+
+    /// <summary>
+    /// The radii a box of <paramref name="width"/> by <paramref name="height"/>
+    /// can draw: a negative or non-finite radius is 0, and where two corners on
+    /// one side need more than the side's length, every radius is scaled down
+    /// by the same factor until they fit — the rule CSS gives
+    /// <c>border-radius</c>. For a uniform radius it is the familiar
+    /// "no more than half the shorter side".
+    /// </summary>
+    public CornerRadii Fit(float width, float height)
+    {
+        width = MathF.Abs(width);
+        height = MathF.Abs(height);
+        float tl = Clean(TopLeft), tr = Clean(TopRight), br = Clean(BottomRight), bl = Clean(BottomLeft);
+        if (!(width > 0f) || !(height > 0f)) return Zero;
+        float f = 1f;
+        f = Shrink(f, width, tl + tr);
+        f = Shrink(f, width, bl + br);
+        f = Shrink(f, height, tl + bl);
+        f = Shrink(f, height, tr + br);
+        return f < 1f ? new(tl * f, tr * f, br * f, bl * f) : new(tl, tr, br, bl);
+
+        static float Clean(float r) => float.IsFinite(r) && r > 0f ? r : 0f;
+        static float Shrink(float f, float side, float sum) => sum > side ? MathF.Min(f, side / sum) : f;
+    }
+
+    /// <summary>Every radius times <paramref name="factor"/>: logical to physical px.</summary>
+    internal CornerRadii Scaled(float factor) =>
+        new(TopLeft * factor, TopRight * factor, BottomRight * factor, BottomLeft * factor);
+
+    /// <summary>
+    /// Adds <paramref name="rect"/> with these corners to <paramref name="path"/>
+    /// as one closed clockwise contour, the radii first <see cref="Fit"/> to it.
+    /// A round corner is a quarter circle; a square one is the rect's corner.
+    /// </summary>
+    public void AddTo(Bibui.Raster.IPathBuilder path, RectF rect)
+    {
+        float l = MathF.Min(rect.Left, rect.Right), r = MathF.Max(rect.Left, rect.Right);
+        float t = MathF.Min(rect.Top, rect.Bottom), b = MathF.Max(rect.Top, rect.Bottom);
+        var c = Fit(r - l, b - t);
+
+        path.MoveTo(l + c.TopLeft, t);
+        Side(path, r - c.TopRight, t, l + c.TopLeft, t);
+        Corner(path, c.TopRight, r, t + c.TopRight);
+        Side(path, r, b - c.BottomRight, r, t + c.TopRight);
+        Corner(path, c.BottomRight, r - c.BottomRight, b);
+        Side(path, l + c.BottomLeft, b, r - c.BottomRight, b);
+        Corner(path, c.BottomLeft, l, b - c.BottomLeft);
+        Side(path, l, t + c.TopLeft, l, b - c.BottomLeft);
+        Corner(path, c.TopLeft, l + c.TopLeft, t);
+        path.Close();
+
+        // A side whose two corners take all of it has no straight part left.
+        static void Side(Bibui.Raster.IPathBuilder p, float x, float y, float fromX, float fromY)
+        {
+            if (x != fromX || y != fromY) p.LineTo(x, y);
+        }
+
+        // A quarter circle clockwise to (x, y); a square corner is a point the
+        // sides already meet at.
+        static void Corner(Bibui.Raster.IPathBuilder p, float radius, float x, float y)
+        {
+            if (radius > 0f) p.ArcTo(radius, radius, 0f, false, true, x, y);
+        }
+    }
 }

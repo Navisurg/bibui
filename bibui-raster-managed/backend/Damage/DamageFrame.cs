@@ -4,7 +4,7 @@ namespace Bibui.Raster.Managed.Backend.Damage;
 
 internal enum OpKind : byte
 {
-    Clear, Save, Restore, Translate, Scale, SetMatrix, ClipRect, SaveLayer,
+    Clear, Save, Restore, Translate, Scale, SetMatrix, ClipRect, ClipRoundRect, SaveLayer,
     RoundRect, Line, Path, Points, Image, Pixels, BackdropBlur, Text, GlyphRun,
 }
 
@@ -16,7 +16,7 @@ internal struct DamageOp
     public byte Alpha;          // SaveLayer
     public PointMode Mode;      // Points
     public RectF Rect;          // rrect / image dest / clip / backdrop clip
-    public float A, B, C, D;    // radii, line ends, text origin, translate, scale, sigma
+    public float A, B, C, D;    // radii (a rounded clip's four), line ends, text origin, translate, scale, sigma
     public RasterPaint Paint;
     public object? Ref;         // path, image
     public RasterFont Font;
@@ -440,6 +440,7 @@ internal sealed class DamageFrame
             case OpKind.Scale: c.Scale(op.A, op.B); break;
             case OpKind.SetMatrix: c.SetMatrix(op.Matrix); break;
             case OpKind.ClipRect: c.ClipRect(op.Rect); break;
+            case OpKind.ClipRoundRect: c.ClipRoundRect(op.Rect, new CornerRadii(op.A, op.B, op.C, op.D)); break;
             case OpKind.SaveLayer: c.SaveLayerAlpha(op.Alpha); break;
             case OpKind.RoundRect: c.DrawRoundRect(op.Rect, op.A, op.B, op.Paint); break;
             case OpKind.Line: c.DrawLine(op.A, op.B, op.C, op.D, op.Paint); break;
