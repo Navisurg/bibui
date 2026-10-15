@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Bibui.Runtime.Platform;
 using Bibui.TextEdit;
 
@@ -9,7 +10,8 @@ namespace Bibui.Runtime;
 ///
 /// The window itself — creating it, its event pump, its framebuffer, how a
 /// frame reaches the screen, the clipboard — belongs to an
-/// <see cref="IPlatformHost"/>, passed in: <c>new BibuiWindow(runtime, host)</c>.
+/// <see cref="IPlatformHost"/>, passed in: <c>new BibuiWindow(runtime, host)</c>,
+/// or chosen after <see cref="Create"/>: <c>BibuiWindow.Create(runtime).WithSilk()</c>.
 /// The cross-platform host is SilkPlatformHost (GLFW + OpenGL, with a CPU
 /// fallback under BIBUI_GPU=0) in Bibui.Platform.Silk; the raw Wayland
 /// one is WaylandPlatformHost in Bibui.Platform.Wayland.
@@ -26,7 +28,11 @@ namespace Bibui.Runtime;
 public sealed class BibuiWindow
 {
     private readonly BibuiRuntime _runtime;
-    private readonly IPlatformHost _host;
+    // Chosen at the latest when the window runs: Create names a default
+    // without making it, so a window that then calls WithSilk() never loads
+    // the Wayland host.
+    private IPlatformHost? _host;
+    private readonly Func<IPlatformHost>? _defaultHost;
 
     // ── The event queue ──────────────────────────────────────────────────────
     // The host's callbacks translate what happened into a WindowEvent and append
@@ -80,8 +86,18 @@ public sealed class BibuiWindow
         return _clickStreak;
     }
 
-    /// <summary>The platform this window runs on.</summary>
-    public IPlatformHost Host => _host;
+    /// <summary>
+    /// The platform this window runs on. Asking settles it: on a window from
+    /// <see cref="Create"/> with no host chosen, this makes the default.
+    /// </summary>
+    public IPlatformHost Host
+    {
+        get
+        {
+            if (_host is null) Attach(_defaultHost!());
+            return _host!;
+        }
+    }
 
     /// <summary>
     /// A window on <paramref name="host"/>. Chosen explicitly — there is no
@@ -94,7 +110,53 @@ public sealed class BibuiWindow
     /// </summary>
     public BibuiWindow(BibuiRuntime runtime, IPlatformHost host)
     {
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(host);
         _runtime = runtime;
+        Attach(host);
+    }
+
+    private BibuiWindow(BibuiRuntime runtime, Func<IPlatformHost> defaultHost)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        _runtime = runtime;
+        _defaultHost = defaultHost;
+    }
+
+    /// <summary>
+    /// A window for <paramref name="runtime"/> that opens on the raw Wayland
+    /// host (Bibui.Platform.Wayland) unless another is chosen before it runs:
+    /// <c>BibuiWindow.Create(runtime).WithSilk()</c> (Bibui.Platform.Silk:
+    /// GLFW + OpenGL, cross-platform) or <c>.WithWayland()</c>. The default is
+    /// not made until the window runs, so choosing another loads nothing of it.
+    ///
+    /// <para>The default is loaded by name (<see cref="PlatformHosts"/>), which
+    /// a trimmed or Native AOT publish may have dropped, so a publish that calls
+    /// this warns (IL2026). An AOT app passes the host:
+    /// <c>new BibuiWindow(runtime, new WaylandPlatformHost())</c>.</para>
+    /// </summary>
+    [RequiresUnreferencedCode(PlatformHosts.TrimMessage)]
+    public static BibuiWindow Create(BibuiRuntime runtime) => new(runtime, static () => PlatformHosts.CreateDefault());
+
+    /// <summary>
+    /// Makes <paramref name="host"/> the platform this window opens on, in
+    /// place of the default <see cref="Create"/> named. Returns the window, so
+    /// it chains. Only before the host is settled — by <see cref="Run"/>, by
+    /// reading <see cref="Host"/>, or by the constructor that takes one.
+    /// </summary>
+    public BibuiWindow WithHost(IPlatformHost host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        if (_host is not null)
+            throw new InvalidOperationException(
+                "The platform host is chosen before the window runs: call WithHost (WithSilk, WithWayland) " +
+                "straight after BibuiWindow.Create(runtime).");
+        Attach(host);
+        return this;
+    }
+
+    private void Attach(IPlatformHost host)
+    {
         _host = host;
 
         // How anything that is not an OS event gets the loop moving again.
@@ -326,7 +388,7 @@ public sealed class BibuiWindow
         // Render() calls hit Runtime's clean-output cache and are cheap.
         _runtime.Render();
 
-        var host = _host;
+        var host = Host;
         try
         {
             host.Open(_runtime, new PlatformWindowOptions(title, logicalW, logicalH));
@@ -433,7 +495,7 @@ public sealed class BibuiWindow
     /// </summary>
     private KeyModifiers CurrentModifiers()
     {
-        var m = _host.HeldModifiers;
+        var m = Host.HeldModifiers;
         if ((m & KeyModifiers.Super) != 0) m |= KeyModifiers.Ctrl;
         return m;
     }

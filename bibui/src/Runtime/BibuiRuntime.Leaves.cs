@@ -43,7 +43,7 @@ public sealed partial class BibuiRuntime
     /// <see cref="Bibui.Fonts"/>, so a string measured here is the width layout
     /// gives a text with that content, from the same cache.
     /// </summary>
-    public Fonts Fonts => _renderer.Fonts;
+    public Fonts Fonts => Renderer.Fonts;
 
     /// <summary>
     /// The font a <see cref="Text"/> built at this point would be set

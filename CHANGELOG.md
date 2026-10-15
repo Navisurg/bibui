@@ -110,6 +110,33 @@ before it was published.
 
 ### Added
 
+- **`BibuiRuntime.Create()` and `BibuiWindow.Create(runtime)`**, with the
+  backend and host chosen after, both optional:
+  `BibuiWindow.Create(BibuiRuntime.Create().WithSkia()).WithSilk().Run(title: "App")`.
+  - `Create()` draws with the managed rasterizer unless a backend is chosen
+    before the runtime first draws: `.WithSkia()` (Bibui.Raster.Skia),
+    `.WithManagedRasterizer()` (Bibui.Raster.Managed.Backend), or
+    `.WithRaster(backend)`. The default is made on first use, so choosing
+    another loads nothing of it.
+  - `BibuiWindow.Create(runtime)` opens on the raw Wayland host unless one is
+    chosen before it runs: `.WithSilk()` (Bibui.Platform.Silk),
+    `.WithWayland()` (Bibui.Platform.Wayland), or `.WithHost(host)`.
+  - Both defaults are loaded by name (`RasterBackends.ManagedProvider`,
+    `PlatformHosts.DefaultProvider`), so the `Create` methods warn (IL2026)
+    under a trimmed or Native AOT publish, as the parameterless
+    `new BibuiRuntime()` does. An AOT app keeps passing the backend and host
+    to the constructors.
+- **Components called on the runtime.** Every component named by an id has a
+  method on `BibuiRuntime` that forwards to its `Build`:
+  `runtime.Button(id, "Save")`, `runtime.Checkbox`, `runtime.Switch`,
+  `runtime.Toggle`, `runtime.Slider`, `runtime.RadioGroup`,
+  `runtime.ToggleGroup`, `runtime.Tabs`, `runtime.Expander`,
+  `runtime.Scrollbar`, `runtime.Markdown`, `runtime.MenuItem`,
+  `runtime.SelectItem`, `runtime.TextField` (`TextField.SingleLine`),
+  `runtime.MultilineTextField` and `runtime.EllipsisTextField`. The `Build`
+  functions stay. Layout (`Arrange`), the keyless leaves and the scopes
+  (`Dialog`, `Popover`, `Menu.Begin`, `Select.Begin`) keep their spelling.
+
 - `Icons.Register(name, svgPathData)`: an app adds icons of its own at
   start-up, drawn by `runtime.Icon` and known to `Icon.IsKnown` like the
   built-in Lucide set (24×24 viewBox, stroke 2, round caps and joins). The

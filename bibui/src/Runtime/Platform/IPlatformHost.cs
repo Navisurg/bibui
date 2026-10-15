@@ -15,7 +15,8 @@ namespace Bibui.Runtime.Platform;
 /// <para>Selection is explicit: <c>new BibuiWindow(runtime, host)</c>. There is
 /// no discovery and no reflection, so a host is trimmed and AOT-compiled like
 /// any other type. The cross-platform host is SilkPlatformHost (GLFW + OpenGL)
-/// in Bibui.Platform.Silk; bibui itself names no host.</para>
+/// in Bibui.Platform.Silk. bibui references no host; <c>BibuiWindow.Create</c>
+/// opens on the one <see cref="PlatformHosts"/> registers, unless told otherwise.</para>
 ///
 /// <para>Threading: everything here is called on the thread that called
 /// <see cref="BibuiWindow.Run"/>, except <see cref="Wake"/>, which any thread may

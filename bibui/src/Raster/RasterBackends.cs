@@ -37,7 +37,14 @@ public static class RasterBackends
     /// <summary>The assembly that registers the default backend when it is loaded.</summary>
     public const string DefaultProvider = "Bibui.Raster.Skia";
 
+    /// <summary>
+    /// The assembly that registers the managed rasterizer when it is loaded:
+    /// what <c>BibuiRuntime.Create()</c> draws with unless the app picks another.
+    /// </summary>
+    public const string ManagedProvider = "Bibui.Raster.Managed.Backend";
+
     private static Func<IRasterBackend>? s_default;
+    private static Func<IRasterBackend>? s_managed;
 
     /// <summary>
     /// Makes <paramref name="factory"/> the backend the parameterless
@@ -53,7 +60,7 @@ public static class RasterBackends
     [RequiresUnreferencedCode(TrimMessage)]
     public static IRasterBackend CreateDefault()
     {
-        if (s_default is null) RunProvider();
+        if (s_default is null) RunProvider(DefaultProvider);
         return s_default?.Invoke() ?? throw new InvalidOperationException(
             RuntimeFeature.IsDynamicCodeSupported
                 ? "No default raster backend: reference the Bibui.Raster.Skia package (it registers SkiaRasterBackend), " +
@@ -61,6 +68,32 @@ public static class RasterBackends
                 : "No default raster backend: under Native AOT, Bibui.Raster.Skia is compiled in only when the app names " +
                   "one of its types, so the parameterless constructor cannot find it. Pass the backend: " +
                   "new BibuiRuntime(new ManagedRasterBackend()) or new BibuiRuntime(new SkiaRasterBackend()).");
+    }
+
+    /// <summary>
+    /// Makes <paramref name="factory"/> the managed rasterizer that
+    /// <see cref="CreateManaged"/> returns. Bibui.Raster.Managed.Backend calls
+    /// it from its module initializer.
+    /// </summary>
+    public static void SetManaged(Func<IRasterBackend> factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        s_managed = factory;
+    }
+
+    /// <summary>
+    /// A new managed rasterizer — <c>BibuiRuntime.Create()</c>'s backend when the
+    /// app chooses none — or an exception that says what to reference. Loaded
+    /// by name, like <see cref="CreateDefault"/>, and for the same reason.
+    /// </summary>
+    [RequiresUnreferencedCode(ManagedTrimMessage)]
+    public static IRasterBackend CreateManaged()
+    {
+        if (s_managed is null) RunProvider(ManagedProvider);
+        return s_managed?.Invoke() ?? throw new InvalidOperationException(
+            "No raster backend: BibuiRuntime.Create() draws with the managed rasterizer unless told otherwise. " +
+            "Reference the Bibui.Raster.Managed.Backend package, or choose one: " +
+            "BibuiRuntime.Create().WithSkia() (Bibui.Raster.Skia) / .WithManagedRasterizer().");
     }
 
     /// <summary>
@@ -72,10 +105,20 @@ public static class RasterBackends
         "unless the app names one of its types. Pass the backend instead: " +
         "new BibuiRuntime(new SkiaRasterBackend()) / new BibuiRenderer(new SkiaRasterBackend()).";
 
-    private static void RunProvider()
+    /// <summary>What a trimmed or Native AOT publish says where <c>BibuiRuntime.Create()</c> is called (IL2026).</summary>
+    internal const string ManagedTrimMessage =
+        "BibuiRuntime.Create() loads the managed rasterizer by name (Bibui.Raster.Managed.Backend) unless a backend is " +
+        "chosen, which trimming and Native AOT do not keep unless the app names one of its types. Pass the backend " +
+        "instead: new BibuiRuntime(new ManagedRasterBackend()).";
+
+    /// <summary>
+    /// Loads <paramref name="name"/>, if the app ships it, and runs its module
+    /// initializer, which registers what it provides. No type is looked up.
+    /// </summary>
+    internal static void RunProvider(string name)
     {
         Assembly provider;
-        try { provider = Assembly.Load(new AssemblyName(DefaultProvider)); }
+        try { provider = Assembly.Load(new AssemblyName(name)); }
         catch (FileNotFoundException) { return; }
         catch (FileLoadException) { return; }
         RuntimeHelpers.RunModuleConstructor(provider.ManifestModule.ModuleHandle);

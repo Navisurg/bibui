@@ -12,6 +12,10 @@
     <ProjectReference Include="../../bibui-testing/bibui-testing.csproj" />
     <!-- Silk.NET.Input, to pin Bibui.Key to it, and the default-host registration. -->
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+    <!-- BibuiRuntime.Create() and BibuiWindow.Create()'s defaults, the managed
+         rasterizer and the Wayland host, and their With... methods. -->
+    <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
+    <ProjectReference Include="../../bibui-platform-wayland/bibui-platform-wayland.csproj" />
     <!-- The sample's own build (BibuiApp.App), which the full-app tests drive headless. -->
     <ProjectReference Include="../../samples/bibui-app/bibui-app.csproj" />
   </ItemGroup>

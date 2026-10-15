@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using Bibui;
 using Bibui.Theming;
+using Bibui.Platform.Wayland;
+using Bibui.Raster.Managed.Backend;
+using Bibui.Raster.Skia;
 using Bibui.Renderer;
 using Bibui.Runtime;
 using Bibui.Runtime.Platform;
@@ -202,6 +205,59 @@ Run("RasterBackends: the parameterless runtime and renderer draw with Skia when 
 {
     Eq("skia", new BibuiRuntime().Raster.Name, "new BibuiRuntime()");
     Eq("skia", new BibuiRenderer().Raster.Name, "new BibuiRenderer()");
+});
+
+// ── BibuiRuntime.Create / BibuiWindow.Create ─────────────────────────────────
+
+Run("Create: the runtime draws with the managed rasterizer unless told otherwise", () =>
+{
+    Eq("managed", BibuiRuntime.Create().Raster.Name, "BibuiRuntime.Create()");
+});
+
+Run("Create: WithSkia and WithManagedRasterizer choose the backend", () =>
+{
+    Eq("skia", BibuiRuntime.Create().WithSkia().Raster.Name, "WithSkia()");
+    Eq("managed", BibuiRuntime.Create().WithSkia().WithManagedRasterizer().Raster.Name, "the last choice wins");
+});
+
+Run("Create: a backend chosen after the runtime has drawn is refused", () =>
+{
+    var runtime = BibuiRuntime.Create().WithSkia();
+    runtime.Mount(() => runtime.Text("drawn").Px(100f, 20f), new SurfaceOptions { Width = 100, Height = 20 });
+    runtime.Render();
+    Throws<InvalidOperationException>(() => runtime.WithManagedRasterizer(), "WithManagedRasterizer after Render");
+    Throws<InvalidOperationException>(
+        () => new BibuiRuntime(new Bibui.Raster.Skia.SkiaRasterBackend()).WithSkia(), "WithSkia on a runtime given its backend");
+});
+
+Run("Create: the window opens on Wayland unless told otherwise, and WithSilk chooses Silk", () =>
+{
+    var runtime = BibuiRuntime.Create().WithSkia();
+    IsTrue(BibuiWindow.Create(runtime).Host is Bibui.Platform.Wayland.WaylandPlatformHost, "BibuiWindow.Create(runtime)");
+
+    var silk = BibuiWindow.Create(runtime).WithSilk();
+    IsTrue(silk.Host is SilkPlatformHost, "WithSilk()");
+    IsTrue(ReferenceEquals(runtime.PlatformHost, silk.Host), "the runtime's clipboard goes through the chosen host");
+    Throws<InvalidOperationException>(() => silk.WithWayland(), "a host chosen after one is settled");
+});
+
+Run("Create: runtime.Button is Button.Build", () =>
+{
+    var runtime = BibuiRuntime.Create().WithSkia();
+    int clicks = 0;
+    runtime.Mount(() =>
+    {
+        var add = runtime.Button(id: "add", "Add one");
+        if (add.Clicked) clicks++;
+        return Layer(null, add.Node).Px(400f, 200f);
+    }, new SurfaceOptions { Width = 400, Height = 200 });
+    runtime.Render();
+    runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = 20f, Y = 20f });
+    runtime.Render();
+    runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Left, X = 20f, Y = 20f });
+    runtime.Render();
+    Eq(1, clicks, "pressed and released on it");
+    Eq("add", runtime.FindById("add")?.Id, "the button keeps the id it was given");
 });
 
 // ── Counter: stateful rebuild ─────────────────────────────────────────────────
