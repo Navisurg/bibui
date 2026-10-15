@@ -75,6 +75,7 @@ jobs:
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
             tests/wayland-hello/wayland-hello.csproj \
+            tests/wayland-gpu-hello/wayland-gpu-hello.csproj \
             samples/component-gallery/component-gallery.csproj \
             samples/bibui-app/bibui-app.csproj
           do
@@ -116,6 +117,7 @@ jobs:
           first_frame samples/component-gallery/component-gallery.csproj
           first_frame samples/component-gallery/component-gallery.csproj --host wayland --raster managed
           first_frame tests/wayland-hello/wayland-hello.csproj
+          first_frame tests/wayland-gpu-hello/wayland-gpu-hello.csproj
 
       # An app on the raw Wayland host and the managed rasterizer publishes with
       # Native AOT. Trim and AOT analysis (IL2xxx, IL3xxx) runs only on a
@@ -131,3 +133,10 @@ jobs:
             --output aot/wayland-hello
           ls -l aot/wayland-hello/wayland-hello
           aot/wayland-hello/wayland-hello --first-frame
+          # The Wayland host with Skia on the GPU (EGL by direct P/Invoke, no
+          # Silk.NET) publishes AOT too, every warning an error.
+          dotnet publish tests/wayland-gpu-hello/wayland-gpu-hello.csproj \
+            --configuration Release -r linux-x64 \
+            -p:PublishAot=true -p:TreatWarningsAsErrors=true \
+            --output aot/wayland-gpu-hello
+          aot/wayland-gpu-hello/wayland-gpu-hello --first-frame

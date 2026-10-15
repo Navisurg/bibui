@@ -18,6 +18,8 @@
     <!-- Skia: what the parameterless new BibuiRuntime()/BibuiRenderer() draw with. -->
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
     <ProjectReference Include="../../bibui-platform-wayland/bibui-platform-wayland.csproj" />
+    <!-- A backend that draws only on the CPU, for the host's GPU-or-shm choice. -->
+    <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
     <ProjectReference Include="../../tools/wayland-scanner/wayland-scanner.csproj" />
   </ItemGroup>
 </Project>
