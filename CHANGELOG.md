@@ -145,23 +145,23 @@ before it was published.
 ### Added
 
 - `runtime.Column()` and `runtime.Row()`: a pooled box along Y or X, linked
-  under the parent in scope and pushed until the returned scope is disposed,
-  so `using (runtime.ColumnFit()) { runtime.Text(...); runtime.Button(...); }`
-  builds into it. The bare forms are sized like `Box()`, by the sizes pushed;
-  the sized forms set the box's own: `ColumnFit`/`RowFit` (children),
-  `ColumnFillX`/`RowFillX`, `ColumnFillY`/`RowFillY`, `ColumnFill`/`RowFill`
-  (parent), `ColumnWidth(px)`, `RowHeight(px)`, `RowFillX(height)` and
-  `ColumnPx`/`RowPx`; an axis a form does not name fits its children. The
-  scope's `Box` styles it further, and the scope converts to the box, so a
-  build can `return` it.
+  under the parent in scope; push it to build into it:
+  `var column = runtime.ColumnFit(); using (runtime.PushParent(column)) { ... }`.
+  The bare forms are sized like `Box()`, by the sizes pushed; the sized forms
+  set the box's own: `ColumnFit`/`RowFit` (children), `ColumnFillX`/`RowFillX`,
+  `ColumnFillY`/`RowFillY`, `ColumnFill`/`RowFill` (parent), `ColumnWidth(px)`,
+  `RowHeight(px)`, `RowFillX(height)` and `ColumnPx`/`RowPx`; an axis a form
+  does not name fits its children. They return the box, so `Padded`, `Styled`
+  and the other helpers chain on it.
 
-- `runtime.Spring()`, and `runtime.CentredX()`, `runtime.CentredY()` and
-  `runtime.Centred()` scopes: `using (runtime.CentredX()) { ... }` centres what
-  is built inside, with springs from the runtime's pool.
+- `runtime.Spring()`, and the `runtime.Centred()` scope: a spring before what
+  is built inside and one after it, along the parent in scope, from the
+  runtime's pool. Centred across a row:
+  `using (runtime.PushParent(runtime.RowFillX())) using (runtime.Centred()) { ... }`.
 - `Arrange.Column`, `Arrange.Row`, `Arrange.CentredX`, `Arrange.CentredY` and
   `Arrange.Centred` are obsolete: they allocate a box a frame and move nodes
-  the runtime has already linked. Build into the `runtime` scopes of the same
-  names instead. They still work; the repository's own call sites build with
+  the runtime has already linked. Push a `runtime` row or column instead, and
+  centre with `runtime.Centred()`. They still work; the repository's own call sites build with
   CS0618 warnings until they are moved over. `Arrange`'s size helpers
   (`FillX`, `Px`, `Padded`, ...) and `Space`/`Spring`/`Gap` are unchanged.
 

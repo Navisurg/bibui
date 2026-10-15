@@ -241,9 +241,9 @@ using (runtime.PushParent(card))
 }
 ```
 
-For the common case, a column or row whose contents you build in place,
-`runtime.Column()` and `runtime.Row()` make the box, link it under the parent
-in scope and push it, in one call. Like `Box()`, they are sized by the sizes
+For the common case, a column or row, `runtime.Column()` and `runtime.Row()`
+make a pooled box with its axis set, linked under the parent in scope like
+any other; push it to build into it. Like `Box()`, they are sized by the sizes
 pushed, and with none, not at all, so you usually call a sized form. Each
 names the rule for the axes it names, and an axis it does not name is as large
 as its children:
@@ -259,26 +259,30 @@ as its children:
 | | `RowFillX(height)` | parent | pixels |
 | `ColumnPx(w, h)` | `RowPx(w, h)` | pixels | pixels |
 
-The scope stands for the box, so a build can return it:
+They return the box, so the size helpers chain on it and a build can return it:
 
 ```csharp
 runtime.Mount(() =>
 {
-    using (var page = runtime.ColumnFillX())
+    var page = runtime.ColumnFillX().Padded(EdgeInsets.All(24f));
+    using (runtime.PushParent(page))
     {
         runtime.Text(title);
-        using (runtime.RowFit())
+        using (runtime.PushParent(runtime.RowFit()))
         {
             if (runtime.Button("ok", "OK").Clicked) Save();
             runtime.Gap(8f);
             if (runtime.Button("cancel", "Cancel", ghost: true).Clicked) Close();
         }
-        return page;
     }
+    return page;
 });
 ```
 
-Style it further through `page.Box` (`page.Box.Padded(EdgeInsets.All(24f))`).
+`runtime.Spring()` takes the room left along the parent in scope, and
+`using (runtime.Centred()) { ... }` puts a spring before and after what is
+built inside: centred across a row, that is
+`using (runtime.PushParent(runtime.RowFillX())) using (runtime.Centred()) runtime.Text(empty);`.
 
 The two forms mix. A node has one parent, and pushing it somewhere else
 (`Row`, `Column`, `CentredY`, `UiNode.PushIntoParent`) **moves** it: it is

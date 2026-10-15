@@ -255,34 +255,37 @@ Run("Create: runtime.Button built while a column is pushed is inserted into it",
     IsTrue(ReferenceEquals(column!.LastChild, button), "after the text, in the order built");
 });
 
-Run("runtime.Column: what is built inside goes into it, in order, and the build can return it", () =>
+Run("runtime.ColumnFit: a box linked where it is made, and built into once pushed", () =>
 {
     var runtime = BibuiRuntime.Create().WithSkia();
-    Box? column = null, row = null;
+    Box? column = null, row = null, unpushed = null;
     runtime.Mount(() =>
     {
-        using (var c = runtime.ColumnFit())
+        column = runtime.ColumnFit();
+        using (runtime.PushParent(column))
         {
-            column = c.Box;
             runtime.Text("Clicked 0 times");
-            using (var r = runtime.RowFit())
+            row = runtime.RowFit();
+            using (runtime.PushParent(row))
             {
-                row = r.Box;
                 runtime.Button(id: "a", "A");
                 runtime.Button(id: "b", "B");
             }
+            unpushed = runtime.RowFit();          // made, never pushed: what follows is not in it
             runtime.Button(id: "add", "Add one");
-            return c;
         }
+        return column;
     }, new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Render();
 
     Eq(LayoutAxis.Y, column!.ChildLayoutAxis, "a column lays out along Y");
     Eq(LayoutAxis.X, row!.ChildLayoutAxis, "a row lays out along X");
-    IsTrue(ReferenceEquals(row.Parent, column), "the row is in the column");
+    IsTrue(ReferenceEquals(row.Parent, column), "the row is linked under the column it was made in");
     IsTrue(ReferenceEquals(runtime.FindById("a")?.Parent, row) && ReferenceEquals(runtime.FindById("b")?.Parent, row),
         "the row's buttons are in the row");
-    IsTrue(ReferenceEquals(column.LastChild, runtime.FindById("add")), "after the row closes, building goes back into the column");
+    IsTrue(ReferenceEquals(unpushed!.Parent, column) && unpushed.FirstChild is null,
+        "a row that is never pushed is in the column, and empty");
+    IsTrue(ReferenceEquals(column.LastChild, runtime.FindById("add")), "after the row's scope, building goes back into the column");
     Eq(SemanticSize.ChildrenSum(), column.SizeX, "ColumnFit: as wide as its children");
     Eq(SemanticSize.ChildrenSum(), column.SizeY, "ColumnFit: as tall as its children");
     IsTrue(column.Extent.Y > row.Extent.Y, "laid out: the column holds the text, the row and a button");
@@ -294,11 +297,11 @@ Run("runtime.Column: sized only by what is pushed, so with nothing pushed layout
     Box? pushed = null;
     runtime.Mount(() =>
     {
-        using var page = runtime.ColumnFill();
+        var page = runtime.ColumnFill();
+        using (runtime.PushParent(page))
         using (runtime.PushSizeX(SemanticSize.Pixels(120f)))
         using (runtime.PushSizeY(SemanticSize.Pixels(30f)))
-        using (var c = runtime.Column())
-            pushed = c.Box;
+            pushed = runtime.Column();
         return page;
     }, new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Render();
@@ -308,8 +311,10 @@ Run("runtime.Column: sized only by what is pushed, so with nothing pushed layout
     var bare = BibuiRuntime.Create().WithSkia();
     bare.Mount(() =>
     {
-        using var page = bare.ColumnFill();
-        using (bare.Column()) bare.Text("unsized");
+        var page = bare.ColumnFill();
+        using (bare.PushParent(page))
+        using (bare.PushParent(bare.Column()))
+            bare.Text("unsized");
         return page;
     }, new SurfaceOptions { Width = 400, Height = 200 });
     Throws<LayoutException>(() => bare.Render(), "a Column() with nothing pushed has no size");
@@ -321,20 +326,24 @@ Run("runtime.ColumnFillX & co: each sized form sets the axes it names, and fits 
     var boxes = new Dictionary<string, Box>();
     runtime.Mount(() =>
     {
-        using var page = runtime.ColumnFill();
-        void Add(string name, BibuiRuntime.BoxScope scope)
+        var page = runtime.ColumnFill();
+        using (runtime.PushParent(page))
         {
-            using (scope) { boxes[name] = scope.Box; runtime.BoxFromId("in-" + name).Px(50f, 10f); }
+            void Add(string name, Box box)
+            {
+                boxes[name] = box;
+                using (runtime.PushParent(box)) runtime.BoxFromId("in-" + name).Px(50f, 10f);
+            }
+            Add("ColumnFit", runtime.ColumnFit());
+            Add("ColumnFillX", runtime.ColumnFillX());
+            Add("ColumnWidth", runtime.ColumnWidth(80f));
+            Add("ColumnPx", runtime.ColumnPx(70f, 15f));
+            Add("RowFit", runtime.RowFit());
+            Add("RowFillX", runtime.RowFillX());
+            Add("RowFillXHeight", runtime.RowFillX(12f));
+            Add("RowHeight", runtime.RowHeight(14f));
+            Add("RowPx", runtime.RowPx(60f, 11f));
         }
-        Add("ColumnFit", runtime.ColumnFit());
-        Add("ColumnFillX", runtime.ColumnFillX());
-        Add("ColumnWidth", runtime.ColumnWidth(80f));
-        Add("ColumnPx", runtime.ColumnPx(70f, 15f));
-        Add("RowFit", runtime.RowFit());
-        Add("RowFillX", runtime.RowFillX());
-        Add("RowFillXHeight", runtime.RowFillX(12f));
-        Add("RowHeight", runtime.RowHeight(14f));
-        Add("RowPx", runtime.RowPx(60f, 11f));
         return page;
     }, new SurfaceOptions { Width = 400, Height = 300 });
     runtime.Render();
@@ -358,10 +367,15 @@ Run("runtime.ColumnFillY & co: the fills along Y, in a row with room to fill", (
     var boxes = new Dictionary<string, Box>();
     runtime.Mount(() =>
     {
-        using var page = runtime.RowFill();
-        using (var c = runtime.ColumnFillY()) { boxes["ColumnFillY"] = c.Box; runtime.BoxFromId("a").Px(50f, 10f); }
-        using (var r = runtime.RowFillY()) { boxes["RowFillY"] = r.Box; runtime.BoxFromId("b").Px(30f, 10f); }
-        using (var f = runtime.ColumnFill()) { boxes["ColumnFill"] = f.Box; }
+        var page = runtime.RowFill();
+        using (runtime.PushParent(page))
+        {
+            boxes["ColumnFillY"] = runtime.ColumnFillY();
+            using (runtime.PushParent(boxes["ColumnFillY"])) runtime.BoxFromId("a").Px(50f, 10f);
+            boxes["RowFillY"] = runtime.RowFillY();
+            using (runtime.PushParent(boxes["RowFillY"])) runtime.BoxFromId("b").Px(30f, 10f);
+            boxes["ColumnFill"] = runtime.ColumnFill();
+        }
         return page;
     }, new SurfaceOptions { Width = 400, Height = 300 });
     runtime.Render();
@@ -371,40 +385,45 @@ Run("runtime.ColumnFillY & co: the fills along Y, in a row with room to fill", (
     Eq(320f, boxes["ColumnFill"].Extent.X, "and the room the row's other children leave");
 });
 
-Run("runtime.CentredX / Centred / Spring: the contents land in the middle, between two springs", () =>
+Run("runtime.Centred / Spring: the contents land in the middle, between two springs", () =>
 {
     var runtime = BibuiRuntime.Create().WithSkia();
     Box? across = null, row = null;
     runtime.Mount(() =>
     {
-        using (var page = runtime.ColumnFill())
+        var page = runtime.ColumnFill();
+        using (runtime.PushParent(page))
         {
-            using (var c = runtime.CentredX())
-            {
-                across = c.Box;
+            // What Arrange.CentredX was: a full-width row, centred in.
+            across = runtime.RowFillX();
+            using (runtime.PushParent(across))
+            using (runtime.Centred())
                 runtime.BoxFromId("mid-x").Px(100f, 20f);
-            }
-            using (var r = runtime.RowFillX())
+
+            row = runtime.RowFillX();
+            using (runtime.PushParent(row))
             {
-                row = r.Box;
+                runtime.Box().Px(40f, 10f);
                 using (runtime.Centred()) runtime.BoxFromId("mid-row").Px(40f, 10f);
             }
-            using (runtime.RowFillX())
+
+            using (runtime.PushParent(runtime.RowFillX()))
             {
                 runtime.Box().Px(30f, 10f);
                 runtime.Spring();
                 runtime.BoxFromId("far-end").Px(30f, 10f);
             }
-            return page;
         }
+        return page;
     }, new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Render();
 
-    Eq(400f, across!.Extent.X, "CentredX's row is as wide as its parent");
+    Eq(400f, across!.Extent.X, "the row is as wide as its parent");
     Eq(150f, runtime.FindById("mid-x")!.Rect.X, "a 100 px box centred in 400 px");
     Eq(3, CountChildren(across), "spring, contents, spring");
-    Eq(180f, runtime.FindById("mid-row")!.Rect.X, "Centred() centres along the row in scope, in no box of its own");
-    IsTrue(ReferenceEquals(runtime.FindById("mid-row")!.Parent, row), "the contents stay the row's children");
+    float midRow = runtime.FindById("mid-row")!.Rect.X;
+    IsTrue(MathF.Abs(midRow - 200f) < 0.01f, $"Centred() centres in the room the row's other children leave (got {midRow})");
+    IsTrue(ReferenceEquals(runtime.FindById("mid-row")!.Parent, row), "the contents stay the row's children, in no box of their own");
     Eq(370f, runtime.FindById("far-end")!.Rect.X, "a spring pushes what follows it to the far end");
 });
 

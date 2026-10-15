@@ -22,10 +22,11 @@ public sealed partial class BibuiRuntime
 
     /// <summary>
     /// A keyless box that lays its children out top to bottom, linked under the
-    /// parent in scope and pushed as the parent until the scope is disposed, so
-    /// what is built inside goes into it, in order:
+    /// parent in scope. It is a box like any other: push it to build into it,
+    /// and size or style it with the usual helpers.
     /// <code>
-    /// using (runtime.ColumnFit())
+    /// var column = runtime.ColumnFit().Padded(EdgeInsets.All(24f));
+    /// using (runtime.PushParent(column))
     /// {
     ///     runtime.Text("Title");
     ///     runtime.Button("ok", "OK");
@@ -36,78 +37,75 @@ public sealed partial class BibuiRuntime
     /// at all, which layout refuses. Usually one of the sized forms says it:
     /// <see cref="ColumnFit"/>, <see cref="ColumnFillX"/>, <see cref="ColumnFillY"/>,
     /// <see cref="ColumnFill"/>, <see cref="ColumnWidth"/>, <see cref="ColumnPx"/>.
-    /// Style the box through the scope: <c>column.Box.Padded(...)</c>.
     /// </summary>
-    public BoxScope Column() => PushGroup(LayoutAxis.Y, null, null);
+    public Box Column() => Group(LayoutAxis.Y, null, null);
 
     /// <summary>The same as <see cref="Column"/>, laying its children out left to right.</summary>
-    public BoxScope Row() => PushGroup(LayoutAxis.X, null, null);
+    public Box Row() => Group(LayoutAxis.X, null, null);
 
     // The sized forms. Each names the rule for the axes it names; an axis it
     // does not name is as large as its children.
 
     /// <summary>A <see cref="Column"/> as wide and as tall as its children.</summary>
-    public BoxScope ColumnFit() => PushGroup(LayoutAxis.Y, Fit, Fit);
+    public Box ColumnFit() => Group(LayoutAxis.Y, Fit, Fit);
 
     /// <summary>A <see cref="Column"/> as wide as its parent, and as tall as its children.</summary>
-    public BoxScope ColumnFillX() => PushGroup(LayoutAxis.Y, Fill, Fit);
+    public Box ColumnFillX() => Group(LayoutAxis.Y, Fill, Fit);
 
     /// <summary>A <see cref="Column"/> as tall as its parent, and as wide as its children.</summary>
-    public BoxScope ColumnFillY() => PushGroup(LayoutAxis.Y, Fit, Fill);
+    public Box ColumnFillY() => Group(LayoutAxis.Y, Fit, Fill);
 
     /// <summary>A <see cref="Column"/> as wide and as tall as its parent.</summary>
-    public BoxScope ColumnFill() => PushGroup(LayoutAxis.Y, Fill, Fill);
+    public Box ColumnFill() => Group(LayoutAxis.Y, Fill, Fill);
 
     /// <summary>A <see cref="Column"/> <paramref name="width"/> pixels wide, and as tall as its children.</summary>
-    public BoxScope ColumnWidth(float width) => PushGroup(LayoutAxis.Y, SemanticSize.Pixels(width), Fit);
+    public Box ColumnWidth(float width) => Group(LayoutAxis.Y, SemanticSize.Pixels(width), Fit);
 
     /// <summary>A <see cref="Column"/> of a fixed size.</summary>
-    public BoxScope ColumnPx(float width, float height)
-        => PushGroup(LayoutAxis.Y, SemanticSize.Pixels(width), SemanticSize.Pixels(height));
+    public Box ColumnPx(float width, float height)
+        => Group(LayoutAxis.Y, SemanticSize.Pixels(width), SemanticSize.Pixels(height));
 
     /// <summary>A <see cref="Row"/> as wide and as tall as its children.</summary>
-    public BoxScope RowFit() => PushGroup(LayoutAxis.X, Fit, Fit);
+    public Box RowFit() => Group(LayoutAxis.X, Fit, Fit);
 
     /// <summary>A <see cref="Row"/> as wide as its parent, and as tall as its children.</summary>
-    public BoxScope RowFillX() => PushGroup(LayoutAxis.X, Fill, Fit);
+    public Box RowFillX() => Group(LayoutAxis.X, Fill, Fit);
 
     /// <summary>A <see cref="Row"/> as wide as its parent and <paramref name="height"/> pixels tall: a toolbar, a header.</summary>
-    public BoxScope RowFillX(float height) => PushGroup(LayoutAxis.X, Fill, SemanticSize.Pixels(height));
+    public Box RowFillX(float height) => Group(LayoutAxis.X, Fill, SemanticSize.Pixels(height));
 
     /// <summary>A <see cref="Row"/> as tall as its parent, and as wide as its children.</summary>
-    public BoxScope RowFillY() => PushGroup(LayoutAxis.X, Fit, Fill);
+    public Box RowFillY() => Group(LayoutAxis.X, Fit, Fill);
 
     /// <summary>A <see cref="Row"/> as wide and as tall as its parent.</summary>
-    public BoxScope RowFill() => PushGroup(LayoutAxis.X, Fill, Fill);
+    public Box RowFill() => Group(LayoutAxis.X, Fill, Fill);
 
     /// <summary>A <see cref="Row"/> <paramref name="height"/> pixels tall, and as wide as its children.</summary>
-    public BoxScope RowHeight(float height) => PushGroup(LayoutAxis.X, Fit, SemanticSize.Pixels(height));
+    public Box RowHeight(float height) => Group(LayoutAxis.X, Fit, SemanticSize.Pixels(height));
 
     /// <summary>A <see cref="Row"/> of a fixed size.</summary>
-    public BoxScope RowPx(float width, float height)
-        => PushGroup(LayoutAxis.X, SemanticSize.Pixels(width), SemanticSize.Pixels(height));
+    public Box RowPx(float width, float height)
+        => Group(LayoutAxis.X, SemanticSize.Pixels(width), SemanticSize.Pixels(height));
 
     private static SemanticSize Fit => SemanticSize.ChildrenSum();
     private static SemanticSize Fill => SemanticSize.ParentPct(1f);
 
     // A size given here is the box's own; one not given is left as Box() set
     // it, from the size pushed or none.
-    private BoxScope PushGroup(LayoutAxis axis, SemanticSize? sizeX, SemanticSize? sizeY, bool closingSpring = false)
+    private Box Group(LayoutAxis axis, SemanticSize? sizeX, SemanticSize? sizeY)
     {
         Box box = Box();
         box.ChildLayoutAxis = axis;
         if (sizeX is { } x) box.SizeX = x;
         if (sizeY is { } y) box.SizeY = y;
-        var pushed = PushParent(box);
-        if (closingSpring) Spring();
-        return new BoxScope(this, box, pushed, closingSpring);
+        return box;
     }
 
     /// <summary>
     /// A spacer that takes whatever room its siblings leave along the axis of
     /// the parent in scope, and gives all of it up first when they do not fit:
     /// what pushes the nodes built after it to the far end.
-    /// <c>using (runtime.Row()) { runtime.Text(title); runtime.Spring(); runtime.Button(...); }</c>
+    /// <c>using (runtime.PushParent(runtime.RowFillX())) { runtime.Text(title); runtime.Spring(); runtime.Button(...); }</c>
     /// </summary>
     public Box Spring()
     {
@@ -124,25 +122,10 @@ public sealed partial class BibuiRuntime
     }
 
     /// <summary>
-    /// What is built inside is centred across the parent in scope's width: a
-    /// row as wide as the parent and as tall as what it holds, with a spring
-    /// before and after it. <c>using (runtime.CentredX()) runtime.Text("Empty");</c>
-    /// </summary>
-    public BoxScope CentredX()
-        => PushGroup(LayoutAxis.X, Fill, Fit, closingSpring: true);
-
-    /// <summary>
-    /// What is built inside is centred across the parent in scope's height: a
-    /// column as tall as the parent and as wide as what it holds, with a spring
-    /// before and after it.
-    /// </summary>
-    public BoxScope CentredY()
-        => PushGroup(LayoutAxis.Y, Fit, Fill, closingSpring: true);
-
-    /// <summary>
     /// What is built inside is centred along the parent in scope's own axis: a
     /// spring before it now, and one after it when the scope is disposed. No
-    /// box of its own; the contents stay children of the parent.
+    /// box of its own; the contents stay children of the parent. Centred
+    /// across a row: <c>using (runtime.PushParent(runtime.ColumnFillY())) using (runtime.Centred()) ...</c>.
     /// </summary>
     public CentredScope Centred()
     {
@@ -256,42 +239,6 @@ public sealed partial class BibuiRuntime
         internal CentredScope(BibuiRuntime runtime) => _runtime = runtime;
 
         public void Dispose() => _runtime.Spring();
-    }
-
-    /// <summary>
-    /// The box <see cref="Column"/>, <see cref="Row"/>, <see cref="CentredX"/>
-    /// or <see cref="CentredY"/> made, pushed as the
-    /// parent until this is disposed. It stands for the box where a node is
-    /// wanted, so a build can return it: <c>using (var column = runtime.Column())
-    /// { ...; return column; }</c>.
-    /// </summary>
-    public readonly struct BoxScope : IDisposable
-    {
-        private readonly BibuiRuntime _runtime;
-        private readonly ParentScope _pushed;
-        private readonly bool _closingSpring;
-
-        internal BoxScope(BibuiRuntime runtime, Box box, ParentScope pushed, bool closingSpring)
-        {
-            _runtime = runtime;
-            Box = box;
-            _pushed = pushed;
-            _closingSpring = closingSpring;
-        }
-
-        /// <summary>The column or row, to size or style further.</summary>
-        public Box Box { get; }
-
-        /// <summary>Stops building into the box (closing a centred one with its second spring).</summary>
-        public void Dispose()
-        {
-            if (_closingSpring) _runtime.Spring();
-            _pushed.Dispose();
-        }
-
-        public static implicit operator Box(BoxScope scope) => scope.Box;
-        public static implicit operator UiNode(BoxScope scope) => scope.Box;
-        public static implicit operator Arrange.Item(BoxScope scope) => scope.Box;
     }
 
     /// <summary>Pops <see cref="PushSizeX"/> or <see cref="PushSizeY"/> when disposed.</summary>
