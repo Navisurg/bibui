@@ -1,12 +1,13 @@
 using Bibui;
 using Bibui.TextEdit;
+using static Bibui.Runtime.Tabs;
 
 namespace Bibui.Runtime;
 
 /// <summary>One tab of a <see cref="Tabs"/> strip: what it reads, and the value it stands for.</summary>
 public readonly record struct TabOption(string Label, string Value);
 
-/// <summary>What <see cref="Tabs.Build"/> built: the strip, and the value of the tab clicked this frame, if any.</summary>
+/// <summary>What <see cref="TabsExtensions.Tabs"/> built: the strip, and the value of the tab clicked this frame, if any.</summary>
 public readonly record struct TabsWidget(Box Node, string? Picked)
 {
     public static implicit operator UiNode(TabsWidget widget) => widget.Node;
@@ -30,20 +31,47 @@ public static class Tabs
     /// <summary>The space a caller puts between the strip and its <see cref="Panel"/>.</summary>
     public const float PanelGap = 8f;
 
-    private const float Inset = 2f;     // the active tab sits this far inside the track, above and below
-    private const float PadX = 12f;     // Spacing.Md, either side of a label
-    private const float TabGap = 4f;
-    private const float RadiusSm = 4f;  // Radii.Sm
-    private const float RadiusMd = 6f;  // Radii.Md
-    private const float PanelPad = 12f; // Spacing.Md
+    internal const float Inset = 2f;     // the active tab sits this far inside the track, above and below
+    internal const float PadX = 12f;     // Spacing.Md, either side of a label
+    internal const float TabGap = 4f;
+    internal const float RadiusSm = 4f;  // Radii.Sm
+    internal const float RadiusMd = 6f;  // Radii.Md
+    internal const float PanelPad = 12f; // Spacing.Md
 
+
+    /// <summary>
+    /// The panel under a strip, under the parent in scope and as wide as it: a
+    /// bordered surface, padded, laid out down. Push it to build the active
+    /// tab's content into it. It is as tall as its content; set its size to
+    /// change that.
+    /// </summary>
+    public static Box Panel(BibuiRuntime runtime)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+
+        Box panel = runtime.Box();
+        panel.ChildLayoutAxis = LayoutAxis.Y;
+        panel.SizeX = SemanticSize.ParentPct(1f);
+        panel.SizeY = SemanticSize.ChildrenSum();
+        panel.Style.BackgroundColor = UiColor.Surface;
+        panel.Style.BorderColor = UiColor.Border;
+        panel.Style.BorderWidth = runtime.Theme.Borders.Width;
+        panel.Style.CornerRadius = RadiusMd;
+        panel.Style.Padding = EdgeInsets.All(PanelPad);
+        return panel;
+    }
+}
+
+/// <summary>The Tabs component, called on the runtime that builds it.</summary>
+public static class TabsExtensions
+{
     /// <summary>
     /// Builds the strip named <paramref name="id"/> under the parent in scope,
     /// as wide as all of it, showing <paramref name="items"/> with the one whose
     /// value is <paramref name="value"/> active. The tabs are named
     /// <c>{id}-{value}</c>.
     /// </summary>
-    public static TabsWidget Build(BibuiRuntime runtime, string id, IReadOnlyList<TabOption> items, string? value)
+    public static TabsWidget Tabs(this BibuiRuntime runtime, string id, IReadOnlyList<TabOption> items, string? value)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -85,27 +113,5 @@ public static class Tabs
             }
         }
         return new TabsWidget(strip, picked);
-    }
-
-    /// <summary>
-    /// The panel under a strip, under the parent in scope and as wide as it: a
-    /// bordered surface, padded, laid out down. Push it to build the active
-    /// tab's content into it. It is as tall as its content; set its size to
-    /// change that.
-    /// </summary>
-    public static Box Panel(BibuiRuntime runtime)
-    {
-        ArgumentNullException.ThrowIfNull(runtime);
-
-        Box panel = runtime.Box();
-        panel.ChildLayoutAxis = LayoutAxis.Y;
-        panel.SizeX = SemanticSize.ParentPct(1f);
-        panel.SizeY = SemanticSize.ChildrenSum();
-        panel.Style.BackgroundColor = UiColor.Surface;
-        panel.Style.BorderColor = UiColor.Border;
-        panel.Style.BorderWidth = runtime.Theme.Borders.Width;
-        panel.Style.CornerRadius = RadiusMd;
-        panel.Style.Padding = EdgeInsets.All(PanelPad);
-        return panel;
     }
 }

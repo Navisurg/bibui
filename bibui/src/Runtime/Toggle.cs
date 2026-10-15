@@ -9,7 +9,7 @@ namespace Bibui.Runtime;
 /// press and reports the click; whether it is on is the caller's, passed in
 /// to be drawn and flipped by the caller on <see cref="BibuiWidget.Clicked"/>.
 /// </summary>
-public static class Toggle
+public static class ToggleExtensions
 {
     private const float Height = 36f;
     private const float PadX = 12f;     // Spacing.Md
@@ -23,7 +23,7 @@ public static class Toggle
     /// frame. <paramref name="icon"/> names an icon drawn before the label.
     /// Disabled, it swallows the press rather than reporting it.
     /// </summary>
-    public static BibuiWidget Build(BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default,
+    public static BibuiWidget Toggle(this BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default,
         string? icon = null, bool disabled = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);

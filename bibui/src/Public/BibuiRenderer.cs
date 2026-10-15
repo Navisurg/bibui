@@ -20,17 +20,6 @@ public sealed class BibuiRenderer
     private readonly Painter _painter;
 
     /// <summary>
-    /// A renderer on the default raster backend (<see cref="RasterBackends"/>):
-    /// Skia, when the app references Bibui.Raster.Skia, the cross-platform
-    /// default. The extension methods for SkiaSharp surfaces
-    /// (<c>RenderTo(SKSurface, …)</c>, <c>SkiaSurface</c>) live there too.
-    /// Under Native AOT pass the backend instead: the default is loaded by
-    /// name, which a trimmed publish may have dropped.
-    /// </summary>
-    [RequiresUnreferencedCode(RasterBackends.TrimMessage)]
-    public BibuiRenderer() : this(RasterBackends.CreateDefault()) { }
-
-    /// <summary>
     /// A renderer on <paramref name="raster"/>, which it now owns. Chosen
     /// explicitly — there is no discovery, so nothing here needs reflection.
     /// </summary>

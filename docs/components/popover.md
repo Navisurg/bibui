@@ -59,7 +59,7 @@ sealed class SharePopover
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        var trigger = Button.Build(runtime, "share", Share);
+        var trigger = runtime.Button("share", Share);
         if (trigger.Clicked)
             if (runtime.IsDropDownOpen("share-popover")) runtime.CloseDropDown("share-popover");
             else runtime.OpenDropDown("share-popover", trigger.Node);

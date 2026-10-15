@@ -17,12 +17,10 @@ namespace Bibui.Runtime;
 /// </summary>
 public sealed partial class BibuiRuntime
 {
-    // Made on first use, from the backend WithRaster chose or else the one the
-    // runtime was created with: Create() names a default without building it,
-    // so an app that then calls WithSkia() never loads the managed rasterizer.
+    // Made on first use, from the backend WithRaster chose: the backend is
+    // chosen after Create(), and its fonts and caches are made with it.
     private BibuiRenderer? _renderer;
     private IRasterBackend? _chosenRaster;
-    private readonly Func<IRasterBackend>? _defaultRaster;
     private readonly object _rendererLock = new();
 
     private BibuiRenderer Renderer
@@ -34,7 +32,9 @@ public sealed partial class BibuiRuntime
             {
                 if (_renderer is null)
                 {
-                    var raster = _chosenRaster ?? _defaultRaster!();
+                    var raster = _chosenRaster ?? throw new InvalidOperationException(
+                        "No raster backend: choose one after BibuiRuntime.Create() — .WithSkia() (Bibui.Raster.Skia), " +
+                        ".WithManagedRasterizer() (Bibui.Raster.Managed.Backend) or .WithRaster(backend).");
                     _chosenRaster = null;
                     Volatile.Write(ref _renderer, new BibuiRenderer(raster));
                 }
@@ -43,26 +43,22 @@ public sealed partial class BibuiRuntime
         }
     }
 
+    private BibuiRuntime() { }
+
     /// <summary>
-    /// A runtime that draws with the managed rasterizer (Bibui.Raster.Managed.Backend)
-    /// unless another backend is chosen before it first draws or measures:
-    /// <c>BibuiRuntime.Create().WithSkia()</c> (Bibui.Raster.Skia) or
-    /// <c>.WithManagedRasterizer()</c>. The default is not made until it is
-    /// needed, so choosing another loads nothing of it.
-    ///
-    /// <para>The default is loaded by name, which a trimmed or Native AOT publish
-    /// may have dropped, so a publish that calls this warns (IL2026). An AOT app
-    /// passes the backend: <c>new BibuiRuntime(new ManagedRasterBackend())</c>.</para>
+    /// A runtime, with no raster backend yet: choose one before it first draws
+    /// or measures — <c>BibuiRuntime.Create().WithSkia()</c> (Bibui.Raster.Skia),
+    /// <c>.WithManagedRasterizer()</c> (Bibui.Raster.Managed.Backend) or
+    /// <c>.WithRaster(backend)</c>. Chosen explicitly — no discovery, so nothing
+    /// here needs reflection.
     /// </summary>
-    [RequiresUnreferencedCode(RasterBackends.ManagedTrimMessage)]
-    public static BibuiRuntime Create() => new(static () => RasterBackends.CreateManaged());
+    public static BibuiRuntime Create() => new();
 
     /// <summary>
     /// Makes <paramref name="raster"/>, which the runtime now owns, the backend
-    /// it draws with, in place of the one it was created with. Returns the
-    /// runtime, so it chains after <see cref="Create"/>. Only before the runtime
-    /// first draws or measures: after that its fonts and caches belong to the
-    /// backend it has.
+    /// it draws with. Returns the runtime, so it chains after <see cref="Create"/>;
+    /// a second choice replaces the first. Only before the runtime first draws or
+    /// measures: after that its fonts and caches belong to the backend it has.
     /// </summary>
     public BibuiRuntime WithRaster(IRasterBackend raster)
     {
@@ -78,27 +74,6 @@ public sealed partial class BibuiRuntime
         }
         return this;
     }
-
-    /// <summary>
-    /// A runtime that paints with the default raster backend (<see cref="RasterBackends"/>):
-    /// Skia, when the app references Bibui.Raster.Skia, the cross-platform default.
-    /// Under Native AOT pass the backend instead —
-    /// <c>new BibuiRuntime(new ManagedRasterBackend())</c>: the default is loaded
-    /// by name, which a trimmed publish may have dropped, so a publish that
-    /// calls this warns (IL2026).
-    /// </summary>
-    [RequiresUnreferencedCode(RasterBackends.TrimMessage)]
-    public BibuiRuntime() : this(new BibuiRenderer()) { }
-
-    /// <summary>
-    /// A runtime that paints with <paramref name="raster"/>, which it now owns.
-    /// Chosen explicitly — no discovery, so nothing here needs reflection.
-    /// </summary>
-    public BibuiRuntime(IRasterBackend raster) : this(new BibuiRenderer(raster)) { }
-
-    private BibuiRuntime(BibuiRenderer renderer) => _renderer = renderer;
-
-    private BibuiRuntime(Func<IRasterBackend> defaultRaster) => _defaultRaster = defaultRaster;
 
     /// <summary>The raster backend frames are painted with.</summary>
     public IRasterBackend Raster => Renderer.Raster;

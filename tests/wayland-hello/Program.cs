@@ -22,7 +22,6 @@ using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 using static Bibui.Arrange;
-using Button = Bibui.Runtime.Button;
 
 bool animate = !args.Contains("--still");
 int clicks = 0;
@@ -34,7 +33,7 @@ string lastButton = "none yet";
 KeyModifiers lastModifiers = KeyModifiers.None;
 
 // The backend is named: the Wayland host brings none, and Native AOT keeps only what is named.
-var runtime = new BibuiRuntime(new ManagedRasterBackend());
+var runtime = BibuiRuntime.Create().WithManagedRasterizer();
 long frame = 0;
 
 runtime.Mount(() =>
@@ -46,10 +45,10 @@ runtime.Mount(() =>
     float t = (MathF.Sin(frame / 40f) + 1f) / 2f;
 
     // ── Ask, innermost and topmost first ────────────────────────────────────
-    var toggle = Switch.Build(runtime, "anim", animate, label: animate ? "Animating (click to stop)" : "Still (click to animate)");
+    var toggle = runtime.Switch("anim", animate, label: animate ? "Animating (click to stop)" : "Still (click to animate)");
     if (toggle.Clicked) { animate = !animate; runtime.RequestFrame(); }
 
-    var hello = Button.Build(runtime, "hello", clicks == 0 ? "Click me" : $"Clicked {clicks}×");
+    var hello = runtime.Button("hello", clicks == 0 ? "Click me" : $"Clicked {clicks}×");
     if (hello.Clicked) clicks++;
 
     // A press focuses the field; Escape or Enter lets it go.
@@ -58,7 +57,7 @@ runtime.Mount(() =>
     field.FillX().Px(height: 40f);
     BibuiWidget line;
     using (runtime.PushParent(field))
-        line = TextField.SingleLine(runtime, "typed", typed, typedEdit, typing,
+        line = runtime.TextField("typed", typed, typedEdit, typing,
             placeholder: "Type here: dead keys, AltGr, held keys repeat, Ctrl+A, Ctrl+Left");
     if (line.Pressed) typing = true;
     foreach (var handle in runtime.UnconsumedEvents)
@@ -144,7 +143,7 @@ if (!WaylandPlatformHost.IsSupported)
     return 1;
 }
 
-new BibuiWindow(runtime, new WaylandPlatformHost(new WaylandHostOptions { AppId = "bibui-wayland-hello" }))
+BibuiWindow.Create(runtime).WithWayland(new WaylandHostOptions { AppId = "bibui-wayland-hello" })
     .Run("bibui — wayland-hello");
 return 0;
 

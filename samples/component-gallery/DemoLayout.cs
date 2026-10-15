@@ -450,7 +450,7 @@ internal static class DemoLayout
             {
                 ColormapSelect(runtime, state, set, colormaps, width: 320f);
                 runtime.Gap(Section.Spacing);
-                var alpha = Slider.Build(runtime, "demo-colormap-alpha", state.ColormapAlpha, 0f, 1f, 0.01f, "Alpha");
+                var alpha = runtime.Slider("demo-colormap-alpha", state.ColormapAlpha, 0f, 1f, 0.01f, "Alpha");
                 if (alpha.Value != state.ColormapAlpha) set(state with { ColormapAlpha = alpha.Value });
             }
 
@@ -461,7 +461,7 @@ internal static class DemoLayout
     }
 
     // A select whose rows are the page's own: a gradient swatch and the name,
-    // which Select.Item does not draw.
+    // which runtime.SelectItem does not draw.
     private static UiNode ColormapSelect(BibuiRuntime runtime, LayoutState state,
         Action<LayoutState> set, IReadOnlyList<string> colormaps, float width)
     {

@@ -14,6 +14,40 @@ before it was published.
 
 ### Changed
 
+- **Runtimes and windows are made with `Create`, and the backend and host are
+  always chosen (breaking).**
+  `BibuiWindow.Create(BibuiRuntime.Create().WithSkia()).WithSilk().Run(title: "App")`.
+  - `BibuiRuntime` and `BibuiWindow` have no public constructors. Instead of
+    `new BibuiRuntime(backend)`, write `BibuiRuntime.Create()` followed by
+    `.WithSkia()` (Bibui.Raster.Skia), `.WithManagedRasterizer()`
+    (Bibui.Raster.Managed.Backend) or `.WithRaster(backend)`, before the
+    runtime first draws or measures. Instead of `new BibuiWindow(runtime, host)`,
+    write `BibuiWindow.Create(runtime)` followed by `.WithSilk()`
+    (Bibui.Platform.Silk), `.WithWayland(options)` (Bibui.Platform.Wayland) or
+    `.WithHost(host)`.
+  - There is no default backend: `new BibuiRuntime()`, `new BibuiRenderer()`
+    and `RasterBackends` are gone, and Bibui.Raster.Skia no longer registers
+    itself. Nothing is loaded by name, so nothing warns under trimming or AOT.
+    A runtime with no backend throws when it first draws, and a window with no
+    host throws when it runs, each saying what to call.
+- **Components are called on the runtime (breaking).** Every component named
+  by an id is an extension method on `BibuiRuntime`, and its static function
+  is gone: `runtime.Button(id, "Save")` for `Button.Build(runtime, id, "Save")`.
+  - `runtime.Button`, `Checkbox`, `Switch`, `Toggle`, `Slider`, `RadioGroup`,
+    `ToggleGroup`, `Tabs`, `Expander`, `Scrollbar` and `Markdown` replace
+    their `Build`; `runtime.MenuItem` replaces `Menu.Item`, `runtime.SelectItem`
+    replaces `Select.Item`, and `runtime.TextField`, `MultilineTextField` and
+    `EllipsisTextField` replace `TextField.SingleLine`, `Multiline` and
+    `Ellipsis`.
+  - The types `Button`, `Checkbox`, `Switch`, `Toggle`, `RadioGroup` and
+    `ToggleGroup` are gone (the methods live on `ButtonExtensions` and so on).
+    `Slider`, `Tabs`, `Expander`, `Scrollbar`, `Markdown`, `Menu`, `Select` and
+    `TextField` keep their constants and other members.
+  - Like any box the runtime builds, a component is linked under the parent
+    in scope, so building it inside `using (runtime.PushParent(column))` puts
+    it in the column. Layout (`Arrange`), the keyless leaves and the scopes
+    (`Dialog`, `Popover`, `Menu.Begin`, `Select.Begin`) keep their spelling.
+
 - **Text is UTF-16, not UTF-8 (since 0.9.1, breaking).** bibui now holds,
   measures and draws .NET's own chars, so a `string` goes straight in:
   `runtime.Text("Party 🎉")`, `Button.Build(runtime, "b", "Save")`.
@@ -109,33 +143,6 @@ before it was published.
   (`BIBUI_TEST_SERVER_OUT`). The constructor takes that directory.
 
 ### Added
-
-- **`BibuiRuntime.Create()` and `BibuiWindow.Create(runtime)`**, with the
-  backend and host chosen after, both optional:
-  `BibuiWindow.Create(BibuiRuntime.Create().WithSkia()).WithSilk().Run(title: "App")`.
-  - `Create()` draws with the managed rasterizer unless a backend is chosen
-    before the runtime first draws: `.WithSkia()` (Bibui.Raster.Skia),
-    `.WithManagedRasterizer()` (Bibui.Raster.Managed.Backend), or
-    `.WithRaster(backend)`. The default is made on first use, so choosing
-    another loads nothing of it.
-  - `BibuiWindow.Create(runtime)` opens on the raw Wayland host unless one is
-    chosen before it runs: `.WithSilk()` (Bibui.Platform.Silk),
-    `.WithWayland()` (Bibui.Platform.Wayland), or `.WithHost(host)`.
-  - Both defaults are loaded by name (`RasterBackends.ManagedProvider`,
-    `PlatformHosts.DefaultProvider`), so the `Create` methods warn (IL2026)
-    under a trimmed or Native AOT publish, as the parameterless
-    `new BibuiRuntime()` does. An AOT app keeps passing the backend and host
-    to the constructors.
-- **Components called on the runtime.** Every component named by an id has a
-  method on `BibuiRuntime` that forwards to its `Build`:
-  `runtime.Button(id, "Save")`, `runtime.Checkbox`, `runtime.Switch`,
-  `runtime.Toggle`, `runtime.Slider`, `runtime.RadioGroup`,
-  `runtime.ToggleGroup`, `runtime.Tabs`, `runtime.Expander`,
-  `runtime.Scrollbar`, `runtime.Markdown`, `runtime.MenuItem`,
-  `runtime.SelectItem`, `runtime.TextField` (`TextField.SingleLine`),
-  `runtime.MultilineTextField` and `runtime.EllipsisTextField`. The `Build`
-  functions stay. Layout (`Arrange`), the keyless leaves and the scopes
-  (`Dialog`, `Popover`, `Menu.Begin`, `Select.Begin`) keep their spelling.
 
 - `Icons.Register(name, svgPathData)`: an app adds icons of its own at
   start-up, drawn by `runtime.Icon` and known to `Icon.IsKnown` like the

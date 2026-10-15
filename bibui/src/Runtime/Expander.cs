@@ -1,10 +1,11 @@
 using Bibui;
 using Bibui.TextEdit;
+using static Bibui.Runtime.Expander;
 
 namespace Bibui.Runtime;
 
 /// <summary>
-/// What <see cref="Expander.Build"/> built: the outlined frame, the body to
+/// What <see cref="ExpanderExtensions.Expander"/> built: the outlined frame, the body to
 /// build the content into — null while closed — and whether the header was
 /// clicked this frame.
 /// </summary>
@@ -31,11 +32,27 @@ public static class Expander
     /// <summary>The header's height, at the theme's default density.</summary>
     public const float HeaderHeight = 44f;
 
-    private const float PadX = 12f;     // Spacing.Md
-    private const float BodyTop = 8f;   // Spacing.Sm
-    private const float Radius = 6f;    // Radii.Md
-    private const float ChevronSize = 16f;
+    internal const float PadX = 12f;     // Spacing.Md
+    internal const float BodyTop = 8f;   // Spacing.Sm
+    internal const float Radius = 6f;    // Radii.Md
+    internal const float ChevronSize = 16f;
 
+
+    // A cell the header's height, under the parent in scope: what is built
+    // into it between two springs is centred down the header.
+    internal static Box Cell(BibuiRuntime runtime)
+    {
+        Box cell = runtime.Box();
+        cell.ChildLayoutAxis = LayoutAxis.Y;
+        cell.SizeX = SemanticSize.ChildrenSum();
+        cell.SizeY = SemanticSize.ParentPct(1f);
+        return cell;
+    }
+}
+
+/// <summary>The Expander component, called on the runtime that builds it.</summary>
+public static class ExpanderExtensions
+{
     /// <summary>
     /// Builds the expander named <paramref name="id"/> under the parent in
     /// scope, as wide as all of it, titled <paramref name="title"/>. While
@@ -43,7 +60,7 @@ public static class Expander
     /// as wide as the frame and as tall as what is built into it: push it to
     /// build the content, and size it to fix the height.
     /// </summary>
-    public static ExpanderWidget Build(BibuiRuntime runtime, string id, ReadOnlySpan<char> title, bool open)
+    public static ExpanderWidget Expander(this BibuiRuntime runtime, string id, ReadOnlySpan<char> title, bool open)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -103,16 +120,5 @@ public static class Expander
             }
         }
         return new ExpanderWidget(frame, body, interaction);
-    }
-
-    // A cell the header's height, under the parent in scope: what is built
-    // into it between two springs is centred down the header.
-    private static Box Cell(BibuiRuntime runtime)
-    {
-        Box cell = runtime.Box();
-        cell.ChildLayoutAxis = LayoutAxis.Y;
-        cell.SizeX = SemanticSize.ChildrenSum();
-        cell.SizeY = SemanticSize.ParentPct(1f);
-        return cell;
     }
 }

@@ -121,7 +121,7 @@ internal static class SelfTest
 
     private static BibuiRuntime Mount(IRasterBackend backend, App app, int w, int h)
     {
-        var rt = new BibuiRuntime(backend);
+        var rt = BibuiRuntime.Create().WithRaster(backend);
         rt.Mount(() => app.Build(rt), app.Theme(), new SurfaceOptions { Width = w, Height = h, ScaleFactor = 1f });
         return rt;
     }

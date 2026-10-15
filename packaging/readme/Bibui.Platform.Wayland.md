@@ -5,11 +5,11 @@ frames drawn on the CPU straight into `wl_shm` buffers and paced by the
 compositor's frame callbacks. No GLFW, no OpenGL, no SkiaSharp. Linux only.
 
 ```csharp
-var runtime = new BibuiRuntime(new ManagedRasterBackend());
+var runtime = BibuiRuntime.Create().WithManagedRasterizer();
 runtime.Mount(() => /* your frame */);
 
 if (WaylandPlatformHost.IsSupported)
-    new BibuiWindow(runtime, new WaylandPlatformHost(new WaylandHostOptions { AppId = "my-app" }))
+    BibuiWindow.Create(runtime).WithWayland(new WaylandHostOptions { AppId = "my-app" })
         .Run("My app");
 ```
 

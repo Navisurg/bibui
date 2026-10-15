@@ -15,8 +15,8 @@ button draws only its label at rest. `tooltip-above`, `popover-open` and
 ## Build
 
 ```cs
-public static BibuiWidget Build(
-    BibuiRuntime runtime,
+public static BibuiWidget Button(
+    this BibuiRuntime runtime,
     string id,
     ReadOnlySpan<char> label,
     bool ghost = false,
@@ -75,12 +75,12 @@ sealed class Counter
         row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
         using (runtime.PushParent(row))
         {
-            if (Button.Build(runtime, "counter-minus", Minus).Clicked) _count--;
+            if (runtime.Button("counter-minus", Minus).Clicked) _count--;
             runtime.Gap(8f);
-            if (Button.Build(runtime, "counter-plus", Plus).Clicked) _count++;
+            if (runtime.Button("counter-plus", Plus).Clicked) _count++;
             runtime.Gap(8f);
             // Disabled at zero: still there, and a press on it reaches nothing beneath.
-            if (Button.Build(runtime, "counter-reset", Reset, ghost: true, disabled: _count == 0,
+            if (runtime.Button("counter-reset", Reset, ghost: true, disabled: _count == 0,
                     size: ComponentSize.Sm).Clicked)
                 _count = 0;
         }

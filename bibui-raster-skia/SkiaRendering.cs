@@ -59,16 +59,3 @@ public static class SkiaCustomDraw
         };
     }
 }
-
-/// <summary>
-/// Referencing this package makes Skia the backend the parameterless
-/// <c>new BibuiRenderer()</c> and <c>new BibuiRuntime()</c> draw with
-/// (<see cref="RasterBackends"/>).
-/// </summary>
-internal static class DefaultBackend
-{
-    [ModuleInitializer]
-    [SuppressMessage("Usage", "CA2255", Justification =
-        "Registering the default backend is the point: it keeps new BibuiRuntime() drawing with Skia for an app that references this package.")]
-    internal static void Register() => RasterBackends.SetDefault(static () => new SkiaRasterBackend());
-}

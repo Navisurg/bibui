@@ -90,7 +90,7 @@ if (Has("--first-frame"))
 {
     var app = NewApp();
     app.Live = false;
-    var rt = new BibuiRuntime(NewBackend());
+    var rt = BibuiRuntime.Create().WithRaster(NewBackend());
     rt.Mount(() => app.Build(rt), app.Theme(), new SurfaceOptions { Width = 1440, Height = 900, ScaleFactor = 1f });
     _ = rt.Render().RawBgraBytes[0];
     double ms = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
@@ -122,7 +122,7 @@ if (Arg("--png") is { } png)
 // ── The window ──────────────────────────────────────────────────────────────
 
 var live = NewApp();
-var runtime = new BibuiRuntime(NewBackend());
+var runtime = BibuiRuntime.Create().WithRaster(NewBackend());
 runtime.Mount(() => live.Build(runtime), live.Theme(), new SurfaceOptions { Width = 1440, Height = 900 });
 
 IPlatformHost platform;
@@ -143,7 +143,7 @@ else
     platform = new SilkPlatformHost();
 #endif
 }
-new BibuiWindow(runtime, platform).Run("Zenith — bibui showcase");
+BibuiWindow.Create(runtime).WithHost(platform).Run("Zenith — bibui showcase");
 return 0;
 
 static (int W, int H) ParseSize(string s)

@@ -14,7 +14,7 @@ public readonly record struct ToggleGroupWidget(Box Node, string? Picked);
 /// raised. Each item is a box that takes its own press; the group reports
 /// which was picked and the caller applies it.
 /// </summary>
-public static class ToggleGroup
+public static class ToggleGroupExtensions
 {
     private const float Height = 36f;
     private const float PadX = 12f;     // Spacing.Md
@@ -27,7 +27,7 @@ public static class ToggleGroup
     /// default density; set its size on
     /// what comes back to change that.
     /// </summary>
-    public static ToggleGroupWidget Build(BibuiRuntime runtime, string id,
+    public static ToggleGroupWidget ToggleGroup(this BibuiRuntime runtime, string id,
         IReadOnlyList<ToggleOption> items, string? value)
     {
         ArgumentNullException.ThrowIfNull(runtime);

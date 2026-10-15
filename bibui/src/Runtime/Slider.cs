@@ -1,5 +1,6 @@
 using Bibui;
 using Bibui.TextEdit;
+using static Bibui.Runtime.Slider;
 
 namespace Bibui.Runtime;
 
@@ -30,15 +31,40 @@ public static class Slider
     /// <summary>The thumb's diameter, and the track's height.</summary>
     public const float Height = 16f;
 
-    private const float GrooveHeight = 4f;
-    private const float LabelGap = 4f;
+    internal const float GrooveHeight = 4f;
+    internal const float LabelGap = 4f;
 
+
+    internal static Box Pill(BibuiRuntime runtime, SemanticSize width, float height, UiColor color)
+    {
+        var pill = runtime.Box();
+        pill.SizeX = width;
+        pill.SizeY = SemanticSize.Pixels(height);
+        pill.Style.BackgroundColor = color;
+        pill.Style.CornerRadius = height / 2f;
+        return pill;
+    }
+
+    /// <summary>Where along a track the pointer is, in the value's own units, snapped to the step.</summary>
+    internal static float ValueAt(float pointerX, float trackX, float trackWidth, float min, float max, float step)
+    {
+        float span = max - min;
+        if (trackWidth <= 0f || span <= 0f) return min;
+        float raw = min + Math.Clamp((pointerX - trackX) / trackWidth, 0f, 1f) * span;
+        if (step > 0f) raw = min + MathF.Round((raw - min) / step) * step;
+        return Math.Clamp(raw, min, max);
+    }
+}
+
+/// <summary>The Slider component, called on the runtime that builds it.</summary>
+public static class SliderExtensions
+{
     /// <summary>
     /// Builds the slider named <paramref name="id"/> under the parent in scope,
     /// as wide as all of it unless the caller sizes the node otherwise.
     /// <paramref name="step"/> 0 is continuous.
     /// </summary>
-    public static SliderWidget Build(BibuiRuntime runtime, string id, float value,
+    public static SliderWidget Slider(this BibuiRuntime runtime, string id, float value,
         float min = 0f, float max = 1f, float step = 0f, ReadOnlySpan<char> label = default, bool disabled = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -81,25 +107,5 @@ public static class Slider
         }
 
         return new SliderWidget(column ?? (UiNode)track, live, interaction);
-    }
-
-    private static Box Pill(BibuiRuntime runtime, SemanticSize width, float height, UiColor color)
-    {
-        var pill = runtime.Box();
-        pill.SizeX = width;
-        pill.SizeY = SemanticSize.Pixels(height);
-        pill.Style.BackgroundColor = color;
-        pill.Style.CornerRadius = height / 2f;
-        return pill;
-    }
-
-    /// <summary>Where along a track the pointer is, in the value's own units, snapped to the step.</summary>
-    internal static float ValueAt(float pointerX, float trackX, float trackWidth, float min, float max, float step)
-    {
-        float span = max - min;
-        if (trackWidth <= 0f || span <= 0f) return min;
-        float raw = min + Math.Clamp((pointerX - trackX) / trackWidth, 0f, 1f) * span;
-        if (step > 0f) raw = min + MathF.Round((raw - min) / step) * step;
-        return Math.Clamp(raw, min, max);
     }
 }

@@ -31,7 +31,7 @@ public static class Arrange
 
         /// <summary>
         /// A built component goes into a row or column as its node, so
-        /// <c>Row(Button.Build(...), ...)</c> needs no <c>.Node</c>.
+        /// <c>Row((...).Button(), ...)</c> needs no <c>.Node</c>.
         /// </summary>
         public static implicit operator Item(BibuiWidget widget) => new(widget.Node, default);
         internal static Item Of(SemanticSize spacer) => new(null, spacer);

@@ -13,8 +13,8 @@ Fixtures: `tabs-account` and `tabs-password`.
 ## Build and Panel
 
 ```cs
-public static TabsWidget Build(
-    BibuiRuntime runtime,
+public static TabsWidget Tabs(
+    this BibuiRuntime runtime,
     string id,
     IReadOnlyList<TabOption> items,
     string? value)
@@ -82,7 +82,7 @@ sealed class SettingsTabs
         column.SizeY = SemanticSize.ChildrenSum();
         using (runtime.PushParent(column))
         {
-            var tabs = Tabs.Build(runtime, "settings-tabs", Items, _tab);
+            var tabs = runtime.Tabs("settings-tabs", Items, _tab);
             if (tabs.Picked is { } picked) _tab = picked;
             runtime.Gap(Tabs.PanelGap);
             using (runtime.PushParent(Tabs.Panel(runtime)))

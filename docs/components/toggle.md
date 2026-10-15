@@ -15,11 +15,11 @@ with dividers between them. The active item is raised.
 Fixtures: `toggle-default`, `toggle-pressed`, `toggle-disabled` and
 `toggle-group-default`.
 
-## Toggle.Build
+## runtime.Toggle
 
 ```cs
-public static BibuiWidget Build(
-    BibuiRuntime runtime,
+public static BibuiWidget Toggle(
+    this BibuiRuntime runtime,
     string id,
     bool on,
     ReadOnlySpan<char> label = default,
@@ -38,11 +38,11 @@ public static BibuiWidget Build(
 The box claims `InteractionKinds.LeftPress`, or `Disabled`, and returns a
 `BibuiWidget`. Flip your value on `Clicked`.
 
-## ToggleGroup.Build
+## runtime.ToggleGroup
 
 ```cs
-public static ToggleGroupWidget Build(
-    BibuiRuntime runtime,
+public static ToggleGroupWidget ToggleGroup(
+    this BibuiRuntime runtime,
     string id,
     IReadOnlyList<ToggleOption> items,
     string? value)
@@ -101,9 +101,9 @@ sealed class FormatBar
         row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
         using (runtime.PushParent(row))
         {
-            if (Toggle.Build(runtime, "format-bold", _bold, Bold, icon: "bold").Clicked) _bold = !_bold;
+            if (runtime.Toggle("format-bold", _bold, Bold, icon: "bold").Clicked) _bold = !_bold;
             runtime.Gap(12f);
-            var align = ToggleGroup.Build(runtime, "format-align", Alignments, _align);
+            var align = runtime.ToggleGroup("format-align", Alignments, _align);
             if (align.Picked is { } picked) _align = picked;
         }
         return row;

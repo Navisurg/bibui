@@ -1,11 +1,12 @@
 using System.Runtime.CompilerServices;
 using Bibui;
 using Bibui.TextEdit;
+using static Bibui.Runtime.Markdown;
 
 namespace Bibui.Runtime;
 
 /// <summary>
-/// What <see cref="Markdown.Build(BibuiRuntime, string, BibuiStr, float?, ComponentSize)"/>
+/// What <see cref="BibuiRuntime.Markdown(string, BibuiStr, float?, ComponentSize)"/>
 /// built: the column holding the document, the destination of a link clicked
 /// this frame, and the source offset of a task box clicked this frame.
 /// </summary>
@@ -31,7 +32,7 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
 /// per runtime and id until it changes, so a frame costs a comparison and
 /// the build. Each paragraph is broken into lines here, across its runs —
 /// a bold word, a code span and plain text wrap as one paragraph — at the width
-/// the viewer had last frame, as <see cref="TextField.Multiline"/> does. A line
+/// the viewer had last frame, as <see cref="TextFieldExtensions.MultilineTextField"/> does. A line
 /// is a row of texts, one per stretch of a single style.</para>
 ///
 /// <para>It owns no state. A link is a box that takes a press; the destination
@@ -45,64 +46,25 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
 /// </summary>
 public static class Markdown
 {
-    private const float CodePadX = 4f;          // either side of a code span
-    private const float CodeRadius = 4f;
-    private const float BlockPad = 12f;          // inside a code block
-    private const float QuotePad = 12f;          // between the rule and the text
-    private const float CellPadX = 10f, TightCellPadX = 6f, CellPadY = 6f;
-    private const float TightGap = 4f;           // between the items of a tight list
-    private const float TaskBox = 14f;
+    internal const float CodePadX = 4f;          // either side of a code span
+    internal const float CodeRadius = 4f;
+    internal const float BlockPad = 12f;          // inside a code block
+    internal const float QuotePad = 12f;          // between the rule and the text
+    internal const float CellPadX = 10f, TightCellPadX = 6f, CellPadY = 6f;
+    internal const float TightGap = 4f;           // between the items of a tight list
+    internal const float TaskBox = 14f;
 
     // Where a line through text sits, as a fraction of its line box: the box is
     // ascent to descent, so the baseline is about four fifths down.
-    private const float UnderlineAt = 0.88f, StrikeAt = 0.56f;
+    internal const float UnderlineAt = 0.88f, StrikeAt = 0.56f;
 
 
-    private static readonly ConditionalWeakTable<BibuiRuntime, Cache> Caches = new();
+    internal static readonly ConditionalWeakTable<BibuiRuntime, Cache> Caches = new();
 
     // Whether a run fits its room, with the hundredth of a pixel the layout's own fit test allows.
-    private static bool Fits(float width, float room) => width <= room + 0.01f;
+    internal static bool Fits(float width, float room) => width <= room + 0.01f;
 
-    /// <summary>
-    /// Builds the viewer named <paramref name="id"/> under the parent in scope,
-    /// showing <paramref name="source"/>. It is <paramref name="width"/> wide, or
-    /// as wide as its parent when that is null — in which case the parent must
-    /// have a width of its own — and as tall as the document. Text is set in
-    /// <paramref name="textSize"/>, headings in the steps above it.
-    /// </summary>
-    public static MarkdownWidget Build(BibuiRuntime runtime, string id, BibuiStr source, float? width = null,
-        ComponentSize textSize = ComponentSize.Md)
-    {
-        ArgumentNullException.ThrowIfNull(runtime);
-        ArgumentNullException.ThrowIfNull(id);
-        ArgumentNullException.ThrowIfNull(source);
-        var cache = Caches.GetValue(runtime, static _ => new Cache());
-        var entry = cache.Entry(id);
-        if (!entry.Parsed || !source.Str.SequenceEqual(entry.Source.Str))
-        {
-            entry.Source.ReplaceRange((0, (int)entry.Source.Length), source.Str);
-            entry.Document = MarkdownDocument.Parse(entry.Source.Str);
-            entry.Parsed = true;
-        }
-        return Build(runtime, id, cache, entry, width, textSize);
-    }
 
-    /// <summary>
-    /// The same, for a document the caller parsed and keeps: no comparison with
-    /// last frame's source at all.
-    /// </summary>
-    public static MarkdownWidget Build(BibuiRuntime runtime, string id, MarkdownDocument document, float? width = null,
-        ComponentSize textSize = ComponentSize.Md)
-    {
-        ArgumentNullException.ThrowIfNull(runtime);
-        ArgumentNullException.ThrowIfNull(id);
-        ArgumentNullException.ThrowIfNull(document);
-        var cache = Caches.GetValue(runtime, static _ => new Cache());
-        var entry = cache.Entry(id);
-        entry.Parsed = false;
-        entry.Document = document;
-        return Build(runtime, id, cache, entry, width, textSize);
-    }
 
     /// <summary>
     /// Ticks or unticks the task item whose box sits at <paramref name="offset"/>
@@ -118,7 +80,7 @@ public static class Markdown
         source.ReplaceRange((offset, offset + 1), mark == ' ' ? "x" : " ");
     }
 
-    private static MarkdownWidget Build(BibuiRuntime runtime, string id, Cache cache, Entry entry, float? width,
+    internal static MarkdownWidget Build(BibuiRuntime runtime, string id, Cache cache, Entry entry, float? width,
         ComponentSize textSize)
     {
         Box root = runtime.BoxFromId(id);
@@ -143,7 +105,7 @@ public static class Markdown
 
     // ── Per runtime ─────────────────────────────────────────────────────────
 
-    private sealed class Cache
+    internal sealed class Cache
     {
         private const int MaxEntries = 64;
         private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
@@ -173,7 +135,7 @@ public static class Markdown
         }
     }
 
-    private sealed class Entry(string id)
+    internal sealed class Entry(string id)
     {
         private readonly List<string> _ids = [];
 
@@ -195,9 +157,9 @@ public static class Markdown
     }
 
     // How a run of inline text is set, before its own style.
-    private readonly record struct Look(FontSize Size, FontSlot Family, bool Bold, UiColor Color);
+    internal readonly record struct Look(FontSize Size, FontSlot Family, bool Bold, UiColor Color);
 
-    private struct Frag
+    internal struct Frag
     {
         public int Run;
         public int Start, Len;
@@ -205,7 +167,7 @@ public static class Markdown
         public bool Space, Break;
     }
 
-    private struct Line
+    internal struct Line
     {
         public int Start, End;    // in Writer._placed
         public float Width;
@@ -213,7 +175,7 @@ public static class Markdown
 
     // ── The build ───────────────────────────────────────────────────────────
 
-    private sealed class Writer
+    internal sealed class Writer
     {
         private readonly List<Frag> _frags = [];
         private readonly List<Frag> _placed = [];
@@ -938,10 +900,55 @@ public static class Markdown
 
     // "n." formatted into the caller's buffer, which 12 chars always holds:
     // nothing is kept, since the Text the number goes to copies it.
-    private static ReadOnlySpan<char> Number(int n, Span<char> into)
+    internal static ReadOnlySpan<char> Number(int n, Span<char> into)
     {
         n.TryFormat(into, out int length);
         into[length] = '.';
         return into[..(length + 1)];
+    }
+}
+
+/// <summary>The Markdown component, called on the runtime that builds it.</summary>
+public static class MarkdownExtensions
+{
+    /// <summary>
+    /// Builds the viewer named <paramref name="id"/> under the parent in scope,
+    /// showing <paramref name="source"/>. It is <paramref name="width"/> wide, or
+    /// as wide as its parent when that is null — in which case the parent must
+    /// have a width of its own — and as tall as the document. Text is set in
+    /// <paramref name="textSize"/>, headings in the steps above it.
+    /// </summary>
+    public static MarkdownWidget Markdown(this BibuiRuntime runtime, string id, BibuiStr source, float? width = null,
+        ComponentSize textSize = ComponentSize.Md)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(source);
+        var cache = Caches.GetValue(runtime, static _ => new Cache());
+        var entry = cache.Entry(id);
+        if (!entry.Parsed || !source.Str.SequenceEqual(entry.Source.Str))
+        {
+            entry.Source.ReplaceRange((0, (int)entry.Source.Length), source.Str);
+            entry.Document = MarkdownDocument.Parse(entry.Source.Str);
+            entry.Parsed = true;
+        }
+        return Build(runtime, id, cache, entry, width, textSize);
+    }
+
+    /// <summary>
+    /// The same, for a document the caller parsed and keeps: no comparison with
+    /// last frame's source at all.
+    /// </summary>
+    public static MarkdownWidget Markdown(this BibuiRuntime runtime, string id, MarkdownDocument document, float? width = null,
+        ComponentSize textSize = ComponentSize.Md)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(document);
+        var cache = Caches.GetValue(runtime, static _ => new Cache());
+        var entry = cache.Entry(id);
+        entry.Parsed = false;
+        entry.Document = document;
+        return Build(runtime, id, cache, entry, width, textSize);
     }
 }

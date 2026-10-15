@@ -49,7 +49,8 @@ static void Eq(string expected, string? actual)
 static (BibuiRuntime Rt, ManagedRasterBackend Backend, IRasterSurface Target) Rig()
 {
     var backend = new ManagedRasterBackend { DamageTracking = true };
-    var rt = new BibuiRuntime(backend) { TargetHz = 60f };
+    var rt = BibuiRuntime.Create().WithRaster(backend);
+    rt.TargetHz = 60f;
     rt.Mount(() =>
     {
         var rows = new List<Arrange.Item>();
@@ -59,7 +60,7 @@ static (BibuiRuntime Rt, ManagedRasterBackend Backend, IRasterSurface Target) Ri
             for (int c = 0; c < 4; c++)
             {
                 if (c > 0) cells.Add(Arrange.Space(6f));
-                cells.Add(Button.Build(rt, $"d{r * 4 + c}", $"Item {r * 4 + c}").Node);
+                cells.Add(rt.Button($"d{r * 4 + c}", $"Item {r * 4 + c}").Node);
             }
             if (r > 0) rows.Add(Arrange.Space(6f));
             rows.Add(Arrange.Row([.. cells]));
@@ -108,7 +109,8 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
     (BibuiRuntime, IRasterSurface, Func<byte[]>) Rig2(bool tracked)
     {
         var backend = new ManagedRasterBackend { DamageTracking = tracked };
-        var rt = new BibuiRuntime(backend) { TargetHz = 60f };
+        var rt = BibuiRuntime.Create().WithRaster(backend);
+        rt.TargetHz = 60f;
         rt.Mount(() =>
         {
             var chart = rt.BoxFromId("chart", InteractionKinds.LeftPress);

@@ -99,7 +99,7 @@ internal static class DemoNavigation
     internal static BibuiWidget WideButton(BibuiRuntime runtime, string id, string label, float width,
         float height = 40f, bool ghost = false, bool disabled = false)
     {
-        var button = Bibui.Runtime.Button.Build(runtime, id, label, ghost, disabled);
+        var button = runtime.Button(id, label, ghost, disabled);
         Font font = runtime.FontInScope();
         float padX = MathF.Max(0f, (width - runtime.Fonts.Measure(label, font)) / 2f);
         float padY = MathF.Max(0f, (height - runtime.Fonts.LineHeight(font)) / 2f);
@@ -153,7 +153,7 @@ internal static class DemoNavigation
             Heading(runtime, "One panel at a time, chosen by its tab");
             using (runtime.PushParent(FixedColumn(runtime, 480f)))
             {
-                var tabs = Tabs.Build(runtime, "demo-tabs", TabItems, state.ActiveTab);
+                var tabs = runtime.Tabs("demo-tabs", TabItems, state.ActiveTab);
                 if (tabs.Picked is { } picked && picked != state.ActiveTab) set(state with { ActiveTab = picked });
 
                 runtime.Gap(Tabs.PanelGap);
@@ -178,7 +178,7 @@ internal static class DemoNavigation
     [
         ("Who holds which one is open?", "The page: it says which is open, and reads back a toggle.", "item-1"),
         ("Why only one at a time?", "This page closes the others when one opens.", "item-2"),
-        ("What is a section made of?", "Expander.Build, as on the Expander page.", "item-3"),
+        ("What is a section made of?", "runtime.Expander, as on the Expander page.", "item-3"),
     ];
 
     private static UiNode AccordionPage(BibuiRuntime runtime, NavigationState state, Action<NavigationState> set)
@@ -194,7 +194,7 @@ internal static class DemoNavigation
                     var (title, content, value) = AccordionItems[i];
                     if (i > 0) runtime.Gap(4f);
                     bool open = state.AccordionOpen == value;
-                    var item = Expander.Build(runtime, $"demo-accordion-{value}", title, open);
+                    var item = runtime.Expander($"demo-accordion-{value}", title, open);
                     if (item.Toggled) set(state with { AccordionOpen = open ? null : value });
                     if (item.Body is { } body)
                     {
@@ -224,7 +224,7 @@ internal static class DemoNavigation
             bool toggled;
             using (runtime.PushParent(FixedColumn(runtime, 360f)))
             {
-                var expander = Expander.Build(runtime, "demo-expander", "Starred repositories", state.ExpanderOpen);
+                var expander = runtime.Expander("demo-expander", "Starred repositories", state.ExpanderOpen);
                 toggled = expander.Toggled;
                 if (expander.Body is { } body)
                     using (runtime.PushParent(body))

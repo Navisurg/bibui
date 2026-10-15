@@ -2,6 +2,7 @@ using System.Numerics;
 using Bibui;
 using Bibui.TextEdit;
 using Bibui.Theming;
+using static Bibui.Runtime.TextField;
 
 namespace Bibui.Runtime;
 
@@ -13,10 +14,10 @@ namespace Bibui.Runtime;
 /// </summary>
 public static class TextField
 {
-    private static readonly UiColor Highlight = UiColor.Rgba(59, 130, 246, 110);
-    private const float CaretWidth = 2f;
-    private const string Dots = "\u2026";
-    private const float DotsGap = 2f;   // between a cut line and its "…"
+    internal static readonly UiColor Highlight = UiColor.Rgba(59, 130, 246, 110);
+    internal const float CaretWidth = 2f;
+    internal const string Dots = "\u2026";
+    internal const float DotsGap = 2f;   // between a cut line and its "…"
 
     // The events a field takes while focused, as bits of their kinds. Read-only
     // fields take what never changes the text.
@@ -28,6 +29,211 @@ public static class TextField
                                        | 1u << (int)BibUiEventKind.Edit;
     public const uint MultiLineEvents = SingleLineEvents | 1u << (int)BibUiEventKind.Submit;
 
+
+
+
+    /// <summary>The height of <paramref name="rows"/> lines in the font in scope: what to push for a multi-line field of a set height.</summary>
+    public static SemanticSize Rows(BibuiRuntime runtime, int rows)
+    {
+        Font font = runtime.FontInScope();
+        return SemanticSize.Pixels(runtime.Fonts.LineHeight(font) + (Math.Max(1, rows) - 1) * runtime.Fonts.LineAdvance(font));
+    }
+
+    /// <summary>
+    /// The look of an input on a field's box: padded and outlined, the outline
+    /// the theme's focus ring while edited, the destructive colour on an
+    /// <paramref name="error"/>. Widths, the ring and the padding above and
+    /// below the text are <paramref name="runtime"/>'s theme's.
+    /// </summary>
+    public static void InputStyle(BibuiRuntime runtime, Box box, bool focused, bool error = false, bool disabled = false)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        InputStyle(runtime.Theme, box, focused, error, disabled);
+    }
+
+    /// <summary>
+    /// <see cref="InputStyle(BibuiRuntime, Box, bool, bool, bool)"/> under the
+    /// default theme's widths, focus ring and density, whatever theme is mounted.
+    /// </summary>
+    [Obsolete("Pass the runtime, so the theme's border width, focus ring and density reach the field: InputStyle(runtime, box, ...).")]
+    public static void InputStyle(Box box, bool focused, bool error = false, bool disabled = false)
+        => InputStyle(DefaultTheme, box, focused, error, disabled);
+
+    internal static readonly ThemeTokens DefaultTheme = new();
+
+    internal static void InputStyle(ThemeTokens theme, Box box, bool focused, bool error, bool disabled)
+    {
+        ArgumentNullException.ThrowIfNull(box);
+        // The ring is drawn as the outline whatever its offset: one standing
+        // clear of the edge is not drawn yet.
+        bool ring = focused && !disabled && !error;
+        box.Style.Padding = EdgeInsets.Symmetric(horizontal: 12f, vertical: theme.Density.Of(10f));
+        box.Style.CornerRadius = 6f;
+        box.Style.BorderWidth = ring ? theme.FocusRing.Width : theme.Borders.Width;
+        box.Style.BorderColor = disabled ? UiColor.Border
+            : error ? UiColor.Destructive
+            : focused ? theme.FocusRing.Color
+            : UiColor.Border;
+        box.Style.BackgroundColor = disabled ? UiColor.SurfaceRaised : UiColor.Surface;
+    }
+
+    // The pointer on one line of text: line holds its chars, x is from where it
+    // starts, and the edit state is in the line's offsets. A press puts the
+    // cursor at the text element under it and sets the mark, unless shift extends a
+    // field already being edited; held, the cursor follows the pointer.
+    internal static void HandlePointer(BibuiRuntime runtime, Font font, Interaction interaction,
+        ReadOnlySpan<char> line, TextEditState edit, float x, bool focused)
+    {
+        int at = runtime.Fonts.OffsetAt(line, font, x);
+        bool extend = focused && (interaction.Modifiers & KeyModifiers.Shift) != 0;
+
+        // Double click highlights word, and dragged selects by words: the
+        // cursor goes to the edge of the word under the pointer that is
+        // away from the mark.
+        if (interaction.PressCount > 1)
+        {
+            int start = at + TextOp.WordScan(line, at, -1);
+            int end = start + TextOp.WordScan(line, start, +1);
+            if (interaction.Pressed) { edit.Mark = start; edit.Cursor = end; }
+            else edit.Cursor = at < edit.Mark ? start : end;
+        }
+        else
+        {
+            edit.Cursor = at;
+            if (interaction.Pressed && !extend) edit.Mark = at;
+        }
+    }
+
+    // One line of text, drawn as texts side by side split at the selection —
+    // [lo, hi) in the line's offsets — the selected one in a box with the
+    // highlight behind it, so layout puts the highlight under its glyphs.
+    internal static void DrawLine(BibuiRuntime runtime, ReadOnlySpan<char> line, int lo, int hi,
+        TextColor color)
+    {
+        if (lo > 0) Part(runtime, line[..lo], color);
+        if (hi > lo)
+        {
+            Box selection = runtime.Box();
+            selection.ChildLayoutAxis = LayoutAxis.X;
+            selection.SizeX = SemanticSize.ChildrenSum();
+            selection.SizeY = SemanticSize.ParentPct(1f);
+            selection.Style.BackgroundColor = Highlight;
+            using (runtime.PushParent(selection)) Part(runtime, line[lo..hi], color);
+        }
+        if (hi < line.Length) Part(runtime, line[hi..], color);
+    }
+
+    // A slice of the line, sized by its text whatever size is pushed.
+    internal static void Part(BibuiRuntime runtime, ReadOnlySpan<char> text, TextColor color)
+    {
+        using (runtime.PushSizeX(SemanticSize.Text()))
+        using (runtime.PushSizeY(SemanticSize.Text()))
+            runtime.Text(text, textColor: color);
+    }
+
+    // Moves the view's target so the caret, the box [at, at + size), is in
+    // sight with step beyond it, without passing end. The view's clamp keeps
+    // it from going before the start.
+    internal static void ScrollToCaret(Box view, Vector2 at, Vector2 size, Vector2 end, Vector2 step)
+    {
+        Vector2 room = view.Extent;
+        Vector2 far = at + size;
+        Vector2 target = view.TargetViewOffset;
+
+        if (room.X > 0f && far.X - target.X > room.X) target.X = far.X - room.X + MathF.Min(step.X, end.X - far.X);
+        else if (at.X < target.X) target.X = at.X - step.X;
+
+        if (room.Y > 0f && far.Y - target.Y > room.Y) target.Y = far.Y - room.Y + MathF.Min(step.Y, end.Y - far.Y);
+        else if (at.Y < target.Y) target.Y = at.Y - step.Y;
+
+        view.TargetViewOffset = target;
+    }
+
+    // The caret on a line top below the first, after the text before it. It
+    // glides there, but jumps right after an edit so it never trails a typed character.
+    internal static void DrawCaret(BibuiRuntime runtime, Box view, Font font, ReadOnlySpan<char> line,
+        int lo, int hi, int caret, float top, SemanticSize height, bool edited)
+    {
+        float before = runtime.Fonts.Measure(line[..lo], font);
+        if (caret == hi && hi > lo) before += runtime.Fonts.Measure(line[lo..hi], font);
+
+        // The theme's caret speed: 60 halvings a second by default, half the way each frame at 60 Hz.
+        float speed = edited ? float.PositiveInfinity : runtime.Theme.Motion.Caret;
+        float easedX = runtime.Animate(view.Id!, "caret-x", before, speed);
+        float easedY = runtime.Animate(view.Id!, "caret-y", top, speed);
+        float x = edited ? before : easedX, y = edited ? top : easedY;
+        Box bar = runtime.Box();
+        bar.SizeX = SemanticSize.Pixels(CaretWidth);
+        bar.SizeY = height;
+        bar.At(x - CaretWidth / 2f, y);
+        bar.Style.BackgroundColor = UiColor.TextPrimary;
+    }
+
+    // Applies and eats the frame's events of the given kinds, in order. A move
+    // between lines is the field's; the rest is TextOp's. Answers whether the
+    // text changed.
+    internal static bool ApplyEdits(BibuiRuntime runtime, BibuiStr text, TextEditState edit, uint kinds,
+        Font font, float wrapWidth, TextWrap wrap)
+    {
+        bool edited = false;
+        Span<char> charBuf = stackalloc char[TextOp.MaxCharsPerCodePoint];
+        foreach (var handle in runtime.UnconsumedEvents)
+        {
+            var ev = handle.Event;
+            if ((kinds & 1u << (int)ev.Kind) == 0) continue;
+            if (ev.Kind == BibUiEventKind.Navigate && ev.DeltaY != 0)
+            {
+                MoveVertically(runtime, font, text, edit, wrapWidth, wrap, ev);
+                handle.Eat();
+                continue;
+            }
+            var op = TextOp.FromStateAndEvent(text, edit, ev, charBuf);
+            if (op.Range.Item1 != op.Range.Item2 || op.ReplaceString.Length > 0) edited = true;
+            text.ReplaceRange(op.Range, op.ReplaceString);
+            edit.Cursor = op.NewCursor;
+            edit.Mark = op.NewMark;
+            if (op.CopyString.Length > 0) runtime.ClipboardSet(new string(op.CopyString));
+            handle.Eat();
+        }
+        return edited;
+    }
+
+    // Up or down a line, by the sign of ev.DeltaY, to the char nearest the
+    // caret's x on that line. With no line there — above the first, below the
+    // last, or anywhere in a single line — the start or end of the text.
+    // Shift keeps the mark.
+    internal static void MoveVertically(BibuiRuntime runtime, Font font, BibuiStr text, TextEditState edit,
+        float wrapWidth, TextWrap wrap, BibUiEvent ev)
+    {
+        // The cursor's line: the last that starts at or before it.
+        var line = runtime.Fonts.Wrap(text.Str, font, wrapWidth, wrap);
+        while (line?.Next is not null && edit.Cursor >= line.Next.Start) line = line.Next;
+
+        var target = ev.DeltaY > 0 ? line?.Next : line?.Prev;
+        if (target is null)
+        {
+            edit.Cursor = ev.DeltaY > 0 ? (int)text.Length : 0;
+        }
+        else
+        {
+            float caretX = runtime.Fonts.Measure(text.Str[line!.Start..edit.Cursor], font);
+            edit.Cursor = target.Start + runtime.Fonts.OffsetAt(text.Str[target.Start..target.End], font, caretX);
+        }
+        if ((ev.Flags & TextActionFlags.KeepMark) == 0) edit.Mark = edit.Cursor;
+    }
+
+    // The line numbered index, counted from the first — clamped to the lines there are.
+    internal static TextLine? LineAt(TextLine? first, int index)
+    {
+        var line = first;
+        for (int i = 0; i < index && line?.Next is not null; i++) line = line.Next;
+        return line;
+    }
+}
+
+/// <summary>The TextField component, called on the runtime that builds it.</summary>
+public static class TextFieldExtensions
+{
     /// <summary>
     /// One line of <paramref name="text"/>, the field named <paramref name="id"/>
     /// in the box in scope, edited while <paramref name="focused"/>. A line tall,
@@ -36,8 +242,8 @@ public static class TextField
     /// <paramref name="events"/>: <see cref="SingleLineEvents"/> to edit,
     /// <see cref="SingleLineReadOnlyEvents"/> to select, none to only show it.
     /// </summary>
-    public static BibuiWidget SingleLine(BibuiRuntime runtime, string id, BibuiStr text,
-        TextEditState edit, bool focused, uint events = SingleLineEvents,
+    public static BibuiWidget TextField(this BibuiRuntime runtime, string id, BibuiStr text,
+        TextEditState edit, bool focused, uint events = global::Bibui.Runtime.TextField.SingleLineEvents,
         TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default)
     {
         Font font = runtime.FontInScope();
@@ -89,43 +295,14 @@ public static class TextField
     }
 
     /// <summary>
-    /// A <see cref="SingleLine"/> named <paramref name="id"/> in the box in scope,
-    /// ending in "…" when it is wider than the box: the line gives up room for
-    /// the "…". Edited, it scrolls instead. The box must not be sized by its
-    /// children, and whether the line fits is told by its width last frame.
-    /// </summary>
-    public static BibuiWidget Ellipsis(BibuiRuntime runtime, string id, BibuiStr text,
-        TextEditState edit, bool focused, uint events = 0,
-        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default)
-    {
-        UiNode box = runtime.ParentInScope;   // holds the line, and the "…" when it is cut
-        float room = box.Extent.X > 0f
-            ? box.Extent.X - box.Style.Padding.Left - box.Style.Padding.Right
-            : float.PositiveInfinity;
-        box.ChildLayoutAxis = LayoutAxis.X;
-
-        var line = SingleLine(runtime, id, text, edit, focused, events, textColor, placeholder);
-        bool empty = text.Length == 0;
-        ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
-        if (focused || runtime.Fonts.Measure(shown, runtime.FontInScope()) <= room)
-            return line;   // fits, or being edited: it scrolls instead
-
-        runtime.Gap(DotsGap);
-        using (runtime.PushSizeX(SemanticSize.Text()))
-        using (runtime.PushSizeY(SemanticSize.Text()))
-            runtime.Text(Dots, textColor: empty ? TextColor.Secondary : textColor);
-        return line;
-    }
-
-    /// <summary>
     /// <paramref name="text"/> as lines, the field named <paramref name="id"/> in
     /// the box in scope, wrapped at its width and edited while <paramref name="focused"/>.
     /// Its height is the size pushed on the stack — <c>ChildrenSum()</c>,
     /// <see cref="Rows"/> or a share — and the wheel scrolls past it. Lines
     /// break as <paramref name="wrap"/> says: between words, or anywhere.
     /// </summary>
-    public static BibuiWidget Multiline(BibuiRuntime runtime, string id, BibuiStr text,
-        TextEditState edit, bool focused, uint events = MultiLineEvents,
+    public static BibuiWidget MultilineTextField(this BibuiRuntime runtime, string id, BibuiStr text,
+        TextEditState edit, bool focused, uint events = global::Bibui.Runtime.TextField.MultiLineEvents,
         TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default, TextWrap wrap = TextWrap.Words)
     {
         Font font = runtime.FontInScope();
@@ -218,201 +395,32 @@ public static class TextField
         return new BibuiWidget(view, interaction);
     }
 
-    /// <summary>The height of <paramref name="rows"/> lines in the font in scope: what to push for a multi-line field of a set height.</summary>
-    public static SemanticSize Rows(BibuiRuntime runtime, int rows)
-    {
-        Font font = runtime.FontInScope();
-        return SemanticSize.Pixels(runtime.Fonts.LineHeight(font) + (Math.Max(1, rows) - 1) * runtime.Fonts.LineAdvance(font));
-    }
-
     /// <summary>
-    /// The look of an input on a field's box: padded and outlined, the outline
-    /// the theme's focus ring while edited, the destructive colour on an
-    /// <paramref name="error"/>. Widths, the ring and the padding above and
-    /// below the text are <paramref name="runtime"/>'s theme's.
+    /// A <see cref="SingleLine"/> named <paramref name="id"/> in the box in scope,
+    /// ending in "…" when it is wider than the box: the line gives up room for
+    /// the "…". Edited, it scrolls instead. The box must not be sized by its
+    /// children, and whether the line fits is told by its width last frame.
     /// </summary>
-    public static void InputStyle(BibuiRuntime runtime, Box box, bool focused, bool error = false, bool disabled = false)
+    public static BibuiWidget EllipsisTextField(this BibuiRuntime runtime, string id, BibuiStr text,
+        TextEditState edit, bool focused, uint events = 0,
+        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default)
     {
-        ArgumentNullException.ThrowIfNull(runtime);
-        InputStyle(runtime.Theme, box, focused, error, disabled);
-    }
+        UiNode box = runtime.ParentInScope;   // holds the line, and the "…" when it is cut
+        float room = box.Extent.X > 0f
+            ? box.Extent.X - box.Style.Padding.Left - box.Style.Padding.Right
+            : float.PositiveInfinity;
+        box.ChildLayoutAxis = LayoutAxis.X;
 
-    /// <summary>
-    /// <see cref="InputStyle(BibuiRuntime, Box, bool, bool, bool)"/> under the
-    /// default theme's widths, focus ring and density, whatever theme is mounted.
-    /// </summary>
-    [Obsolete("Pass the runtime, so the theme's border width, focus ring and density reach the field: InputStyle(runtime, box, ...).")]
-    public static void InputStyle(Box box, bool focused, bool error = false, bool disabled = false)
-        => InputStyle(DefaultTheme, box, focused, error, disabled);
+        var line = runtime.TextField(id, text, edit, focused, events, textColor, placeholder);
+        bool empty = text.Length == 0;
+        ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
+        if (focused || runtime.Fonts.Measure(shown, runtime.FontInScope()) <= room)
+            return line;   // fits, or being edited: it scrolls instead
 
-    private static readonly ThemeTokens DefaultTheme = new();
-
-    private static void InputStyle(ThemeTokens theme, Box box, bool focused, bool error, bool disabled)
-    {
-        ArgumentNullException.ThrowIfNull(box);
-        // The ring is drawn as the outline whatever its offset: one standing
-        // clear of the edge is not drawn yet.
-        bool ring = focused && !disabled && !error;
-        box.Style.Padding = EdgeInsets.Symmetric(horizontal: 12f, vertical: theme.Density.Of(10f));
-        box.Style.CornerRadius = 6f;
-        box.Style.BorderWidth = ring ? theme.FocusRing.Width : theme.Borders.Width;
-        box.Style.BorderColor = disabled ? UiColor.Border
-            : error ? UiColor.Destructive
-            : focused ? theme.FocusRing.Color
-            : UiColor.Border;
-        box.Style.BackgroundColor = disabled ? UiColor.SurfaceRaised : UiColor.Surface;
-    }
-
-    // The pointer on one line of text: line holds its chars, x is from where it
-    // starts, and the edit state is in the line's offsets. A press puts the
-    // cursor at the text element under it and sets the mark, unless shift extends a
-    // field already being edited; held, the cursor follows the pointer.
-    private static void HandlePointer(BibuiRuntime runtime, Font font, Interaction interaction,
-        ReadOnlySpan<char> line, TextEditState edit, float x, bool focused)
-    {
-        int at = runtime.Fonts.OffsetAt(line, font, x);
-        bool extend = focused && (interaction.Modifiers & KeyModifiers.Shift) != 0;
-
-        // Double click highlights word, and dragged selects by words: the
-        // cursor goes to the edge of the word under the pointer that is
-        // away from the mark.
-        if (interaction.PressCount > 1)
-        {
-            int start = at + TextOp.WordScan(line, at, -1);
-            int end = start + TextOp.WordScan(line, start, +1);
-            if (interaction.Pressed) { edit.Mark = start; edit.Cursor = end; }
-            else edit.Cursor = at < edit.Mark ? start : end;
-        }
-        else
-        {
-            edit.Cursor = at;
-            if (interaction.Pressed && !extend) edit.Mark = at;
-        }
-    }
-
-    // One line of text, drawn as texts side by side split at the selection —
-    // [lo, hi) in the line's offsets — the selected one in a box with the
-    // highlight behind it, so layout puts the highlight under its glyphs.
-    private static void DrawLine(BibuiRuntime runtime, ReadOnlySpan<char> line, int lo, int hi,
-        TextColor color)
-    {
-        if (lo > 0) Part(runtime, line[..lo], color);
-        if (hi > lo)
-        {
-            Box selection = runtime.Box();
-            selection.ChildLayoutAxis = LayoutAxis.X;
-            selection.SizeX = SemanticSize.ChildrenSum();
-            selection.SizeY = SemanticSize.ParentPct(1f);
-            selection.Style.BackgroundColor = Highlight;
-            using (runtime.PushParent(selection)) Part(runtime, line[lo..hi], color);
-        }
-        if (hi < line.Length) Part(runtime, line[hi..], color);
-    }
-
-    // A slice of the line, sized by its text whatever size is pushed.
-    private static void Part(BibuiRuntime runtime, ReadOnlySpan<char> text, TextColor color)
-    {
+        runtime.Gap(DotsGap);
         using (runtime.PushSizeX(SemanticSize.Text()))
         using (runtime.PushSizeY(SemanticSize.Text()))
-            runtime.Text(text, textColor: color);
-    }
-
-    // Moves the view's target so the caret, the box [at, at + size), is in
-    // sight with step beyond it, without passing end. The view's clamp keeps
-    // it from going before the start.
-    private static void ScrollToCaret(Box view, Vector2 at, Vector2 size, Vector2 end, Vector2 step)
-    {
-        Vector2 room = view.Extent;
-        Vector2 far = at + size;
-        Vector2 target = view.TargetViewOffset;
-
-        if (room.X > 0f && far.X - target.X > room.X) target.X = far.X - room.X + MathF.Min(step.X, end.X - far.X);
-        else if (at.X < target.X) target.X = at.X - step.X;
-
-        if (room.Y > 0f && far.Y - target.Y > room.Y) target.Y = far.Y - room.Y + MathF.Min(step.Y, end.Y - far.Y);
-        else if (at.Y < target.Y) target.Y = at.Y - step.Y;
-
-        view.TargetViewOffset = target;
-    }
-
-    // The caret on a line top below the first, after the text before it. It
-    // glides there, but jumps right after an edit so it never trails a typed character.
-    private static void DrawCaret(BibuiRuntime runtime, Box view, Font font, ReadOnlySpan<char> line,
-        int lo, int hi, int caret, float top, SemanticSize height, bool edited)
-    {
-        float before = runtime.Fonts.Measure(line[..lo], font);
-        if (caret == hi && hi > lo) before += runtime.Fonts.Measure(line[lo..hi], font);
-
-        // The theme's caret speed: 60 halvings a second by default, half the way each frame at 60 Hz.
-        float speed = edited ? float.PositiveInfinity : runtime.Theme.Motion.Caret;
-        float easedX = runtime.Animate(view.Id!, "caret-x", before, speed);
-        float easedY = runtime.Animate(view.Id!, "caret-y", top, speed);
-        float x = edited ? before : easedX, y = edited ? top : easedY;
-        Box bar = runtime.Box();
-        bar.SizeX = SemanticSize.Pixels(CaretWidth);
-        bar.SizeY = height;
-        bar.At(x - CaretWidth / 2f, y);
-        bar.Style.BackgroundColor = UiColor.TextPrimary;
-    }
-
-    // Applies and eats the frame's events of the given kinds, in order. A move
-    // between lines is the field's; the rest is TextOp's. Answers whether the
-    // text changed.
-    private static bool ApplyEdits(BibuiRuntime runtime, BibuiStr text, TextEditState edit, uint kinds,
-        Font font, float wrapWidth, TextWrap wrap)
-    {
-        bool edited = false;
-        Span<char> charBuf = stackalloc char[TextOp.MaxCharsPerCodePoint];
-        foreach (var handle in runtime.UnconsumedEvents)
-        {
-            var ev = handle.Event;
-            if ((kinds & 1u << (int)ev.Kind) == 0) continue;
-            if (ev.Kind == BibUiEventKind.Navigate && ev.DeltaY != 0)
-            {
-                MoveVertically(runtime, font, text, edit, wrapWidth, wrap, ev);
-                handle.Eat();
-                continue;
-            }
-            var op = TextOp.FromStateAndEvent(text, edit, ev, charBuf);
-            if (op.Range.Item1 != op.Range.Item2 || op.ReplaceString.Length > 0) edited = true;
-            text.ReplaceRange(op.Range, op.ReplaceString);
-            edit.Cursor = op.NewCursor;
-            edit.Mark = op.NewMark;
-            if (op.CopyString.Length > 0) runtime.ClipboardSet(new string(op.CopyString));
-            handle.Eat();
-        }
-        return edited;
-    }
-
-    // Up or down a line, by the sign of ev.DeltaY, to the char nearest the
-    // caret's x on that line. With no line there — above the first, below the
-    // last, or anywhere in a single line — the start or end of the text.
-    // Shift keeps the mark.
-    private static void MoveVertically(BibuiRuntime runtime, Font font, BibuiStr text, TextEditState edit,
-        float wrapWidth, TextWrap wrap, BibUiEvent ev)
-    {
-        // The cursor's line: the last that starts at or before it.
-        var line = runtime.Fonts.Wrap(text.Str, font, wrapWidth, wrap);
-        while (line?.Next is not null && edit.Cursor >= line.Next.Start) line = line.Next;
-
-        var target = ev.DeltaY > 0 ? line?.Next : line?.Prev;
-        if (target is null)
-        {
-            edit.Cursor = ev.DeltaY > 0 ? (int)text.Length : 0;
-        }
-        else
-        {
-            float caretX = runtime.Fonts.Measure(text.Str[line!.Start..edit.Cursor], font);
-            edit.Cursor = target.Start + runtime.Fonts.OffsetAt(text.Str[target.Start..target.End], font, caretX);
-        }
-        if ((ev.Flags & TextActionFlags.KeepMark) == 0) edit.Mark = edit.Cursor;
-    }
-
-    // The line numbered index, counted from the first — clamped to the lines there are.
-    private static TextLine? LineAt(TextLine? first, int index)
-    {
-        var line = first;
-        for (int i = 0; i < index && line?.Next is not null; i++) line = line.Next;
+            runtime.Text(Dots, textColor: empty ? TextColor.Secondary : textColor);
         return line;
     }
 }

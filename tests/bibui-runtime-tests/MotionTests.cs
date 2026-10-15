@@ -4,6 +4,7 @@ using Bibui.Renderer;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 using Bibui.Theming;
+using Bibui.Raster.Skia;
 
 /// <summary>
 /// Motion: timed curves and springs beside Animate, colour in Oklab, presence
@@ -33,7 +34,8 @@ static class MotionTests
     /// <summary>A runtime whose build asks <paramref name="ask"/> and draws nothing else.</summary>
     static BibuiRuntime Asking(Action<BibuiRuntime> ask, float hz = 60f)
     {
-        var runtime = new BibuiRuntime { TargetHz = hz };
+        var runtime = BibuiRuntime.Create().WithSkia();
+        runtime.TargetHz = hz;
         runtime.Mount(() => { ask(runtime); return Root(); }, new SurfaceOptions { Width = 200, Height = 100 });
         return runtime;
     }
@@ -415,7 +417,7 @@ static class MotionTests
         {
             float progress = 1f;
             Box holder = null!;
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() =>
             {
                 var root = Root();
@@ -444,7 +446,7 @@ static class MotionTests
         {
             Box b = null!;
             var style = new Style { BackgroundColor = "#FF0000", Translate = new Vector2(100f, 0f) };
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() =>
             {
                 var root = new Box { Style = new Style { BackgroundColor = "#000000" } }.FillX().FillY();
@@ -467,7 +469,7 @@ static class MotionTests
         run("Transform: the pointer finds a box where it is drawn, not where it was laid out", () =>
         {
             bool pressed = false;
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() =>
             {
                 var root = Root();
@@ -494,7 +496,7 @@ static class MotionTests
         run("Transform: a turned box is hit inside its turned outline only", () =>
         {
             bool pressed = false;
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() =>
             {
                 var root = Root();
@@ -523,7 +525,7 @@ static class MotionTests
         run("Transform: a box moved out of its clipping parent is not hit outside it", () =>
         {
             bool pressed = false;
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() =>
             {
                 var root = Root();
@@ -554,7 +556,7 @@ static class MotionTests
         run("Transform: a click by name lands on the box as drawn", () =>
         {
             bool pressed = false;
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() =>
             {
                 var root = Root();
@@ -578,7 +580,7 @@ static class MotionTests
         {
             var dark = new ThemeTokens { Colors = new ColorTokens { Background = "#000000" } };
             var light = new ThemeTokens { Colors = new ColorTokens { Background = "#FFFFFF" } };
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() => new Box { Style = new Style { BackgroundColor = UiColor.Background } }.FillX().FillY(),
                 dark, new SurfaceOptions { Width = 20, Height = 20 });
             runtime.Render();

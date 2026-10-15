@@ -7,12 +7,8 @@ images, backdrop blur and text, drawn by Skia on the CPU or, through
 Name it when you create the runtime:
 
 ```csharp
-var runtime = new BibuiRuntime(new SkiaRasterBackend());
+var runtime = BibuiRuntime.Create().WithSkia();
 ```
-
-Referencing this package also makes Skia the backend the parameterless
-`new BibuiRuntime()` and `new BibuiRenderer()` draw with. Naming the backend
-is what trimming and Native AOT keep.
 
 Skia-typed extras live here too: `SkiaCustomDraw.Of` draws into a box with an
 `SKCanvas`, and `renderer.RenderTo(SKSurface, …)` renders a frame onto a Skia

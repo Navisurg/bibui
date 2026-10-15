@@ -13,8 +13,8 @@ Fixtures: `switch-default`, `switch-checked-true` and `switch-disabled-true`.
 ## Build
 
 ```cs
-public static BibuiWidget Build(
-    BibuiRuntime runtime,
+public static BibuiWidget Switch(
+    this BibuiRuntime runtime,
     string id,
     bool on,
     ReadOnlySpan<char> label = default,
@@ -63,7 +63,7 @@ sealed class AirplaneMode
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        var toggle = Switch.Build(runtime, "airplane-mode", _on, Label);
+        var toggle = runtime.Switch("airplane-mode", _on, Label);
         if (toggle.Clicked) _on = !_on;
         return toggle;
     }

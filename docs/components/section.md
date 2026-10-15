@@ -55,9 +55,9 @@ sealed class AppearanceSection
         using (runtime.PushParent(column))
         using (runtime.PushParent(Section.Build(runtime, Caption)))
         {
-            if (Switch.Build(runtime, "appearance-dark", _dark, Dark).Clicked) _dark = !_dark;
+            if (runtime.Switch("appearance-dark", _dark, Dark).Clicked) _dark = !_dark;
             runtime.Gap(Section.Spacing);
-            _alpha = Slider.Build(runtime, "appearance-alpha", _alpha, 0f, 1f, 0.01f, Alpha).Value;
+            _alpha = runtime.Slider("appearance-alpha", _alpha, 0f, 1f, 0.01f, Alpha).Value;
         }
         return column;
     }

@@ -13,8 +13,8 @@ Fixtures: `radio-group-default` and `radio-group-disabled`.
 ## Build
 
 ```cs
-public static RadioGroupWidget Build(
-    BibuiRuntime runtime,
+public static RadioGroupWidget RadioGroup(
+    this BibuiRuntime runtime,
     string id,
     IReadOnlyList<RadioOption> items,
     string? value,
@@ -71,7 +71,7 @@ sealed class ShippingChoice
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        var group = RadioGroup.Build(runtime, "shipping", Options, _shipping);
+        var group = runtime.RadioGroup("shipping", Options, _shipping);
         if (group.Picked is { } picked) _shipping = picked;
         return group.Node;
     }

@@ -4,7 +4,6 @@ using Bibui.TextEdit;
 using Bibui.Theming;
 using static Bibui.Arrange;
 using static Showcase.Ui;
-using Button = Bibui.Runtime.Button;
 
 namespace Showcase;
 
@@ -55,7 +54,7 @@ internal sealed partial class App
 
         // Mode
         Section(rt, "Mode");
-        var mode = ToggleGroup.Build(rt, "settings-mode", ModeOptions, Dark ? "dark" : "light");
+        var mode = rt.ToggleGroup("settings-mode", ModeOptions, Dark ? "dark" : "light");
         if (mode.Picked is { } m && (m == "dark") != Dark) { Dark = m == "dark"; ThemeFileName = null; }
         rt.Gap(22f);
 
@@ -84,10 +83,10 @@ internal sealed partial class App
         var select = Select.Begin(rt, "theme-file", current, width: inner);
         if (select.Open)
         {
-            if (Select.Item(rt, "theme-generated", "Generated from accent", selected: ThemeFileName is null).Clicked)
+            if (rt.SelectItem("theme-generated", "Generated from accent", selected: ThemeFileName is null).Clicked)
             { ThemeFileName = null; select.Close(); }
             foreach (var file in ThemeFiles)
-                if (Select.Item(rt, "theme-" + file, Title(file) + "  ·  themes/" + file + ".json", selected: ThemeFileName == file).Clicked)
+                if (rt.SelectItem("theme-" + file, Title(file) + "  ·  themes/" + file + ".json", selected: ThemeFileName == file).Clicked)
                 { ThemeFileName = file; select.Close(); }
         }
         select.End();
@@ -101,14 +100,14 @@ internal sealed partial class App
         slot.SizeY = SemanticSize.ChildrenSum();
         using (rt.PushParent(slot))
         {
-            var radius = Slider.Build(rt, "settings-radius", Radius, 0f, 16f, step: 1f);
+            var radius = rt.Slider("settings-radius", Radius, 0f, 16f, step: 1f);
             if (MathF.Abs(radius.Value - Radius) > 0.01f) { Radius = radius.Value; ThemeFileName = null; }
         }
         rt.Gap(6f);
         rt.Text($"{Radius:0} px  ·  Sm {Radius * 2f / 3f:0.#}, Lg {Radius * 4f / 3f:0.#}", FontSize.Px(12f), UiColor.TextSecondary);
         rt.Gap(20f);
         Section(rt, "Density");
-        var density = RadioGroup.Build(rt, "settings-density", DensityOptions, Density switch
+        var density = rt.RadioGroup("settings-density", DensityOptions, Density switch
         {
             Bibui.Theming.Density.Compact => "compact",
             Bibui.Theming.Density.Comfortable => "comfortable",
@@ -123,13 +122,13 @@ internal sealed partial class App
 
         // Motion and the sky
         Section(rt, "Behaviour");
-        var reduce = Switch.Build(rt, "settings-reduce", ReducedMotion, label: "Reduce motion");
+        var reduce = rt.Switch("settings-reduce", ReducedMotion, label: "Reduce motion");
         if (reduce.Clicked) ReducedMotion = !ReducedMotion;
         rt.Gap(12f);
-        var grid = Checkbox.Build(rt, "settings-grid", Grid, label: "Alt-az grid on the sky");
+        var grid = rt.Checkbox("settings-grid", Grid, label: "Alt-az grid on the sky");
         if (grid.Clicked) Grid = !Grid;
         rt.Gap(10f);
-        var labels = Checkbox.Build(rt, "settings-labels", Labels, label: "Name the targets");
+        var labels = rt.Checkbox("settings-labels", Labels, label: "Name the targets");
         if (labels.Clicked) Labels = !Labels;
         rt.Gap(24f);
 
@@ -143,7 +142,7 @@ internal sealed partial class App
         rt.Gap(8f);
         inView.Dispose();
         using (rt.PushParent(body))
-            Scrollbar.Build(rt, "settings-bar", view);
+            rt.Scrollbar("settings-bar", view);
         rt.InteractionsFor(view);
 
         if (sheet.End().Dismissed | close.Clicked) SettingsOpen = false;
@@ -200,16 +199,16 @@ internal sealed partial class App
         if (Menu.Begin(rt, "row-menu", MenuX, MenuY, 232f) is not { } menu) return;
         Menu.Label(rt, t.Name);
         bool close = false;
-        if (Menu.Item(rt, "menu-slew", "Slew to target", "send", "Enter", disabled: Pointing == t.Id).Clicked) { Selected = t.Id; Slew(); close = true; }
-        if (Menu.Item(rt, "menu-log", "Open observing log", "file-text", "4").Clicked) { Selected = t.Id; Page = Page.Journal; close = true; }
-        if (Menu.Item(rt, "menu-copy", "Copy coordinates", "copy", null).Clicked)
+        if (rt.MenuItem("menu-slew", "Slew to target", "send", "Enter", disabled: Pointing == t.Id).Clicked) { Selected = t.Id; Slew(); close = true; }
+        if (rt.MenuItem("menu-log", "Open observing log", "file-text", "4").Clicked) { Selected = t.Id; Page = Page.Journal; close = true; }
+        if (rt.MenuItem("menu-copy", "Copy coordinates", "copy", null).Clicked)
         {
             rt.ClipboardSet($"{t.Code}  RA {t.RaHours:0.000}h  Dec {t.DecDeg:+0.00;-0.00}°");
             close = true;
         }
         Menu.Separator(rt);
-        if (Menu.Item(rt, "menu-hold", "Hold for weather", "pause", null).Clicked) close = true;
-        if (Menu.Item(rt, "menu-drop", "Drop from tonight", "trash-2", null, disabled: true).Clicked) close = true;
+        if (rt.MenuItem("menu-hold", "Hold for weather", "pause", null).Clicked) close = true;
+        if (rt.MenuItem("menu-drop", "Drop from tonight", "trash-2", null, disabled: true).Clicked) close = true;
         menu.End();
         if (close) rt.CloseDropDown("row-menu");
     }
@@ -284,14 +283,14 @@ internal sealed partial class App
         var items = Column();
         for (int k = 0; k < ChecklistItems.Length; k++)
         {
-            var cb = Checkbox.Build(rt, "check-" + k, Checklist[k], label: ChecklistItems[k]);
+            var cb = rt.Checkbox("check-" + k, Checklist[k], label: ChecklistItems[k]);
             if (cb.Clicked) Checklist[k] = !Checklist[k];
             if (k > 0) Gap(items, 12f);
             UiNode.PushIntoParent(items, cb.Node);
         }
-        var rating = RadioGroup.Build(rt, "rating", Ratings, Rating);
+        var rating = rt.RadioGroup("rating", Ratings, Rating);
         if (rating.Picked is { } r) Rating = r;
-        var summary = Expander.Build(rt, "night-summary", "Night summary", NightOpen);
+        var summary = rt.Expander("night-summary", "Night summary", NightOpen);
         if (summary.Toggled) NightOpen = !NightOpen;
         if (summary.Body is { } body)
         {
@@ -318,7 +317,7 @@ internal sealed partial class App
         using (rt.PushParent(noteBox))
         using (rt.PushFontSize(ComponentSize.Sm))
         using (rt.PushSizeY(TextField.Rows(rt, 4)))
-            note = TextField.Multiline(rt, "note", Note, NoteEdit, NoteFocused, placeholder: "Hand-over note for the morning crew");
+            note = rt.MultilineTextField("note", Note, NoteEdit, NoteFocused, placeholder: "Hand-over note for the morning crew");
         if (note.Pressed) { NoteFocused = true; SearchFocused = false; }
 
         int ticked = Checklist.Count(c => c);

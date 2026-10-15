@@ -53,12 +53,12 @@ sealed class Toolbar
         row.SizeY = SemanticSize.Pixels(36f);
         using (runtime.PushParent(row))
         {
-            Button.Build(runtime, "toolbar-cut", Cut, ghost: true);
-            Button.Build(runtime, "toolbar-copy", Copy, ghost: true);
+            runtime.Button("toolbar-cut", Cut, ghost: true);
+            runtime.Button("toolbar-copy", Copy, ghost: true);
             runtime.Gap(8f);
             Separator.Build(runtime, vertical: true);   // the row's 36 px
             runtime.Gap(8f);
-            Button.Build(runtime, "toolbar-help", Help, ghost: true);
+            runtime.Button("toolbar-help", Help, ghost: true);
         }
         return row;
     }

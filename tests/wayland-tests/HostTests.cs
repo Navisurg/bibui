@@ -3,6 +3,7 @@ using Bibui.Platform.Wayland;
 using Bibui.Platform.Wayland.Protocol;
 using Bibui.Runtime;
 using Bibui.Runtime.Platform;
+using Bibui.Raster.Skia;
 
 namespace Bibui.WaylandTests;
 
@@ -270,7 +271,7 @@ internal static unsafe class HostTests
 
             // A real buffer — memfd, mmap, fd passed in create_pool — drawn
             // into by the runtime, and compared with the runtime's own render.
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.Mount(() => Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box()))
                     .Styled(new Bibui.Style { BackgroundColor = Bibui.UiColor.Accent, CornerRadius = 8f }),
                 new Bibui.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });

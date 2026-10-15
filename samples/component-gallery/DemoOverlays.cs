@@ -86,7 +86,7 @@ internal static class DemoOverlays
     {
         using (runtime.PushFontSize(ComponentSize.Sm))
         using (runtime.PushSizeY(SemanticSize.ChildrenSum()))
-            TextField.Multiline(runtime, id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0,
+            runtime.MultilineTextField(id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0,
                 textColor: TextColor.Secondary);
     }
 
@@ -109,7 +109,7 @@ internal static class DemoOverlays
                 using (runtime.PushParent(row))
                 {
                     Arrange.Spring(row);
-                    var trigger = Button.Build(runtime, "demo-popover", "Open popover");
+                    var trigger = runtime.Button("demo-popover", "Open popover");
                     if (trigger.Clicked)
                         if (runtime.IsDropDownOpen(id)) runtime.CloseDropDown(id); else runtime.OpenDropDown(id, trigger.Node);
                     Arrange.Spring(row);
@@ -202,7 +202,7 @@ internal static class DemoOverlays
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Point at a button, or pin the first hint open");
-            if (Button.Build(runtime, "demo-tooltip-toggle", state.TooltipOpen ? "Hide tooltip" : "Show tooltip").Clicked)
+            if (runtime.Button("demo-tooltip-toggle", state.TooltipOpen ? "Hide tooltip" : "Show tooltip").Clicked)
                 set(state with { TooltipOpen = !state.TooltipOpen });
             Arrange.Gap(page, 16f);
 
@@ -245,7 +245,7 @@ internal static class DemoOverlays
             using (runtime.PushParent(row))
             {
                 Arrange.Spring(row);
-                button = Button.Build(runtime, id, label);
+                button = runtime.Button(id, label);
                 Arrange.Spring(row);
             }
             Arrange.Spring(area);
@@ -303,7 +303,7 @@ internal static class DemoOverlays
                         {
                             var (label, icon, shortcut) = AccountItems[i];
                             if (label.Length == 0) { Menu.Separator(runtime); continue; }
-                            if (Menu.Item(runtime, $"demo-dropdown-menu-item-{i}", label, icon,
+                            if (runtime.MenuItem($"demo-dropdown-menu-item-{i}", label, icon,
                                     shortcut is null ? null : shortcut).Clicked)
                                 picked = label;
                         }
@@ -360,7 +360,7 @@ internal static class DemoOverlays
                 {
                     var (label, icon, disabled) = FileItems[i];
                     if (label.Length == 0) { Menu.Separator(runtime); continue; }
-                    if (Menu.Item(runtime, $"demo-context-menu-item-{i}", label, icon, disabled: disabled).Clicked)
+                    if (runtime.MenuItem($"demo-context-menu-item-{i}", label, icon, disabled: disabled).Clicked)
                         picked = label;
                 }
                 menu.End();
@@ -442,7 +442,7 @@ internal static class DemoOverlays
                     field.SizeX = SemanticSize.ParentPct(1f);
                     field.SizeY = SemanticSize.ChildrenSum();
                     using (runtime.PushParent(field))
-                        focus = TextField.SingleLine(runtime, "demo-command-search", CommandQuery, CommandEdit, state.CommandPaletteOpen,
+                        focus = runtime.TextField("demo-command-search", CommandQuery, CommandEdit, state.CommandPaletteOpen,
                             textColor: TextColor.Primary, placeholder: "Type a command…").Pressed;
                 }
                 Box rule = runtime.Box();
@@ -469,7 +469,7 @@ internal static class DemoOverlays
                             Menu.Label(runtime, itemGroup);
                             group = itemGroup;
                         }
-                        if (Menu.Item(runtime, $"demo-command-item-{i}", label, icon).Clicked) ran = label;
+                        if (runtime.MenuItem($"demo-command-item-{i}", label, icon).Clicked) ran = label;
                         any = true;
                     }
                     if (!any)
@@ -567,7 +567,7 @@ internal static class DemoOverlays
             bool close;
             using (runtime.PushParent(Actions(runtime)))
             {
-                close = Button.Build(runtime, "demo-dialog-cancel", "Cancel").Clicked;
+                close = runtime.Button("demo-dialog-cancel", "Cancel").Clicked;
                 runtime.Gap(8f);
                 close |= PrimaryButton(runtime, "demo-dialog-save", "Rename").Clicked;
             }
@@ -590,7 +590,7 @@ internal static class DemoOverlays
             bool close;
             using (runtime.PushParent(Actions(runtime)))
             {
-                close = Button.Build(runtime, "demo-alert-dialog-cancel", "Cancel").Clicked;
+                close = runtime.Button("demo-alert-dialog-cancel", "Cancel").Clicked;
                 runtime.Gap(8f);
                 close |= DestructiveButton(runtime, "demo-alert-dialog-confirm", "Delete workspace").Clicked;
             }

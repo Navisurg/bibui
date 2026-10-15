@@ -40,7 +40,7 @@ internal static class DemoDisplay
         box.Style.Padding = EdgeInsets.All(8);
         using (runtime.PushParent(box))
         using (runtime.PushSizeY(rows is { } r ? TextField.Rows(runtime, r) : SemanticSize.ChildrenSum()))
-            TextField.Multiline(runtime, id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0);
+            runtime.MultilineTextField(id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0);
         return box;
     }
 
@@ -65,7 +65,7 @@ internal static class DemoDisplay
         box.Style.BorderColor = EllipsisFocused ? UiColor.BorderFocus : UiColor.Border;
         BibuiWidget line;
         using (runtime.PushParent(box))
-            line = TextField.Ellipsis(runtime, id, EllipsisText, EllipsisEdit, EllipsisFocused, events: TextField.SingleLineEvents);
+            line = runtime.EllipsisTextField(id, EllipsisText, EllipsisEdit, EllipsisFocused, events: TextField.SingleLineEvents);
         if (line.Pressed) EllipsisFocused = true;
         if (EllipsisFocused)
             foreach (var handle in runtime.UnconsumedEvents)
@@ -211,7 +211,7 @@ internal static class DemoDisplay
     /// edge, or — disabled — the page's surface with an edge and a faint
     /// label. Its label is centred in a box <paramref name="height"/> tall
     /// and <paramref name="width"/> wide, or as wide as the label and its
-    /// padding. Button.Build draws only the raised and ghost looks, so the
+    /// padding. runtime.Button draws only the raised and ghost looks, so the
     /// page draws the solid one itself.
     /// </summary>
     private static BibuiWidget PageButton(BibuiRuntime runtime, string id, string label, bool primary,
@@ -340,7 +340,7 @@ internal static class DemoDisplay
                 lines.SizeY = SemanticSize.ChildrenSum();
                 using (runtime.PushParent(lines))
                 using (runtime.PushSizeY(SemanticSize.ChildrenSum()))
-                    TextField.Multiline(runtime, id, GalleryHelpers.Held(id, body), NoEdit, focused: false, events: 0);
+                    runtime.MultilineTextField(id, GalleryHelpers.Held(id, body), NoEdit, focused: false, events: 0);
             }
         }
         return card;

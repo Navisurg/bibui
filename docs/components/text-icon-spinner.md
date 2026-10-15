@@ -40,7 +40,7 @@ public FontFaceScope PushFontFace(FontSlot? family = null, FontWeight? weight = 
   comes from `family`, or the one pushed, or the body family.
 - A text is as large as what it holds, unless a size is pushed with
   `PushSizeX` or `PushSizeY`. One line, no wrapping: for wrapped text use
-  `TextField.Multiline` with `events: 0`.
+  `runtime.MultilineTextField` with `events: 0`.
 - `Text` is keyless and pooled. Use `TextFromId` when the text must be found
   again, by a test or an animation.
 

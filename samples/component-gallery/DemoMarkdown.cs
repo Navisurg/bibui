@@ -35,7 +35,7 @@ internal static class DemoMarkdown
         + "| **Keep split** | none | two packages to version |\n"
         + "\n"
         + "```\n"
-        + "Markdown.Build(runtime, \"doc\", source);\n"
+        + "runtime.Markdown(\"doc\", source);\n"
         + "```\n");
 
     private static readonly TextEditState Edit = new();
@@ -66,7 +66,7 @@ internal static class DemoMarkdown
                 using (runtime.PushParent(frame))
                 using (runtime.PushSizeY(TextField.Rows(runtime, 26)))
                 using (runtime.PushFontSize(ComponentSize.Sm))
-                    field = TextField.Multiline(runtime, "demo-markdown-source", Source, Edit, _focused);
+                    field = runtime.MultilineTextField("demo-markdown-source", Source, Edit, _focused);
                 if (field.Pressed) _focused = true;
 
                 runtime.Gap(24f);
@@ -81,7 +81,7 @@ internal static class DemoMarkdown
                 surface.Style.CornerRadius = 8f;
                 using (runtime.PushParent(surface))
                 {
-                    var viewer = Markdown.Build(runtime, "demo-markdown", Source, width: ViewerWidth - 32f);
+                    var viewer = runtime.Markdown("demo-markdown", Source, width: ViewerWidth - 32f);
                     if (viewer.LinkClicked) _lastLink = viewer.ClickedLink;
                     if (viewer.TaskClicked) Markdown.ToggleTask(Source, viewer.ToggledTask);
                 }

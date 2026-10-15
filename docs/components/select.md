@@ -2,7 +2,7 @@
 
 A trigger showing the current choice and a chevron. When open, it shows a
 raised list under the trigger. You build the list's rows between `Begin` and
-`End`, either with `Select.Item` or with rows of your own.
+`End`, either with `runtime.SelectItem` or with rows of your own.
 
 | Closed | With a value | Disabled |
 |---|---|---|
@@ -25,8 +25,8 @@ public static SelectScope Begin(
     float width = 220f,
     bool disabled = false)
 
-public static BibuiWidget Item(
-    BibuiRuntime runtime,
+public static BibuiWidget SelectItem(
+    this BibuiRuntime runtime,
     string id,
     ReadOnlySpan<char> label,
     bool selected = false,
@@ -105,7 +105,7 @@ sealed class FruitPicker
         var select = Select.Begin(runtime, "fruit", shown);
         if (select.Open)
             foreach (var (label, value) in Fruits)
-                if (Select.Item(runtime, "fruit-" + value, label, selected: value == _fruit).Clicked)
+                if (runtime.SelectItem("fruit-" + value, label, selected: value == _fruit).Clicked)
                 {
                     _fruit = value;
                     select.Close();

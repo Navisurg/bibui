@@ -2,6 +2,10 @@ using Bibui;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 using ComponentGallery;
+using Bibui.Raster.Skia;
+using Bibui.Runtime.Platform;
+using Bibui.Platform.Wayland;
+using Bibui.Raster.Managed.Backend;
 
 // ── Component Gallery ─────────────────────────────────────────────────────────
 // A page for each of bibui's components, and for the patterns an application
@@ -60,9 +64,9 @@ if (options.Check)
     return;
 }
 
-BibuiRuntime runtime = options.Raster == GalleryRaster.Managed
-    ? new(new Bibui.Raster.Managed.Backend.ManagedRasterBackend())
-    : new();
+var runtime = options.Raster == GalleryRaster.Managed
+    ? BibuiRuntime.Create().WithManagedRasterizer()
+    : BibuiRuntime.Create().WithSkia();
 HotReloadListener.Register(runtime.RequestFrame);
 
 runtime.MountStateful(
@@ -83,14 +87,14 @@ if (options.FirstFrame)
 using var testServer = BibuiTestServer.StartIfEnabled(runtime, options.Port);
 
 var window = options.Host == GalleryHost.Wayland
-    ? new BibuiWindow(runtime, new Bibui.Platform.Wayland.WaylandPlatformHost(
+    ? BibuiWindow.Create(runtime).WithWayland(
         new Bibui.Platform.Wayland.WaylandHostOptions
         {
             AppId = "bibui-component-gallery",
             MinWidth = ShellLayout.MinWidth,
             MinHeight = ShellLayout.MinHeight,
-        }))
-    : new BibuiWindow(runtime, new Bibui.Runtime.Platform.SilkPlatformHost());
+        })
+    : BibuiWindow.Create(runtime).WithSilk();
 window.Run("Component Gallery");
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -136,7 +140,7 @@ static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, SetState<Ga
 
     bool Entry(string id, string label, float height, bool raised)
     {
-        var entry = Bibui.Runtime.Button.Build(runtime, id, label, ghost: true);
+        var entry = runtime.Button(id, label, ghost: true);
         (entry.Node.SizeX, entry.Node.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.Pixels(height));
         var style = entry.Node.Style;
         if (raised) style.Draw = DrawFlags.Background;
@@ -166,7 +170,7 @@ static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, SetState<Ga
     }
 
     using (runtime.PushParent(nav))
-        Scrollbar.Build(runtime, "sidebar-bar", list);
+        runtime.Scrollbar("sidebar-bar", list);
 
     runtime.InteractionsFor(list);
     (list.SizeX, list.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
@@ -189,7 +193,7 @@ static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, SetState<Ga
 // the button that shows the sidebar in place of the page, or the page again.
 static UiNode BuildMenuBar(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState)
 {
-    var toggle = Bibui.Runtime.Button.Build(runtime, "nav-menu",
+    var toggle = runtime.Button("nav-menu",
         state.MenuOpen ? "Close" : "Components", ghost: true, size: ComponentSize.Sm);
     if (toggle.Clicked) setState.Set(state with { MenuOpen = !state.MenuOpen });
 
@@ -232,7 +236,7 @@ static UiNode BuildContentPanel(BibuiRuntime runtime, GalleryState state, SetSta
     UiNode.PushIntoParent(view, page);
 
     using (runtime.PushParent(panel))
-        Scrollbar.Build(runtime, "content-bar", view);
+        runtime.Scrollbar("content-bar", view);
     runtime.InteractionsFor(view);
 
     view.ChildLayoutAxis = LayoutAxis.Y;
@@ -351,7 +355,7 @@ static IEnumerable<(string Name, GalleryState State, string? DropDown)> Pages()
 static void WriteReference(string outDir, string name, GalleryState state, string? dropDown,
     Bibui.Theming.ThemeTokens theme, SurfaceOptions surface)
 {
-    var runtime = new BibuiRuntime();
+    var runtime = BibuiRuntime.Create().WithSkia();
     runtime.MountStateful(state, (s, set) => BuildGallery(runtime, s, set), theme, surface);
     if (dropDown is not null) runtime.OpenDropDown(dropDown);
     try
@@ -394,7 +398,7 @@ static int CheckLayouts(GalleryOptions options)
         foreach (var (name, state, dropDown) in Pages().Append(menu))
         {
             pages++;
-            var runtime = new BibuiRuntime();
+            var runtime = BibuiRuntime.Create().WithSkia();
             runtime.MountStateful(state, (s, set) => BuildGallery(runtime, s, set), options.Theme(),
                 new SurfaceOptions { Width = width, Height = height });
             if (dropDown is not null) runtime.OpenDropDown(dropDown);

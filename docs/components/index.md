@@ -14,7 +14,7 @@ page takes for granted, such as boxes, sizes, asks and retained boxes, are in
 All the components follow the same rules. Once you know them, a signature tells
 you most of what a component does.
 
-- **You call it from your build function, every frame.** `Checkbox.Build(runtime, …)`
+- **You call it from your build function, every frame.** `runtime.Checkbox(…)`
   links the checkbox under the parent you pushed with `runtime.PushParent`, or
   you place the node it returns yourself.
 - **The `id` names its retained boxes.** Any part that takes a press is a

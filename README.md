@@ -42,25 +42,25 @@ using Bibui.Runtime;
 using Bibui.Runtime.Platform;
 using static Bibui.Arrange;
 
-var runtime = new BibuiRuntime(new SkiaRasterBackend());
+var runtime = BibuiRuntime.Create().WithSkia();
 int count = 0;
 
 runtime.Mount(() =>
 {
-    var add = Button.Build(runtime, "add", "Add one");
+    var add = runtime.Button("add", "Add one");
     if (add.Clicked) count++;
     var text = runtime.Text($"Clicked {count} times");
     return Column(text, Space(12f), add).FillX().FillY().Padded(EdgeInsets.All(24f));
 });
 
-new BibuiWindow(runtime, new SilkPlatformHost()).Run("Counter");
+BibuiWindow.Create(runtime).WithSilk().Run("Counter");
 ```
 
 ```bash
 dotnet run
 ```
 
-The build function runs every frame. `Button.Build` reports whether the
+The build function runs every frame. `runtime.Button` reports whether the
 button was clicked, so the app changes its own state right there. There are no
 callbacks. Labels and texts are plain strings, and the window is cleared to the
 theme's background colour before each frame is painted.
@@ -84,9 +84,9 @@ provides. You pick both explicitly, and nothing is discovered at run time.
   using Bibui.Platform.Wayland;
   using Bibui.Raster.Managed.Backend;
 
-  var runtime = new BibuiRuntime(new ManagedRasterBackend());
+  var runtime = BibuiRuntime.Create().WithManagedRasterizer();
   // ... runtime.Mount(...) as above ...
-  new BibuiWindow(runtime, new WaylandPlatformHost(new WaylandHostOptions { AppId = "dev.example.counter" }))
+  BibuiWindow.Create(runtime).WithWayland(new WaylandHostOptions { AppId = "dev.example.counter" })
       .Run("Counter");
   ```
 

@@ -15,7 +15,7 @@ namespace Bibui.Runtime;
 /// no callback. The label comes in by value and <see cref="BibuiWidget.Clicked"/>
 /// goes back, so the caller decides what a press means.
 /// </summary>
-public static class Button
+public static class ButtonExtensions
 {
     // Not read from the theme, the way Switch does not read its radius: these
     // are Spacing.Sm and Spacing.Lg in every theme the repo ships, so neither is
@@ -39,8 +39,7 @@ public static class Button
     /// reports nothing and swallows the press, so it does not fall through to
     /// whatever is beneath.
     /// </summary>
-    public static BibuiWidget Build(
-        BibuiRuntime runtime,
+    public static BibuiWidget Button(this BibuiRuntime runtime,
         string id,
         ReadOnlySpan<char> label,
         bool ghost = false,

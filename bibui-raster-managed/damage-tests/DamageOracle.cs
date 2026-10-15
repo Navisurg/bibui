@@ -5,7 +5,6 @@ using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 using Bibui.Theming;
-using RtButton = Bibui.Runtime.Button;
 
 /// <summary>
 /// The damage oracle: every scene runs on two runtimes side by side, each on
@@ -80,7 +79,8 @@ internal static class DamageOracle
 
     private static BibuiRuntime Make(Scene scene, ManagedRasterBackend backend, out Action<int> step)
     {
-        var rt = new BibuiRuntime(backend) { TargetHz = 60f };
+        var rt = BibuiRuntime.Create().WithRaster(backend);
+        rt.TargetHz = 60f;
         var (build, s) = scene.Setup(rt);
         rt.Mount(build, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = scene.Width, Height = scene.Height, ScaleFactor = scene.Scale });
         step = s;
@@ -190,7 +190,7 @@ internal static class DamageOracle
             {
                 var kids = new UiNode[100];
                 for (int i = 0; i < kids.Length; i++)
-                    kids[i] = RtButton.Build(rt, $"b{i}", $"Item {i}", ghost: i % 3 == 1, disabled: i % 17 == 16, size: ComponentSize.Sm).Node;
+                    kids[i] = rt.Button($"b{i}", $"Item {i}", ghost: i % 3 == 1, disabled: i % 17 == 16, size: ComponentSize.Sm).Node;
                 return Page(Grid(kids, 10, 4f));
             }
             return (Build, f =>
@@ -207,7 +207,7 @@ internal static class DamageOracle
             UiNode Build()
             {
                 var kids = new UiNode[30];
-                for (int i = 0; i < kids.Length; i++) kids[i] = RtButton.Build(rt, $"b{i}", $"B{i}", ghost: i % 2 == 0, size: ComponentSize.Sm).Node;
+                for (int i = 0; i < kids.Length; i++) kids[i] = rt.Button($"b{i}", $"B{i}", ghost: i % 2 == 0, size: ComponentSize.Sm).Node;
                 return Page(Grid(kids, 6, 3f), 6f);
             }
             return (Build, f => { var (x, y) = Wander(f, 450, 300); Move(rt, x, y); });
@@ -221,7 +221,7 @@ internal static class DamageOracle
                 var kids = new UiNode[clicks.Length];
                 for (int i = 0; i < kids.Length; i++)
                 {
-                    var b = RtButton.Build(rt, $"r{i}", clicks[i] == 0 ? $"Button {i}" : $"Clicked {clicks[i]}",
+                    var b = rt.Button($"r{i}", clicks[i] == 0 ? $"Button {i}" : $"Clicked {clicks[i]}",
                         ghost: i % 4 == 1, disabled: i % 9 == 8, size: i % 2 == 0 ? ComponentSize.Sm : ComponentSize.Md);
                     if (b.Clicked) clicks[i]++;
                     kids[i] = b.Node;
@@ -245,7 +245,7 @@ internal static class DamageOracle
                 var items = new List<Arrange.Item>();
                 for (int i = 0; i < 6; i++)
                 {
-                    var s = Switch.Build(rt, $"sw{i}", on[i], label: on[i] ? $"Option {i} on" : $"Option {i}", disabled: i == 5 && !on[0]);
+                    var s = rt.Switch($"sw{i}", on[i], label: on[i] ? $"Option {i} on" : $"Option {i}", disabled: i == 5 && !on[0]);
                     if (s.Clicked) on[i] = !on[i];
                     if (i > 0) items.Add(Arrange.Space(14f));
                     items.Add(s.Node);
@@ -276,7 +276,7 @@ internal static class DamageOracle
                 field.FillX().Px(height: 36f);
                 BibuiWidget line;
                 using (rt.PushParent(field))
-                    line = TextField.SingleLine(rt, id, text, edit, focus == index, placeholder: placeholder);
+                    line = rt.TextField(id, text, edit, focus == index, placeholder: placeholder);
                 if (line.Pressed) focus = index;
                 return field;
             }
@@ -362,8 +362,8 @@ internal static class DamageOracle
                 bool popover = (frame / 15) % 2 == 1;
                 bool dialog = frame >= 30 && frame < 75;
                 float shown = rt.Animate("dialog", "shown", dialog ? 1f : 0f, speed: 10f);
-                var trigger = RtButton.Build(rt, "pop-trigger", "Details");
-                var tipped = RtButton.Build(rt, "tip-trigger", "Hover for a tip", ghost: true);
+                var trigger = rt.Button("pop-trigger", "Details");
+                var tipped = rt.Button("tip-trigger", "Hover for a tip", ghost: true);
                 if (tipped.Hovering) Tooltip.Build(rt, "A tooltip over the grid", (Box)tipped.Node);
                 if (popover) rt.OpenDropDown("pop", trigger.Node);
                 else rt.CloseDropDown("pop");
@@ -377,11 +377,11 @@ internal static class DamageOracle
                     var d = Dialog.Begin(rt, "dialog", shown, width: 320f);
                     using (rt.PushFontFace(weight: FontWeight.Bold)) rt.Text("Dialog");
                     rt.Gap(12f);
-                    RtButton.Build(rt, "dialog-ok", "OK");
+                    rt.Button("dialog-ok", "OK");
                     d.End();
                 }
                 var grid = new UiNode[16];
-                for (int i = 0; i < grid.Length; i++) grid[i] = RtButton.Build(rt, $"u{i}", $"Under {i}").Node;
+                for (int i = 0; i < grid.Length; i++) grid[i] = rt.Button($"u{i}", $"Under {i}").Node;
                 return Page(Arrange.Column(Arrange.Row(trigger.Node, Arrange.Space(12f), tipped.Node), Arrange.Space(10f), Grid(grid, 4, 6f)), 16f);
             }
             return (Build, f => { frame = f; var (x, y) = Wander(f, 640, 420); Move(rt, x, y); });
@@ -398,7 +398,7 @@ internal static class DamageOracle
                 for (int i = 0; i < 60; i++)
                 {
                     if (i > 0) Arrange.Gap(view, 4f);
-                    var row = RtButton.Build(rt, $"row{i}", $"Row {i}", ghost: i % 2 == 1);
+                    var row = rt.Button($"row{i}", $"Row {i}", ghost: i % 2 == 1);
                     UiNode.PushIntoParent(view, row.Node);
                 }
                 return Page(view);
@@ -416,7 +416,7 @@ internal static class DamageOracle
             UiNode Build()
             {
                 var kids = new UiNode[36];
-                for (int i = 0; i < kids.Length; i++) kids[i] = RtButton.Build(rt, $"z{i}", $"Z{i}").Node;
+                for (int i = 0; i < kids.Length; i++) kids[i] = rt.Button($"z{i}", $"Z{i}").Node;
                 return Page(Grid(kids, 6, 4f));
             }
             return (Build, f =>
@@ -432,8 +432,8 @@ internal static class DamageOracle
         {
             UiNode Card(int i)
             {
-                var a = RtButton.Build(rt, $"c{i}a", "Open");
-                var b = RtButton.Build(rt, $"c{i}b", "Share", ghost: true);
+                var a = rt.Button($"c{i}a", "Open");
+                var b = rt.Button($"c{i}b", "Share", ghost: true);
                 var card = Arrange.Column(a.Node, Arrange.Space(6f), b.Node).Px(190f, 150f);
                 card.Style = new Style
                 {
@@ -503,7 +503,7 @@ internal static class DamageOracle
                 for (int i = 0; i < 4; i++)
                 {
                     if (i > 0) kids.Add(Arrange.Space(6f));
-                    kids.Add(RtButton.Build(rt, $"o{i}", $"Faded {i}").Node);
+                    kids.Add(rt.Button($"o{i}", $"Faded {i}").Node);
                 }
                 var panel = Arrange.Row([.. kids]);
                 panel.Style = new Style { Opacity = o, Padding = EdgeInsets.All(8f), BackgroundColor = UiColor.Hex("#27272a"), CornerRadius = 8f };
@@ -538,7 +538,7 @@ internal static class DamageOracle
                         }
                     },
                 }.FillX().Px(height: 120f);
-                return Page(Arrange.Column(canvas, Arrange.Space(8f), RtButton.Build(rt, "cd", "Hover me").Node).FillX(), 12f);
+                return Page(Arrange.Column(canvas, Arrange.Space(8f), rt.Button("cd", "Hover me").Node).FillX(), 12f);
             }
             return (Build, f => { frame = f; Move(rt, 60 + (f * 5) % 120, 150); });
         });
@@ -599,7 +599,7 @@ internal static class DamageOracle
                         c.Restore();
                     },
                 }.Px(520f, 240f);
-                return Page(Arrange.Column(canvas, Arrange.Space(8f), RtButton.Build(rt, "cc", "Hover me").Node), 0f);
+                return Page(Arrange.Column(canvas, Arrange.Space(8f), rt.Button("cc", "Hover me").Node), 0f);
             }
             return (Build, f => { frame = f; Move(rt, 40 + (f * 7) % 200, 270); });
         });
@@ -626,7 +626,7 @@ internal static class DamageOracle
                             for (int i = start; i < start + 20; i++)
                             {
                                 if (i > start) rt.Gap(4f);
-                                RtButton.Build(rt, $"s{i}", $"Item {i}").Node.FillX();
+                                rt.Button($"s{i}", $"Item {i}").Node.FillX();
                             }
                         }
                     }

@@ -15,8 +15,8 @@ Fixtures: `slider-default` and `slider-disabled-true`. `section-default` shows o
 ## Build
 
 ```cs
-public static SliderWidget Build(
-    BibuiRuntime runtime,
+public static SliderWidget Slider(
+    this BibuiRuntime runtime,
     string id,
     float value,
     float min = 0f,
@@ -72,7 +72,7 @@ sealed class VolumeControl
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        var slider = Slider.Build(runtime, "volume", _volume, min: 0f, max: 100f, step: 1f, label: Label);
+        var slider = runtime.Slider("volume", _volume, min: 0f, max: 100f, step: 1f, label: Label);
         _volume = slider.Value;   // unchanged unless the track is being pressed or dragged
         return slider.Node.Px(width: 320f);   // otherwise as wide as its parent
     }

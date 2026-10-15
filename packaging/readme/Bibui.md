@@ -27,12 +27,12 @@ using Bibui.Runtime;
 using Bibui.Runtime.Platform;
 using static Bibui.Arrange;
 
-var runtime = new BibuiRuntime(new SkiaRasterBackend());
+var runtime = BibuiRuntime.Create().WithSkia();
 int clicks = 0;
 
 runtime.Mount(() =>
 {
-    var button = Button.Build(runtime, "hello", "Click me");
+    var button = runtime.Button("hello", "Click me");
     if (button.Clicked) clicks++;
 
     return Column(
@@ -43,7 +43,7 @@ runtime.Mount(() =>
         .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(24f) });
 });
 
-new BibuiWindow(runtime, new SilkPlatformHost()).Run("Hello");
+BibuiWindow.Create(runtime).WithSilk().Run("Hello");
 ```
 
 The first release supports Linux. Documentation, samples and the source are at

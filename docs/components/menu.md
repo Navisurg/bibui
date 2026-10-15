@@ -17,8 +17,8 @@ Fixtures: `menu-dropdown` and `menu-context`.
 public static MenuScope? Begin(BibuiRuntime runtime, string id, float x, float y, float width = 220f)
 public static MenuScope? BeginBelow(BibuiRuntime runtime, string id, UiNode anchor, float width = 220f, float gap = 4f)
 
-public static BibuiWidget Item(
-    BibuiRuntime runtime,
+public static BibuiWidget MenuItem(
+    this BibuiRuntime runtime,
     string id,
     ReadOnlySpan<char> label,
     string? icon = null,
@@ -95,7 +95,7 @@ sealed class AccountMenu
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        var trigger = Button.Build(runtime, "account-trigger", Trigger);
+        var trigger = runtime.Button("account-trigger", Trigger);
         if (trigger.Clicked)
             if (runtime.IsDropDownOpen("account-menu")) runtime.CloseDropDown("account-menu");
             else runtime.OpenDropDown("account-menu", trigger.Node);
@@ -103,10 +103,10 @@ sealed class AccountMenu
         if (Menu.BeginBelow(runtime, "account-menu", trigger.Node) is { } menu)
         {
             Menu.Label(runtime, Account);
-            bool chosen = Menu.Item(runtime, "account-profile", Profile, "user").Clicked;
-            chosen |= Menu.Item(runtime, "account-settings", Settings, "settings", SettingsKey).Clicked;
+            bool chosen = runtime.MenuItem("account-profile", Profile, "user").Clicked;
+            chosen |= runtime.MenuItem("account-settings", Settings, "settings", SettingsKey).Clicked;
             Menu.Separator(runtime);
-            chosen |= Menu.Item(runtime, "account-logout", LogOut, "log-out").Clicked;
+            chosen |= runtime.MenuItem("account-logout", LogOut, "log-out").Clicked;
             menu.End();
             if (chosen) runtime.CloseDropDown("account-menu");
         }
@@ -140,8 +140,8 @@ sealed class FileContextMenu
 
         if (Menu.Begin(runtime, "file-menu", _at.X, _at.Y) is { } menu)
         {
-            bool chosen = Menu.Item(runtime, "file-rename", Rename, "pencil").Clicked;
-            chosen |= Menu.Item(runtime, "file-delete", Delete, "trash").Clicked;
+            bool chosen = runtime.MenuItem("file-rename", Rename, "pencil").Clicked;
+            chosen |= runtime.MenuItem("file-delete", Delete, "trash").Clicked;
             menu.End();
             if (chosen) runtime.CloseDropDown("file-menu");
         }
