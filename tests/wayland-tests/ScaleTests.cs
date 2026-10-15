@@ -250,8 +250,8 @@ internal static unsafe class ScaleTests
                 box.ChildLayoutAxis = Bibui.LayoutAxis.Y;
                 using (runtime.PushParent(box))
                 {
-                    runtime.Text("Sharp at 1.25×"u8.ToArray());
-                    runtime.Text("ÆØÅ fig. 0123"u8.ToArray());
+                    runtime.Text("Sharp at 1.25×");
+                    runtime.Text("ÆØÅ fig. 0123");
                 }
                 return box;
             }, new Bibui.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });
