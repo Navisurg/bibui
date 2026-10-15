@@ -194,7 +194,6 @@ public sealed partial class BibuiRuntime
                 _hotId = null;
             _retainedBoxes.EndFrame();
             RewindLeaves();
-            _dropDowns.EndFrame();
             _eased.EndFrame();
             _motion.EndFrame();
             _lists.EndFrame();

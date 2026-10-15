@@ -84,7 +84,9 @@ before it was published.
   is their z-order. Overlays (menu, popover, select, dialog) open with
   `runtime.OpenDropDown(id, anchor)`, are built with
   `runtime.BeginDropDown(id)` and drawn last, and close on a press that a box
-  outside them and their anchor takes, or that nothing takes.
+  outside them and their anchor takes, or that nothing takes. A dropdown's
+  rect is its own over whatever is drawn under it, so a select in a dialog
+  picks its rows.
 - **Components are functions.** `Button.Build`, `Switch.Build`,
   `Slider.Build`, `Dialog.Begin` and the rest compose boxes and return what
   happened (`BibuiWidget`). They own no state, and colours are theme tokens
