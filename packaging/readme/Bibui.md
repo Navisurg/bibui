@@ -7,12 +7,12 @@ painter records it into a draw list, which a renderer you choose draws. Componen
 compose boxes and return what happened. There are no callbacks: a box claims
 what it takes, and you ask about it.
 
-This package holds the core, the runtime (`BibuiRuntime`, `BibuiWindow`) and the
-components. Add a window host and a renderer:
+This package holds the core, the runtime (`BibuiRuntime`) and the components.
+Add a platform window and a renderer:
 
 | Package | What it adds |
 |---|---|
-| `Bibui.Platform.Silk` | A window through GLFW and OpenGL (brings `Bibui.Raster.Skia`) |
+| `Bibui.Platform.Silk` | A window through GLFW and OpenGL |
 | `Bibui.Platform.Wayland` | A window on raw Wayland, drawn on the CPU; Native AOT |
 | `Bibui.Raster.Skia` | Drawing with SkiaSharp |
 | `Bibui.Raster.Managed.Backend` | Drawing with a managed rasterizer and FreeType text, no SkiaSharp |
@@ -28,24 +28,32 @@ using Bibui.Runtime.Platform;
 using static Bibui.Arrange;
 
 var runtime = BibuiRuntime.Create();
-using var skia = new SkiaRenderer();
 int clicks = 0;
 
-runtime.Mount(() =>
+using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Hello", 480, 240));
+using var skia = new SkiaRenderer(window.Gl);   // Bibui.Raster.Skia
+while (SilkWindow.BeginFrame(window, runtime))
 {
+    runtime.BeginBuild();
     var button = runtime.Button("hello", "Click me");
     if (button.Clicked) clicks++;
-
-    return Column(
+    UiNode.PushIntoParent(runtime.ParentInScope,
+        Column(
             runtime.Text($"Clicked {clicks} times"),
             Space(12f),
             button.Node)
         .FillX().FillY()
-        .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(24f) });
-});
-
-BibuiWindow.Create(runtime).WithSilk(skia).Run("Hello");
+        .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(24f) }));
+    runtime.EndBuild();
+    skia.Draw(runtime.DrawList);
+    SilkWindow.EndFrame(window, runtime);
+}
 ```
+
+The app owns the loop: the window waits for input and puts frames on screen,
+the runtime builds and records them, and the renderer draws them. The app's
+state is its own fields; a click writes one and the next frame reads it.
+`samples/counter` is this loop in full.
 
 The first release supports Linux. Documentation, samples and the source are at
 <https://github.com/Navisurg/bibui>. Licensed under Apache-2.0.

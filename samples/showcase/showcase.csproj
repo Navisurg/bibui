@@ -26,8 +26,9 @@
     <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(ShowcaseRoute)' != 'wayland'">
-    <!-- Cross-platform: GLFW + GL host, which brings Skia. -->
+    <!-- Cross-platform: the GLFW + GL window, and Skia to draw into it. -->
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+    <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Theme files the Appearance sheet offers, beside the binary. -->

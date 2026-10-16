@@ -11,9 +11,9 @@ result.
 | Route | Packages | Native AOT |
 |---|---|---|
 | Wayland + managed raster | `Bibui`, `Bibui.Platform.Wayland`, `Bibui.Raster.Managed.Backend` | **Yes.** Tested in CI with warnings as errors |
-| Silk + Skia | `Bibui`, `Bibui.Platform.Silk` | **No, JIT only for now** |
+| Silk + Skia | `Bibui`, `Bibui.Platform.Silk`, `Bibui.Raster.Skia` | **No, JIT only for now** |
 
-The Silk + Skia route is JIT-only for now. bibui's own Silk host and Skia
+The Silk + Skia route is JIT-only for now. bibui's own Silk window and Skia
 renderer are AOT compatible, but Silk.NET itself is not trim-safe: it finds its
 platform by reflection and resolves native library paths through
 `Assembly.Location`, so an AOT publish reports Silk.NET's own warnings (IL2072,
@@ -22,8 +22,8 @@ ask you to accept them. Run the Silk + Skia route on the JIT, and use the
 Wayland + managed route when you need a native binary. This may change if
 Silk.NET becomes trim-safe or GPU rendering comes to the Wayland host.
 
-Your build code does not depend on the route. Only `Program.cs`, which picks
-the host and the renderer, differs.
+Your build code does not depend on the route. Only `Program.cs`, which opens
+the window and binds the renderer, differs.
 
 ## Set up the project
 
@@ -58,44 +58,56 @@ need.
 
 ## Name the renderer
 
-Construct the renderer yourself and hand it to the host:
+Open the window and construct the renderer yourself, bound to the window's
+memory:
 
 ```csharp
 using Bibui;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
+using Bibui.Runtime.Platform;
 using static Bibui.Arrange;
 
 var runtime = BibuiRuntime.Create();
-var managed = new ManagedRenderer();
 int count = 0;
 
-runtime.Mount(() =>
+void Build()
 {
     var add = runtime.Button("add", "Add one");
     if (add.Clicked) count++;
     var text = runtime.Text($"Clicked {count} times");
-    return Column(text, Space(12f), add).FillX().FillY().Padded(EdgeInsets.All(24f));
-});
+    UiNode.PushIntoParent(runtime.ParentInScope,
+        Column(text, Space(12f), add).FillX().FillY().Padded(EdgeInsets.All(24f)));
+}
 
-if (!WaylandPlatformHost.IsSupported)
+if (!WaylandWindow.IsSupported)
 {
     Console.Error.WriteLine("This app needs a Wayland session.");
     return 1;
 }
-BibuiWindow.Create(runtime).WithWayland(managed.Draw, new WaylandHostOptions { AppId = "dev.example.counter" })
-    .Run("Counter");
+using var window = WaylandWindow.Open(runtime, new PlatformWindowOptions("Counter", 360, 160),
+    new WaylandHostOptions { AppId = "dev.example.counter" });
+using var managed = new ManagedRenderer(window.Cpu);
+while (WaylandWindow.BeginFrame(window, runtime))
+{
+    runtime.BeginBuild();
+    Build();
+    runtime.EndBuild();
+    managed.Draw(runtime.DrawList);
+    WaylandWindow.EndFrame(window, runtime);
+}
 return 0;
 ```
 
 There is no default renderer: the runtime only records each frame into a
 `DrawList`, and the renderer that draws it is one you construct
-(`new ManagedRenderer()` or `new SkiaRenderer()`), so the trimmer sees the type
-you name and keeps it.
+(`new ManagedRenderer(window.Cpu)` or `new SkiaRenderer(window.Cpu)`), so the
+trimmer sees the type you name and keeps it.
 
-The host is chosen the same way, after `BibuiWindow.Create(runtime)`. bibui looks nothing up at run time: no
-platform discovery, no plug-in loading, no reflection over your types.
+The window is chosen the same way: the app opens the one it names. bibui looks
+nothing up at run time: no platform discovery, no plug-in loading, no
+reflection over your types.
 
 ## Publish
 
@@ -105,7 +117,7 @@ dotnet publish -c Release -r linux-x64 -o out
 ```
 
 `-p:PublishAot=true` on the command line does the same, if you would rather not
-set it in the project. The result is a single executable. `WaylandPlatformHost.IsSupported`
+set it in the project. The result is a single executable. `WaylandWindow.IsSupported`
 is false outside a Wayland session (no `WAYLAND_DISPLAY`, or no
 libwayland-client), so the app can say so instead of failing to connect.
 
@@ -120,7 +132,7 @@ reference:
 | Executable | about **5.2 MB**, one file |
 | First rendered frame (1440 × 900), from spawn | about **29 ms** |
 
-The counter above and the [getting-started](getting-started.md) app publish
+The app above and the [getting-started](getting-started.md) app publish
 to about 5 MB as well. Most of that is bibui and the managed rasterizer, so it
 grows slowly with your own code; `System.Text.Json`, for example, adds about
 half a megabyte.
@@ -136,6 +148,7 @@ and Skia out of the AOT binary, so only the managed route ships:
 </ItemGroup>
 <ItemGroup Condition="'$(AppRoute)' != 'wayland'">
   <PackageReference Include="Bibui.Platform.Silk" Version="0.9.0" />
+  <PackageReference Include="Bibui.Raster.Skia" Version="0.9.0" />
 </ItemGroup>
 <PropertyGroup Condition="'$(AppRoute)' == 'wayland'">
   <DefineConstants>$(DefineConstants);WAYLAND_ONLY</DefineConstants>
@@ -147,7 +160,7 @@ dotnet run                                                          # JIT, Silk 
 dotnet publish -c Release -r linux-x64 -p:PublishAot=true -p:AppRoute=wayland -o out
 ```
 
-Code that names `SilkPlatformHost` or `SkiaRenderer` goes inside
+Code that names `SilkWindow` or `SkiaRenderer` goes inside
 `#if !WAYLAND_ONLY`.
 
 ## Trimming rules for your code
@@ -199,19 +212,22 @@ broken; with `TreatWarningsAsErrors` that warning fails the build.
 ## Checking a publish in CI
 
 Headless machines have no Wayland session, so check the binary without a
-window. Give the app a flag that mounts, builds one frame and exits:
+window. Give the app a flag that builds one frame, before any window opens, and
+exits:
 
 ```csharp
 if (args.Contains("--first-frame"))
 {
-    runtime.EndBuild();   // builds and lays out one frame into runtime.DrawList; throws if either fails
+    runtime.BeginBuild();
+    Build();
+    runtime.EndBuild();   // lays out one frame into runtime.DrawList; throws if it fails
     return 0;
 }
 ```
 
 Drawing is the renderer's, not the runtime's. To exercise the rasterizer as
-well, draw `runtime.DrawList` into a buffer with `managed.Draw` before
-returning.
+well, draw `runtime.DrawList` into a buffer before returning:
+`FramePixels.Bgra(runtime, new ManagedRenderer().Draw, out _, out _)`.
 
 Then publish with warnings as errors and run it:
 

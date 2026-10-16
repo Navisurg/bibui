@@ -2,7 +2,7 @@ namespace Bibui.Theming;
 
 /// <summary>
 /// The one table of theme names. Every API that takes a theme by name —
-/// <see cref="ThemeLoader.Load"/>, <c>BibuiRuntime.Mount</c>/<c>MountStateful</c>,
+/// <see cref="ThemeLoader.Load"/>, <c>BibuiRuntime.SetTheme</c>,
 /// <c>BibuiPage.Launch</c>, a fixture's <c>Theme</c> — resolves it here, so a
 /// name that works in one works in all of them.
 /// </summary>

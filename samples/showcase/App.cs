@@ -101,7 +101,8 @@ internal sealed partial class App
 
     // ── The frame ────────────────────────────────────────────────────────────
 
-    public UiNode Build(BibuiRuntime rt)
+    /// <summary>One frame of the app, between the loop's BeginBuild and EndBuild.</summary>
+    public void Build(BibuiRuntime rt)
     {
         ApplyTheme(rt);
         if (Live)
@@ -123,9 +124,27 @@ internal sealed partial class App
         var sidebar = Sidebar(rt, open, h);
         var main = Main(rt, w - SidebarWidth(open), h);
 
-        return Row(sidebar, main)
+        var page = Row(sidebar, main)
             .Px(w, h)
             .Styled(new Style { BackgroundColor = UiColor.Background });
+        UiNode.PushIntoParent(rt.ParentInScope, page);   // built with Arrange: linked under the frame's root
+    }
+
+    /// <summary>One whole frame, as the headless tools build it: BeginBuild, the app, EndBuild.</summary>
+    public void Frame(BibuiRuntime rt)
+    {
+        rt.BeginBuild();
+        Build(rt);
+        rt.EndBuild();
+    }
+
+    /// <summary>A runtime for this app, headless, on a <paramref name="w"/> × <paramref name="h"/> surface in its theme.</summary>
+    public BibuiRuntime Headless(int w, int h)
+    {
+        var rt = BibuiRuntime.Create();
+        rt.Surface = new SurfaceOptions { Width = w, Height = h, ScaleFactor = 1f };
+        rt.SetTheme(Theme());
+        return rt;
     }
 
     public static float SidebarWidth(float open) => 76f + 172f * open;

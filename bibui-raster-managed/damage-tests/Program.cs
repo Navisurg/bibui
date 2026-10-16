@@ -49,7 +49,7 @@ static void Eq(string expected, string? actual)
 // One frame: built, then drawn onto target by renderer.
 static void Frame(BibuiRuntime rt, ManagedRenderer renderer, Surface target)
 {
-    rt.EndBuild();
+    rt.Step();
     renderer.Draw(rt.DrawList, target);
 }
 
@@ -59,7 +59,7 @@ static (BibuiRuntime Rt, ManagedRenderer Backend, Surface Target) Rig()
     var backend = new ManagedRenderer { DamageTracking = true };
     var rt = BibuiRuntime.Create();
     rt.TargetHz = 60f;
-    rt.Mount(() =>
+    rt.SetBuild(() =>
     {
         var rows = new List<Arrange.Item>();
         for (int r = 0; r < 3; r++)
@@ -119,7 +119,7 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
         var backend = new ManagedRenderer { DamageTracking = tracked };
         var rt = BibuiRuntime.Create();
         rt.TargetHz = 60f;
-        rt.Mount(() =>
+        rt.SetBuild(() =>
         {
             var chart = rt.BoxFromId("chart", InteractionKinds.LeftPress);
             chart.Px(120f, 60f);

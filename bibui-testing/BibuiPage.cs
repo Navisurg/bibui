@@ -27,9 +27,10 @@ public sealed class BibuiPage : IDisposable
     private readonly SkiaRenderer? _ownRenderer;
     private bool _disposed;
 
-    private BibuiPage(BibuiRuntime runtime, DrawToPixels? draw)
+    private BibuiPage(BibuiRuntime runtime, Action build, DrawToPixels? draw)
     {
         _runtime = runtime;
+        _build = build;
         if (draw is null)
         {
             _ownRenderer = new SkiaRenderer();
@@ -44,80 +45,72 @@ public sealed class BibuiPage : IDisposable
         // A page opens on a built frame, the way a window does. Actions
         // hit-test the frame that was on screen when they happened, so the
         // first one needs a frame to have happened.
-        _runtime.EndBuild();
+        Frame();
     }
+
+    // What one frame builds, between the page's BeginBuild and EndBuild.
+    private readonly Action _build;
 
     // ── Factories ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Creates a page with a stateful interactive app.
-    /// The build function receives the current state and a <see cref="SetState{T}"/> handle.
-    /// Calling <c>setState.Set(newState)</c> from build code will cause
-    /// the next inspection or action to re-render with the new state. From async
-    /// continuations call <c>setState.Update(s =&gt; ...)</c> to avoid stale-closure clobbering.
+    /// A page on a runtime of its own. <paramref name="build"/> builds one frame
+    /// into the runtime it is handed, as an app's loop body does between
+    /// <c>BeginBuild</c> and <c>EndBuild</c>; state is the caller's own.
     /// </summary>
-    public static BibuiPage Launch<T>(
-        T initialState,
-        Func<T, SetState<T>, UiNode> build,
-        SurfaceOptions? surface = null,
-        string theme = "bibui-dark")
+    public static BibuiPage Launch(Action<BibuiRuntime> build, SurfaceOptions? surface = null, ThemeTokens? theme = null)
     {
+        ArgumentNullException.ThrowIfNull(build);
         var runtime = BibuiRuntime.Create();
-        runtime.MountStateful(initialState, build, surface, theme);
-        return new BibuiPage(runtime, null);
+        if (surface is not null) runtime.Surface = surface;
+        if (theme is not null) runtime.SetTheme(theme);
+        return new BibuiPage(runtime, () => build(runtime), null);
     }
 
     /// <summary>
-    /// Creates a stateful page driven by an explicit <see cref="ThemeTokens"/> object — for apps that
-    /// need a custom theme (e.g. a custom accent) without reflecting onto private runtime state.
+    /// A page on a runtime of its own, whose every frame is the tree
+    /// <paramref name="build"/> returns, linked under the frame's root (unless
+    /// the build linked it already). In the theme named <paramref name="theme"/>.
     /// </summary>
-    public static BibuiPage Launch<T>(
-        T initialState,
-        Func<T, SetState<T>, UiNode> build,
-        ThemeTokens theme,
-        SurfaceOptions? surface = null)
+    public static BibuiPage Launch(Func<UiNode> build, SurfaceOptions? surface = null, string theme = "bibui-dark")
+        => Launch(build, ThemeRegistry.Load(theme), surface);
+
+    /// <inheritdoc cref="Launch(Func{UiNode}, SurfaceOptions?, string)"/>
+    public static BibuiPage Launch(Func<UiNode> build, ThemeTokens theme, SurfaceOptions? surface = null)
     {
-        var runtime = BibuiRuntime.Create();
-        runtime.MountStateful(initialState, build, theme, surface);
-        return new BibuiPage(runtime, null);
+        ArgumentNullException.ThrowIfNull(build);
+        return Launch(runtime =>
+        {
+            var tree = build();
+            if (tree.Parent is null) UiNode.PushIntoParent(runtime.ParentInScope, tree);
+        }, surface, theme);
     }
 
     /// <summary>
-    /// Creates a page with a static (non-interactive) UI tree. Useful for
-    /// visual inspection. For apps with state, use Launch&lt;T&gt;.
+    /// A page on a runtime the caller made. Use this when an external service
+    /// (e.g. VideoService) needs to close over the runtime first.
+    /// <paramref name="build"/> builds one frame into it; <paramref name="draw"/>
+    /// is what <see cref="Screenshot"/> draws with, null for Skia on the CPU.
     /// </summary>
-    public static BibuiPage Launch(
-        Func<UiNode> build,
-        SurfaceOptions? surface = null,
-        string theme = "bibui-dark")
+    public static BibuiPage From(BibuiRuntime runtime, Action build, DrawToPixels? draw = null)
     {
-        var runtime = BibuiRuntime.Create();
-        runtime.Mount(build, surface, theme);
-        return new BibuiPage(runtime, null);
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(build);
+        return new BibuiPage(runtime, build, draw);
     }
 
     /// <summary>
-    /// Creates a static page driven by an explicit <see cref="ThemeTokens"/> object — for visual
-    /// inspection of a fixed tree under a fully custom theme, with no reflection on runtime state.
+    /// One frame, as the app's loop would build it: <c>BeginBuild</c>, the
+    /// build, <c>EndBuild</c>. Every action builds the frame it causes; call this
+    /// for one that nothing caused (time passing, a value set from outside).
     /// </summary>
-    public static BibuiPage Launch(
-        Func<UiNode> build,
-        ThemeTokens theme,
-        SurfaceOptions? surface = null)
+    public void Frame()
     {
-        var runtime = BibuiRuntime.Create();
-        runtime.Mount(build, theme, surface);
-        return new BibuiPage(runtime, null);
+        if (_disposed) throw new ObjectDisposedException(nameof(BibuiPage));
+        _runtime.BeginBuild();
+        _build();
+        _runtime.EndBuild();
     }
-
-    /// <summary>
-    /// Wraps an already-mounted <see cref="BibuiRuntime"/>. Use this when an
-    /// external service (e.g. VideoService) needs to close over the runtime
-    /// before mounting — create and configure the runtime yourself, then pass
-    /// it here to get the full test API. <paramref name="draw"/> is what
-    /// <see cref="Screenshot"/> draws with; null for Skia on the CPU.
-    /// </summary>
-    public static BibuiPage From(BibuiRuntime runtime, DrawToPixels? draw = null) => new(runtime, draw);
 
     // ── Tree query ───────────────────────────────────────────────────────────
 
@@ -127,7 +120,7 @@ public sealed class BibuiPage : IDisposable
     /// </summary>
     public UiNode? FindById(string id)
     {
-        Render();
+        Frame();
         return _runtime.FindById(id);
     }
 
@@ -158,7 +151,7 @@ public sealed class BibuiPage : IDisposable
 
     /// <summary>One key, as the window would report it.</summary>
     private void PressKey(Key key, bool ctrl = false, bool shift = false)
-        => _runtime.ProcessEvent(BibuiWindow.BibUiEventFromKey(key, ctrl, shift, _runtime.ClipboardGet));
+        => _runtime.ProcessEvent(BibUiEvent.FromKey(key, ctrl, shift, _runtime.ClipboardGet));
 
     /// <summary>
     /// Clicks the box with the given Id: a press and a release at its centre.
@@ -167,7 +160,7 @@ public sealed class BibuiPage : IDisposable
     public void Click(string id)
     {
         PressAt(id);
-        _runtime.EndBuild();
+        Frame();
     }
 
     /// <summary>
@@ -178,14 +171,14 @@ public sealed class BibuiPage : IDisposable
     public void DoubleClick(string id)
     {
         PressAt(id, clickCount: 2);
-        _runtime.EndBuild();
+        Frame();
     }
 
     /// <summary>Three clicks, which on text selects the line.</summary>
     public void TripleClick(string id)
     {
         PressAt(id, clickCount: 3);
-        _runtime.EndBuild();
+        Frame();
     }
 
     /// <summary>
@@ -203,7 +196,7 @@ public sealed class BibuiPage : IDisposable
             X      = b.X + b.Width / 2f,
             Y      = b.Y + b.Height / 2f,
         });
-        _runtime.EndBuild();
+        Frame();
     }
 
     /// <summary>
@@ -212,8 +205,8 @@ public sealed class BibuiPage : IDisposable
     /// </summary>
     public void Fill(string inputId, string value)
     {
-        _runtime.DispatchFill(inputId, value);
-        _runtime.EndBuild();
+        _runtime.DispatchFill(inputId, value, Frame);
+        Frame();
     }
 
     // ── State inspection ─────────────────────────────────────────────────────
@@ -268,7 +261,7 @@ public sealed class BibuiPage : IDisposable
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            _runtime.EndBuild(); // flush any pending invalidations
+            Frame(); // flush any pending invalidations
             if (condition()) return;
             Thread.Sleep(interval);
         }
@@ -287,7 +280,7 @@ public sealed class BibuiPage : IDisposable
         {
             Kind = BibUiEventKind.Text, Key = Key.Unknown, Char = ch, CodePoint = ch,
         });
-        _runtime.EndBuild();
+        Frame();
     }
 
     /// <summary>
@@ -298,7 +291,7 @@ public sealed class BibuiPage : IDisposable
     public void Press(Key key, bool ctrl = false, bool shift = false)
     {
         PressKey(key, ctrl, shift);
-        _runtime.EndBuild();
+        Frame();
     }
 
     /// <summary>
@@ -316,21 +309,21 @@ public sealed class BibuiPage : IDisposable
     public void PressBackspace()
     {
         PressKey(Key.Backspace);
-        _runtime.EndBuild();
+        Frame();
     }
 
     /// <summary>Presses the left arrow.</summary>
     public void PressArrowLeft()
     {
         PressKey(Key.Left);
-        _runtime.EndBuild();
+        Frame();
     }
 
     /// <summary>Presses the right arrow.</summary>
     public void PressArrowRight()
     {
         PressKey(Key.Right);
-        _runtime.EndBuild();
+        Frame();
     }
 
     // ── Visual ───────────────────────────────────────────────────────────────
@@ -338,7 +331,7 @@ public sealed class BibuiPage : IDisposable
     /// <summary>Returns the current render as a PNG byte array.</summary>
     public byte[] Screenshot()
     {
-        Render();
+        Frame();
         return FramePixels.Png(_runtime, _draw);
     }
 
@@ -348,14 +341,5 @@ public sealed class BibuiPage : IDisposable
     {
         _disposed = true;
         _ownRenderer?.Dispose();
-    }
-
-    // ── Private helpers ──────────────────────────────────────────────────────
-
-    private void Render()
-    {
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(BibuiPage));
-        _runtime.EndBuild();
     }
 }

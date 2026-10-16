@@ -29,7 +29,7 @@ public static class Frames
     /// <summary>Builds the runtime's next frame and draws it with <paramref name="draw"/>, Skia by default.</summary>
     public static Pixels Frame(this BibuiRuntime runtime, DrawToPixels? draw = null)
     {
-        runtime.EndBuild();
+        runtime.Step();
         return runtime.LastFrame(draw);
     }
 
@@ -44,7 +44,68 @@ public static class Frames
     public static Pixels Frame(UiNode root, SurfaceOptions surface, Bibui.Theming.ThemeTokens theme)
     {
         var runtime = BibuiRuntime.Create();
-        runtime.Mount(() => root, theme, surface);
+        runtime.SetBuild(() => root, theme, surface);
         return runtime.Frame();
+    }
+}
+
+/// <summary>
+/// A test's app: its build, kept per runtime, and the frames it runs. An app
+/// owns its loop and runs BeginBuild, its build, EndBuild; a test does the same
+/// here, a frame at a time.
+/// </summary>
+public static class TestBuild
+{
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<BibuiRuntime, Func<UiNode>> s_builds = new();
+
+    /// <summary>Keeps <paramref name="build"/> as the test's, on a surface (800×600 at 1× by default) in a theme.</summary>
+    public static void SetBuild(this BibuiRuntime runtime, Func<UiNode> build, SurfaceOptions? surface = null, string theme = "bibui-dark")
+        => runtime.SetBuild(build, Bibui.Theming.ThemeRegistry.Load(theme), surface);
+
+    /// <inheritdoc cref="SetBuild(BibuiRuntime, Func{UiNode}, SurfaceOptions?, string)"/>
+    public static void SetBuild(this BibuiRuntime runtime, Func<UiNode> build, Bibui.Theming.ThemeTokens theme, SurfaceOptions? surface = null)
+    {
+        s_builds.AddOrUpdate(runtime, build);
+        runtime.Surface = surface ?? new SurfaceOptions { Width = 800, Height = 600, ScaleFactor = 1f };
+        runtime.SetTheme(theme);
+    }
+
+    /// <summary>
+    /// The test's build, between a BeginBuild and an EndBuild: what it returns
+    /// is linked under the frame's root, unless the build linked it there already.
+    /// </summary>
+    public static void BuildTree(this BibuiRuntime runtime)
+    {
+        if (!s_builds.TryGetValue(runtime, out var build))
+            throw new InvalidOperationException("This runtime has no test build: SetBuild first.");
+        var tree = build();
+        if (tree.Parent is null) UiNode.PushIntoParent(runtime.ParentInScope, tree);
+    }
+
+    /// <summary>
+    /// The app's loop, on a thread of its own: a frame whenever one is owed, as a
+    /// window's loop builds them. A test server's commands wait on it. Background,
+    /// so it ends with the process; a frame that throws is the test's to notice.
+    /// </summary>
+    public static void RunLoop(this BibuiRuntime runtime)
+    {
+        new Thread(() =>
+        {
+            while (true)
+            {
+                if (runtime.FramesRequested == 0) { Thread.Sleep(2); continue; }
+                runtime.ConsumeFrame();
+                try { runtime.Step(); }
+                catch (Exception) { }
+            }
+        }) { IsBackground = true, Name = "test app loop" }.Start();
+    }
+
+    /// <summary>One frame: BeginBuild, the test's build, EndBuild.</summary>
+    public static void Step(this BibuiRuntime runtime)
+    {
+        runtime.BeginBuild();
+        runtime.BuildTree();
+        runtime.EndBuild();
     }
 }

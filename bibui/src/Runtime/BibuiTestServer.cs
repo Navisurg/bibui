@@ -14,7 +14,7 @@ namespace Bibui.Runtime;
 /// <summary>
 /// A TCP test server that exposes <see cref="BibuiRuntime"/> as a line-delimited
 /// JSON command API on the loopback interface, for workflow automation and video
-/// recording. Start alongside <see cref="BibuiWindow"/>.
+/// recording. Start it beside the app's window loop, which builds the frames its commands wait for.
 ///
 /// <para>It is off unless the app asks for it. <see cref="StartIfEnabled"/> starts
 /// one only when the environment variable <c>BIBUI_TEST_SERVER</c> is <c>1</c>;
@@ -27,11 +27,13 @@ namespace Bibui.Runtime;
 /// written only inside <see cref="OutputDirectory"/>: <c>screenshot</c> and
 /// <c>start_recording</c> take paths relative to it.</para>
 ///
-/// <para>A command builds frames on the server's thread, under the runtime's
-/// <see cref="BibuiRuntime.FrameLock"/>, as the window's loop does on its own.
-/// Screenshots and recordings draw the runtime's <see cref="BibuiRuntime.DrawList"/>
-/// with the function the server was given, under the same lock; without one
-/// they are refused.</para>
+/// <para>The server builds no frames: only the app knows its build. A command
+/// acts on the runtime from the server's thread and waits for the app's loop to
+/// build the frames that answer it. Screenshots and recordings draw the
+/// runtime's <see cref="BibuiRuntime.DrawList"/> with the function the server
+/// was given, under <see cref="BibuiRuntime.FrameLock"/>; without one they are
+/// refused. Give it a renderer of its own: the app's is busy on the loop's
+/// thread.</para>
 ///
 /// <para>Protocol: each request and response is a single JSON line. Commands are
 /// dispatched synchronously — the response is sent once the action completes.
@@ -371,10 +373,24 @@ public sealed class BibuiTestServer : IDisposable
     /// path had the same guarantee for a different reason — it invoked the handler before the
     /// render rather than inside it.</para>
     /// </summary>
-    private void Settle()
+    private void Settle() => WaitFrames(2);
+
+    /// <summary>
+    /// Waits for the app's loop to build <paramref name="n"/> more frames, asking for
+    /// each. The server builds none itself: only the app knows its build. A loop that
+    /// builds nothing for five seconds is an error.
+    /// </summary>
+    private void WaitFrames(int n)
     {
-        _runtime.EndBuild();
-        _runtime.EndBuild();
+        long until = _runtime.FrameCount + n;
+        long deadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency * 5;
+        while (_runtime.FrameCount < until)
+        {
+            if (Stopwatch.GetTimestamp() > deadline)
+                throw new TimeoutException("The app's loop built no frame for five seconds.");
+            _runtime.RequestFrame();
+            Thread.Sleep(1);
+        }
     }
 
     private string HandleClick(JsonNode node)
@@ -430,7 +446,7 @@ public sealed class BibuiTestServer : IDisposable
     /// One continuous pointer gesture: press at the first point, move through the rest,
     /// release at the last — with NO render in between.
     ///
-    /// <para>This exists because the per-command handlers each build a frame (<see cref="BibuiRuntime.EndBuild"/>),
+    /// <para>This exists because the per-command handlers each wait for a frame,
     /// which means a test-driven drag gets a fresh frame between every move. A real pointer
     /// does not: mouse moves arrive far faster than frames, so build code acting on a drag
     /// is holding state from an older frame. Any app that writes back a captured
@@ -459,13 +475,13 @@ public sealed class BibuiTestServer : IDisposable
 
         var start = At(0);
         _runtime.ProcessEvent(Mouse(BibUiEventKind.MouseDown, MouseButton.Left, start.X, start.Y));
-        if (renderEach) _runtime.EndBuild();
+        if (renderEach) WaitFrames(1);
 
         for (int i = 1; i < pts.Count; i++)
         {
             var p = At(i);
             _runtime.ProcessEvent(Mouse(BibUiEventKind.MouseMove, MouseButton.Left, p.X, p.Y));
-            if (renderEach) _runtime.EndBuild();
+            if (renderEach) WaitFrames(1);
         }
 
         var end = At(pts.Count - 1);
@@ -504,7 +520,7 @@ public sealed class BibuiTestServer : IDisposable
         if (!TryParseKey(name, out var key))
             return Err($"Unknown key '{name}'. Use a Bibui.Key name, e.g. Delete or Escape.");
 
-        _runtime.ProcessEvent(BibuiWindow.BibUiEventFromKey(key, ctrl, shift, _runtime.ClipboardGet));
+        _runtime.ProcessEvent(BibUiEvent.FromKey(key, ctrl, shift, _runtime.ClipboardGet));
         Settle();
         // And let go of it, in a frame of its own, as a keyboard does. A press that never
         // released was a key no user can type: an app that acted on the release as well as
@@ -521,7 +537,7 @@ public sealed class BibuiTestServer : IDisposable
     ///
     /// <para>The other half of <c>press</c>. A keyboard reports a printable character on a
     /// different channel from the key that produced it — Silk raises KeyChar separately from
-    /// KeyDown, and <see cref="BibuiWindow.BibUiEventFromKey"/> deliberately returns nothing for
+    /// KeyDown, and <see cref="BibUiEvent.FromKey"/> deliberately returns nothing for
     /// printable keys because layout, not scancode, decides what "the 2 key" types. So
     /// <c>press</c> can reach Delete and Escape but can never enter a digit, and a text field
     /// stayed undrivable.</para>
@@ -586,7 +602,7 @@ public sealed class BibuiTestServer : IDisposable
     {
         var id    = RequireId(node);
         var value = node["value"]?.GetValue<string>() ?? "";
-        _runtime.DispatchFill(id, value);
+        _runtime.DispatchFill(id, value, () => WaitFrames(1));
         Settle();
         return Ok();
     }
@@ -597,7 +613,7 @@ public sealed class BibuiTestServer : IDisposable
     private UiNode? Find(JsonNode node)
     {
         var id = RequireId(node);
-        _runtime.EndBuild();
+        WaitFrames(1);
         return _runtime.FindById(id);
     }
 
@@ -627,12 +643,9 @@ public sealed class BibuiTestServer : IDisposable
         var path = ResolveOutputPath(
             node["path"]?.GetValue<string>() ?? throw new ArgumentException("screenshot requires 'path'"));
         if (_draw is null) return Err("This server was started without a renderer to draw screenshots with");
+        WaitFrames(1);
         byte[] png;
-        lock (_runtime.FrameLock)
-        {
-            _runtime.EndBuild();
-            png = FramePixels.Png(_runtime, _draw);
-        }
+        lock (_runtime.FrameLock) png = FramePixels.Png(_runtime, _draw);
 
         // Written beside the target and renamed over it, so a link put in the
         // target's place after the check is replaced, not written through.
@@ -690,12 +703,9 @@ public sealed class BibuiTestServer : IDisposable
         }
 
         if (_draw is null) return Err("This server was started without a renderer to record with");
+        WaitFrames(1);
         int width, height;
-        lock (_runtime.FrameLock)
-        {
-            _runtime.EndBuild();
-            FramePixels.Bgra(_runtime, _draw, out width, out height);
-        }
+        lock (_runtime.FrameLock) FramePixels.Bgra(_runtime, _draw, out width, out height);
 
         lock (_recordLock)
             _recording = true;

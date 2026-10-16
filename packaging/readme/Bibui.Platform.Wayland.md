@@ -6,16 +6,22 @@ compositor's frame callbacks. No GLFW, no OpenGL, no SkiaSharp. Linux only.
 
 ```csharp
 var runtime = BibuiRuntime.Create();
-var managed = new ManagedRenderer();       // Bibui.Raster.Managed.Backend
-runtime.Mount(() => /* your frame */);
-
-if (WaylandPlatformHost.IsSupported)
-    BibuiWindow.Create(runtime).WithWayland(managed.Draw, new WaylandHostOptions { AppId = "my-app" })
-        .Run("My app");
+using var window = WaylandWindow.Open(runtime, new PlatformWindowOptions("My app", 960, 640),
+    new WaylandHostOptions { AppId = "my-app" });
+using var managed = new ManagedRenderer(window.Cpu);   // Bibui.Raster.Managed.Backend
+while (WaylandWindow.BeginFrame(window, runtime))
+{
+    runtime.BeginBuild();
+    /* your frame */
+    runtime.EndBuild();
+    managed.Draw(runtime.DrawList);
+    WaylandWindow.EndFrame(window, runtime);
+}
 ```
 
-The host draws each frame with the `DrawToPixels` you pass first; any
-renderer's `Draw` converts to it, so `skia.Draw` works too. With
+`window.Cpu` is this frame's `wl_shm` buffer; a renderer bound to it draws
+there, so `new SkiaRenderer(window.Cpu)` works too. `WaylandWindow.IsSupported`
+says whether this session can open a window. With
 `Bibui.Raster.Managed.Backend` this is bibui's Native AOT route. It needs
 `libwayland-client` and `libxkbcommon` at run time.
 

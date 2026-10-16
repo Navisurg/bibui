@@ -20,9 +20,9 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <!-- IPlatformHost, BibuiRuntime and WindowEvent. The host itself uses no
-         Silk.NET and no SkiaSharp type: it draws through the runtime's raster
-         backend (IRasterBackend.CreateSurface over shm memory). -->
+    <!-- BibuiRuntime, WindowInput and CpuTarget. The window uses no Silk.NET
+         and no SkiaSharp type: the app's renderer draws into its shm buffer
+         through window.Cpu. -->
     <ProjectReference Include="../bibui/bibui.csproj" />
   </ItemGroup>
   <ItemGroup>

@@ -18,7 +18,7 @@ public enum WindowEventKind
 
 /// <summary>
 /// One thing the OS told us, and only that. Produced by an
-/// <see cref="IPlatformHost"/>'s event pump; <see cref="BibuiWindow"/> decides what it means.
+/// platform's event pump; <see cref="WindowInput"/> decides what it means.
 ///
 /// It says what happened, never what is now true: no button mask, no modifier
 /// set, nothing accumulated. Those are a fold of the whole stream and belong to

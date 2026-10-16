@@ -1,21 +1,22 @@
 # Bibui.Testing
 
 Headless testing for bibui apps. A `BibuiPage` holds a runtime with no window
-and draws it with Skia on the CPU, unless `BibuiPage.From(runtime, draw)` is
-given another `DrawToPixels`; a test finds nodes by id, reads their laid-out
+and draws it with Skia on the CPU, unless `BibuiPage.From(runtime, build, draw)`
+is given another `DrawToPixels`; a test finds nodes by id, reads their laid-out
 bounds and text, clicks, types and presses keys, and takes screenshots.
 `WorkflowClient` drives a running app the same way over its test server.
 
 ```csharp
 var runtime = BibuiRuntime.Create();
-runtime.Mount(() => MyScreen.Build(runtime));
-
-using var page = BibuiPage.From(runtime);
+using var page = BibuiPage.From(runtime, () => MyScreen.Build(runtime));
 page.Click("save");
 var bounds = page.GetBounds("save");
 ```
 
-`BibuiPage.Launch` does the same from a build function alone.
+The build is what the app's loop runs between `BeginBuild` and `EndBuild`;
+each action builds the frame it causes, and `page.Frame()` builds one nothing
+caused. `BibuiPage.Launch(runtime => MyScreen.Build(runtime))` does the same on
+a runtime of its own.
 
 `WorkflowClient` talks to a `BibuiTestServer` the app starts on purpose, for
 example with `BibuiTestServer.StartIfEnabled(runtime, draw: skia.Draw)` (`skia`
