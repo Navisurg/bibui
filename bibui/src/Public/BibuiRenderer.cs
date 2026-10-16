@@ -150,14 +150,14 @@ public sealed class BibuiRenderer
         // Capture locals for the deferred PNG factory (used only by verification/testing).
         int capturedW = physW, capturedH = physH;
         var capturedRaw = rawBytes;
-        var backend = _caches.Backend;
 
         var result = new RenderOutput
         {
             RawBgraBytes = rawBytes,
             Width = physW,
             Height = physH,
-            PngFactory = () => backend.EncodePng(capturedRaw, capturedW, capturedH),
+            PngFactory = () => Imaging.Png.Encode(capturedRaw, capturedW, capturedH, capturedW * 4,
+                Imaging.ChannelOrder.Bgra, Imaging.AlphaMode.Premultiplied),
         };
 
         if (_profile)

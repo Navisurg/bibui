@@ -544,13 +544,13 @@ internal static class DamageOracle
         });
 
         // Every canvas call the scenes above never make, drawn straight onto the
-        // canvas by a box's own draw: images (one still, one moving), a pixel
-        // buffer rewritten in place every frame, points, two runs of glyphs (one
+        // canvas by a box's own draw: a texture (drawn still and moving), a texture
+        // whose pixels are updated every frame, points, two runs of glyphs (one
         // changing), and shapes under a changing scale and a set matrix.
         yield return new Scene("canvas-calls", 520, 300, 1f, 60, rt =>
         {
             int frame = 0;
-            RasterImage? image = null;
+            TextureHandle image = default, video = default;
             var pixels = new byte[32 * 32 * 4];
             // A run shaped by the engine, its glyphs at the sum of the advances before them.
             static void Glyphs(IRasterCanvas c, FontFace face, string text, float x, float baseline, Rgba color)
@@ -576,11 +576,12 @@ internal static class DamageOracle
                         var c = ctx.Canvas;
                         float l = ctx.Rect.Left, t = ctx.Rect.Top;
                         var white = ctx.Fill(new Rgba(255, 255, 255));
-                        image ??= ctx.Backend.CreateImage(Checkerboard(16), 16, 16);
+                        var backend = (ManagedRasterBackend)ctx.Backend;
+                        if (image.IsNone) image = backend.CreateTexture(Checkerboard(16), 16, 16);
 
-                        c.DrawImage(image, new RectF(l + 20, t + 20, l + 84, t + 84), white);
+                        c.DrawTexture(image, new RectF(l + 20, t + 20, l + 84, t + 84), white);
                         float x = l + 120 + frame / 4 % 10 * 8;
-                        c.DrawImage(image, new RectF(x, t + 20, x + 48, t + 68), white);
+                        c.DrawTexture(image, new RectF(x, t + 20, x + 48, t + 68), white);
 
                         // The same array, rewritten in place: its content is what is drawn.
                         for (int i = 0; i < 32 * 32; i++)
@@ -590,7 +591,10 @@ internal static class DamageOracle
                             pixels[i * 4 + 2] = (byte)(frame * 11);
                             pixels[i * 4 + 3] = 255;
                         }
-                        c.DrawPixels(pixels, 32, 32, new RectF(l + 260, t + 20, l + 324, t + 84), white);
+                        // One handle, its pixels updated every frame: damage must see the change.
+                        if (video.IsNone) video = backend.CreateTexture(pixels, 32, 32);
+                        else backend.UpdateTexture(video, pixels, 32, 32);
+                        c.DrawTexture(video, new RectF(l + 260, t + 20, l + 324, t + 84), white);
 
                         Span<Vector2> pts = stackalloc Vector2[8];
                         for (int i = 0; i < 8; i++) pts[i] = new(l + 30 + i * 20, t + 120 + (i == frame % 8 ? 6 : 0));

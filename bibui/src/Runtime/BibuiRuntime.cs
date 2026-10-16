@@ -366,10 +366,10 @@ public sealed partial class BibuiRuntime
             {
                 var capturedRaw = rawPixels;
                 int cw = physW, ch = physH;
-                var raster = Renderer.Raster;
                 // PNG encoding is pure CPU work over the captured buffer — safe to
                 // run lazily on whatever thread first asks for PngBytes.
-                pngFactory = () => raster.EncodePng(capturedRaw, cw, ch);
+                pngFactory = () => Imaging.Png.Encode(capturedRaw, cw, ch, cw * 4,
+                    Imaging.ChannelOrder.Bgra, Imaging.AlphaMode.Premultiplied);
             }
             else
             {

@@ -2840,6 +2840,66 @@ Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string
     IsTrue(fromString.Chunk(4).Distinct().Count() > 2, "text was drawn");
 });
 
+// Textures: one checked against each backend, through the backend's own
+// texture functions, which are not on IRasterBackend.
+void TextureContract(string name, Bibui.Raster.IRasterBackend backend,
+    Func<byte[], int, int, Bibui.Raster.TextureHandle> create,
+    Action<Bibui.Raster.TextureHandle, byte[], int, int> update,
+    Action<Bibui.Raster.TextureHandle> release)
+{
+    // 4x2 opaque pixels, RGBA, each one different.
+    static byte[] Pixels(byte seed)
+    {
+        var px = new byte[4 * 2 * 4];
+        for (int i = 0; i < 8; i++) (px[i * 4], px[i * 4 + 1], px[i * 4 + 2], px[i * 4 + 3]) = ((byte)(seed + i * 30), (byte)(200 - i * 20), (byte)(i * 11), 255);
+        return px;
+    }
+    // Drawn 1:1 at the origin with an opaque paint, read back as RGBA.
+    byte[] Draw(Bibui.Raster.TextureHandle texture)
+    {
+        using var surface = backend.CreateSurface(4, 2);
+        surface.Canvas.Clear(new Rgba(0, 0, 0, 0));
+        surface.Canvas.DrawTexture(texture, new RectF(0, 0, 4, 2), new PaintSpec { Color = Rgba.Black, FilterQuality = FilterQuality.Low });
+        var bgra = new byte[4 * 2 * 4];
+        IsTrue(surface.ReadPixels(bgra, 4, 2), $"{name}: read back");
+        for (int i = 0; i < bgra.Length; i += 4) (bgra[i], bgra[i + 2]) = (bgra[i + 2], bgra[i]);
+        return bgra;
+    }
+
+    var a = Pixels(10);
+    var first = create(a, 4, 2);
+    IsTrue(!first.IsNone, $"{name}: a created texture is a handle");
+    IsTrue(Draw(first).SequenceEqual(a), $"{name}: drawn 1:1, a texture is its pixels");
+
+    var b = Pixels(90);
+    update(first, b, 4, 2);
+    IsTrue(Draw(first).SequenceEqual(b), $"{name}: an update changes what the same handle draws");
+
+    var empty = new byte[4 * 2 * 4];
+    IsTrue(Draw(Bibui.Raster.TextureHandle.None).SequenceEqual(empty), $"{name}: None draws nothing");
+    release(first);
+    IsTrue(Draw(first).SequenceEqual(empty), $"{name}: a released handle draws nothing");
+    var second = create(a, 4, 2);
+    IsTrue(second != first, $"{name}: a new texture in the reused slot has a new handle");
+    IsTrue(Draw(first).SequenceEqual(empty), $"{name}: the old handle still draws nothing");
+    IsTrue(Draw(second).SequenceEqual(a), $"{name}: the new handle draws its own pixels");
+    update(first, b, 4, 2);
+    IsTrue(Draw(second).SequenceEqual(a), $"{name}: updating the old handle leaves the new texture alone");
+    release(second);
+}
+
+Run("Textures: drawn, updated and released on Skia", () =>
+{
+    using var skia = new SkiaRasterBackend();
+    TextureContract("skia", skia, (px, w, h) => skia.CreateTexture(px, w, h), (t, px, w, h) => skia.UpdateTexture(t, px, w, h), skia.ReleaseTexture);
+});
+
+Run("Textures: drawn, updated and released on the managed rasterizer", () =>
+{
+    using var managed = new ManagedRasterBackend();
+    TextureContract("managed", managed, (px, w, h) => managed.CreateTexture(px, w, h), (t, px, w, h) => managed.UpdateTexture(t, px, w, h), managed.ReleaseTexture);
+});
+
 Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and gradients", () =>
 {
     // The former Skia escape hatch: paints are values, paths and

@@ -129,6 +129,7 @@ internal static class DemoDisplay
     "Alert" => AlertPage(runtime),
 
     "Separator" => SeparatorPage(runtime),
+    "Texture" => DemoTexture.Build(runtime),
 
     "Label" => Arrange.Column(
         Bold(runtime, "Form labels paired with inputs", ComponentSize.Sm, TextColor.Secondary),

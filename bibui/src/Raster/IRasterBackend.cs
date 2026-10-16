@@ -54,20 +54,10 @@ public interface IRasterBackend : IDisposable
     /// <summary>An empty path. The caller owns it and disposes it.</summary>
     RasterPath CreatePath();
 
-    // ── Images and encoded bitmaps ───────────────────────────────────────────
-
-    /// <summary>An immutable image copied from straight-alpha RGBA8888 pixels.</summary>
-    RasterImage CreateImage(ReadOnlySpan<byte> rgba, int width, int height);
-
-    /// <summary>A decoded PNG (or any format the backend reads), or null when it cannot be decoded.</summary>
-    RasterImage? DecodeImage(ReadOnlySpan<byte> encoded);
-
-    /// <summary>
-    /// PNG bytes for a tightly packed BGRA8888 premultiplied frame. Must be safe
-    /// to call from any thread: a render output encodes lazily, on whichever
-    /// thread first asks for its PNG.
-    /// </summary>
-    byte[] EncodePng(ReadOnlySpan<byte> bgraPremul, int width, int height);
+    // Textures are not created here. Usage code knows its backend and calls
+    // the backend's own CreateTexture, UpdateTexture and ReleaseTexture; image
+    // files are decoded by whoever loads them (bibui's Png, or a codec of the
+    // app's choosing), never by a backend.
 
     // ── Frame clock ──────────────────────────────────────────────────────────
 
@@ -137,17 +127,14 @@ public interface IRasterCanvas
 
     void DrawPoints(PointMode mode, ReadOnlySpan<Vector2> points, in RasterPaint paint);
 
-    // ── Images ───────────────────────────────────────────────────────────────
-
-    /// <summary>Draws <paramref name="image"/> scaled into <paramref name="dest"/>, sampled per the paint's FilterQuality and modulated by its alpha.</summary>
-    void DrawImage(RasterImage image, RectF dest, in RasterPaint paint);
+    // ── Textures ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// <see cref="DrawImage"/> over pixels the caller holds — straight-alpha
-    /// RGBA8888, <c>width * 4</c> bytes a row — without making an image that
-    /// outlives the call. For video frames and other per-frame bitmaps.
+    /// Draws <paramref name="texture"/> scaled into <paramref name="dest"/>, sampled
+    /// per the paint's FilterQuality and modulated by its alpha. A
+    /// <see cref="TextureHandle.None"/> or released texture draws nothing.
     /// </summary>
-    void DrawPixels(ReadOnlySpan<byte> rgba, int width, int height, RectF dest, in RasterPaint paint);
+    void DrawTexture(TextureHandle texture, RectF dest, in RasterPaint paint);
 
     /// <summary>
     /// Blurs what is already painted: snapshots <paramref name="region"/> of the

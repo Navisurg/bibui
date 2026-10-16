@@ -255,21 +255,12 @@ internal sealed class DamageRecorder
 
     // ── Images ───────────────────────────────────────────────────────────────
 
-    internal void DrawImage(RasterImage image, RectF dest, in RasterPaint paint)
+    /// <summary>A texture draw, signed by its handle and its content version: the handle stays the same when its pixels are updated.</summary>
+    internal void DrawTexture(TextureHandle texture, uint version, RectF dest, in RasterPaint paint)
     {
-        ref var op = ref _f.NewOp(OpKind.Image);
-        op.Ref = image; op.Rect = dest; op.Paint = paint;
-        ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(0x27UL, ImageIds.Of(image)), dest), paint);
-        Draw(ref op, h, Bounds(Inflate(dest, 1f), paint));
-    }
-
-    internal void DrawPixels(ReadOnlySpan<byte> rgba, int width, int height, RectF dest, in RasterPaint paint)
-    {
-        ref var op = ref _f.NewOp(OpKind.Pixels);
-        op.Start = Tee ? 0 : _f.Store(rgba);   // kept only to be replayed
-        op.Count = rgba.Length;
-        op.W = width; op.H = height; op.Rect = dest; op.Paint = paint;
-        ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(0x28UL, Hash64.Bytes(rgba)), (ulong)width << 32 | (uint)height), dest), paint);
+        ref var op = ref _f.NewOp(OpKind.Texture);
+        op.Texture = texture; op.Rect = dest; op.Paint = paint;
+        ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(0x27UL, texture.Value), version), dest), paint);
         Draw(ref op, h, Bounds(Inflate(dest, 1f), paint));
     }
 
@@ -412,16 +403,3 @@ internal sealed class DamageRecorder
     }
 }
 
-/// <summary>
-/// An identity per image for the life of the process. An image is immutable, so
-/// the same instance is the same pixels; a new one is a new number even where
-/// the runtime hands out an address that a dead one had.
-/// </summary>
-internal static class ImageIds
-{
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<RasterImage, object> s_ids = new();
-    private static long s_next;
-
-    internal static ulong Of(RasterImage image) =>
-        (ulong)(long)s_ids.GetValue(image, static _ => Interlocked.Increment(ref s_next));
-}

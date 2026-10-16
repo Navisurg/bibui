@@ -40,6 +40,23 @@ before it was published.
     gets the built-in Inter, and a character Inter lacks draws as its missing
     glyph. Text no longer depends on the machine.
 
+- **The draw layer knows textures, never images (breaking).** An app gets an
+  image's pixels into memory its own way (`Bibui.Imaging.Png`, a video
+  decoder, its own code) and makes a texture on the backend it chose.
+  - `SkiaRasterBackend` and `ManagedRasterBackend` have `CreateTexture(rgba,
+    width, height)`, `UpdateTexture` and `ReleaseTexture`, which return and
+    take a `TextureHandle`. The app owns the texture. A released handle, or
+    `TextureHandle.None`, draws nothing.
+  - `IRasterCanvas.DrawTexture(texture, dest, paint)` and
+    `DrawContext.DrawTexture` replace `DrawImage` and `DrawPixels`. `RasterImage`
+    and `DrawContext.DrawBitmap` are gone: for a video frame, update one texture
+    every frame and draw it.
+  - `IRasterBackend` loses `CreateImage`, `DecodeImage` and `EncodePng`. Frame
+    PNGs (`RenderOutput.PngBytes`) are encoded by `Bibui.Imaging.Png`, and the
+    managed backend's own PNG codec is gone.
+  - The component gallery's Texture page shows both: a texture made once, and
+    one whose pixels change every frame.
+
 - **Runtimes and windows are made with `Create`, and the backend and host are
   always chosen (breaking).**
   `BibuiWindow.Create(BibuiRuntime.Create().WithSkia()).WithSilk().Run(title: "App")`.

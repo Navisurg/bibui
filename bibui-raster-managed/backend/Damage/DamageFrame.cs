@@ -5,7 +5,7 @@ namespace Bibui.Raster.Managed.Backend.Damage;
 internal enum OpKind : byte
 {
     Clear, Save, Restore, Translate, Scale, SetMatrix, ClipRect, SaveLayer,
-    RoundRect, Line, Path, Points, Image, Pixels, BackdropBlur, Glyphs,
+    RoundRect, Line, Path, Points, Texture, BackdropBlur, Glyphs,
 }
 
 /// <summary>One recorded canvas call. Fat on purpose: a fixed struct in one array, reused frame to frame.</summary>
@@ -18,11 +18,12 @@ internal struct DamageOp
     public RectF Rect;          // rrect / image dest / clip / backdrop clip
     public float A, B, C, D;    // radii, line ends, text origin, translate, scale, sigma
     public RasterPaint Paint;
-    public object? Ref;         // path, image
+    public object? Ref;         // path
+    public TextureHandle Texture; // Texture
     public FontFace? Face;      // Glyphs
     public float Size;          // Glyphs: px per em
     public Rgba Color;
-    public int Start, Count, W, H;
+    public int Start, Count;
     public int Start2;          // GlyphRun: where its positions start in Vecs
     public PixelRect Region;    // backdrop read region
     public Matrix3x2 Matrix;    // SetMatrix
@@ -61,14 +62,12 @@ internal sealed class DamageFrame
     internal int[] Draws = new int[256];
     internal int DrawCount;
 
-    // Side storage for spans an op carried (glyphs and their positions, points, pixels),
+    // Side storage for spans an op carried (glyphs and their positions, points),
     // so an op stays a fixed-size struct and nothing is allocated once warm.
     internal ushort[] Glyphs = new ushort[256];
     internal int GlyphCount;
     internal Vector2[] Vecs = new Vector2[256];
     internal int VecCount;
-    internal byte[] Bytes = [];
-    internal int ByteCount;
 
     // Copies of paths that changed before the frame was replayed (the scratch
     // path, rewound and rebuilt for the next draw). Reused frame to frame.
@@ -85,7 +84,7 @@ internal sealed class DamageFrame
     {
         // Drop references the last frame held so nothing outlives its frame here.
         for (int i = 0; i < OpCount; i++) (Ops[i].Ref, Ops[i].Face) = (null, null);
-        OpCount = DrawCount = GlyphCount = VecCount = ByteCount = _pathCopyCount = 0;
+        OpCount = DrawCount = GlyphCount = VecCount = _pathCopyCount = 0;
         Width = width;
         Height = height;
         Background = default;
@@ -128,15 +127,6 @@ internal sealed class DamageFrame
         vecs.CopyTo(Vecs.AsSpan(VecCount));
         int at = VecCount;
         VecCount += vecs.Length;
-        return at;
-    }
-
-    internal int Store(ReadOnlySpan<byte> bytes)
-    {
-        Ensure(ref Bytes, ByteCount + bytes.Length);
-        bytes.CopyTo(Bytes.AsSpan(ByteCount));
-        int at = ByteCount;
-        ByteCount += bytes.Length;
         return at;
     }
 
@@ -435,8 +425,7 @@ internal sealed class DamageFrame
             case OpKind.Line: c.DrawLine(op.A, op.B, op.C, op.D, op.Paint); break;
             case OpKind.Path: c.DrawPath((RasterPath)op.Ref!, op.Paint); break;
             case OpKind.Points: c.DrawPoints(op.Mode, Vecs.AsSpan(op.Start, op.Count), op.Paint); break;
-            case OpKind.Image: c.DrawImage((RasterImage)op.Ref!, op.Rect, op.Paint); break;
-            case OpKind.Pixels: c.DrawPixels(Bytes.AsSpan(op.Start, op.Count), op.W, op.H, op.Rect, op.Paint); break;
+            case OpKind.Texture: c.DrawTexture(op.Texture, op.Rect, op.Paint); break;
             case OpKind.BackdropBlur: c.DrawBackdropBlur(op.Region, op.Rect, op.A); break;
             case OpKind.Glyphs:
                 c.DrawGlyphs(op.Face!, op.Size, Glyphs.AsSpan(op.Start, op.Count), Vecs.AsSpan(op.Start2, op.Count), op.A, op.B, op.Color);
