@@ -169,7 +169,7 @@ bibui has 16 interfaces. What happens to each:
 
 ## Getting there without changing a pixel
 
-Each step's gate is the same: the runtime tests (with the byte-exact `RenderTo`/`Render` parity test), `damage-tests`, and the fixture suites, all unchanged.
+Each step's gate is the same: the runtime tests, `damage-tests`, and the fixture suites, all unchanged. Until step 5, the runtime tests include the byte-exact `RenderTo`/`Render` parity test; it is deleted with those two methods, and from then on the fixture suites hold the pixels.
 
 1. **Text out of the rasterizer.** `Fonts` runs on the core's FreeType + HarfBuzz text engine, and the canvas's only text call becomes `DrawGlyphs`. This is already decided (the text-engine proposal).
 2. **Textures replace images in the draw layer.** `TextureHandle`, `DrawTexture`, and each renderer's texture functions. `DrawImage`, `DrawBitmap` and `DrawPixels` leave `DrawContext`.
@@ -185,6 +185,7 @@ Each step's gate is the same: the runtime tests (with the byte-exact `RenderTo`/
 
 - **Callbacks** are `DrawCallback(Box box, DrawContext ctx)`.
 - **`DrawList` access** is read-only spans; only the core writes the list.
+- **No owner ids.** An op doesn't record which box drew it. One can be added (an `int` per op) if a draw-list dump or the damage-debug overlay ever needs to name boxes.
 - **`runtime.EndBuild()` ends a frame's building:** it runs the build function given to `Mount`, lays out, and issues the draw calls, recording the `DrawList`. `Mount` stays how an app hands the runtime its UI. When it returns, the frame's input has been consumed, the tree is laid out, and `runtime.DrawList` describes the frame; nothing has been drawn. Drawing is the caller's next step, with its renderer:
 
   ```csharp
@@ -192,7 +193,7 @@ Each step's gate is the same: the runtime tests (with the byte-exact `RenderTo`/
   SkiaDraw.Execute(runtime.DrawList, canvas);
   ```
 
-  This replaces `runtime.Render()` and `runtime.RenderTo(surface)`, which today build, lay out, paint and (for `Render()`) read the pixels back in one call. The runtime's internal `BeginBuild`/`EndBuild` frame markers (tooltip and dropdown bookkeeping, sweeping unused retained boxes) are renamed to make room. The `DrawList` is valid until the next frame starts building.
+  `runtime.Render()` and `runtime.RenderTo(surface)` are removed. Today they build, lay out, paint and (for `Render()`) read the pixels back in one call. The runtime's internal `BeginBuild`/`EndBuild` frame markers (tooltip and dropdown bookkeeping, sweeping unused retained boxes) are renamed to make room. The `DrawList` is valid until the next frame starts building.
 - **Pixels and PNGs come from rendering the `DrawList`,** like any other frame: a renderer draws it into pixels in memory, and whoever wants a PNG encodes those (the codec stays in the core). There is no frame-output path in the core: `RenderOutput` and `PngFactory` go. `Bibui.Testing` renders with a renderer it is given (Skia on the CPU by default) to keep `Screenshot()`.
 
 ## Later
@@ -200,7 +201,3 @@ Each step's gate is the same: the runtime tests (with the byte-exact `RenderTo`/
 - **Cached paths drawn as textures.** Icons and check marks are the same shape every frame. A renderer may rasterize a cached path once into its own mask atlas (keyed by path id, scale and stroke) and draw quads from it, tinted by the op's colour. This is the renderer's choice, behind the op: the core keeps drawing paths, and creates no textures. A mask is drawn at whole-pixel offsets where icons today land on fractional ones, so pixels would shift slightly. It's an optimization to measure after the rebuild, not part of it. Content an app draws itself (a chart, a dome) can be drawn once into a texture by the app, which needs a renderer to draw ops into a texture (an off-screen target), not yet in any step.
 
 - **A frame bracket:** `runtime.BeginBuild(); BuildUi(runtime); runtime.EndBuild();`, with the app running its own build code between the two calls instead of handing the runtime a callback with `Mount`. It changes every app's entry point, so it is not part of this rebuild.
-
-## Open questions
-
-1. **Owner ids:** ops carry no reference to the box that recorded them. One could be added (an `int` per op) if a draw-list dump or the damage-debug overlay needs to name boxes; nothing needs it yet.
