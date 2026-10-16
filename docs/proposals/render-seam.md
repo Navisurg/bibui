@@ -179,7 +179,7 @@ Each step's gate is the same: the runtime tests (with the byte-exact `RenderTo`/
 
 ## Later
 
-- **A rad-style frame bracket:** `runtime.BeginBuild(); BuildUi(runtime); runtime.EndBuild();`, with the app running its own build code between the two calls instead of handing the runtime a callback with `Mount`, as the RAD debugger's `ui_begin_build`/`ui_end_build` do. It changes every app's entry point, so it is not part of this rebuild.
+- **A frame bracket:** `runtime.BeginBuild(); BuildUi(runtime); runtime.EndBuild();`, with the app running its own build code between the two calls instead of handing the runtime a callback with `Mount`. It changes every app's entry point, so it is not part of this rebuild.
 
 ## Open questions
 
