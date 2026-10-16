@@ -1,5 +1,4 @@
 using System.Numerics;
-using Bibui.Renderer;
 using Bibui.TextEdit;
 
 namespace Bibui.Runtime;
@@ -181,7 +180,7 @@ public sealed partial class BibuiRuntime
     }
 
     // The frame's opening marker, before build() runs.
-    private void BeginBuild()
+    private void BeginDropDowns()
     {
         lock (_syncRoot)
         {

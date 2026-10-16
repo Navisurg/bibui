@@ -1,6 +1,5 @@
 using System.Numerics;
 using Bibui;
-using Bibui.Renderer;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 using Bibui.Theming;
@@ -34,7 +33,7 @@ static class MotionTests
     /// <summary>A runtime whose build asks <paramref name="ask"/> and draws nothing else.</summary>
     static BibuiRuntime Asking(Action<BibuiRuntime> ask, float hz = 60f)
     {
-        var runtime = BibuiRuntime.Create().WithSkia();
+        var runtime = BibuiRuntime.Create();
         runtime.TargetHz = hz;
         runtime.Mount(() => { ask(runtime); return Root(); }, new SurfaceOptions { Width = 200, Height = 100 });
         return runtime;
@@ -42,10 +41,10 @@ static class MotionTests
 
     static void Frames(BibuiRuntime runtime, int n)
     {
-        for (int i = 0; i < n; i++) runtime.Render();
+        for (int i = 0; i < n; i++) runtime.EndBuild();
     }
 
-    static (byte R, byte G, byte B) Pixel(RenderOutput frame, int x, int y)
+    static (byte R, byte G, byte B) Pixel(Pixels frame, int x, int y)
     {
         int i = (y * frame.Width + x) * 4;   // BGRA
         return (frame.RawBgraBytes[i + 2], frame.RawBgraBytes[i + 1], frame.RawBgraBytes[i]);
@@ -85,7 +84,7 @@ static class MotionTests
         run("Timed: asked for the first time, a value is at its target", () =>
         {
             var runtime = Asking(rt => rt.Animate("t", "x", 5f, Transition.Timed(0.2f)));
-            runtime.Render();
+            runtime.EndBuild();
             Eq(5f, runtime.Animate("t", "x", 5f, Transition.Timed(0.2f)), "arrived, not travelling");
         });
 
@@ -94,7 +93,7 @@ static class MotionTests
             float target = 0f;
             var tr = Transition.Timed(0.2f, Easing.Linear);
             var runtime = Asking(rt => rt.Animate("t", "x", target, tr));
-            runtime.Render();
+            runtime.EndBuild();
 
             target = 100f;
             Frames(runtime, 6);   // 6 of the 12 frames 0.2 s is at 60 Hz
@@ -111,7 +110,7 @@ static class MotionTests
             float target = 0f;
             var tr = Transition.Timed(0.1f, Easing.Linear, delay: 0.1f);
             var runtime = Asking(rt => rt.Animate("t", "x", target, tr));
-            runtime.Render();
+            runtime.EndBuild();
             target = 1f;
             Frames(runtime, 6);
             Eq(0f, runtime.Animate("t", "x", 1f, tr), "still waiting at the end of the delay");
@@ -124,7 +123,7 @@ static class MotionTests
             float target = 0f;
             var tr = Transition.Timed(0.2f, Easing.Linear);
             var runtime = Asking(rt => rt.Animate("t", "x", target, tr));
-            runtime.Render();
+            runtime.EndBuild();
             target = 100f;
             Frames(runtime, 6);
             float mid = runtime.Animate("t", "x", 100f, tr);
@@ -141,7 +140,7 @@ static class MotionTests
                 float target = 0f;
                 var tr = Transition.Timed(0.4f, Easing.Standard);
                 var runtime = Asking(rt => rt.Animate("t", "x", target, tr), hz);
-                runtime.Render();
+                runtime.EndBuild();
                 target = 1f;
                 Frames(runtime, (int)(0.2f * hz));
                 return runtime.Animate("t", "x", 1f, tr);
@@ -156,7 +155,7 @@ static class MotionTests
             float target = 0f;
             var tr = Transition.OnSpring(Spring.Snappy);
             var runtime = Asking(rt => rt.Animate("s", "x", target, tr, epsilon: 0.01f));
-            runtime.Render();
+            runtime.EndBuild();
             target = 100f;
             Frames(runtime, 120);
             Eq(100f, runtime.Animate("s", "x", 100f, tr, epsilon: 0.01f), "arrived on the number");
@@ -169,7 +168,7 @@ static class MotionTests
                 float target = 0f, peak = 0f;
                 var tr = Transition.OnSpring(spring);
                 var runtime = Asking(rt => peak = MathF.Max(peak, rt.Animate("s", "x", target, tr)));
-                runtime.Render();
+                runtime.EndBuild();
                 target = 1f;
                 Frames(runtime, 120);
                 return peak;
@@ -183,7 +182,7 @@ static class MotionTests
             float target = 0f;
             var tr = Transition.OnSpring(Spring.Gentle);
             var runtime = Asking(rt => rt.Animate("s", "x", target, tr));
-            runtime.Render();
+            runtime.EndBuild();
             target = 100f;
             Frames(runtime, 6);
             float a = runtime.Animate("s", "x", 100f, tr);
@@ -204,7 +203,7 @@ static class MotionTests
                 float target = 0f;
                 var tr = Transition.OnSpring(Spring.Gentle);
                 var runtime = Asking(rt => rt.Animate("s", "x", target, tr), hz);
-                runtime.Render();
+                runtime.EndBuild();
                 target = 1f;
                 Frames(runtime, (int)MathF.Round(0.1f * hz));
                 return runtime.Animate("s", "x", 1f, tr);
@@ -219,7 +218,7 @@ static class MotionTests
             var target = Vector2.Zero;
             var tr = Transition.Timed(0.2f, Easing.Linear);
             var runtime = Asking(rt => rt.Animate("bar", "at", target, tr));
-            runtime.Render();
+            runtime.EndBuild();
             target = new Vector2(100f, 40f);
             Frames(runtime, 6);
             var at = runtime.Animate("bar", "at", target, tr);
@@ -232,7 +231,7 @@ static class MotionTests
             UiColor target = "#FF0000";
             var tr = Transition.Timed(0.2f, Easing.Linear);
             var runtime = Asking(rt => rt.AnimateColor("row", "bg", target, tr));
-            runtime.Render();
+            runtime.EndBuild();
             Eq("#FF0000FF", runtime.AnimateColor("row", "bg", target, tr).Resolve(runtime.Theme.Colors), "starts as asked");
 
             target = "#0000FF";
@@ -251,7 +250,7 @@ static class MotionTests
             UiColor target = "#3366CC";
             var tr = Transition.Timed(0.1f, Easing.Linear);
             var runtime = Asking(rt => rt.AnimateColor("chip", "bg", target, tr));
-            runtime.Render();
+            runtime.EndBuild();
             target = "#3366CC00";
             Frames(runtime, 3);
             var mid = Rgba.Parse(runtime.AnimateColor("chip", "bg", target, tr).Resolve(runtime.Theme.Colors));
@@ -280,7 +279,7 @@ static class MotionTests
                 shown = rt.Presence("view", present: true);
                 hidden = rt.Presence("palette", present: false);
             });
-            runtime.Render();
+            runtime.EndBuild();
             Eq(PresenceState.Present, shown.State, "the view is simply there");
             Eq(1f, shown.Progress, "at rest");
             Eq(PresenceState.Gone, hidden.State, "the palette is not");
@@ -293,7 +292,7 @@ static class MotionTests
             Presence p = default;
             var exit = Transition.Timed(0.1f, Easing.Linear);
             var runtime = Asking(rt => p = rt.Presence("palette", open, exit: exit));
-            runtime.Render();
+            runtime.EndBuild();
 
             // A build reads where the value got to by the end of the frame
             // before, so the fourth frame's build sees three steps: half of six.
@@ -313,7 +312,7 @@ static class MotionTests
             Presence p = default;
             var tr = Transition.Timed(0.1f, Easing.Linear);
             var runtime = Asking(rt => p = rt.Presence("palette", open, enter: tr, exit: tr));
-            runtime.Render();
+            runtime.EndBuild();
 
             open = true;
             Frames(runtime, 1);
@@ -336,7 +335,7 @@ static class MotionTests
         {
             Presence p = default;
             var runtime = Asking(rt => p = rt.Presence("view", true, enter: Transition.Timed(0.1f), appear: true));
-            runtime.Render();
+            runtime.EndBuild();
             Eq(PresenceState.Entering, p.State, "entering on its first frame");
             Eq(0f, p.Progress, "from nothing");
         });
@@ -366,12 +365,12 @@ static class MotionTests
             IReadOnlyList<PresenceItem<string>> rows = [];
             var tr = Transition.Timed(0.1f, Easing.Linear);
             var runtime = Asking(rt => rows = rt.PresenceList("inbox", items, s => s, tr, tr));
-            runtime.Render();
+            runtime.EndBuild();
             Eq("a,b,c", string.Join(",", rows.Select(r => r.Key)), "every row");
             IsTrue(rows.All(r => r.State == PresenceState.Present && r.Progress == 1f), "all at rest");
 
             items = ["a", "c", "d"];   // b accepted, d arrived
-            runtime.Render();
+            runtime.EndBuild();
             Eq("a,b,c,d", string.Join(",", rows.Select(r => r.Key)), "b still there, in its place");
             Eq(PresenceState.Exiting, rows[1].State, "b leaving");
             Eq("b", rows[1].Item, "with the item it was built from");
@@ -388,7 +387,7 @@ static class MotionTests
             IReadOnlyList<PresenceItem<string>> rows = [];
             var tr = Transition.Timed(0.1f, Easing.Linear);
             var runtime = Asking(rt => rows = rt.PresenceList("inbox", items, s => s, tr, tr, stagger: 0.05f));
-            runtime.Render();
+            runtime.EndBuild();
             items = ["a", "b", "c"];
             Frames(runtime, 8);   // 0.1 s each, starting 0.05 s apart
             IsTrue(rows[0].Progress > rows[1].Progress && rows[1].Progress > rows[2].Progress,
@@ -399,14 +398,14 @@ static class MotionTests
         {
             IReadOnlyList<PresenceItem<string>> rows = [];
             var runtime = Asking(rt => rows = rt.PresenceList("inbox", new[] { "a" }, s => s, appear: true));
-            runtime.Render();
+            runtime.EndBuild();
             Eq(PresenceState.Entering, rows[0].State, "entering");
         });
 
         run("PresenceList: two items with one key are refused", () =>
         {
             var runtime = Asking(rt => rt.PresenceList("inbox", new[] { "a", "a" }, s => s));
-            try { runtime.Render(); }
+            try { runtime.EndBuild(); }
             catch (InvalidOperationException) { return; }
             throw new Exception("expected a refusal");
         });
@@ -417,7 +416,7 @@ static class MotionTests
         {
             float progress = 1f;
             Box holder = null!;
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.Mount(() =>
             {
                 var root = Root();
@@ -446,7 +445,7 @@ static class MotionTests
         {
             Box b = null!;
             var style = new Style { BackgroundColor = "#FF0000", Translate = new Vector2(100f, 0f) };
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.Mount(() =>
             {
                 var root = new Box { Style = new Style { BackgroundColor = "#000000" } }.FillX().FillY();
@@ -454,14 +453,14 @@ static class MotionTests
                 UiNode.PushIntoParent(root, b);
                 return root;
             }, new SurfaceOptions { Width = 200, Height = 100 });
-            var frame = runtime.Render();
+            var frame = runtime.Frame();
             Eq(new Vector2(10f, 10f), b.Rect, "laid out where it was put");
             Eq(((byte)0, (byte)0, (byte)0), Pixel(frame, 30, 30), "not drawn there");
             Eq(((byte)255, (byte)0, (byte)0), Pixel(frame, 130, 30), "but 100 px to the right");
 
             style.Translate = Vector2.Zero;
             style.Scale = new Vector2(2f, 2f);
-            frame = runtime.Render();
+            frame = runtime.Frame();
             Eq(((byte)255, (byte)0, (byte)0), Pixel(frame, 5, 5), "doubled about its centre reaches past its corner");
             Eq(((byte)255, (byte)0, (byte)0), Pixel(frame, 65, 65), "on both sides");
         });
@@ -469,7 +468,7 @@ static class MotionTests
         run("Transform: the pointer finds a box where it is drawn, not where it was laid out", () =>
         {
             bool pressed = false;
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.Mount(() =>
             {
                 var root = Root();
@@ -483,20 +482,20 @@ static class MotionTests
             Frames(runtime, 2);
 
             runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = 30f, Y = 30f });
-            runtime.Render();
+            runtime.EndBuild();
             IsTrue(!pressed, "a press where it was laid out misses");
             runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Left, X = 30f, Y = 30f });
-            runtime.Render();
+            runtime.EndBuild();
 
             runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = 130f, Y = 30f });
-            runtime.Render();
+            runtime.EndBuild();
             IsTrue(pressed, "a press where it is drawn lands");
         });
 
         run("Transform: a turned box is hit inside its turned outline only", () =>
         {
             bool pressed = false;
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.Mount(() =>
             {
                 var root = Root();
@@ -512,9 +511,9 @@ static class MotionTests
             void Press(float x, float y)
             {
                 runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = x, Y = y });
-                runtime.Render();
+                runtime.EndBuild();
                 runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Left, X = x, Y = y });
-                runtime.Render();
+                runtime.EndBuild();
             }
             Press(60f, 50f);
             IsTrue(!pressed, "the end of the bar as laid out is empty now");
@@ -525,7 +524,7 @@ static class MotionTests
         run("Transform: a box moved out of its clipping parent is not hit outside it", () =>
         {
             bool pressed = false;
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.Mount(() =>
             {
                 var root = Root();
@@ -543,20 +542,20 @@ static class MotionTests
             Frames(runtime, 2);
 
             runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = 150f, Y = 10f });
-            runtime.Render();
+            runtime.EndBuild();
             IsTrue(!pressed, "the part cut off takes nothing");
             runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Left, X = 150f, Y = 10f });
-            runtime.Render();
+            runtime.EndBuild();
 
             runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = 90f, Y = 10f });
-            runtime.Render();
+            runtime.EndBuild();
             IsTrue(pressed, "the part inside does");
         });
 
         run("Transform: a click by name lands on the box as drawn", () =>
         {
             bool pressed = false;
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.Mount(() =>
             {
                 var root = Root();
@@ -570,7 +569,7 @@ static class MotionTests
             }, new SurfaceOptions { Width = 200, Height = 100 });
             Frames(runtime, 2);
             runtime.DispatchClick("card");
-            runtime.Render();
+            runtime.EndBuild();
             IsTrue(pressed, "pressed");
         });
 
@@ -580,19 +579,19 @@ static class MotionTests
         {
             var dark = new ThemeTokens { Colors = new ColorTokens { Background = "#000000" } };
             var light = new ThemeTokens { Colors = new ColorTokens { Background = "#FFFFFF" } };
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.Mount(() => new Box { Style = new Style { BackgroundColor = UiColor.Background } }.FillX().FillY(),
                 dark, new SurfaceOptions { Width = 20, Height = 20 });
-            runtime.Render();
+            runtime.EndBuild();
 
             runtime.SetTheme(light, Transition.Timed(0.1f, Easing.Linear));
-            var start = Pixel(runtime.Render(), 5, 5);
+            var start = Pixel(runtime.Frame(), 5, 5);
             Eq(((byte)0, (byte)0, (byte)0), start, "the first frame is still the old theme");
             Frames(runtime, 2);
-            var mid = Pixel(runtime.Render(), 5, 5);
+            var mid = Pixel(runtime.Frame(), 5, 5);
             IsTrue(mid.R is > 0 and < 255, $"part way ({mid.R})");
             Frames(runtime, 6);
-            Eq(((byte)255, (byte)255, (byte)255), Pixel(runtime.Render(), 5, 5), "and arrives at the new one");
+            Eq(((byte)255, (byte)255, (byte)255), Pixel(runtime.Frame(), 5, 5), "and arrives at the new one");
             Eq(light, runtime.Theme, "the theme asked for is the theme");
         });
 
@@ -617,7 +616,7 @@ static class MotionTests
                 color = rt.AnimateColor("m", "c", target > 0 ? "#FFFFFF" : "#000000", Transition.Timed(1f));
             });
             runtime.ReducedMotion = true;
-            runtime.Render();
+            runtime.EndBuild();
 
             target = 1f; open = false; items = [];
             Frames(runtime, 2);   // one to ask, one to read the step back

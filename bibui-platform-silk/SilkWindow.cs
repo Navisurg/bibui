@@ -5,11 +5,13 @@ public static class SilkWindow
 {
     /// <summary>
     /// Opens <paramref name="window"/> on a new <see cref="SilkPlatformHost"/>
-    /// (GLFW + OpenGL, cross-platform): <c>BibuiWindow.Create(runtime).WithSilk()</c>.
+    /// (GLFW + OpenGL, cross-platform) that draws with <paramref name="renderer"/>:
+    /// <c>BibuiWindow.Create(runtime).WithSilk(skia)</c>.
     /// </summary>
-    public static BibuiWindow WithSilk(this BibuiWindow window)
+    public static BibuiWindow WithSilk(this BibuiWindow window, Bibui.Raster.Skia.SkiaRenderer renderer)
     {
         ArgumentNullException.ThrowIfNull(window);
-        return window.WithHost(new SilkPlatformHost());
+        ArgumentNullException.ThrowIfNull(renderer);
+        return window.WithHost(new SilkPlatformHost(renderer));
     }
 }

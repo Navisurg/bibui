@@ -341,15 +341,14 @@ public sealed class BibuiWindow
         var logicalW = _runtime.SurfaceWidth;
         var logicalH = _runtime.SurfaceHeight;
 
-        // Pre-warm Skia + JIT + font resolution BEFORE the Wayland surface
+        // Pre-warm the JIT and font resolution BEFORE the Wayland surface
         // exists. Once the host maps the surface, Hyprland's ANR
         // manager starts expecting xdg_wm_base.pong within
-        // misc:anr_missed_pings cycles (default 3). The first
-        // _runtime.Render() call is the slow one (SkiaSharp native load, JIT,
-        // font cache build) — doing it here means there's no compositor
-        // clock running yet, so there's nothing to miss. Subsequent
-        // Render() calls hit Runtime's clean-output cache and are cheap.
-        _runtime.Render();
+        // misc:anr_missed_pings cycles (default 3). The first frame is the
+        // slow one (JIT, font cache build) — building it here means there's no
+        // compositor clock running yet, so there's nothing to miss. A host
+        // warms its renderer in Open, before the first frame is shown.
+        _runtime.EndBuild();
 
         var host = Host;
         try

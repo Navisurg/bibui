@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Bibui.Raster;
+namespace Bibui.Draw;
 
 /// <summary>What a path is built from; each takes a fixed number of arguments (<see cref="VectorPath.ArgCount"/>).</summary>
 public enum PathVerb : byte
@@ -95,49 +95,6 @@ public sealed class VectorPath
         PathVerb.Arc => 7,
         _ => 0,
     };
-
-    /// <summary>
-    /// Builds this path into <paramref name="into"/>, a backend's own path,
-    /// verb for verb. An added path is built into a path of
-    /// <paramref name="makePath"/>'s first, then added under its transform.
-    /// </summary>
-    public void BuildInto(RasterPath into, Func<RasterPath> makePath)
-    {
-        ArgumentNullException.ThrowIfNull(into);
-        Build(Verbs, Args, into, makePath, this);
-    }
-
-    /// <summary>
-    /// <see cref="BuildInto"/> over verbs and arguments held elsewhere (a
-    /// <see cref="DrawList"/>'s payload); <paramref name="owner"/> supplies the
-    /// added paths, if any verb adds one.
-    /// </summary>
-    public static void Build(ReadOnlySpan<PathVerb> verbs, ReadOnlySpan<float> a, RasterPath into, Func<RasterPath> makePath, VectorPath? owner = null)
-    {
-        int at = 0, added = 0;
-        foreach (var verb in verbs)
-        {
-            switch (verb)
-            {
-                case PathVerb.Move: into.MoveTo(a[at], a[at + 1]); break;
-                case PathVerb.Line: into.LineTo(a[at], a[at + 1]); break;
-                case PathVerb.Quad: into.QuadTo(a[at], a[at + 1], a[at + 2], a[at + 3]); break;
-                case PathVerb.Cubic: into.CubicTo(a[at], a[at + 1], a[at + 2], a[at + 3], a[at + 4], a[at + 5]); break;
-                case PathVerb.Arc: into.ArcTo(a[at], a[at + 1], a[at + 2], a[at + 3] != 0f, a[at + 4] != 0f, a[at + 5], a[at + 6]); break;
-                case PathVerb.AddArc: into.AddArc(new RectF(a[at], a[at + 1], a[at + 2], a[at + 3]), a[at + 4], a[at + 5]); break;
-                case PathVerb.Close: into.Close(); break;
-                case PathVerb.AddPath:
-                {
-                    var (source, transform) = owner!.Added(added++);
-                    using var built = makePath();
-                    source.BuildInto(built, makePath);
-                    into.AddPath(built, transform);
-                    break;
-                }
-            }
-            at += ArgCount(verb);
-        }
-    }
 
     /// <summary>Whether every argument is a finite number.</summary>
     public bool AllFinite

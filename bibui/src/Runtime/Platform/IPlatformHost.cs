@@ -30,10 +30,10 @@ public interface IPlatformHost
     /// (<see cref="BibuiRuntime.ResizeSurface"/>) and the framebuffer properties
     /// below are valid.
     ///
-    /// <para>The runtime has already rendered once before this is called, so
-    /// Skia, the JIT and fonts are warm before any compositor clock starts. A
-    /// host that has further one-off costs (GPU shader compilation) should pay
-    /// them here, before the first frame is shown — a compositor that pings a
+    /// <para>The runtime has already built a frame before this is called, so
+    /// the JIT and fonts are warm before any compositor clock starts. A host
+    /// that has further one-off costs (its renderer's first draw, GPU shader
+    /// compilation) should pay them here, before the first frame is shown — a compositor that pings a
     /// mapped surface (Hyprland's ANR) is not waiting yet.</para>
     /// </summary>
     void Open(BibuiRuntime runtime, PlatformWindowOptions options);
@@ -109,16 +109,13 @@ public interface IPlatformHost
     bool PacesFrames { get; }
 
     /// <summary>
-    /// Draws one whole frame from the runtime and puts it on screen. A Skia GPU
-    /// host hands the runtime an SKSurface over (RenderTo(SKSurface), Bibui.Platform.Silk)
-    /// its framebuffer. A CPU host needs no Skia type: it asks the runtime's
-    /// raster backend for a surface over memory the compositor reads
-    /// (<c>runtime.Raster.CreateSurface(new RasterPixels(...))</c> over a
-    /// <c>wl_shm</c> buffer) and hands that to
-    /// <see cref="BibuiRuntime.RenderTo(Bibui.Raster.IRasterSurface)"/>, or copies
-    /// <see cref="BibuiRuntime.Render"/>'s bytes. Returns how long the runtime took
-    /// and how long handing the result over took; the caller times the whole
-    /// call, so the rest is presenting.
+    /// Builds one whole frame (<see cref="BibuiRuntime.EndBuild"/>), draws its
+    /// <see cref="BibuiRuntime.DrawList"/> with the host's renderer and puts it on
+    /// screen, under <see cref="BibuiRuntime.FrameLock"/>. A Skia GPU host draws
+    /// onto a surface over its framebuffer; a CPU host draws into memory the
+    /// compositor reads (a <c>wl_shm</c> buffer). Returns how long building and
+    /// drawing took and how long handing the result over took; the caller times
+    /// the whole call, so the rest is presenting.
     /// </summary>
     PresentTimings Present(BibuiRuntime runtime);
 
@@ -146,7 +143,7 @@ public readonly record struct PresentTimings(double RenderMs, double SubmitMs);
 /// <summary>How a host gets a frame to the screen.</summary>
 public enum HostPresentation
 {
-    /// <summary>Skia rasterises on the CPU into memory the host then shows.</summary>
+    /// <summary>A renderer rasterises on the CPU into memory the host then shows.</summary>
     CpuPixels,
 
     /// <summary>Skia's GPU backend draws straight into the window's framebuffer.</summary>

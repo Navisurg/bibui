@@ -32,8 +32,9 @@ float wheelX = 0f, wheelY = 0f;
 string lastButton = "none yet";
 KeyModifiers lastModifiers = KeyModifiers.None;
 
-// The backend is named: the Wayland host brings none, and Native AOT keeps only what is named.
-var runtime = BibuiRuntime.Create().WithManagedRasterizer();
+// The renderer is named: the Wayland host brings none, and Native AOT keeps only what is named.
+var runtime = BibuiRuntime.Create();
+var managed = new ManagedRenderer();
 long frame = 0;
 
 runtime.Mount(() =>
@@ -133,7 +134,8 @@ runtime.Mount(() =>
 
 if (args.Contains("--first-frame"))
 {
-    runtime.Render();
+    runtime.EndBuild();
+    FramePixels.Bgra(runtime, managed.Draw, out _, out _);
     return 0;
 }
 
@@ -143,7 +145,7 @@ if (!WaylandPlatformHost.IsSupported)
     return 1;
 }
 
-BibuiWindow.Create(runtime).WithWayland(new WaylandHostOptions { AppId = "bibui-wayland-hello" })
+BibuiWindow.Create(runtime).WithWayland(managed.Draw, new WaylandHostOptions { AppId = "bibui-wayland-hello" })
     .Run("bibui — wayland-hello");
 return 0;
 

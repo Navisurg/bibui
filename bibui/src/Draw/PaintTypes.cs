@@ -1,20 +1,16 @@
 using System.Numerics;
-using Bibui.Renderer;
 
-namespace Bibui.Raster;
+namespace Bibui.Draw;
 
 /// <summary>
 /// Everything a shape draw needs to know about how to paint it: the
 /// <see cref="PaintSpec"/> (colour, style, stroke) plus the effects bibui uses —
 /// a gradient, a Gaussian blur of the shape's coverage (shadows), a Gaussian
-/// blur of what is drawn (backdrops) and a dash pattern.
-///
-/// <para>A description, not an object: a backend that keeps native paint
-/// objects (Skia) caches them by this value's content, and one that does not
-/// (a managed rasterizer) reads the fields directly. Either way, building one
-/// allocates nothing.</para>
+/// blur of what is drawn (backdrops) and a dash pattern. What a
+/// <see cref="Paint"/> becomes on its way into a <see cref="DrawOp"/>, which
+/// carries the same fields as values.
 /// </summary>
-public readonly record struct RasterPaint
+internal readonly record struct RasterPaint
 {
     public PaintSpec Spec { get; init; }
 
@@ -44,7 +40,7 @@ public readonly record struct RasterPaint
 /// <summary>On/off dash lengths and a phase, in physical px.</summary>
 public readonly record struct DashPattern(float On, float Off, float Phase = 0f);
 
-/// <summary>How <see cref="IRasterCanvas.DrawPoints"/> joins its points.</summary>
+/// <summary>How a <see cref="DrawOpKind.Points"/> op joins its points.</summary>
 public enum PointMode
 {
     /// <summary>Each point is a dot (a square or round cap per the paint).</summary>
@@ -63,18 +59,18 @@ public readonly record struct PixelRect(int Left, int Top, int Right, int Bottom
 }
 
 /// <summary>
-/// Pixel memory the caller owns, for <see cref="IRasterBackend.CreateSurface(in RasterPixels)"/>:
-/// BGRA8888 premultiplied — the layout of a <c>wl_shm</c> ARGB8888 buffer on a
+/// Pixel memory the caller owns, for a renderer to draw a frame into: BGRA8888
+/// premultiplied — the layout of a <c>wl_shm</c> ARGB8888 buffer on a
 /// little-endian machine.
 /// </summary>
-/// <param name="Address">The first byte of the top row. Must stay valid and pinned while a surface uses it.</param>
+/// <param name="Address">The first byte of the top row. Must stay valid and pinned while a renderer draws into it.</param>
 /// <param name="RowBytes">Bytes from one row to the next; at least <c>Width * 4</c>.</param>
 public readonly record struct RasterPixels(nint Address, int Width, int Height, int RowBytes);
 
 /// <summary>
-/// A linear or radial gradient, clamped at its ends. Immutable, and carries
-/// its content key so a backend that caches native shaders can find one
-/// without hashing the stops again.
+/// A linear or radial gradient, clamped at its ends. Immutable: a
+/// <see cref="Paint"/>'s shader, recorded into a <see cref="DrawList"/>'s
+/// payload as its colours and stops.
 /// </summary>
 public sealed class RasterShader
 {
@@ -94,10 +90,7 @@ public sealed class RasterShader
     /// <summary>Stop positions 0..1, one per colour; null means evenly spread.</summary>
     public float[]? Stops { get; }
 
-    /// <summary>A hash of every field above. Equal keys mean an equal gradient.</summary>
-    public CacheKey Key { get; }
-
-    private RasterShader(GradientType type, Vector2 start, Vector2 end, float radius, Rgba[] colors, float[]? stops, CacheKey key)
+    private RasterShader(GradientType type, Vector2 start, Vector2 end, float radius, Rgba[] colors, float[]? stops)
     {
         Type = type;
         Start = start;
@@ -105,7 +98,6 @@ public sealed class RasterShader
         Radius = radius;
         Colors = colors;
         Stops = stops;
-        Key = key;
     }
 
     /// <summary>
@@ -116,45 +108,12 @@ public sealed class RasterShader
         => new(GradientType.Linear, start, end, 0f, colors.ToArray(),
             // No stops means evenly distributed — null, not an empty array, which
             // is a different (and malformed) request.
-            stops.IsEmpty ? null : stops.ToArray(),
-            CacheKey.OfGradient(0, start, end, 0f, colors, stops));
+            stops.IsEmpty ? null : stops.ToArray());
 
     /// <summary>A radial gradient around <paramref name="centre"/>.</summary>
     public static RasterShader Radial(Vector2 centre, float radius, ReadOnlySpan<Rgba> colors, ReadOnlySpan<float> stops)
         => new(GradientType.Radial, centre, centre, radius, colors.ToArray(),
             // Radial passes its stops through as given, empty included — the
             // Skia call before the raster backend seam did, and the pixels are pinned to it.
-            stops.ToArray(),
-            CacheKey.OfGradient(1, centre, centre, radius, colors, stops));
-}
-
-/// <summary>
-/// A path a backend holds in its own form, built from bibui's <see cref="VectorPath"/>
-/// (<see cref="VectorPath.BuildInto"/>) and drawn with <see cref="IRasterCanvas.DrawPath"/>.
-/// </summary>
-public abstract class RasterPath : IDisposable
-{
-    public abstract void MoveTo(float x, float y);
-    public abstract void LineTo(float x, float y);
-    public abstract void QuadTo(float x1, float y1, float x2, float y2);
-    public abstract void CubicTo(float x1, float y1, float x2, float y2, float x3, float y3);
-    public abstract void ArcTo(float rx, float ry, float xAxisRotate, bool largeArc, bool sweep, float x, float y);
-    public abstract void AddArc(RectF oval, float startAngle, float sweepAngle);
-    public abstract void Close();
-
-    /// <summary>Appends <paramref name="source"/>'s contours mapped through <paramref name="transform"/>.</summary>
-    public abstract void AddPath(RasterPath source, in Matrix3x2 transform);
-
-    /// <summary>Empties the path, keeping its storage for the next build.</summary>
-    public abstract void Rewind();
-
-    public abstract bool IsEmpty { get; }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing) { }
+            stops.ToArray());
 }

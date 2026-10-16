@@ -1,12 +1,13 @@
 # Bibui.Testing
 
 Headless testing for bibui apps. A `BibuiPage` holds a runtime with no window
-and renders it with Skia; a test finds nodes by id, reads their laid-out
+and draws it with Skia on the CPU, unless `BibuiPage.From(runtime, draw)` is
+given another `DrawToPixels`; a test finds nodes by id, reads their laid-out
 bounds and text, clicks, types and presses keys, and takes screenshots.
 `WorkflowClient` drives a running app the same way over its test server.
 
 ```csharp
-var runtime = BibuiRuntime.Create().WithSkia();
+var runtime = BibuiRuntime.Create();
 runtime.Mount(() => MyScreen.Build(runtime));
 
 using var page = BibuiPage.From(runtime);
@@ -17,8 +18,10 @@ var bounds = page.GetBounds("save");
 `BibuiPage.Launch` does the same from a build function alone.
 
 `WorkflowClient` talks to a `BibuiTestServer` the app starts on purpose, for
-example with `BibuiTestServer.StartIfEnabled(runtime)`, which starts one only
-when `BIBUI_TEST_SERVER=1`. The client sends the server's token with every
+example with `BibuiTestServer.StartIfEnabled(runtime, draw: skia.Draw)` (`skia`
+being the app's `SkiaRenderer`), which starts one only when
+`BIBUI_TEST_SERVER=1`. Its screenshots and recordings are drawn with the
+function you pass. The client sends the server's token with every
 request, reading it from the file the server writes for the user alone, and
 screenshot and recording paths are relative to the server's output directory
 (`BIBUI_TEST_SERVER_OUT`):

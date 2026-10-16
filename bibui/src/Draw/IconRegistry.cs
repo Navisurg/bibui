@@ -1,4 +1,4 @@
-namespace Bibui.Renderer;
+namespace Bibui.Draw;
 
 /// <summary>
 /// SVG path data for a curated subset of Lucide icons (ISC licence; the icons

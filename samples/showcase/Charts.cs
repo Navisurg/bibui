@@ -1,6 +1,5 @@
 using Bibui;
-using Bibui.Raster;
-using Bibui.Renderer;
+using Bibui.Draw;
 using Bibui.Runtime;
 using static Bibui.Arrange;
 

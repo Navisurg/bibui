@@ -27,7 +27,7 @@ system libraries at run time:
 
 Each library is its own project: `bibui` holds the core, the runtime
 (`BibuiRuntime`, `BibuiWindow`) and the components, and the window hosts,
-raster backends and text engine are projects beside it. Build the ones you
+renderers and text engine are projects beside it. Build the ones you
 touch, in Release, as CI does:
 
 ```bash

@@ -37,14 +37,15 @@ dotnet add package Bibui.Platform.Silk
 ## Quick start
 
 Below, a simple bibui app with a label and a button is shown.
-It sets up Skia for rendering and Silk to handle input and window events:
+It draws with Skia and uses Silk to handle input and window events:
 
 ```csharp
 using Bibui.Raster.Skia;
 using Bibui.Runtime;
 using Bibui.Runtime.Platform;
 
-var runtime = BibuiRuntime.Create().WithSkia();
+var runtime = BibuiRuntime.Create();
+using var skia = new SkiaRenderer();
 int count = 0;
 
 runtime.Mount(() =>
@@ -61,7 +62,7 @@ runtime.Mount(() =>
     return column;
 });
 
-BibuiWindow.Create(runtime).WithSilk().Run(title: "Counter");
+BibuiWindow.Create(runtime).WithSilk(skia).Run(title: "Counter");
 ```
 
 Run it from the project created above:
@@ -113,8 +114,9 @@ Every component, with pictures, is in [Components](docs/components/index.md).
 
 ## Two routes
 
-bibui draws through a raster backend and runs in a window that a host
-provides. You pick both explicitly, and nothing is discovered at run time.
+The runtime records each frame into a draw list; a renderer draws that list,
+and a host provides the window. You pick both explicitly, and nothing is
+discovered at run time.
 
 - **Silk + Skia.** `SilkPlatformHost` opens the window with GLFW and renders
   with Skia on OpenGL when it can, falling back to the CPU otherwise
@@ -130,9 +132,10 @@ provides. You pick both explicitly, and nothing is discovered at run time.
   using Bibui.Platform.Wayland;
   using Bibui.Raster.Managed.Backend;
 
-  var runtime = BibuiRuntime.Create().WithManagedRasterizer();
+  var runtime = BibuiRuntime.Create();
+  var managed = new ManagedRenderer();
   // ... runtime.Mount(...) as above ...
-  BibuiWindow.Create(runtime).WithWayland(new WaylandHostOptions { AppId = "dev.example.counter" })
+  BibuiWindow.Create(runtime).WithWayland(managed.Draw, new WaylandHostOptions { AppId = "dev.example.counter" })
       .Run("Counter");
   ```
 

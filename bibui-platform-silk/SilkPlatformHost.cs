@@ -1,4 +1,4 @@
-using Bibui.Renderer;
+using Bibui.Raster.Skia;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 // Silk's key enum, for asking its keyboard what is held. What reaches the
@@ -15,18 +15,23 @@ namespace Bibui.Runtime.Platform;
 /// OpenGL, and the clipboard through TextCopy (wl-clipboard on Wayland).
 ///
 /// The rendering pipeline (GPU, default):
-///   BibuiRuntime.RenderTo(surface) → Skia GL backend rasterizes straight into
-///   the window's default framebuffer — no CPU raster, no readback, no upload.
+///   BibuiRuntime.EndBuild() → the host's SkiaRenderer draws the DrawList with
+///   Skia's GL backend straight into the window's default framebuffer — no CPU
+///   raster, no readback, no upload.
 ///
 /// The rendering pipeline (CPU fallback, BIBUI_GPU=0 or no usable GL for Skia):
-///   BibuiRuntime.Render() → raw BGRA bytes → GL texture → fullscreen quad blit
+///   BibuiRuntime.EndBuild() → SkiaRenderer on the CPU into BGRA bytes → GL
+///   texture → fullscreen quad blit
 ///
 /// Uses only bibui's public API, so it can move to an assembly of its
 /// own without change.
 /// </summary>
-public sealed class SilkPlatformHost : ISkiaGpuPlatformHost
+public sealed class SilkPlatformHost(SkiaRenderer renderer) : ISkiaGpuPlatformHost
 {
     private BibuiRuntime _runtime = null!;
+
+    /// <summary>What every frame is drawn with: the app's, which it also makes its textures on.</summary>
+    public SkiaRenderer Renderer { get; } = renderer;
 
     // OpenGL handles — valid only while the window is open.
     // _program/_vao/_texture are only allocated on the CPU fallback path.
@@ -48,8 +53,9 @@ public sealed class SilkPlatformHost : ISkiaGpuPlatformHost
     private static readonly bool _gpuDisabled = Environment.GetEnvironmentVariable("BIBUI_GPU") == "0";
     private static readonly bool _profile = Environment.GetEnvironmentVariable("BIBUI_PROFILE") == "1";
 
-    // Track last uploaded output to avoid redundant texture uploads (CPU fallback path)
-    private RenderOutput? _lastUploaded;
+    // The CPU fallback's frame, pinned so the renderer draws into it where it
+    // lies; reallocated when the framebuffer changes size.
+    private byte[]? _cpuPixels;
 
     // Actual GL framebuffer dimensions (physical pixels), updated on load and resize
     private int _fbWidth, _fbHeight;
@@ -472,7 +478,11 @@ public sealed class SilkPlatformHost : ISkiaGpuPlatformHost
 
         var surface = EnsureGpuSurface();
         var t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-        _runtime.RenderTo(surface);
+        lock (_runtime.FrameLock)
+        {
+            _runtime.EndBuild();
+            Renderer.Draw(_runtime.DrawList, surface);
+        }
         var t1 = System.Diagnostics.Stopwatch.GetTimestamp();
 
         // Submit Skia's recorded GL work before the swap that follows this
@@ -494,14 +504,18 @@ public sealed class SilkPlatformHost : ISkiaGpuPlatformHost
         _gl.Clear(ClearBufferMask.ColorBufferBit);
 
         var t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-        var output = _runtime.Render();
+        int w = _fbWidth, h = _fbHeight;
+        if (_cpuPixels is null || _cpuPixels.Length != w * h * 4)
+            _cpuPixels = GC.AllocateArray<byte>(w * h * 4, pinned: true);
+        lock (_runtime.FrameLock)
+        {
+            _runtime.EndBuild();
+            nint at = System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(_cpuPixels, 0);
+            Renderer.Draw(_runtime.DrawList, new Bibui.Draw.RasterPixels(at, w, h, w * 4));
+        }
         var t1 = System.Diagnostics.Stopwatch.GetTimestamp();
 
-        if (!ReferenceEquals(output, _lastUploaded))
-        {
-            UploadTexture(output);
-            _lastUploaded = output;
-        }
+        UploadTexture(_cpuPixels, w, h);
 
         _gl.UseProgram(_program);
 
@@ -585,7 +599,7 @@ public sealed class SilkPlatformHost : ISkiaGpuPlatformHost
 
     // ── Texture upload ────────────────────────────────────────────────────────
 
-    private void UploadTexture(RenderOutput output)
+    private void UploadTexture(byte[] bgra, int width, int height)
     {
         var t0 = System.Diagnostics.Stopwatch.GetTimestamp();
 
@@ -594,18 +608,18 @@ public sealed class SilkPlatformHost : ISkiaGpuPlatformHost
         // Use TexSubImage2D when size is unchanged so the driver updates the
         // existing storage in place instead of reallocating the texture each frame.
         _gl.BindTexture(TextureTarget.Texture2D, _texture);
-        if (output.Width == _texAllocWidth && output.Height == _texAllocHeight)
+        if (width == _texAllocWidth && height == _texAllocHeight)
         {
             _gl.TexSubImage2D(
                 TextureTarget.Texture2D,
                 level: 0,
                 xoffset: 0,
                 yoffset: 0,
-                width: (uint)output.Width,
-                height: (uint)output.Height,
+                width: (uint)width,
+                height: (uint)height,
                 format: PixelFormat.Bgra,
                 type: PixelType.UnsignedByte,
-                in output.RawBgraBytes[0]);
+                in bgra[0]);
         }
         else
         {
@@ -613,14 +627,14 @@ public sealed class SilkPlatformHost : ISkiaGpuPlatformHost
                 TextureTarget.Texture2D,
                 level: 0,
                 internalformat: InternalFormat.Rgba,
-                width: (uint)output.Width,
-                height: (uint)output.Height,
+                width: (uint)width,
+                height: (uint)height,
                 border: 0,
                 format: PixelFormat.Bgra,
                 type: PixelType.UnsignedByte,
-                in output.RawBgraBytes[0]);
-            _texAllocWidth = output.Width;
-            _texAllocHeight = output.Height;
+                in bgra[0]);
+            _texAllocWidth = width;
+            _texAllocHeight = height;
         }
         _gl.BindTexture(TextureTarget.Texture2D, 0);
 

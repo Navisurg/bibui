@@ -44,17 +44,4 @@ internal static class Hash64
         Mix(Mix(h, (ulong)span.Length), Bytes(MemoryMarshal.AsBytes(span)));
 
     internal static ulong Bytes(ReadOnlySpan<byte> bytes) => XxHash3.HashToUInt64(bytes);
-
-    /// <summary>Every field of a paint, the shader by its content key.</summary>
-    internal static ulong Mix(ulong h, in RasterPaint p)
-    {
-        var s = p.Spec;
-        h = Mix(h, ((ulong)s.Color.Argb << 32) | ((ulong)(byte)s.Style << 24) | ((ulong)(byte)s.StrokeCap << 16)
-                   | ((ulong)(byte)s.StrokeJoin << 8) | ((ulong)(byte)s.FilterQuality << 1) | (s.IsAntialias ? 1UL : 0UL));
-        h = Mix(h, s.StrokeWidth, p.MaskBlurSigma);
-        h = Mix(h, p.ImageBlurSigma);
-        if (p.Shader is { } sh) h = Mix(Mix(h, (ulong)sh.Key.Hash), (ulong)(sh.Key.Hash >> 64));
-        if (p.Dash is { } d) h = Mix(Mix(h, d.On, d.Off), d.Phase);
-        return h;
-    }
 }

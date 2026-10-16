@@ -5,9 +5,10 @@ Skia on the GPU when OpenGL is available and on the CPU otherwise
 (`BIBUI_GPU=0` forces the CPU). The clipboard goes through TextCopy.
 
 ```csharp
-var runtime = BibuiRuntime.Create().WithSkia();
+var runtime = BibuiRuntime.Create();
+using var skia = new SkiaRenderer();       // Bibui.Raster.Skia
 runtime.Mount(() => /* your frame */);
-BibuiWindow.Create(runtime).WithSilk().Run("My app");
+BibuiWindow.Create(runtime).WithSilk(skia).Run("My app");
 ```
 
 This package brings `Bibui.Raster.Skia`. It runs under the JIT; for a Native

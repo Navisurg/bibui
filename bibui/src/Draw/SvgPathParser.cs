@@ -1,6 +1,6 @@
-using Bibui.Raster;
+using Bibui.Draw;
 
-namespace Bibui.Renderer;
+namespace Bibui.Draw;
 
 /// <summary>
 /// Parses SVG path data into path verbs. Supports M m L l H h V v C c S s

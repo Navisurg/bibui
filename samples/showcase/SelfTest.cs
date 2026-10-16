@@ -1,5 +1,5 @@
 using Bibui;
-using Bibui.Raster;
+using Bibui.Draw;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 
@@ -12,7 +12,7 @@ namespace Showcase;
 /// </summary>
 internal static class SelfTest
 {
-    public static int Run(Func<IRasterBackend> backend, Func<App> newApp)
+    public static int Run(Func<App> newApp)
     {
         var failures = new List<string>();
         void Check(bool ok, string what)
@@ -30,8 +30,8 @@ internal static class SelfTest
                     app.Live = false;
                     app.Page = page;
                     app.Dark = dark;
-                    var rt = Mount(backend(), app, w, h);
-                    try { for (int f = 0; f < 3; f++) rt.Render(); }
+                    var rt = Mount(app, w, h);
+                    try { for (int f = 0; f < 3; f++) rt.EndBuild(); }
                     catch (Exception e) { Check(false, $"{page} {(dark ? "dark" : "light")} at {w}×{h}: {e.GetType().Name}: {e.Message}"); }
                 }
         Check(failures.Count == 0, "every page renders at 640×480 … 1920×1080, dark and light");
@@ -39,7 +39,7 @@ internal static class SelfTest
         {
             var app = newApp();
             app.Live = false;
-            var rt = Mount(backend(), app, 1440, 900);
+            var rt = Mount(app, 1440, 900);
             Frames(rt, 3);
 
             Click(rt, "nav-targets");
@@ -97,7 +97,7 @@ internal static class SelfTest
             var app = newApp();
             app.Live = false;
             app.Page = Page.Targets;
-            var rt = Mount(backend(), app, 1440, 900);
+            var rt = Mount(app, 1440, 900);
             Frames(rt, 3);
             string row = "row-" + app.Selected;
             string other = Array.Find(Data.Targets, t => t.Id != app.Selected)!.Id;
@@ -119,16 +119,16 @@ internal static class SelfTest
         return 0;
     }
 
-    private static BibuiRuntime Mount(IRasterBackend backend, App app, int w, int h)
+    private static BibuiRuntime Mount(App app, int w, int h)
     {
-        var rt = BibuiRuntime.Create().WithRaster(backend);
+        var rt = BibuiRuntime.Create();
         rt.Mount(() => app.Build(rt), app.Theme(), new SurfaceOptions { Width = w, Height = h, ScaleFactor = 1f });
         return rt;
     }
 
     private static void Frames(BibuiRuntime rt, int n)
     {
-        for (int i = 0; i < n; i++) rt.Render();
+        for (int i = 0; i < n; i++) rt.EndBuild();
     }
 
     private static void Click(BibuiRuntime rt, string id)

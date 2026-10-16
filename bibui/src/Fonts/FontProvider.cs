@@ -1,7 +1,7 @@
 using Bibui.FreeType;
 using FtFont = Bibui.FreeType.Font;
 
-namespace Bibui.Renderer;
+namespace Bibui;
 
 /// <summary>
 /// Which face draws which text: resolves (family, weight) to a <see cref="FontFace"/>

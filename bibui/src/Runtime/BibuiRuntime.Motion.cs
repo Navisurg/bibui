@@ -1,5 +1,4 @@
 using System.Numerics;
-using Bibui.Renderer;
 using Bibui.Theming;
 
 namespace Bibui.Runtime;
@@ -392,7 +391,6 @@ public sealed partial class BibuiRuntime
             _themeFade.Elapsed = 0f;
             _themeFade.Transition = crossfade;
             _theme = theme;
-            _lastOutput = null;
             _lastTree = null;
         }
         RequestFrame();
@@ -451,7 +449,6 @@ public sealed partial class BibuiRuntime
             bool moving = Step(_themeFade, dt, instant);
             if (!moving) _themeFrom = null;   // arrived: paint the theme itself again
             animating = true;                 // one frame at the end, the theme as it is
-            _lastOutput = null;
         }
 
         return animating;

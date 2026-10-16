@@ -1,7 +1,7 @@
 using Bibui;
 using Bibui.Theming;
 
-namespace Bibui.Renderer.Components;
+namespace Bibui;
 
 /// <summary>
 /// Family and weight resolution for a font slot, from the theme.

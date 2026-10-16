@@ -1,10 +1,9 @@
 using System.Numerics;
 using Bibui;
 using Bibui.Theming;
-using Bibui.Renderer.Components;
-using Bibui.Raster;
+using Bibui.Draw;
 
-namespace Bibui.Renderer;
+namespace Bibui.Draw;
 
 /// <summary>
 /// Draws a laid-out tree. Every node's <see cref="UiNode.Rect"/>,
@@ -23,7 +22,7 @@ internal sealed class Painter
     {
         _caches = caches;
         _fonts = fonts;
-        _drawing = new DrawingContext(fonts, caches, backdrop: true);
+        _drawing = new DrawingContext(fonts, caches);
     }
 
     // The one recording context, begun again for every frame.
@@ -38,7 +37,7 @@ internal sealed class Painter
     /// <summary>
     /// Records <paramref name="root"/>'s frame into <paramref name="list"/>, from a
     /// <see cref="DrawOpKind.Clear"/> in the theme's background on. Draws nothing:
-    /// the renderer executes the list, and ends the frame's caches after.
+    /// a renderer executes the list.
     /// </summary>
     internal void Record(DrawList list, UiNode root, SurfaceOptions options, ThemeTokens theme, FrameInput input)
     {
@@ -106,7 +105,7 @@ internal sealed class Painter
         {
             case Text text: DrawText(text, frame, theme, ctx); break;
             case Icon icon: DrawIcon(icon, frame, theme, ctx); break;
-            case Spinner spinner: SpinnerRenderer.Draw(SpinnerRenderer.FromNative(spinner), frame, theme, ctx); break;
+            case Spinner spinner: SpinnerPainter.Draw(SpinnerPainter.FromNative(spinner), frame, theme, ctx); break;
         }
 
         if (node.FirstChild is not null)

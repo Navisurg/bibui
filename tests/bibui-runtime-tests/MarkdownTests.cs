@@ -294,14 +294,14 @@ static class MarkdownTests
         {
             var source = BibuiStr.FromStrLit("Go to [the docs](https://example.com/docs) now.");
             MarkdownWidget last = default;
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.Mount(() =>
             {
                 last = runtime.Markdown("md", source, width: 400f);
                 return Arrange.Column(last.Node).FillX().FillY();
             }, new SurfaceOptions { Width = 500, Height = 200, ScaleFactor = 1f });
-            runtime.Render();
-            runtime.Render();
+            runtime.EndBuild();
+            runtime.EndBuild();
             IsTrue(last.ClickedLink is null, "nothing was clicked yet");
             using var page = Bibui.Testing.BibuiPage.From(runtime);
             page.Click("md/0");
@@ -313,14 +313,14 @@ static class MarkdownTests
         {
             var source = BibuiStr.FromStrLit("- [ ] write it\n- [x] test it");
             MarkdownWidget last = default;
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.Mount(() =>
             {
                 last = runtime.Markdown("tasks", source, width: 300f);
                 return Arrange.Column(last.Node).FillX().FillY();
             }, new SurfaceOptions { Width = 400, Height = 200, ScaleFactor = 1f });
-            runtime.Render();
-            runtime.Render();
+            runtime.EndBuild();
+            runtime.EndBuild();
             using var page = Bibui.Testing.BibuiPage.From(runtime);
             page.Click("tasks/0");
             IsTrue(last.TaskClicked, "the first task box should report its click");
@@ -338,12 +338,12 @@ static class MarkdownTests
             var surface = new SurfaceOptions { Width = 500, Height = 2000, ScaleFactor = 1f };
 
             var source = BibuiStr.FromStrLit(bytes);
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.Mount(() => Arrange.Column(runtime.Markdown("same", source, width: 400f).Node).FillX().FillY(), surface);
             long frame = SteadyFrame(runtime);
             var texts = Descendants(runtime.FindById("same")!).OfType<Text>().Select(t => t.Content.ToArray()).ToArray();
 
-            var plain = BibuiRuntime.Create().WithSkia();
+            var plain = BibuiRuntime.Create();
             plain.Mount(() =>
             {
                 var column = plain.Box();
@@ -367,10 +367,10 @@ static class MarkdownTests
 
     private static long SteadyFrame(BibuiRuntime runtime)
     {
-        runtime.Render();
-        runtime.Render();
+        runtime.EndBuild();
+        runtime.EndBuild();
         long before = GC.GetAllocatedBytesForCurrentThread();
-        runtime.Render();
+        runtime.EndBuild();
         return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
@@ -378,12 +378,12 @@ static class MarkdownTests
     // second frame breaks lines at the width the first one measured.
     private static (BibuiRuntime Runtime, UiNode Root) Show(string markdown, float width)
     {
-        var runtime = BibuiRuntime.Create().WithSkia();
+        var runtime = BibuiRuntime.Create();
         var source = BibuiStr.FromStrLit(markdown);
         runtime.Mount(() => Arrange.Column(runtime.Markdown("md", source, width: width).Node).FillX().FillY(),
             new SurfaceOptions { Width = (int)width + 40, Height = 1200, ScaleFactor = 1f });
-        runtime.Render();
-        runtime.Render();
+        runtime.EndBuild();
+        runtime.EndBuild();
         return (runtime, runtime.FindById("md") ?? throw new Exception("the viewer was not built"));
     }
 

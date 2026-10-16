@@ -14,7 +14,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Bibui;
 using Bibui.Platform.Wayland;
-using Bibui.Raster;
+using Bibui.Draw;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
 using Bibui.Runtime.Platform;
@@ -65,11 +65,12 @@ if (host != "wayland" || raster != "managed")
 }
 #endif
 
-IRasterBackend NewBackend() => raster switch
+// What draws a frame's list into pixels: the renderer --raster names.
+DrawToPixels NewDraw() => raster switch
 {
-    "managed" => new ManagedRasterBackend(),
+    "managed" => new ManagedRenderer().Draw,
 #if !WAYLAND_ONLY
-    "skia" => new Bibui.Raster.Skia.SkiaRasterBackend(),
+    "skia" => new Bibui.Raster.Skia.SkiaRenderer().Draw,
 #endif
     _ => throw new ArgumentException($"--raster {raster}: expected skia or managed"),
 };
@@ -90,9 +91,10 @@ if (Has("--first-frame"))
 {
     var app = NewApp();
     app.Live = false;
-    var rt = BibuiRuntime.Create().WithRaster(NewBackend());
+    var rt = BibuiRuntime.Create();
     rt.Mount(() => app.Build(rt), app.Theme(), new SurfaceOptions { Width = 1440, Height = 900, ScaleFactor = 1f });
-    _ = rt.Render().RawBgraBytes[0];
+    rt.EndBuild();
+    _ = FramePixels.Bgra(rt, NewDraw(), out _, out _)[0];
     double ms = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
     Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
         $"FIRST_FRAME main_ms={ms:F2} rss_mb={Environment.WorkingSet / 1048576.0:F1}"));
@@ -100,12 +102,12 @@ if (Has("--first-frame"))
 }
 
 if (Has("--selftest"))
-    return SelfTest.Run(NewBackend, NewApp);
+    return SelfTest.Run(NewApp);
 
 if (Arg("--shots") is { } dir)
 {
     Directory.CreateDirectory(dir);
-    Screenshots.WriteAll(dir, NewBackend, NewApp, all: Has("--all"));
+    Screenshots.WriteAll(dir, NewDraw, raster, NewApp, all: Has("--all"));
     return 0;
 }
 
@@ -114,7 +116,7 @@ if (Arg("--png") is { } png)
     var (w, h) = ParseSize(Arg("--size") ?? "1440x900");
     var app = NewApp();
     app.Live = false;
-    File.WriteAllBytes(png, Screenshots.Render(NewBackend(), app, w, h, (_, _) => { }));
+    File.WriteAllBytes(png, Screenshots.Render(NewDraw(), app, w, h, (_, _) => { }));
     Console.WriteLine($"wrote {png}");
     return 0;
 }
@@ -122,7 +124,7 @@ if (Arg("--png") is { } png)
 // ── The window ──────────────────────────────────────────────────────────────
 
 var live = NewApp();
-var runtime = BibuiRuntime.Create().WithRaster(NewBackend());
+var runtime = BibuiRuntime.Create();
 runtime.Mount(() => live.Build(runtime), live.Theme(), new SurfaceOptions { Width = 1440, Height = 900 });
 
 IPlatformHost platform;
@@ -133,14 +135,16 @@ if (host == "wayland")
         Console.Error.WriteLine("--host wayland needs a Wayland session (WAYLAND_DISPLAY) and libwayland-client.");
         return 1;
     }
-    platform = new WaylandPlatformHost(new WaylandHostOptions { AppId = "bibui-showcase", MinWidth = 640, MinHeight = 480 });
+    platform = new WaylandPlatformHost(NewDraw(), new WaylandHostOptions { AppId = "bibui-showcase", MinWidth = 640, MinHeight = 480 });
 }
 else
 {
 #if WAYLAND_ONLY
     return 2;
 #else
-    platform = new SilkPlatformHost();
+    // The Silk host draws with Skia, on the GPU when it can.
+    if (raster != "skia") Console.Error.WriteLine($"--host silk draws with Skia; --raster {raster} is for --host wayland.");
+    platform = new SilkPlatformHost(new Bibui.Raster.Skia.SkiaRenderer());
 #endif
 }
 BibuiWindow.Create(runtime).WithHost(platform).Run("Zenith — bibui showcase");

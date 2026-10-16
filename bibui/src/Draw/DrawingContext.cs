@@ -1,16 +1,14 @@
 using Bibui;
-using Bibui.Raster;
+using Bibui.Draw;
 using Bibui.Theming;
 
-namespace Bibui.Renderer;
+namespace Bibui.Draw;
 
 internal sealed class DrawingContext
 {
     private DrawList _list = null!;
-    private readonly IRasterBackend _backend;
     private float _scale;
     private readonly Fonts _fonts;
-    private readonly bool _backdrop;
 
     /// <summary>
     /// Logical surface dimensions, set by the painter at frame start.
@@ -21,17 +19,11 @@ internal sealed class DrawingContext
     /// <summary>The theme this frame is painted in — the one the painter resolves every token against.</summary>
     internal ThemeTokens Theme { get; private set; } = null!;
 
-    /// <param name="backdrop">
-    /// Whether <see cref="DrawContext.BlurBackdrop"/> may read back what the canvas
-    /// has painted. Without it the blur is a no-op.
-    /// </param>
     // Made once per painter; Begin sets what changes from frame to frame, so a
     // frame allocates no context.
-    internal DrawingContext(Fonts fonts, RenderCaches caches, bool backdrop = false)
+    internal DrawingContext(Fonts fonts, RenderCaches caches)
     {
-        _backend = caches.Backend;
         _fonts = fonts;
-        _backdrop = backdrop;
         _caches = caches;
     }
 
@@ -99,11 +91,9 @@ internal sealed class DrawingContext
 
     internal DrawList List => _list;
 
-    internal IRasterBackend Backend => _backend;
     internal float Scale => _scale;
     internal RenderCaches Caches => _caches;
     internal Fonts Fonts => _fonts;
-    internal bool CanBlurBackdrop => _backdrop;
 
     /// <summary>The context handed to a Box.Draw callback, over this frame's caches.</summary>
     internal DrawContext DrawContextFor(float x, float y, float w, float h) =>

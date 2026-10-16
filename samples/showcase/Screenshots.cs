@@ -1,5 +1,5 @@
 using Bibui;
-using Bibui.Raster;
+using Bibui.Draw;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 
@@ -11,16 +11,16 @@ namespace Showcase;
 /// </summary>
 internal static class Screenshots
 {
-    public static void WriteAll(string dir, Func<IRasterBackend> backend, Func<App> newApp, bool all)
+    public static void WriteAll(string dir, Func<DrawToPixels> draw, string rasterName, Func<App> newApp, bool all)
     {
         // 1. The overview, dark, with the pointer over the seeing chart.
-        Write(dir, "overview-dark.png", backend(), newApp(), 1440, 900, app => { }, (rt, frame) =>
+        Write(dir, rasterName, "overview-dark.png", draw(), newApp(), 1440, 900, app => { }, (rt, frame) =>
         {
             if (frame == 3) HoverAt(rt, "tel-main-chart", 0.72f, 0.5f);
         });
 
         // 2. Light mode from another seed, the pointer on a queue row.
-        Write(dir, "overview-light.png", backend(), newApp(), 1440, 900, app =>
+        Write(dir, rasterName, "overview-light.png", draw(), newApp(), 1440, 900, app =>
         {
             app.Dark = false;
             app.Accent = "#F97316";
@@ -32,7 +32,7 @@ internal static class Screenshots
         });
 
         // 2b. The Appearance sheet: one seed, the whole theme.
-        Write(dir, "appearance.png", backend(), newApp(), 1440, 900, app =>
+        Write(dir, rasterName, "appearance.png", draw(), newApp(), 1440, 900, app =>
         {
             app.Accent = "#2DD4BF";
             app.SettingsOpen = true;
@@ -42,7 +42,7 @@ internal static class Screenshots
         });
 
         // 3. A narrow window: the sidebar folds to a rail and the cards stack.
-        Write(dir, "narrow-dark.png", backend(), newApp(), 820, 1180, app =>
+        Write(dir, rasterName, "narrow-dark.png", draw(), newApp(), 820, 1180, app =>
         {
             app.Accent = "#2DD4BF";
             app.Selected = "tamsin";
@@ -52,7 +52,7 @@ internal static class Screenshots
         if (!all) return;
 
         // 4. The queue: sorted by altitude, and a context menu open on a row.
-        Write(dir, "targets-menu.png", backend(), newApp(), 1440, 900, app =>
+        Write(dir, rasterName, "targets-menu.png", draw(), newApp(), 1440, 900, app =>
         {
             app.Page = Page.Targets;
             app.Accent = "#38BDF8";
@@ -72,35 +72,33 @@ internal static class Screenshots
         });
 
         // 5. The journal: Markdown, a checklist and a rating.
-        Write(dir, "journal-dark.png", backend(), newApp(), 1440, 900, app =>
+        Write(dir, rasterName, "journal-dark.png", draw(), newApp(), 1440, 900, app =>
         {
             app.Page = Page.Journal;
             app.Accent = "#E879F9";
         }, (rt, frame) => { });
     }
 
-    private static void Write(string dir, string name, IRasterBackend backend, App app, int w, int h,
+    private static void Write(string dir, string rasterName, string name, DrawToPixels draw, App app, int w, int h,
         Action<App> setup, Action<BibuiRuntime, int> script)
     {
         app.Live = false;
         setup(app);
-        var png = Render(backend, app, w, h, script);
+        var png = Render(draw, app, w, h, script);
         File.WriteAllBytes(Path.Combine(dir, name), png);
-        Console.WriteLine($"  wrote {name} ({w}×{h}, {backend.Name})");
+        Console.WriteLine($"  wrote {name} ({w}×{h}, {rasterName})");
     }
 
-    public static byte[] Render(IRasterBackend backend, App app, int w, int h, Action<BibuiRuntime, int> script, int frames = 10)
+    public static byte[] Render(DrawToPixels draw, App app, int w, int h, Action<BibuiRuntime, int> script, int frames = 10)
     {
-        var rt = BibuiRuntime.Create().WithRaster(backend);
+        var rt = BibuiRuntime.Create();
         rt.Mount(() => app.Build(rt), app.Theme(), new SurfaceOptions { Width = w, Height = h, ScaleFactor = 1f });
-        byte[] png = [];
         for (int f = 0; f < frames; f++)
         {
             script(rt, f);
-            var output = rt.Render();
-            if (f == frames - 1) png = output.PngBytes;
+            rt.EndBuild();
         }
-        return png;
+        return FramePixels.Png(rt, draw);
     }
 
     private static void HoverAt(BibuiRuntime rt, string id, float fx, float fy)

@@ -42,7 +42,7 @@ present.
 - **Whole-window redraws.** These are where the GPU wins. Per megapixel of CPU
   time, GL costs about 1.0 ms (GPU time not counted), Wayland shared memory
   about 2.4 ms and the Skia CPU fallback about 4.3 ms. A CPU-only stack holds
-  60 Hz through damage tracking (`ManagedRasterBackend.DamageTracking`), which repaints
+  60 Hz through damage tracking (`ManagedRenderer.DamageTracking`), which repaints
   only what changed. A typical frame changes a hover colour or a caret, not the
   whole window.
 

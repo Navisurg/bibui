@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Bibui.Raster;
+namespace Bibui.Draw;
 
 /// <summary>What a <see cref="DrawOp"/> does. A push is undone by the <see cref="Pop"/> that matches it.</summary>
 public enum DrawOpKind : byte
@@ -187,3 +187,10 @@ public sealed class DrawList
         return at;
     }
 }
+
+/// <summary>
+/// Draws a frame's list into CPU memory: a renderer's <c>Draw(DrawList, RasterPixels)</c>,
+/// handed to code that has pixels to fill and no business choosing how (a
+/// window's shared-memory buffers, the test server's screenshots).
+/// </summary>
+public delegate void DrawToPixels(DrawList list, RasterPixels target);

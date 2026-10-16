@@ -47,19 +47,21 @@ using Bibui.Runtime;
 using Bibui.Runtime.Platform;
 using static Bibui.Arrange;
 
-var runtime = BibuiRuntime.Create().WithSkia();
+var runtime = BibuiRuntime.Create();
+using var skia = new SkiaRenderer();
 var hello = "Hello, bibui";
 
 runtime.Mount(() =>
     Column(runtime.Text(hello)).FillX().FillY().Padded(EdgeInsets.All(24f)));
 
-BibuiWindow.Create(runtime).WithSilk().Run("Stepper");
+BibuiWindow.Create(runtime).WithSilk(skia).Run("Stepper");
 ```
 
 `dotnet run` opens an 800 × 600 window.
 
-- `BibuiRuntime.Create().WithSkia()` names the raster backend that
-  draws. bibui never looks one up at run time; you pass it.
+- `new SkiaRenderer()` is the renderer that draws each frame, and
+  `WithSilk(skia)` hands it to the window. bibui never looks one up at run
+  time; you pass it.
 - `Mount` takes a build function. bibui calls it whenever a frame is needed,
   lays out the tree it returns, and paints it.
 - `Column(...)` stacks its items vertically and is as large as they are.
@@ -169,9 +171,10 @@ using Bibui.Raster.Skia;
 using Bibui.Runtime;
 using Bibui.Runtime.Platform;
 
-var runtime = BibuiRuntime.Create().WithSkia();
+var runtime = BibuiRuntime.Create();
+using var skia = new SkiaRenderer();
 App.Mount(runtime);
-BibuiWindow.Create(runtime).WithSilk().Run("Stepper");
+BibuiWindow.Create(runtime).WithSilk(skia).Run("Stepper");
 ```
 
 `setState.Set` stores the new state and asks for a frame, and the next build
@@ -234,7 +237,6 @@ dotnet add reference ../Stepper/Stepper.csproj
 ```
 
 ```csharp
-using Bibui.Raster.Skia;
 using Bibui.Runtime;
 using Bibui.Testing;
 using Xunit;
@@ -244,7 +246,7 @@ public class StepperTests
     [Fact]
     public void Plus_adds_one_and_reset_returns_to_zero()
     {
-        var runtime = BibuiRuntime.Create().WithSkia();
+        var runtime = BibuiRuntime.Create();
         App.Mount(runtime);
         using var page = BibuiPage.From(runtime);
 
@@ -259,7 +261,7 @@ public class StepperTests
     [Fact]
     public void The_first_frame_renders()
     {
-        var runtime = BibuiRuntime.Create().WithSkia();
+        var runtime = BibuiRuntime.Create();
         App.Mount(runtime, theme: "default-light");
         using var page = BibuiPage.From(runtime);
 
@@ -275,8 +277,9 @@ dotnet run
 
 `page.Click(id)` presses the middle of the box with that id. `GetText`,
 `GetBounds`, `FindById`, `Fill`, `Press` and `Screenshot` cover reading and
-typing. Ids come from `BoxFromId`, `TextFromId` and the `id` you pass to a
-component.
+typing. The page draws its screenshots with Skia on the CPU, so the test needs
+no renderer of its own. Ids come from `BoxFromId`, `TextFromId` and the `id`
+you pass to a component.
 
 ## 7. Publishing with Native AOT
 
@@ -297,10 +300,11 @@ using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
 
-var runtime = BibuiRuntime.Create().WithManagedRasterizer();
+var runtime = BibuiRuntime.Create();
+var managed = new ManagedRenderer();
 App.Mount(runtime);
 
-var host = new WaylandPlatformHost(new WaylandHostOptions { AppId = "dev.example.stepper" });
+var host = new WaylandPlatformHost(managed.Draw, new WaylandHostOptions { AppId = "dev.example.stepper" });
 BibuiWindow.Create(runtime).WithHost(host).Run("Stepper");
 ```
 

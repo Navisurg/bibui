@@ -74,7 +74,7 @@ internal sealed class WindowFrameProfile
         }
         Console.WriteLine($"{"Phase",-44} {"min",7} {"p50",7} {"p99",7} {"max",7}");
         Console.WriteLine(new string('─', 79));
-        Row(gpu ? "render  (build+layout+GL record: RenderTo)" : "render  (build+layout+raster+readback)", _render);
+        Row(gpu ? "render  (build+layout+record+GL record)" : "render  (build+layout+record+raster)", _render);
         Row(gpu ? "submit  (Skia flush → GL)" : "submit  (texture upload + quad)", _submit);
         Row("present (SwapBuffers)", _swap);
         Row("frame   (DoRender total)", _frame);
