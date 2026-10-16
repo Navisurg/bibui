@@ -10,9 +10,8 @@ Name it when you create the runtime:
 var runtime = BibuiRuntime.Create().WithSkia();
 ```
 
-Skia-typed extras live here too: `SkiaCustomDraw.Of` draws into a box with an
-`SKCanvas`, and `renderer.RenderTo(SKSurface, …)` renders a frame onto a Skia
-surface of your own.
+Skia-typed extras live here too: `renderer.RenderTo(SKSurface, …)` renders a
+frame onto a Skia surface of your own.
 
 Part of bibui, a code-first native UI library for .NET:
 <https://github.com/Navisurg/bibui>. Licensed under Apache-2.0.

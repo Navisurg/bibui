@@ -40,6 +40,22 @@ before it was published.
     gets the built-in Inter, and a character Inter lacks draws as its missing
     glyph. Text no longer depends on the machine.
 
+- **A frame is recorded into a `DrawList`, then drawn (breaking).** After
+  layout, the painter and every custom draw record their draws, in tree
+  order, into the renderer's `DrawList` (`BibuiRenderer.DrawList`), and the
+  renderer then executes it onto the surface: build → layout → draw ops →
+  render. Pixels are unchanged.
+  - A `DrawOp` is a fixed-size value with no references; points, glyphs, path
+    verbs and gradient colours live in the list's payload, and kept paths and
+    faces are named by index. The list is reused from frame to frame.
+  - `DrawContext` records instead of drawing. `DrawContext.Canvas` is gone, and
+    with it `SkiaCustomDraw`: a custom draw uses `DrawContext`, which every
+    backend can execute.
+  - Paths are bibui's own `VectorPath` (verbs and arguments, `AddPath` under a
+    transform), not a backend's. `ctx.Path(key, build)` builds and keeps one;
+    `ctx.DrawPath` draws it, or copies any other path into the list.
+    `IPathBuilder` is gone.
+
 - **The draw layer knows textures, never images (breaking).** An app gets an
   image's pixels into memory its own way (`Bibui.Imaging.Png`, a video
   decoder, its own code) and makes a texture on the backend it chose.
@@ -154,9 +170,9 @@ before it was published.
   now `new BibuiWindow(runtime, new SilkPlatformHost())` (GLFW + OpenGL, in
   `Bibui.Platform.Silk`) or `new WaylandPlatformHost()`. `Bibui.Key` and
   `Bibui.MouseButton` are bibui's own types.
-- **Skia-specific API moved to the Skia packages.** `Box.CustomDraw` is now
-  `Draw = SkiaCustomDraw.Of(...)` in `Bibui.Raster.Skia`;
-  `renderer.RenderTo(SKSurface, ...)` and `SkiaSurface` live there too.
+- **Skia-specific API moved to the Skia packages.**
+  `renderer.RenderTo(SKSurface, ...)` and `SkiaSurface` live in
+  `Bibui.Raster.Skia`.
 - **Drawing types are named for what they are:** `SkiaContext` is
   `DrawContext`, `SkiaDraw` is `DrawCallback`, `SkiaKey` is `CacheKey`.
 - **The runtime is part of `Bibui`.** `BibuiRuntime`, `BibuiWindow`, the

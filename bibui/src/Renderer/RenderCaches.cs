@@ -188,31 +188,31 @@ internal sealed class RenderCaches : IDisposable
     /// <summary>The raster backend these caches hold resources of. Owned: disposed with them.</summary>
     public readonly IRasterBackend Backend;
 
-    // Geometry that repeats across frames, in the backend's own path form. Paints
-    // are not here: a paint is a value (RasterPaint) the backend resolves to
-    // whatever it keeps — Skia caches SKPaints by the paint's content on its side
-    // of the seam — so nothing on this side holds a backend object but paths.
-    // Text measurement, metrics and line breaks are Fonts', which keeps its own.
-    public readonly ResourceCache<CacheKey, RasterPath> Paths;
+    // Geometry that repeats across frames, as bibui's own paths: a draw list
+    // names these, and the replay keeps the native path it builds from each.
+    // Paints are not here: a paint is a value (RasterPaint) the backend resolves
+    // to whatever it keeps. Text measurement, metrics and line breaks are
+    // Fonts', which keeps its own.
+    public readonly ResourceCache<CacheKey, VectorPath> Paths;
 
     public RenderCaches(IRasterBackend backend)
     {
         Backend = backend;
-        Paths = Create<CacheKey, RasterPath>();
+        Paths = Create<CacheKey, VectorPath>();
         Anims = Create<AnimKey, AnimCell>(keepFrames: 1);
         _endFrames.Add(backend.EndFrame);
     }
 
-    private RasterPath? _scratchPath;
+    private readonly VectorPath _scratchPath = new();
 
     /// <summary>
     /// A path for geometry drawn once and dropped — a chart series whose points
     /// are the content, so no key could name it. Rewound before it is handed out;
-    /// valid until the next call, so not for anything that nests.
+    /// valid until the next call, so not for anything that nests. Drawing it
+    /// copies it into the draw list.
     /// </summary>
-    public RasterPath ScratchPath()
+    public VectorPath ScratchPath()
     {
-        _scratchPath ??= Backend.CreatePath();
         _scratchPath.Rewind();
         return _scratchPath;
     }
@@ -250,7 +250,6 @@ internal sealed class RenderCaches : IDisposable
         {
             disposable.Dispose();
         }
-        _scratchPath?.Dispose();
         Backend.Dispose();
     }
 }

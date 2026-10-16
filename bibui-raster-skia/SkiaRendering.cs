@@ -38,24 +38,3 @@ public static class SkiaRendering
         raster as SkiaRasterBackend ?? throw new InvalidOperationException(
             $"An SKSurface can only be rendered to by the Skia raster backend; this renderer uses '{raster.Name}'.");
 }
-
-/// <summary>
-/// Raw SkiaSharp drawing inside a box: what <c>Box.CustomDraw</c> was before
-/// the Skia backend left the core library. It runs only where Skia
-/// paints; on any other backend the box draws its style and nothing more.
-/// Prefer a plain <see cref="DrawCallback"/>, whose context speaks the backend's
-/// own vocabulary and so draws on every backend.
-/// <code>new Box { Draw = SkiaCustomDraw.Of((canvas, rect) => …) }</code>
-/// </summary>
-public static class SkiaCustomDraw
-{
-    /// <summary>A <see cref="Box.Draw"/> hook handing <paramref name="draw"/> the Skia canvas and the box's rect in physical pixels.</summary>
-    public static DrawCallback Of(Action<SKCanvas, SKRect> draw)
-    {
-        ArgumentNullException.ThrowIfNull(draw);
-        return ctx =>
-        {
-            if (ctx.Canvas is SkiaRasterCanvas skia) draw(skia.Native, ctx.Rect.ToSk());
-        };
-    }
-}

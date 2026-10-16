@@ -129,39 +129,10 @@ public sealed class RasterShader
 }
 
 /// <summary>
-/// The verbs a path is built from. <see cref="RasterPath"/> implements it, and
-/// so can anything that wants to record a path before a backend exists to
-/// hold it (the SVG icon parser does).
+/// A path a backend holds in its own form, built from bibui's <see cref="VectorPath"/>
+/// (<see cref="VectorPath.BuildInto"/>) and drawn with <see cref="IRasterCanvas.DrawPath"/>.
 /// </summary>
-public interface IPathBuilder
-{
-    void MoveTo(float x, float y);
-    void LineTo(float x, float y);
-    void QuadTo(float x1, float y1, float x2, float y2);
-    void CubicTo(float x1, float y1, float x2, float y2, float x3, float y3);
-
-    /// <summary>
-    /// An SVG elliptical arc from the current point to (<paramref name="x"/>,
-    /// <paramref name="y"/>). <paramref name="sweep"/> true goes the way of
-    /// increasing angle — clockwise on a y-down screen.
-    /// </summary>
-    void ArcTo(float rx, float ry, float xAxisRotate, bool largeArc, bool sweep, float x, float y);
-
-    /// <summary>
-    /// An arc of the ellipse inscribed in <paramref name="oval"/>, as a new
-    /// contour. Angles in degrees, 0 along +x, positive clockwise on screen.
-    /// </summary>
-    void AddArc(RectF oval, float startAngle, float sweepAngle);
-
-    void Close();
-}
-
-/// <summary>
-/// A path a backend holds in its own form. Build it with the
-/// <see cref="IPathBuilder"/> verbs, draw it with
-/// <see cref="IRasterCanvas.DrawPath"/>.
-/// </summary>
-public abstract class RasterPath : IPathBuilder, IDisposable
+public abstract class RasterPath : IDisposable
 {
     public abstract void MoveTo(float x, float y);
     public abstract void LineTo(float x, float y);

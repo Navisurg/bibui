@@ -529,7 +529,7 @@ internal static class DamageOracle
                         ctx.DrawArc(x, 40, 16, 3, new Rgba(56, 189, 248), sweepAngle: 90 + frame * 7 % 270);
                         if (frame % 10 >= 5)
                         {
-                            using var own = ctx.Backend.CreatePath();
+                            var own = new VectorPath();
                             own.MoveTo(ctx.Rect.Left + 400, ctx.Rect.Top + 10);
                             own.LineTo(ctx.Rect.Left + 460, ctx.Rect.Top + 100);
                             own.LineTo(ctx.Rect.Left + 380, ctx.Rect.Top + 100);
@@ -543,45 +543,30 @@ internal static class DamageOracle
             return (Build, f => { frame = f; Move(rt, 60 + (f * 5) % 120, 150); });
         });
 
-        // Every canvas call the scenes above never make, drawn straight onto the
-        // canvas by a box's own draw: a texture (drawn still and moving), a texture
-        // whose pixels are updated every frame, points, two runs of glyphs (one
-        // changing), and shapes under a changing scale and a set matrix.
+        // Every draw the scenes above never make, by a box's own draw: a texture
+        // (drawn still and moving), a texture whose pixels are updated every frame,
+        // points, two runs of text (one changing), and shapes under a changing
+        // scale and a translation.
         yield return new Scene("canvas-calls", 520, 300, 1f, 60, rt =>
         {
             int frame = 0;
             TextureHandle image = default, video = default;
             var pixels = new byte[32 * 32 * 4];
-            // A run shaped by the engine, its glyphs at the sum of the advances before them.
-            static void Glyphs(IRasterCanvas c, FontFace face, string text, float x, float baseline, Rgba color)
-            {
-                var run = new Bibui.FreeType.GlyphRun();
-                face.Strike(14f).Shape(text, run);
-                var glyphs = new ushort[run.Count];
-                var at = new Vector2[run.Count];
-                for (int i = 0; i < glyphs.Length; i++)
-                {
-                    glyphs[i] = (ushort)run.Glyphs[i];
-                    if (i > 0) at[i] = new(at[i - 1].X + run.Advances[i - 1], 0f);
-                }
-                c.DrawGlyphs(face, 14f, glyphs, at, x, baseline, color);
-            }
-
             UiNode Build()
             {
                 var canvas = new Box
                 {
                     Draw = ctx =>
                     {
-                        var c = ctx.Canvas;
+                        // The scene is at scale 1, so logical and physical px agree.
                         float l = ctx.Rect.Left, t = ctx.Rect.Top;
                         var white = ctx.Fill(new Rgba(255, 255, 255));
                         var backend = (ManagedRasterBackend)ctx.Backend;
                         if (image.IsNone) image = backend.CreateTexture(Checkerboard(16), 16, 16);
 
-                        c.DrawTexture(image, new RectF(l + 20, t + 20, l + 84, t + 84), white);
+                        ctx.DrawTexture(image, new RectF(l + 20, t + 20, l + 84, t + 84), white);
                         float x = l + 120 + frame / 4 % 10 * 8;
-                        c.DrawTexture(image, new RectF(x, t + 20, x + 48, t + 68), white);
+                        ctx.DrawTexture(image, new RectF(x, t + 20, x + 48, t + 68), white);
 
                         // The same array, rewritten in place: its content is what is drawn.
                         for (int i = 0; i < 32 * 32; i++)
@@ -594,25 +579,22 @@ internal static class DamageOracle
                         // One handle, its pixels updated every frame: damage must see the change.
                         if (video.IsNone) video = backend.CreateTexture(pixels, 32, 32);
                         else backend.UpdateTexture(video, pixels, 32, 32);
-                        c.DrawTexture(video, new RectF(l + 260, t + 20, l + 324, t + 84), white);
+                        ctx.DrawTexture(video, new RectF(l + 260, t + 20, l + 324, t + 84), white);
 
                         Span<Vector2> pts = stackalloc Vector2[8];
                         for (int i = 0; i < 8; i++) pts[i] = new(l + 30 + i * 20, t + 120 + (i == frame % 8 ? 6 : 0));
-                        c.DrawPoints(PointMode.Points, pts, ctx.Stroke(new Rgba(234, 179, 8), 4f));
+                        ctx.DrawPoints(PointMode.Points, pts, ctx.Stroke(new Rgba(234, 179, 8), 4f));
 
-                        var face = ctx.Fonts.Face();
-                        Glyphs(c, face, $"frame {frame / 6}", l + 30, t + 170, new Rgba(255, 255, 255));
-                        Glyphs(c, face, "glyphs", l + 200, t + 170, new Rgba(56, 189, 248));
+                        var font = new Font(14f, null, 400, 1f);
+                        ctx.DrawText($"frame {frame / 6}", l + 30, t + 156, font, new Rgba(255, 255, 255));
+                        ctx.DrawText("glyphs", l + 200, t + 156, font, new Rgba(56, 189, 248));
 
-                        c.Save();
-                        c.Translate(l + 400, t + 120);
-                        c.Scale(1f + frame / 10 % 3 * 0.25f, 1f);
-                        c.DrawRoundRect(new RectF(0, 0, 40, 30), 6, 6, ctx.Fill(new Rgba(34, 197, 94)));
-                        c.Restore();
-                        c.Save();
-                        c.SetMatrix(Matrix3x2.CreateTranslation(l + 400, t + 180 + frame % 5));
-                        c.DrawRoundRect(new RectF(0, 0, 40, 30), 6, 6, ctx.Fill(new Rgba(239, 68, 68)));
-                        c.Restore();
+                        ctx.PushTransform(Matrix3x2.CreateScale(1f + frame / 10 % 3 * 0.25f, 1f) * Matrix3x2.CreateTranslation(l + 400, t + 120));
+                        ctx.DrawRoundRect(new RectF(0, 0, 40, 30), 6, fill: ctx.Fill(new Rgba(34, 197, 94)));
+                        ctx.PopTransform();
+                        ctx.PushTranslation(l + 400, t + 180 + frame % 5);
+                        ctx.DrawRoundRect(new RectF(0, 0, 40, 30), 6, fill: ctx.Fill(new Rgba(239, 68, 68)));
+                        ctx.PopTranslation();
                     },
                 }.Px(520f, 240f);
                 return Page(Arrange.Column(canvas, Arrange.Space(8f), rt.Button("cc", "Hover me").Node), 0f);

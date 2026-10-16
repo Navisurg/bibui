@@ -38,8 +38,9 @@ public readonly record struct PaintSpec
 internal enum PathKind { CheckMark, Arc, Polyline, FilledPath, Edge }
 
 /// <summary>
-/// What a <c>Box.Draw</c> callback is handed: the canvas, where it may paint,
-/// and cached constructors for the paths and paints it might need.
+/// What a <c>Box.Draw</c> callback is handed: the draws it may make, recorded
+/// into the frame's <see cref="DrawList"/> in tree order, and cached
+/// constructors for the paths and paints it might need.
 ///
 /// Nothing here is constructed twice. A path lives in the renderer's caches, and
 /// a paint is a value the raster backend resolves against its own — both evicted
@@ -47,13 +48,11 @@ internal enum PathKind { CheckMark, Arc, Polyline, FilledPath, Edge }
 /// a built-in one costs, instead of allocating and destroying native objects on
 /// every frame.
 ///
-/// One vocabulary, the raster backend's (<see cref="IRasterBackend"/>): bibui's
-/// value types (<see cref="Rgba"/>, <see cref="RectF"/>, Vector2,
-/// <see cref="PaintSpec"/>, <see cref="RasterPaint"/>) and the backend's handles
-/// (<see cref="RasterPath"/>, <see cref="RasterImage"/>). Nothing here is
-/// SkiaSharp, so a component written against it draws on any backend. Code that
-/// wants Skia itself can still reach it through the Skia backend's own types
-/// (<c>(ctx.Canvas as SkiaRasterCanvas)?.Native</c>), and is then tied to it.
+/// One vocabulary, bibui's: value types (<see cref="Rgba"/>, <see cref="RectF"/>,
+/// Vector2, <see cref="PaintSpec"/>, <see cref="RasterPaint"/>), its own
+/// <see cref="VectorPath"/>, and texture handles. Nothing here is a backend's,
+/// so a component written against it draws on any backend, and nothing is
+/// drawn while it records: a renderer executes the list after.
 ///
 /// A ref struct so it cannot outlive the callback. The objects it hands back
 /// are ordinary references, so do not store them past the call: they are valid
@@ -75,14 +74,10 @@ public readonly ref partial struct DrawContext
         Rect = rect;
     }
 
-    /// <summary>
-    /// The raw canvas, in physical pixels. The Draw* methods below resolve theme
-    /// colours, scale and cached geometry for you; what is drawn here is drawn
-    /// as given, and the raster backend sees it like any other draw.
-    /// </summary>
-    public IRasterCanvas Canvas => _ctx.Canvas;
+    // The frame's draws: every method below records into it.
+    private DrawList List => _ctx.List;
 
-    /// <summary>The raster backend painting this frame — for paths and images a primitive takes.</summary>
+    /// <summary>The raster backend painting this frame — for the textures a draw makes on it.</summary>
     public IRasterBackend Backend => _ctx.Backend;
 
     /// <summary>This node's paint rect, in physical pixels.</summary>
@@ -113,23 +108,51 @@ public readonly ref partial struct DrawContext
     /// </summary>
     public void DrawRoundRect(RectF rect, float radius, RasterPaint? fill = null, RasterPaint? stroke = null)
     {
-        if (fill is { } f)
-        {
-            Canvas.DrawRoundRect(rect, radius, radius, f);
-        }
-        if (stroke is { } s)
-        {
-            Canvas.DrawRoundRect(rect, radius, radius, s);
-        }
+        if (fill is { } f) RoundRect(rect, radius, f);
+        if (stroke is { } s) RoundRect(rect, radius, s);
+    }
+
+    private void RoundRect(RectF rect, float radius, in RasterPaint paint)
+    {
+        ref var op = ref List.Push(DrawOpKind.RoundRect);
+        (op.Rect, op.A, op.B) = (rect, radius, radius);
+        List.SetPaint(ref op, paint);
     }
 
     public void DrawLine(float x1, float y1, float x2, float y2, in RasterPaint paint)
-        => Canvas.DrawLine(x1, y1, x2, y2, paint);
+    {
+        ref var op = ref List.Push(DrawOpKind.Line);
+        (op.A, op.B, op.C, op.D) = (x1, y1, x2, y2);
+        List.SetPaint(ref op, paint);
+    }
 
-    public void DrawPath(RasterPath path, in RasterPaint paint) => Canvas.DrawPath(path, paint);
+    /// <summary>
+    /// Draws <paramref name="path"/> in physical px. A path from <see cref="Path(CacheKey, Action{VectorPath})"/>
+    /// is kept, so the list names it and the renderer reuses what it built from
+    /// it; any other is copied into the list as it is now, and may be rewound
+    /// and rebuilt as soon as this returns.
+    /// </summary>
+    public void DrawPath(VectorPath path, in RasterPaint paint)
+    {
+        ref var op = ref List.Push(DrawOpKind.Path);
+        if (path.Kept) op.Resource = List.AddPath(path);
+        else
+        {
+            if (path.Verbs.Contains(PathVerb.AddPath))
+                throw new NotSupportedException("A path that adds another is drawn from ctx.Path, where it is kept for the frame.");
+            (op.Start, op.Count) = (List.AddVerbs(path.Verbs), path.Verbs.Length);
+            (op.Start2, op.Count2) = (List.AddFloats(path.Args), path.Args.Length);
+        }
+        List.SetPaint(ref op, paint);
+    }
 
     public void DrawPoints(PointMode mode, ReadOnlySpan<Vector2> points, in RasterPaint paint)
-        => Canvas.DrawPoints(mode, points, paint);
+    {
+        ref var op = ref List.Push(DrawOpKind.Points);
+        op.Mode = mode;
+        (op.Start, op.Count) = (List.AddPoints(points), points.Length);
+        List.SetPaint(ref op, paint);
+    }
 
     /// <summary>
     /// Draws <paramref name="texture"/> into <paramref name="dest"/> (physical px).
@@ -140,16 +163,16 @@ public readonly ref partial struct DrawContext
     /// every frame.
     /// </summary>
     public void DrawTexture(TextureHandle texture, RectF dest, in RasterPaint paint)
-        => Canvas.DrawTexture(texture, dest, paint);
-
-    /// <summary>Clips to a physical rect until the matching <see cref="PopClip"/>.</summary>
-    public void PushClip(RectF rect)
     {
-        Canvas.Save();
-        Canvas.ClipRect(rect);
+        ref var op = ref List.Push(DrawOpKind.Texture);
+        (op.Texture, op.Rect) = (texture, dest);
+        List.SetPaint(ref op, paint);
     }
 
-    public void PopClip() => Canvas.Restore();
+    /// <summary>Clips to a physical rect until the matching <see cref="PopClip"/>.</summary>
+    public void PushClip(RectF rect) => List.Push(DrawOpKind.PushClip).Rect = rect;
+
+    public void PopClip() => List.Push(DrawOpKind.Pop);
 
     /// <summary>A logical rect in physical pixels, matching <see cref="Rect"/>.</summary>
     public RectF Physical(float x, float y, float w, float h) => _ctx.ToPhysical(x, y, w, h);
@@ -445,7 +468,7 @@ public readonly ref partial struct DrawContext
     }
 
     /// <summary>The curve, then a straight baseline back to the start.</summary>
-    private void BuildClosedArea(RasterPath path, ReadOnlySpan<(float X, float Y)> points, float baselineY)
+    private void BuildClosedArea(VectorPath path, ReadOnlySpan<(float X, float Y)> points, float baselineY)
     {
         path.MoveTo(points[0].X * Scale, points[0].Y * Scale);
         for (int i = 1; i < points.Length; i++)
@@ -508,11 +531,11 @@ public readonly ref partial struct DrawContext
     /// <summary>Shifts the origin until the matching <see cref="PopTranslation"/>.</summary>
     public void PushTranslation(float dx, float dy)
     {
-        Canvas.Save();
-        Canvas.Translate(dx * Scale, dy * Scale);
+        ref var op = ref List.Push(DrawOpKind.PushTranslate);
+        (op.A, op.B) = (dx * Scale, dy * Scale);
     }
 
-    public void PopTranslation() => Canvas.Restore();
+    public void PopTranslation() => List.Push(DrawOpKind.Pop);
 
     /// <summary>
     /// Maps a zoomed subtree's local logical space onto the surface: local point
@@ -523,12 +546,11 @@ public readonly ref partial struct DrawContext
     /// </summary>
     public void PushScale(float originX, float originY, float scale)
     {
-        Canvas.Save();
-        Canvas.Translate(originX * Scale, originY * Scale);
-        Canvas.Scale(scale, scale);
+        ref var op = ref List.Push(DrawOpKind.PushScale);
+        (op.A, op.B, op.C) = (originX * Scale, originY * Scale, scale);
     }
 
-    public void PopScale() => Canvas.Restore();
+    public void PopScale() => List.Push(DrawOpKind.Pop);
 
     /// <summary>
     /// Draws everything until <see cref="PopTransform"/> through
@@ -539,13 +561,12 @@ public readonly ref partial struct DrawContext
     public void PushTransform(Matrix3x2 logical)
     {
         // The same map over physical px: down to logical, through it, back up.
+        // Recorded relative: the renderer applies it before its current transform.
         float s = Scale;
-        var physical = Matrix3x2.CreateScale(1f / s) * logical * Matrix3x2.CreateScale(s);
-        Canvas.Save();
-        Canvas.SetMatrix(physical * Canvas.TotalMatrix);
+        List.Push(DrawOpKind.PushTransform).Matrix = Matrix3x2.CreateScale(1f / s) * logical * Matrix3x2.CreateScale(s);
     }
 
-    public void PopTransform() => Canvas.Restore();
+    public void PopTransform() => List.Push(DrawOpKind.Pop);
 
 
     /// <summary>Clips to this logical rect until the matching <see cref="PopClip"/>.</summary>
@@ -554,14 +575,10 @@ public readonly ref partial struct DrawContext
     /// <summary>Composites everything until <see cref="PopOpacityLayer"/> at the given opacity.</summary>
     public void PushOpacityLayer(float opacity)
     {
-        byte alpha = (byte)Math.Clamp((int)MathF.Round(opacity * 255f), 0, 255);
-        Canvas.SaveLayerAlpha(alpha);
+        List.Push(DrawOpKind.PushOpacity).Alpha = (byte)Math.Clamp((int)MathF.Round(opacity * 255f), 0, 255);
     }
 
-    public void PopOpacityLayer()
-    {
-        Canvas.Restore();
-    }
+    public void PopOpacityLayer() => List.Push(DrawOpKind.Pop);
 
     /// <summary>
     /// The paint for <paramref name="spec"/> with the effects bibui draws with: a
@@ -605,29 +622,27 @@ public readonly ref partial struct DrawContext
     /// The key must cover everything <paramref name="build"/> reads — including
     /// position, unless the caller translates the canvas instead.
     /// </summary>
-    public RasterPath Path(CacheKey key, Action<RasterPath> build) =>
-        _caches.Paths.FromKey(key, (backend: _ctx.Backend, build),
-            static p => Built(p.backend, p.build));
+    public VectorPath Path(CacheKey key, Action<VectorPath> build) =>
+        _caches.Paths.FromKey(key, build, static build => Kept(build));
 
     /// <summary>
     /// Geometry built from <paramref name="arg"/> by a <c>static</c> lambda, so a
     /// hit allocates nothing — no closure is captured. Prefer this over the
     /// <see cref="Action{T}"/> overload on any path a frame draws repeatedly.
     /// </summary>
-    public RasterPath Path<TArg>(CacheKey key, TArg arg, Action<TArg, RasterPath> build)
-        => _caches.Paths.FromKey(key, (backend: _ctx.Backend, arg, build),
-            static p => Built(p.backend, p.arg, p.build));
+    public VectorPath Path<TArg>(CacheKey key, TArg arg, Action<TArg, VectorPath> build)
+        => _caches.Paths.FromKey(key, (arg, build), static p => Kept(p.arg, p.build));
 
-    private static RasterPath Built(IRasterBackend backend, Action<RasterPath> build)
+    private static VectorPath Kept(Action<VectorPath> build)
     {
-        var path = backend.CreatePath();
+        var path = new VectorPath { Kept = true };
         build(path);
         return path;
     }
 
-    private static RasterPath Built<TArg>(IRasterBackend backend, TArg arg, Action<TArg, RasterPath> build)
+    private static VectorPath Kept<TArg>(TArg arg, Action<TArg, VectorPath> build)
     {
-        var path = backend.CreatePath();
+        var path = new VectorPath { Kept = true };
         build(arg, path);
         return path;
     }

@@ -7,18 +7,18 @@ namespace Bibui.Renderer;
 /// Q q T t A a Z z, including reflected control points (S/T) and elliptical arcs
 /// (A).
 ///
-/// The result is a <see cref="RecordedPath"/>, not a backend path: the parse is
-/// process-wide while paths belong to a renderer's raster backend, so the verbs
-/// are kept and replayed into whichever backend draws the icon. Parsed paths are
+/// The result is bibui's own <see cref="VectorPath"/>, not a backend path: the parse is
+/// process-wide while native paths belong to a renderer, which builds its own
+/// from the verbs. Parsed paths are
 /// cached by their raw path string for the lifetime of the process — icon paths
 /// are immutable and the registry is small (~90 entries).
 /// </summary>
 internal static class SvgPathParser
 {
-    private static readonly Dictionary<string, RecordedPath> _cache = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, VectorPath> _cache = new(StringComparer.Ordinal);
     private static readonly object _cacheLock = new();
 
-    public static RecordedPath? Parse(string? svg)
+    public static VectorPath? Parse(string? svg)
     {
         if (string.IsNullOrWhiteSpace(svg)) return null;
         lock (_cacheLock)
@@ -26,7 +26,7 @@ internal static class SvgPathParser
             if (_cache.TryGetValue(svg, out var cached)) return cached;
         }
 
-        var path = new RecordedPath();
+        var path = new VectorPath();
         try
         {
             BuildPath(svg, path);
@@ -49,12 +49,12 @@ internal static class SvgPathParser
     /// not begin with a move, a number that is not finite, or no segment to
     /// stroke. What <c>Icons.Register</c> checks an app's path with.
     /// </summary>
-    public static RecordedPath ParseStrict(string svg)
+    public static VectorPath ParseStrict(string svg)
     {
         string trimmed = svg.TrimStart(' ', ',', '\t', '\n', '\r');
         if (trimmed.Length == 0) throw new FormatException("The path data is empty.");
         if (trimmed[0] is not ('M' or 'm')) throw new FormatException($"The path data must begin with a move (M or m), not '{trimmed[0]}'.");
-        var path = new RecordedPath();
+        var path = new VectorPath();
         BuildPath(svg, path);
         if (!path.AllFinite) throw new FormatException("The path data holds a number too large to be finite.");
         if (!path.HasSegment) throw new FormatException("The path data draws nothing: it has no line, curve or arc.");
@@ -65,7 +65,7 @@ internal static class SvgPathParser
         return path;
     }
 
-    private static void BuildPath(string s, IPathBuilder path)
+    private static void BuildPath(string s, VectorPath path)
     {
         int i = 0;
         int len = s.Length;
@@ -317,98 +317,5 @@ internal static class SvgPathParser
         if (c == '0') return false;
         if (c == '1') return true;
         throw new FormatException($"Expected arc flag (0 or 1), got '{c}'");
-    }
-}
-
-/// <summary>
-/// Path verbs kept as data, to be replayed into a backend's path later. What
-/// the SVG parser produces, since its cache outlives any one raster backend.
-/// </summary>
-internal sealed class RecordedPath : IPathBuilder
-{
-    private enum Verb : byte { Move, Line, Quad, Cubic, Arc, AddArc, Close }
-
-    private readonly List<Verb> _verbs = [];
-    private readonly List<float> _args = [];
-
-    public void MoveTo(float x, float y) { _verbs.Add(Verb.Move); _args.Add(x); _args.Add(y); }
-    public void LineTo(float x, float y) { _verbs.Add(Verb.Line); _args.Add(x); _args.Add(y); }
-
-    public void QuadTo(float x1, float y1, float x2, float y2)
-    {
-        _verbs.Add(Verb.Quad);
-        _args.Add(x1); _args.Add(y1); _args.Add(x2); _args.Add(y2);
-    }
-
-    public void CubicTo(float x1, float y1, float x2, float y2, float x3, float y3)
-    {
-        _verbs.Add(Verb.Cubic);
-        _args.Add(x1); _args.Add(y1); _args.Add(x2); _args.Add(y2); _args.Add(x3); _args.Add(y3);
-    }
-
-    public void ArcTo(float rx, float ry, float xAxisRotate, bool largeArc, bool sweep, float x, float y)
-    {
-        _verbs.Add(Verb.Arc);
-        _args.Add(rx); _args.Add(ry); _args.Add(xAxisRotate);
-        _args.Add(largeArc ? 1f : 0f); _args.Add(sweep ? 1f : 0f);
-        _args.Add(x); _args.Add(y);
-    }
-
-    public void AddArc(RectF oval, float startAngle, float sweepAngle)
-    {
-        _verbs.Add(Verb.AddArc);
-        _args.Add(oval.Left); _args.Add(oval.Top); _args.Add(oval.Right); _args.Add(oval.Bottom);
-        _args.Add(startAngle); _args.Add(sweepAngle);
-    }
-
-    public void Close() => _verbs.Add(Verb.Close);
-
-    /// <summary>True when every coordinate is finite.</summary>
-    public bool AllFinite
-    {
-        get
-        {
-            foreach (float a in _args) if (!float.IsFinite(a)) return false;
-            return true;
-        }
-    }
-
-    /// <summary>True when there is something to stroke: a line, curve or arc, not only moves.</summary>
-    public bool HasSegment
-    {
-        get
-        {
-            foreach (var v in _verbs) if (v is not (Verb.Move or Verb.Close)) return true;
-            return false;
-        }
-    }
-
-    /// <summary>Issues every verb, in order, into <paramref name="into"/>.</summary>
-    public void ReplayInto(IPathBuilder into)
-    {
-        int a = 0;
-        foreach (var verb in _verbs)
-        {
-            switch (verb)
-            {
-                case Verb.Move: into.MoveTo(_args[a], _args[a + 1]); a += 2; break;
-                case Verb.Line: into.LineTo(_args[a], _args[a + 1]); a += 2; break;
-                case Verb.Quad: into.QuadTo(_args[a], _args[a + 1], _args[a + 2], _args[a + 3]); a += 4; break;
-                case Verb.Cubic:
-                    into.CubicTo(_args[a], _args[a + 1], _args[a + 2], _args[a + 3], _args[a + 4], _args[a + 5]);
-                    a += 6;
-                    break;
-                case Verb.Arc:
-                    into.ArcTo(_args[a], _args[a + 1], _args[a + 2], _args[a + 3] != 0f, _args[a + 4] != 0f,
-                        _args[a + 5], _args[a + 6]);
-                    a += 7;
-                    break;
-                case Verb.AddArc:
-                    into.AddArc(new RectF(_args[a], _args[a + 1], _args[a + 2], _args[a + 3]), _args[a + 4], _args[a + 5]);
-                    a += 6;
-                    break;
-                case Verb.Close: into.Close(); break;
-            }
-        }
     }
 }

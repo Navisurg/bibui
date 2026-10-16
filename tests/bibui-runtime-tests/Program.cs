@@ -2888,6 +2888,58 @@ void TextureContract(string name, Bibui.Raster.IRasterBackend backend,
     release(second);
 }
 
+Run("DrawList: recording a frame after the first allocates nothing", () =>
+{
+    // A page of what most frames are made of: text, icons, decorated and
+    // clipped boxes, an opacity layer, a cached path. Laid out once by a real
+    // runtime, then recorded again and again into one list.
+    var runtime = BibuiRuntime.Create().WithSkia();
+    UiNode? tree = null;
+    runtime.Mount(() =>
+    {
+        var page = runtime.ColumnFit();
+        using (runtime.PushParent(page))
+        {
+            runtime.Text("Recording allocates nothing");
+            runtime.Icon("check", size: 18f);
+            var card = runtime.Box();
+            card.Px(160f, 48f).Clipped();
+            card.Style.BackgroundColor = UiColor.SurfaceRaised;
+            card.Style.BorderColor = UiColor.Border;
+            card.Style.BorderWidth = 1f;
+            card.Style.CornerRadius = 8f;
+            card.Style.Opacity = 0.5f;
+            using (runtime.PushParent(card)) runtime.Text("inside a clipped, faded card");
+            var drawn = runtime.Box();
+            drawn.Px(80f, 40f);
+            drawn.Draw = ctx => ctx.DrawCheckMark(0f, 0f, 20f, 20f, new Rgba(34, 197, 94), 2f);
+        }
+        return tree = page;
+    }, new SurfaceOptions { Width = 400, Height = 300 });
+    runtime.Render();
+
+    var caches = new Bibui.Renderer.RenderCaches(new SkiaRasterBackend());
+    using var fonts = new Fonts();
+    var painter = new Bibui.Renderer.Painter(caches, fonts);
+    var list = new Bibui.Raster.DrawList();
+    var surface = new SurfaceOptions { Width = 400, Height = 300 };
+    var theme = runtime.Theme;
+    for (int i = 0; i < 3; i++)
+    {
+        painter.Record(list, tree!, surface, theme, FrameInput.None);
+        caches.EndFrame();
+        fonts.EndFrame();
+    }
+
+    long before = GC.GetAllocatedBytesForCurrentThread();
+    painter.Record(list, tree!, surface, theme, FrameInput.None);
+    long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+    IsTrue(list.Ops.Length > 8, $"the page recorded its draws ({list.Ops.Length} ops)");
+    Eq(0L, allocated, $"a warmed-up recording allocates nothing (it allocated {allocated} bytes)");
+    caches.Dispose();
+});
+
 Run("Textures: drawn, updated and released on Skia", () =>
 {
     using var skia = new SkiaRasterBackend();

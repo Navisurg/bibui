@@ -29,7 +29,10 @@ public readonly ref partial struct DrawContext
         for (var run = Fonts.SplitRuns(text, family, weight); run is not null; run = run.Next)
         {
             var shaped = Fonts.Shape(text[run.Start..run.End], run.Face, sizePx);
-            Canvas.DrawGlyphs(run.Face, sizePx, shaped.Glyphs, shaped.Positions, cursor, baselineY, color);
+            ref var op = ref List.Push(DrawOpKind.Glyphs);
+            op.Resource = List.AddFace(run.Face);
+            (op.A, op.B, op.C, op.Color) = (cursor, baselineY, sizePx, color);
+            (op.Start, op.Count, op.Start2) = (List.AddGlyphs(shaped.Glyphs), shaped.Glyphs.Length, List.AddPoints(shaped.Positions));
             cursor += shaped.Width;
         }
     }
@@ -124,19 +127,14 @@ public readonly ref partial struct DrawContext
         // in and every on-screen position would be its own entry.
         float s = size / 24f * Scale;
 
-        // The parse is process-wide and backend-free, so the icon is replayed into
-        // a path of this frame's backend at its own 24-unit scale and then mapped
-        // to the target size — in that order, so the scaled geometry is exactly
-        // what scaling the parsed path gives.
+        // The parse is process-wide and backend-free. The icon is added at its own
+        // 24-unit scale and mapped to the target size, so a renderer builds the
+        // parsed path and then scales it, in that order: the scaled geometry is
+        // exactly what scaling the parsed path gives.
         var scaledPath = Path(
             CacheKey.Of([CacheKey.Bits(s)], CacheKey.OfString(iconName)),
-            (srcPath, s, backend: _ctx.Backend),
-            static (p, path) =>
-            {
-                using var unscaled = p.backend.CreatePath();
-                p.srcPath.ReplayInto(unscaled);
-                path.AddPath(unscaled, Matrix3x2.CreateScale(p.s, p.s));
-            });
+            (srcPath, s),
+            static (p, path) => path.AddPath(p.srcPath, Matrix3x2.CreateScale(p.s, p.s)));
 
         float strokeW = MathF.Max(1f, 1.5f * (size / 18f) * Scale);
         var paint = Paint(PaintSpec.Stroke(color, strokeW) with
@@ -193,6 +191,7 @@ public readonly ref partial struct DrawContext
         }
 
         var clipRect = new RectF(x * Scale, y * Scale, (x + w) * Scale, (y + h) * Scale);
-        Canvas.DrawBackdropBlur(physSubset, clipRect, sigma * Scale);
+        ref var op = ref List.Push(DrawOpKind.BackdropBlur);
+        (op.Region, op.Rect, op.A) = (physSubset, clipRect, sigma * Scale);
     }
 }
