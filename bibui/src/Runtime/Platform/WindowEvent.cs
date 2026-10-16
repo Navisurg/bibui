@@ -1,3 +1,5 @@
+using System.Text;
+
 
 namespace Bibui.Runtime.Platform;
 
@@ -39,7 +41,12 @@ public readonly struct WindowEvent
     public float ScrollY { get; private init; }
 
     public Key Key { get; private init; }
-    public char Char { get; private init; }
+    /// <summary>
+    /// What a <see cref="WindowEventKind.KeyChar"/> typed: one whole character,
+    /// never half of a UTF-16 surrogate pair. A <see cref="Rune"/> cannot hold an
+    /// invalid scalar, so a platform cannot hand the runtime one.
+    /// </summary>
+    public Rune CodePoint { get; private init; }
 
     public static WindowEvent Mouse(WindowEventKind kind, float x, float y, MouseButton button)
         => new() { Kind = kind, X = x, Y = y, Button = button };
@@ -49,6 +56,6 @@ public readonly struct WindowEvent
 
     public static WindowEvent KeyPress(Key key) => new() { Kind = WindowEventKind.KeyDown, Key = key };
     public static WindowEvent KeyRelease(Key key) => new() { Kind = WindowEventKind.KeyUp, Key = key };
-    public static WindowEvent Text(char ch) => new() { Kind = WindowEventKind.KeyChar, Char = ch };
+    public static WindowEvent Text(Rune codePoint) => new() { Kind = WindowEventKind.KeyChar, CodePoint = codePoint };
     public static WindowEvent FocusLost() => new() { Kind = WindowEventKind.FocusLost };
 }

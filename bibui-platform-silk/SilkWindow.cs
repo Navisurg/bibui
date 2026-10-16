@@ -124,8 +124,10 @@ public sealed class SilkWindow : IDisposable
     private IKeyboard? _keyboard;
     private IMouse? _mouse;
     private CursorShape _cursor;
+    // Held so the GC keeps it while GLFW holds its function pointer.
+    private global::Silk.NET.GLFW.GlfwCallbacks.CharCallback? _onChar;
 
-    internal void WireInput()
+    internal unsafe void WireInput()
     {
         var input = Native.CreateInput();
         var events = Input.Events;
@@ -138,10 +140,18 @@ public sealed class SilkWindow : IDisposable
         }
         foreach (var keyboard in input.Keyboards)
         {
-            keyboard.KeyChar += (_, c)    => events.Add(WindowEvent.Text(c));
             keyboard.KeyDown += (_, y, _) => events.Add(WindowEvent.KeyPress((Bibui.Key)y));
             keyboard.KeyUp   += (_, y, _) => events.Add(WindowEvent.KeyRelease((Bibui.Key)y));
         }
+        // Text straight from GLFW, not Silk.NET's KeyChar: that casts GLFW's code
+        // point to a char, which turns 😀 (U+1F600) into U+F600. Taking the window's
+        // char callback replaces Silk.NET's, whose only listener was KeyChar.
+        _onChar = (_, codePoint) =>
+        {
+            if (System.Text.Rune.TryCreate(codePoint, out var r)) events.Add(WindowEvent.Text(r));
+        };
+        global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetCharCallback(
+            (global::Silk.NET.GLFW.WindowHandle*)Native.Native!.Glfw!.Value, _onChar);
         _keyboard = input.Keyboards.FirstOrDefault();
         _mouse = input.Mice.FirstOrDefault();
         if (_cursor != CursorShape.Default) ApplyCursor();

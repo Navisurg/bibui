@@ -212,9 +212,10 @@ public ref struct TextOp
             op.NewMark = min;
         }
 
-        if (ev.CodePoint != 0)
+        // A code point that is no character (half a surrogate pair, past U+10FFFF)
+        // inserts nothing: input never throws.
+        if (ev.CodePoint != 0 && System.Text.Rune.TryCreate(ev.CodePoint, out var rune))
         {
-            var rune = new System.Text.Rune(ev.CodePoint);
             int written = rune.EncodeToUtf16(buf);
             op.ReplaceString = buf[..written];
 

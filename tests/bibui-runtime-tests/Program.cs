@@ -820,6 +820,13 @@ Run("HitTest D: Next button fills column width", () =>
 // edit state it edits, which the tests read and set directly.
 (BibuiPage Page, BibuiStr Text, TextEditState Edit) TextFieldPage(string initial = "hello world")
 {
+    var (runtime, text, edit) = TextFieldRuntime(initial);
+    return (BibuiPage.From(runtime, runtime.BuildTree), text, edit);
+}
+
+// The same field, for a test that hands the runtime its input itself.
+(BibuiRuntime Runtime, BibuiStr Text, TextEditState Edit) TextFieldRuntime(string initial)
+{
     var text = BibuiStr.FromStrLit(initial);
     var edit = new TextEditState { Cursor = (int)text.Length, Mark = (int)text.Length };
     var runtime = BibuiRuntime.Create();
@@ -836,7 +843,7 @@ Run("HitTest D: Next button fills column width", () =>
         return frame;
     }, new SurfaceOptions { Width = 300, Height = 60 });
     runtime.Step();
-    return (BibuiPage.From(runtime, runtime.BuildTree), text, edit);
+    return (runtime, text, edit);
 }
 
 string Value(BibuiStr text) => text.ToString();
@@ -6950,6 +6957,24 @@ Run("WindowInput: Super held is reported as Ctrl too", () =>
         if (h.Event.Kind == BibUiEventKind.Press) seen = h.Event.Modifiers;
     IsTrue((seen & KeyModifiers.Ctrl) != 0, $"Cmd+key should read as Ctrl+key, saw {seen}");
     IsTrue((seen & KeyModifiers.Super) != 0, "and stay distinguishable as Super");
+});
+
+Run("WindowInput: a typed emoji enters the field whole", () =>
+{
+    var (rt, text, _) = TextFieldRuntime("");
+    var input = new WindowInput();
+    foreach (var r in "a\U0001F600".EnumerateRunes()) input.Events.Add(WindowEvent.Text(r));
+    input.Apply(rt, KeyModifiers.None);
+    rt.Step();
+    Eq("a\U0001F600", Value(text), "both characters, the emoji as its two chars");
+});
+
+Run("TextField: half a surrogate pair types nothing, and does not throw", () =>
+{
+    var (rt, text, _) = TextFieldRuntime("ab");
+    rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.Text, CodePoint = 0xD83D });
+    rt.Step();
+    Eq("ab", Value(text), "no character to insert");
 });
 
 Run("Frames owed: a frame that handled input owes one more, and an idle runtime owes none", () =>

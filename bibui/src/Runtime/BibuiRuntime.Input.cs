@@ -11,13 +11,6 @@ namespace Bibui.Runtime;
 public sealed partial class BibuiRuntime
 {
     /// <summary>
-    /// Raised for a key press that reached no focused input — an app-level
-    /// shortcut. The only route a keyboard shortcut has: a claim is
-    /// pointer-only.
-    /// </summary>
-    public Action<string>? OnUnhandledKey { get; set; }
-
-    /// <summary>
     /// How this reaches the system clipboard. By default, the clipboard of the
     /// window the runtime runs in (<see cref="WindowClipboard"/>, set by the
     /// platform when it opens), and none (null, nothing written) for a runtime
@@ -66,65 +59,16 @@ public sealed partial class BibuiRuntime
             {
                 NotePointer(ev);
 
+                // Nothing is taken: every event stays in the queue for the boxes
+                // that ask. A pointer event asks for a frame, because hot state
+                // follows the pointer.
                 EnqueueEvent(ev);
-                Dispatch(ev);
+                if (ev.Kind is BibUiEventKind.MouseDown or BibUiEventKind.MouseUp or BibUiEventKind.MouseMove)
+                    RequestFrame();
             }
-        }
-    }
-
-    /// <summary>
-    /// What the runtime itself does with an event. Nothing is taken: every
-    /// event stays in the queue for the boxes that ask. A pointer event asks
-    /// for frames, because hot state follows the pointer.
-    /// </summary>
-    private void Dispatch(BibUiEvent ev)
-    {
-        switch (ev.Kind)
-        {
-            case BibUiEventKind.MouseDown:
-            case BibUiEventKind.MouseUp:
-            case BibUiEventKind.MouseMove: RequestFrame(); break;
-            case BibUiEventKind.Scroll:    break;
-            case BibUiEventKind.Release:   break;
-            case BibUiEventKind.Text:      OnKeyChar(ev); break;
-            default:                       OnKeyDown(ev); break;
         }
     }
 
     /// <summary>One event, for a caller that has exactly one.</summary>
     public void ProcessEvent(BibUiEvent ev) => ProcessEvents(new[] { ev });
-
-    // A typed character is an app-level shortcut too. A field reads its text
-    // from the frame's events when it asks; this does not know whether one did.
-    private void OnKeyChar(BibUiEvent ev)
-    {
-        char ch = ev.Char ?? '\0';
-        if (!char.IsControl(ch))
-            OnUnhandledKey?.Invoke(ch.ToString());
-    }
-
-    // ── OS → BibUiEvent translation ──────────────────────────────────────────
-    // Centralized at the WM boundary — same shape as the prior TextActionFromSilkKey
-    // but constructs the unified BibUiEvent (raw Key/Ctrl/Shift + text-edit intent).
-
-    private void OnKeyDown(BibUiEvent ev)
-    {
-        var key = ev.Key;
-
-        if (key == Key.Escape)
-        {
-            OnUnhandledKey?.Invoke("Escape");
-            return;
-        }
-
-        var keyName = key switch
-        {
-            Key.Left  => "Left",
-            Key.Right => "Right",
-            Key.Up    => "Up",
-            Key.Down  => "Down",
-            _         => null, // printable chars handled by OnKeyChar
-        };
-        if (keyName != null) OnUnhandledKey?.Invoke(keyName);
-    }
 }
