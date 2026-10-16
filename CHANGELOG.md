@@ -371,6 +371,10 @@ before it was published.
 - `GetDrawOps`, the YAML specs, the render manifest, and the browser parity
   pipeline.
 - The `Bibui.Contracts` and `Bibui.Runtime` packages (merged into `Bibui`).
+- `runtime.OnUnhandledKey`. It fired as a key arrived, before any field
+  could take it, so it also reported text typed into a field. Read
+  `runtime.UnconsumedEvents` while building instead: what a component took is
+  marked eaten.
 
 ### Fixed
 
