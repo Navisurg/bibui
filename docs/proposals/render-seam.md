@@ -28,7 +28,7 @@ A renderer is any code that reads a `DrawList`. There is no renderer interface. 
 
 ## The `DrawList`
 
-One per runtime, reset when a frame's recording starts. It's valid from the end of the frame's recording until the next frame starts recording. Everything in it is physical pixels with resolved colours: the scale factor and the theme are applied while recording, as `DrawContext` does today.
+One per runtime, reset when a frame's recording starts. Renderers read it through read-only spans; only the core writes it. It's valid from the end of the frame's recording until the next frame starts recording. Everything in it is physical pixels with resolved colours: the scale factor and the theme are applied while recording, as `DrawContext` does today.
 
 ```csharp
 public sealed class DrawList
@@ -114,7 +114,7 @@ The vocabulary grows when an app needs more, as ops and paint fields every rende
 
 - **Transforms are relative.** `PushTransform` records `m` and the renderer applies `m × current`. That's what `Canvas.SetMatrix(m * Canvas.TotalMatrix)` computes today, so the core never needs to track the renderer's matrix.
 - **Text advances come from `Fonts`.** Today `DrawRuns` moves its cursor by what `DrawText` returns. Both backends return their measured advance (Skia: `paint.MeasureText`; managed: the strike's width), which is the same number `Fonts`' measure cache holds. Recording advances by that.
-- **Custom draws get their `Box`.** A callback runs at the same point in the walk (after the box's children, so on top of them) and records into the same list. Its `DrawContext` carries the `Box`, so it can read `HotT`, `ActiveT` and `Id` for animation, and its `Rect` is the callback's canvas.
+- **Custom draws get their `Box`:** the callback is `delegate void DrawCallback(Box box, DrawContext ctx)`. It runs at the same point in the walk (after the box's children, so on top of them) and records into the same list. It reads `HotT`, `ActiveT` and `Id` from the box for animation, and the box's `Rect` is its canvas.
 - **`DrawContext.Canvas` and `DrawContext.Backend` are removed.** Nothing in bibui's samples uses them.
 - **`ctx.Path(key, build)` returns a path id instead of a `RasterPath`.** Callers that pass it straight to `ctx.DrawPath` don't change.
 
@@ -156,16 +156,23 @@ Each step's gate is the same: the runtime tests (with the byte-exact `RenderTo`/
 1. **Text out of the rasterizer.** `Fonts` runs on the core's FreeType + HarfBuzz text engine, and the canvas's only text call becomes `DrawGlyphs`. This is already decided (the text-engine proposal).
 2. **Textures replace images in the draw layer.** `TextureHandle`, `DrawTexture`, and each renderer's texture functions. `DrawImage`, `DrawBitmap` and `DrawPixels` leave `DrawContext`.
 3. **The `DrawList`.** `DrawContext` records. A replay function executes the list onto the existing `IRasterCanvas`, so the interface survives this step but only the replay calls it, and byte-identical pixels prove the op set is complete. Anything not yet converted to a value (a `RasterImage` before step 2, a backend typeface before step 1) rides along as an index into a per-frame object list that steps 1, 2 and 5 empty.
-4. **Custom draws get the `Box`** and lose `Canvas` and `Backend`.
+4. **Custom draws get the `Box`** (`DrawCallback(Box box, DrawContext ctx)`) and lose `Canvas` and `Backend`.
 5. **Renderers replace `IRasterBackend`.** `SkiaDraw` and `ManagedDraw`, the hosts executing the list, damage tracking over `DrawList`s, and `IRasterBackend` and `IRasterCanvas` deleted.
 6. **Paint vocabulary:** colour matrix, LUT, blend modes, source rect, texture formats.
 7. **Texture kinds:** Static, Stream, Dynamic.
 
 1, 2 and 3 can run in parallel. 3 carries text as `Text` ops replayed through the old `DrawText` until 1 lands. 4 needs 3, and 5 needs 1 to 4.
 
+## Decided
+
+- **Callbacks** are `DrawCallback(Box box, DrawContext ctx)`.
+- **`DrawList` access** is read-only spans; only the core writes the list.
+
 ## Open questions
 
-1. **How a callback gets its `Box`:** `ctx.Box` on `DrawContext`, which keeps the delegate's signature, or `DrawCallback(Box box, DrawContext ctx)`. This proposal assumes `ctx.Box`.
-2. **Owner ids:** should every op carry its box (as an index into a per-frame node list) for debugging and draw-list dumps, or only when a debug flag is set?
-3. **`DrawList` access:** read-only spans (as above), or public arrays and counts, which a renderer in another assembly could also write?
-4. **`RenderOutput` and frame PNGs:** they move out of the core in step 5. Should they go to `Bibui.Testing`, or to each renderer package?
+1. **Owner ids:** ops carry no reference to the box that recorded them. One could be added (an `int` per op) if a draw-list dump or the damage-debug overlay needs to name boxes; nothing needs it yet.
+2. **Frames and pixels:** `runtime.Render()` both runs a frame and turns it into pixels. The proposed split:
+   - `runtime.Frame()` builds, lays out and records the `DrawList`;
+   - pixels come from a renderer (`SkiaDraw.Render(list, size)` returns a `RenderOutput`, and likewise for `ManagedDraw`);
+   - `RenderOutput` stays a plain data type in the core, with PNG through the core codec;
+   - `Bibui.Testing`'s `BibuiPage` takes a renderer when it is created (Skia on the CPU by default) and keeps `Screenshot()`.
