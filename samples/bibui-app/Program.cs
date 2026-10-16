@@ -29,7 +29,8 @@ if (args.Contains("--first-frame"))
 using var window = SilkWindow.Open(runtime, new("bibui — interactive demo", 720, 1200));
 using var skia = new SkiaRenderer(window.Gl);
 
-// Off unless asked for (BIBUI_TEST_SERVER=1). Its screenshots draw with a renderer of their own.
+// Off unless asked for (BIBUI_TEST_SERVER=1); the loop steps it. Its screenshots
+// draw on the CPU, with a renderer of their own beside the window's GPU one.
 using var testServer = BibuiTestServer.StartIfEnabled(runtime, draw: new SkiaRenderer().Draw);
 
 window.OnRefresh = Frame;   // keeps drawing during a resize on Windows and macOS
@@ -37,7 +38,8 @@ while (SilkWindow.BeginFrame(window, runtime)) Frame();
 
 void Frame()
 {
-    runtime.BeginBuild();
+    // While a test-server command runs, the server is the keyboard and mouse.
+    runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
     Demo.Build(runtime, state);
     runtime.EndBuild();
     skia.Draw(runtime.DrawList);

@@ -19,10 +19,17 @@ caused. `BibuiPage.Launch(runtime => MyScreen.Build(runtime))` does the same on
 a runtime of its own.
 
 `WorkflowClient` talks to a `BibuiTestServer` the app starts on purpose, for
-example with `BibuiTestServer.StartIfEnabled(runtime, draw: skia.Draw)` (`skia`
-being the app's `SkiaRenderer`), which starts one only when
-`BIBUI_TEST_SERVER=1`. Its screenshots and recordings are drawn with the
-function you pass. The client sends the server's token with every
+example with `BibuiTestServer.StartIfEnabled(runtime, draw: cpu.Draw)` (`cpu`
+a renderer that draws into memory), which starts one only when
+`BIBUI_TEST_SERVER=1`. The app's loop steps it once a frame; while a command
+runs, the server is the keyboard and mouse:
+
+```csharp
+runtime.BeginBuild(server?.Step(window.Events) ?? window.Events);
+```
+
+Its screenshots and recordings are drawn with the function you pass, on the
+loop. The client sends the server's token with every
 request, reading it from the file the server writes for the user alone, and
 screenshot and recording paths are relative to the server's output directory
 (`BIBUI_TEST_SERVER_OUT`):

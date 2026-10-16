@@ -20,8 +20,9 @@ namespace Bibui.Platform.Wayland;
 /// it types after dead keys and Compose. Ctrl and Alt make it a shortcut, which
 /// types nothing — as GLFW.</item>
 /// <item><b>Modifiers</b> come from wl_keyboard.modifiers through the xkb state,
-/// and are asked (<see cref="HeldModifiers"/>), never accumulated. None while
-/// the window does not have the keyboard.</item>
+/// and are asked (<see cref="HeldModifiers"/>) as each event is reported and
+/// stamped on it, never accumulated. None while the window does not have the
+/// keyboard.</item>
 /// <item><b>Repeat</b> is the client's on Wayland. Timed by
 /// <see cref="KeyRepeat"/> on a timerfd that the host polls beside the display
 /// (<see cref="RepeatFd"/>), so it runs on the loop thread. A repeat types the
@@ -71,7 +72,7 @@ internal sealed unsafe class WaylandInput : IWaylandFeature
         _emit = emit;
         _inputSerial = inputSerial;
         _cursor = cursor;
-        _frame = new PointerFrame(emit);
+        _frame = new PointerFrame(emit, () => HeldModifiers);
     }
 
     private readonly IPointerCursorHooks? _cursor;
@@ -230,7 +231,7 @@ internal sealed unsafe class WaylandInput : IWaylandFeature
     private void LoseFocus()
     {
         _keyboardFocused = false;
-        foreach (var code in _keysDown) _emit(WindowEvent.KeyRelease(KeyFor(code)));
+        foreach (var code in _keysDown) _emit(WindowEvent.KeyRelease(KeyFor(code), HeldModifiers));
         _keysDown.Clear();
         _repeat.Stop();
         ArmRepeat();
@@ -248,7 +249,7 @@ internal sealed unsafe class WaylandInput : IWaylandFeature
         if (state == WlKeyboard.KeyState.Released)
         {
             if (!_keysDown.Remove(code)) return;
-            _emit(WindowEvent.KeyRelease(KeyFor(code)));
+            _emit(WindowEvent.KeyRelease(KeyFor(code), HeldModifiers));
             _repeat.Release(code);
             ArmRepeat();
             return;
@@ -256,7 +257,7 @@ internal sealed unsafe class WaylandInput : IWaylandFeature
         if (state != WlKeyboard.KeyState.Pressed) return; // Repeated (v10) is not asked for
 
         _keysDown.Add(code);
-        _emit(WindowEvent.KeyPress(KeyFor(code)));
+        _emit(WindowEvent.KeyPress(KeyFor(code), HeldModifiers));
         EmitText(_xkb?.Press(code));
 
         // GLFW's rule: a key that repeats takes the repeat over; one that does

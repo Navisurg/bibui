@@ -29,17 +29,17 @@ public sealed partial class BibuiRuntime
     /// </summary>
     public bool ReducedMotion
     {
-        get { lock (_syncRoot) return _reducedMotion; }
+        get => _reducedMotion;
         set
         {
-            lock (_syncRoot) _reducedMotion = value;
+            _reducedMotion = value;
             RequestFrame();
         }
     }
 
     private bool _reducedMotion = Environment.GetEnvironmentVariable("BIBUI_REDUCED_MOTION") is "1" or "true";
 
-    /// <summary>Whether this frame snaps rather than travels. Caller holds <c>_syncRoot</c>.</summary>
+    /// <summary>Whether this frame snaps rather than travels.</summary>
     private bool Instant => _reducedMotion || _theme.Motion.Easing == MotionEasing.None;
 
     /// <summary>
@@ -64,7 +64,6 @@ public sealed partial class BibuiRuntime
     /// The cell for <paramref name="key"/>, retargeted at
     /// <paramref name="target"/>. A new one starts at <paramref name="initial"/>,
     /// which is the target itself unless the caller wants it to travel there.
-    /// Caller holds <c>_syncRoot</c>.
     /// </summary>
     private MotionCell Drive(AnimKey key, Vector4 target, Vector4 initial, in Transition transition, float epsilon)
     {
@@ -103,7 +102,7 @@ public sealed partial class BibuiRuntime
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(property);
         var t = new Vector4(target, 0f, 0f, 0f);
-        lock (_syncRoot) return Drive(AnimKey.For(id, property), t, t, transition, epsilon).Current.X;
+        return Drive(AnimKey.For(id, property), t, t, transition, epsilon).Current.X;
     }
 
     /// <summary>
@@ -116,11 +115,8 @@ public sealed partial class BibuiRuntime
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(property);
         var t = new Vector4(target, 0f, 0f);
-        lock (_syncRoot)
-        {
-            var c = Drive(AnimKey.For(id, property), t, t, transition, epsilon).Current;
-            return new Vector2(c.X, c.Y);
-        }
+        var c = Drive(AnimKey.For(id, property), t, t, transition, epsilon).Current;
+        return new Vector2(c.X, c.Y);
     }
 
     /// <summary>
@@ -134,27 +130,24 @@ public sealed partial class BibuiRuntime
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(property);
-        lock (_syncRoot)
+        var (r, g, b, a) = target.ResolveColor(_theme.Colors);
+        Vector4 lab = ColorMix.ToOklab(new Rgba(r, g, b, a));
+        var key = AnimKey.For(id, property);
+
+        // Fading to or from nothing keeps the hue of the end that is there,
+        // so it gains or loses opacity instead of passing through grey.
+        if (_motion.Entries.TryGetValue(key, out var existing))
         {
-            var (r, g, b, a) = target.ResolveColor(_theme.Colors);
-            Vector4 lab = ColorMix.ToOklab(new Rgba(r, g, b, a));
-            var key = AnimKey.For(id, property);
-
-            // Fading to or from nothing keeps the hue of the end that is there,
-            // so it gains or loses opacity instead of passing through grey.
-            if (_motion.Entries.TryGetValue(key, out var existing))
-            {
-                var c = existing.Value;
-                if (a == 0)
-                    lab = c.Target.W == 0f ? c.Target : new Vector4(c.Current.X, c.Current.Y, c.Current.Z, 0f);
-                else if (c.Current.W == 0f && c.Target != lab)
-                    c.Current = c.From = new Vector4(lab.X, lab.Y, lab.Z, 0f);
-            }
-
-            var cell = Drive(key, lab, lab, transition ?? DefaultColorTransition, 0.0005f);
-            var rgba = ColorMix.FromOklab(cell.Current);
-            return UiColor.Rgba(rgba.R, rgba.G, rgba.B, rgba.A);
+            var c = existing.Value;
+            if (a == 0)
+                lab = c.Target.W == 0f ? c.Target : new Vector4(c.Current.X, c.Current.Y, c.Current.Z, 0f);
+            else if (c.Current.W == 0f && c.Target != lab)
+                c.Current = c.From = new Vector4(lab.X, lab.Y, lab.Z, 0f);
         }
+
+        var cell = Drive(key, lab, lab, transition ?? DefaultColorTransition, 0.0005f);
+        var rgba = ColorMix.FromOklab(cell.Current);
+        return UiColor.Rgba(rgba.R, rgba.G, rgba.B, rgba.A);
     }
 
     private static readonly Transition DefaultColorTransition = Transition.Timed(0.18f, Easing.Standard);
@@ -179,13 +172,10 @@ public sealed partial class BibuiRuntime
     {
         ArgumentNullException.ThrowIfNull(id);
         float target = present ? 1f : 0f;
-        lock (_syncRoot)
-        {
-            var initial = new Vector4(present && appear ? 0f : target, 0f, 0f, 0f);
-            var cell = Drive(AnimKey.For(id, "presence"), new Vector4(target, 0f, 0f, 0f), initial,
-                present ? enter ?? DefaultEnter : exit ?? DefaultExit, 0.001f);
-            return new Presence(Math.Clamp(cell.Current.X, 0f, 1f), StateOf(present, cell.Current.X));
-        }
+        var initial = new Vector4(present && appear ? 0f : target, 0f, 0f, 0f);
+        var cell = Drive(AnimKey.For(id, "presence"), new Vector4(target, 0f, 0f, 0f), initial,
+            present ? enter ?? DefaultEnter : exit ?? DefaultExit, 0.001f);
+        return new Presence(Math.Clamp(cell.Current.X, 0f, 1f), StateOf(present, cell.Current.X));
     }
 
     private static PresenceState StateOf(bool present, float progress) => present
@@ -242,73 +232,70 @@ public sealed partial class BibuiRuntime
         var enterT = enter ?? DefaultEnter;
         var exitT = exit ?? DefaultExit;
 
-        lock (_syncRoot)
+        var cell = _lists.FromKey(id, 0, static _ => new PresenceListCell());
+        bool first = !cell.Seeded;
+        cell.Seeded = true;
+
+        // Who is here now, and which of them are new.
+        var keys = new string[items.Count];
+        var present = new HashSet<string>(items.Count);
+        int entering = 0;
+        for (int i = 0; i < items.Count; i++)
         {
-            var cell = _lists.FromKey(id, 0, static _ => new PresenceListCell());
-            bool first = !cell.Seeded;
-            cell.Seeded = true;
+            string key = keyOf(items[i]) ?? throw new InvalidOperationException($"PresenceList '{id}': an item's key is null.");
+            if (!present.Add(key)) throw new InvalidOperationException($"PresenceList '{id}': two items share the key '{key}'. Keys name rows, so they must be distinct.");
+            keys[i] = key;
 
-            // Who is here now, and which of them are new.
-            var keys = new string[items.Count];
-            var present = new HashSet<string>(items.Count);
-            int entering = 0;
-            for (int i = 0; i < items.Count; i++)
+            if (!cell.Rows.TryGetValue(key, out var row))
             {
-                string key = keyOf(items[i]) ?? throw new InvalidOperationException($"PresenceList '{id}': an item's key is null.");
-                if (!present.Add(key)) throw new InvalidOperationException($"PresenceList '{id}': two items share the key '{key}'. Keys name rows, so they must be distinct.");
-                keys[i] = key;
-
-                if (!cell.Rows.TryGetValue(key, out var row))
-                {
-                    float start = first && !appear ? 1f : 0f;
-                    row = new PresenceListCell.Row();
-                    row.Motion.Current = row.Motion.From = row.Motion.Target = new Vector4(start, 0f, 0f, 0f);
-                    cell.Rows[key] = row;
-                }
-                row.Item = items[i];
-                row.Present = true;
-                row.Motion.Epsilon = 0.001f;
-                if (row.Motion.Target.X != 1f)
-                {
-                    // New, or coming back while it was leaving: a leg in from
-                    // wherever it is, behind the rows that started before it.
-                    row.Motion.From = row.Motion.Current;
-                    row.Motion.Target = Vector4.UnitX;
-                    row.Motion.Elapsed = 0f;
-                    row.Motion.Transition = stagger > 0f
-                        ? enterT.WithDelay(enterT.Delay + Math.Min(entering, 15) * stagger)
-                        : enterT;
-                    entering++;
-                }
+                float start = first && !appear ? 1f : 0f;
+                row = new PresenceListCell.Row();
+                row.Motion.Current = row.Motion.From = row.Motion.Target = new Vector4(start, 0f, 0f, 0f);
+                cell.Rows[key] = row;
             }
-
-            // Who has left: still drawn, on their way out, where they were.
-            foreach (var (key, row) in cell.Rows)
+            row.Item = items[i];
+            row.Present = true;
+            row.Motion.Epsilon = 0.001f;
+            if (row.Motion.Target.X != 1f)
             {
-                if (present.Contains(key)) continue;
-                row.Present = false;
-                if (row.Motion.Target.X != 0f)
-                {
-                    row.Motion.From = row.Motion.Current;
-                    row.Motion.Target = Vector4.Zero;
-                    row.Motion.Elapsed = 0f;
-                    row.Motion.Transition = exitT;
-                }
+                // New, or coming back while it was leaving: a leg in from
+                // wherever it is, behind the rows that started before it.
+                row.Motion.From = row.Motion.Current;
+                row.Motion.Target = Vector4.UnitX;
+                row.Motion.Elapsed = 0f;
+                row.Motion.Transition = stagger > 0f
+                    ? enterT.WithDelay(enterT.Delay + Math.Min(entering, 15) * stagger)
+                    : enterT;
+                entering++;
             }
-
-            MergeOrder(cell.Order, keys, present);
-
-            var result = cell.Result as List<PresenceItem<T>> ?? new List<PresenceItem<T>>();
-            cell.Result = result;
-            result.Clear();
-            foreach (string key in cell.Order)
-            {
-                var row = cell.Rows[key];
-                float p = Math.Clamp(row.Motion.Current.X, 0f, 1f);
-                result.Add(new PresenceItem<T>(key, (T)row.Item!, p, StateOf(row.Present, row.Motion.Current.X)));
-            }
-            return result;
         }
+
+        // Who has left: still drawn, on their way out, where they were.
+        foreach (var (key, row) in cell.Rows)
+        {
+            if (present.Contains(key)) continue;
+            row.Present = false;
+            if (row.Motion.Target.X != 0f)
+            {
+                row.Motion.From = row.Motion.Current;
+                row.Motion.Target = Vector4.Zero;
+                row.Motion.Elapsed = 0f;
+                row.Motion.Transition = exitT;
+            }
+        }
+
+        MergeOrder(cell.Order, keys, present);
+
+        var result = cell.Result as List<PresenceItem<T>> ?? new List<PresenceItem<T>>();
+        cell.Result = result;
+        result.Clear();
+        foreach (string key in cell.Order)
+        {
+            var row = cell.Rows[key];
+            float p = Math.Clamp(row.Motion.Current.X, 0f, 1f);
+            result.Add(new PresenceItem<T>(key, (T)row.Item!, p, StateOf(row.Present, row.Motion.Current.X)));
+        }
+        return result;
     }
 
     /// <summary>
@@ -382,24 +369,20 @@ public sealed partial class BibuiRuntime
     public void SetTheme(ThemeTokens theme, Transition crossfade)
     {
         ArgumentNullException.ThrowIfNull(theme);
-        lock (_syncRoot)
-        {
-            _themeFrom = PaintedTheme(_theme).Colors;
-            _themeFade.Current = _themeFade.From = Vector4.Zero;
-            _themeFade.Target = Vector4.UnitX;
-            _themeFade.Velocity = Vector4.Zero;
-            _themeFade.Elapsed = 0f;
-            _themeFade.Transition = crossfade;
-            _theme = theme;
-            _lastTree = null;
-        }
+        _themeFrom = PaintedTheme(_theme).Colors;
+        _themeFade.Current = _themeFade.From = Vector4.Zero;
+        _themeFade.Target = Vector4.UnitX;
+        _themeFade.Velocity = Vector4.Zero;
+        _themeFade.Elapsed = 0f;
+        _themeFade.Transition = crossfade;
+        _theme = theme;
+        _lastTree = null;
         RequestFrame();
     }
 
     /// <summary>
     /// The theme a frame is painted with: <paramref name="theme"/>, or while a
     /// crossfade runs, it with every colour part way from the old theme's.
-    /// Caller holds <c>_syncRoot</c>.
     /// </summary>
     private ThemeTokens PaintedTheme(ThemeTokens theme)
     {
@@ -412,8 +395,8 @@ public sealed partial class BibuiRuntime
 
     /// <summary>
     /// Steps every value, presence and list row asked for this frame, and the
-    /// theme fade, and says whether any is still moving. Caller holds
-    /// <c>_syncRoot</c>; runs before the caches' EndFrame, which is what
+    /// theme fade, and says whether any is still moving. Runs before the
+    /// caches' EndFrame, which is what
     /// <c>Touched</c> is still comparable against.
     /// </summary>
     private bool StepMotion()

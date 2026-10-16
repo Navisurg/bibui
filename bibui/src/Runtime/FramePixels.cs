@@ -7,8 +7,7 @@ namespace Bibui.Runtime;
 /// A runtime's last frame as pixels: its <see cref="BibuiRuntime.DrawList"/>
 /// drawn by the renderer the caller names into a new buffer the size of the
 /// frame. For screenshots, tests and tools; a window draws into memory of its
-/// own. Take <see cref="BibuiRuntime.FrameLock"/> around it when another thread
-/// may build.
+/// own. Between frames, on the loop's thread.
 /// </summary>
 public static class FramePixels
 {

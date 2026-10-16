@@ -155,7 +155,7 @@ if (host == "wayland")
     {
         while (WaylandWindow.BeginFrame(window, runtime))
         {
-            live.Frame(runtime);
+            live.Frame(runtime, window.Events);
             draw(runtime.DrawList);
             WaylandWindow.EndFrame(window, runtime);
         }
@@ -181,7 +181,7 @@ return 2;
 
     void Frame()
     {
-        live.Frame(runtime);
+        live.Frame(runtime, window.Events);
         draw(runtime.DrawList);
         SilkWindow.EndFrame(window, runtime);
     }

@@ -53,12 +53,9 @@ public sealed partial class BibuiRuntime
     {
         ArgumentNullException.ThrowIfNull(id);
         bool opened;
-        lock (_syncRoot)
-        {
-            opened = _openDropDowns.TryAdd(id, anchor);
-            if (!opened) _openDropDowns[id] = anchor;
-            _openedThisFrame.Add(id);
-        }
+        opened = _openDropDowns.TryAdd(id, anchor);
+        if (!opened) _openDropDowns[id] = anchor;
+        _openedThisFrame.Add(id);
         if (opened) RequestFrame();
     }
 
@@ -67,7 +64,7 @@ public sealed partial class BibuiRuntime
     {
         ArgumentNullException.ThrowIfNull(id);
         bool closed;
-        lock (_syncRoot) closed = _openDropDowns.Remove(id);
+        closed = _openDropDowns.Remove(id);
         if (closed) RequestFrame();
     }
 
@@ -75,7 +72,7 @@ public sealed partial class BibuiRuntime
     public bool IsDropDownOpen(string id)
     {
         ArgumentNullException.ThrowIfNull(id);
-        lock (_syncRoot) return _openDropDowns.ContainsKey(id);
+        return _openDropDowns.ContainsKey(id);
     }
 
     /// <summary>
@@ -102,51 +99,45 @@ public sealed partial class BibuiRuntime
     public Box? BeginDropDown(string id)
     {
         ArgumentNullException.ThrowIfNull(id);
-        lock (_syncRoot)
+        if (!_openDropDowns.ContainsKey(id)) return null;
+        var dropDown = DropDownFromId(id);
+        if (dropDown is null)
         {
-            if (!_openDropDowns.ContainsKey(id)) return null;
-            var dropDown = DropDownFromId(id);
-            if (dropDown is null)
-            {
-                dropDown = new DropDown { Root = new Box { Id = id } };
-                if (_drawnDropDowns.Last is null) _drawnDropDowns.First = dropDown; else _drawnDropDowns.Last.NextDrawn = dropDown;
-                _drawnDropDowns.Last = dropDown;
-            }
-            // A build counts from 1, so a new dropdown is not yet built in it.
-            if (dropDown.Build != _dropDownBuild)
-            {
-                dropDown.Build = _dropDownBuild;
-                dropDown.NextBuilt = null;
-                if (_builtDropDowns.Last is null) _builtDropDowns.First = dropDown; else _builtDropDowns.Last.NextBuilt = dropDown;
-                _builtDropDowns.Last = dropDown;
-            }
-            var root = dropDown.Root;
-            ResetForBuild(root);
-            root.Claims = InteractionKinds.None;
-            root.ChildLayoutAxis = LayoutAxis.Y;
-            root.FloatingX = root.FloatingY = true;
-            return root;
+            dropDown = new DropDown { Root = new Box { Id = id } };
+            if (_drawnDropDowns.Last is null) _drawnDropDowns.First = dropDown; else _drawnDropDowns.Last.NextDrawn = dropDown;
+            _drawnDropDowns.Last = dropDown;
         }
+        // A build counts from 1, so a new dropdown is not yet built in it.
+        if (dropDown.Build != _dropDownBuild)
+        {
+            dropDown.Build = _dropDownBuild;
+            dropDown.NextBuilt = null;
+            if (_builtDropDowns.Last is null) _builtDropDowns.First = dropDown; else _builtDropDowns.Last.NextBuilt = dropDown;
+            _builtDropDowns.Last = dropDown;
+        }
+        var root = dropDown.Root;
+        ResetForBuild(root);
+        root.Claims = InteractionKinds.None;
+        root.ChildLayoutAxis = LayoutAxis.Y;
+        root.FloatingX = root.FloatingY = true;
+        return root;
     }
 
     // A box took a press: every open dropdown it is not under, by the
     // dropdown's root or its anchor, is dismissed.
     private void PressTaken(Box box)
     {
-        lock (_syncRoot)
+        List<string>? dismissed = null;
+        foreach (var (id, anchor) in _openDropDowns)
         {
-            List<string>? dismissed = null;
-            foreach (var (id, anchor) in _openDropDowns)
-            {
-                Box? root = DropDownFromId(id)?.Root;
-                bool under = false;
-                for (UiNode? n = box; n is not null && !under; n = n.Parent == n ? null : n.Parent)
-                    under = n == root || n == anchor;
-                if (!under) (dismissed ??= new()).Add(id);
-            }
-            if (dismissed is null) return;
-            foreach (var id in dismissed) _openDropDowns.Remove(id);
+            Box? root = DropDownFromId(id)?.Root;
+            bool under = false;
+            for (UiNode? n = box; n is not null && !under; n = n.Parent == n ? null : n.Parent)
+                under = n == root || n == anchor;
+            if (!under) (dismissed ??= new()).Add(id);
         }
+        if (dismissed is null) return;
+        foreach (var id in dismissed) _openDropDowns.Remove(id);
         RequestFrame();
     }
 
@@ -166,7 +157,7 @@ public sealed partial class BibuiRuntime
     /// </summary>
     public Box OpenToolTip()
     {
-        lock (_syncRoot) return _toolTip;
+        return _toolTip;
     }
 
     /// <summary>Places <paramref name="box"/> where a tooltip goes by default: 15 px right of and below the mouse.</summary>
@@ -174,7 +165,7 @@ public sealed partial class BibuiRuntime
     {
         ArgumentNullException.ThrowIfNull(box);
         float x, y;
-        lock (_syncRoot) (x, y) = (_mouseX, _mouseY);
+        (x, y) = (_mouseX, _mouseY);
         // Before any pointer event the mouse is nowhere; the corner, then.
         box.At((float.IsNaN(x) ? 0f : x) + 15f, (float.IsNaN(y) ? 0f : y) + 15f);
     }
@@ -182,13 +173,10 @@ public sealed partial class BibuiRuntime
     // The frame's opening marker, before build() runs.
     private void BeginDropDowns()
     {
-        lock (_syncRoot)
-        {
-            EmptyToolTip(_toolTip);
-            _openedThisFrame.Clear();
-            _dropDownBuild++;
-            _builtDropDowns = default;
-        }
+        EmptyToolTip(_toolTip);
+        _openedThisFrame.Clear();
+        _dropDownBuild++;
+        _builtDropDowns = default;
     }
 
     private static Box EmptyToolTip(Box box)
@@ -209,29 +197,26 @@ public sealed partial class BibuiRuntime
     // the drawn ones from here on.
     private void EndDropDowns(UiNode tree)
     {
-        lock (_syncRoot)
+        bool untaken = false;
+        for (var ev = _firstEvent; ev is not null; ev = ev.Next)
+            untaken |= !ev.Consumed && ev.Kind == BibUiEventKind.MouseDown;
+        List<string>? closing = null;
+        foreach (var id in _openDropDowns.Keys)
+            if (!_openedThisFrame.Contains(id) && (untaken || DropDownFromId(id)?.Build != _dropDownBuild))
+                (closing ??= new()).Add(id);
+        if (closing is not null)
         {
-            bool untaken = false;
-            foreach (var handle in _frameEvents)
-                untaken |= !handle.Consumed && handle.Event.Kind == BibUiEventKind.MouseDown;
-            List<string>? closing = null;
-            foreach (var id in _openDropDowns.Keys)
-                if (!_openedThisFrame.Contains(id) && (untaken || DropDownFromId(id)?.Build != _dropDownBuild))
-                    (closing ??= new()).Add(id);
-            if (closing is not null)
-            {
-                foreach (var id in closing) _openDropDowns.Remove(id);
-                RequestFrame();
-            }
-
-            for (var d = _builtDropDowns.First; d is not null; d = d.NextBuilt)
-            {
-                if (d.Root.Parent is null && d.Root != tree) UiNode.PushIntoParent(tree, d.Root);
-                d.NextDrawn = d.NextBuilt;
-            }
-            _drawnDropDowns = _builtDropDowns;
-            if (_toolTip.FirstChild is not null && _toolTip.Parent is null) UiNode.PushIntoParent(tree, _toolTip);
+            foreach (var id in closing) _openDropDowns.Remove(id);
+            RequestFrame();
         }
+
+        for (var d = _builtDropDowns.First; d is not null; d = d.NextBuilt)
+        {
+            if (d.Root.Parent is null && d.Root != tree) UiNode.PushIntoParent(tree, d.Root);
+            d.NextDrawn = d.NextBuilt;
+        }
+        _drawnDropDowns = _builtDropDowns;
+        if (_toolTip.FirstChild is not null && _toolTip.Parent is null) UiNode.PushIntoParent(tree, _toolTip);
     }
 
     /// <summary>
@@ -243,31 +228,27 @@ public sealed partial class BibuiRuntime
     /// </summary>
     private bool IsUnderDropDown(Box box, Vector2 pos)
     {
-        lock (_syncRoot)
+        // Bottom first: a rect that holds pos covers the box, until the
+        // box's own dropdown comes, which is over what came before. Which
+        // dropdown that is matters only once something covers, so the walk
+        // to the top waits until then.
+        UiNode? top = null;
+        bool covered = false;
+        for (var d = _drawnDropDowns.First; d is not null; d = d.NextDrawn)
         {
-            // Bottom first: a rect that holds pos covers the box, until the
-            // box's own dropdown comes, which is over what came before. Which
-            // dropdown that is matters only once something covers, so the walk
-            // to the top waits until then.
-            UiNode? top = null;
-            bool covered = false;
-            for (var d = _drawnDropDowns.First; d is not null; d = d.NextDrawn)
+            var root = d.Root;
+            if (!covered && !(pos.X >= root.Rect.X && pos.Y >= root.Rect.Y
+                && pos.X < root.Rect.X + root.Extent.X && pos.Y < root.Rect.Y + root.Extent.Y)) continue;
+            if (top is null)
             {
-                var root = d.Root;
-                if (!covered && !(pos.X >= root.Rect.X && pos.Y >= root.Rect.Y
-                    && pos.X < root.Rect.X + root.Extent.X && pos.Y < root.Rect.Y + root.Extent.Y)) continue;
-                if (top is null)
-                {
-                    top = box;
-                    while (top.Parent is not null) top = top.Parent;
-                }
-                covered = root != top;
+                top = box;
+                while (top.Parent is not null) top = top.Parent;
             }
-            return covered;
+            covered = root != top;
         }
+        return covered;
     }
 
-    // Called under _syncRoot.
     private DropDown? DropDownFromId(string id)
     {
         for (var d = _drawnDropDowns.First; d is not null; d = d.NextDrawn)

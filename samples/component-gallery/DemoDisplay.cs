@@ -68,11 +68,11 @@ internal static class DemoDisplay
             line = runtime.EllipsisTextField(id, EllipsisText, EllipsisEdit, EllipsisFocused, events: TextField.SingleLineEvents);
         if (line.Pressed) EllipsisFocused = true;
         if (EllipsisFocused)
-            foreach (var handle in runtime.UnconsumedEvents)
-                if (handle.Event is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: Bibui.TextEdit.BibUiEventKind.Submit })
+            foreach (var ev in runtime.UnconsumedEvents)
+                if (ev is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: Bibui.TextEdit.BibUiEventKind.Submit })
                 {
                     EllipsisFocused = false;
-                    handle.Eat();
+                    ev.Eat();
                 }
         return box;
     }

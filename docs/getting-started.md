@@ -58,7 +58,7 @@ using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Stepper",
 using var skia = new SkiaRenderer(window.Gl);
 while (SilkWindow.BeginFrame(window, runtime))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(window.Events);
     UiNode.PushIntoParent(runtime.ParentInScope,
         Column(runtime.Text(hello)).FillX().FillY().Padded(EdgeInsets.All(24f)));
     runtime.EndBuild();
@@ -191,7 +191,7 @@ using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Stepper",
 using var skia = new SkiaRenderer(window.Gl);
 while (SilkWindow.BeginFrame(window, runtime))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(window.Events);
     app.Build(runtime);
     runtime.EndBuild();
     skia.Draw(runtime.DrawList);
@@ -330,7 +330,7 @@ using var window = WaylandWindow.Open(runtime, new PlatformWindowOptions("Steppe
 using var managed = new ManagedRenderer(window.Cpu);
 while (WaylandWindow.BeginFrame(window, runtime))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(window.Events);
     app.Build(runtime);
     runtime.EndBuild();
     managed.Draw(runtime.DrawList);

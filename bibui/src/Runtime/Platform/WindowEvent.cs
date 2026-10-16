@@ -19,14 +19,14 @@ public enum WindowEventKind
 }
 
 /// <summary>
-/// One thing the OS told us, and only that. Produced by an
-/// platform's event pump; <see cref="WindowInput"/> decides what it means.
+/// One thing the OS told us, and only that. Produced by a platform's event
+/// pump (or anything else that speaks for a keyboard and mouse, as a test
+/// server does); <see cref="BibuiRuntime.BeginBuild"/> decides what it means.
 ///
-/// It says what happened, never what is now true: no button mask, no modifier
-/// set, nothing accumulated. Those are a fold of the whole stream and belong to
-/// whoever keeps that fold — the window keeps the modifiers, the runtime the rest.
-/// Carrying a snapshot on each event would mean every event answering a question
-/// it was not asked, and a key press pretending to know about the mouse.
+/// It says what happened, and the modifiers held as it happened, stamped by the
+/// platform from the OS's own state at that moment (<see cref="Modifiers"/>), so
+/// nothing downstream keeps a fold of the key stream that a key released in
+/// another window could leave stuck. No button mask: the runtime keeps that.
 /// </summary>
 public readonly struct WindowEvent
 {
@@ -48,14 +48,17 @@ public readonly struct WindowEvent
     /// </summary>
     public Rune CodePoint { get; private init; }
 
-    public static WindowEvent Mouse(WindowEventKind kind, float x, float y, MouseButton button)
-        => new() { Kind = kind, X = x, Y = y, Button = button };
+    /// <summary>The modifiers held when it happened, as the OS reported them then.</summary>
+    public KeyModifiers Modifiers { get; private init; }
 
-    public static WindowEvent Wheel(float x, float y, float scrollX, float scrollY)
-        => new() { Kind = WindowEventKind.Scroll, X = x, Y = y, ScrollX = scrollX, ScrollY = scrollY };
+    public static WindowEvent Mouse(WindowEventKind kind, float x, float y, MouseButton button, KeyModifiers modifiers = KeyModifiers.None)
+        => new() { Kind = kind, X = x, Y = y, Button = button, Modifiers = modifiers };
 
-    public static WindowEvent KeyPress(Key key) => new() { Kind = WindowEventKind.KeyDown, Key = key };
-    public static WindowEvent KeyRelease(Key key) => new() { Kind = WindowEventKind.KeyUp, Key = key };
+    public static WindowEvent Wheel(float x, float y, float scrollX, float scrollY, KeyModifiers modifiers = KeyModifiers.None)
+        => new() { Kind = WindowEventKind.Scroll, X = x, Y = y, ScrollX = scrollX, ScrollY = scrollY, Modifiers = modifiers };
+
+    public static WindowEvent KeyPress(Key key, KeyModifiers modifiers = KeyModifiers.None) => new() { Kind = WindowEventKind.KeyDown, Key = key, Modifiers = modifiers };
+    public static WindowEvent KeyRelease(Key key, KeyModifiers modifiers = KeyModifiers.None) => new() { Kind = WindowEventKind.KeyUp, Key = key, Modifiers = modifiers };
     public static WindowEvent Text(Rune codePoint) => new() { Kind = WindowEventKind.KeyChar, CodePoint = codePoint };
     public static WindowEvent FocusLost() => new() { Kind = WindowEventKind.FocusLost };
 }

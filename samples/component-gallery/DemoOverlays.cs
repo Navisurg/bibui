@@ -494,11 +494,11 @@ internal static class DemoOverlays
             // Escape ends the search, as it ends editing a field elsewhere.
             bool escape = false;
             if (state.CommandPaletteOpen)
-                foreach (var handle in runtime.UnconsumedEvents)
-                    if (handle.Event is { IsKeyDown: true, Key: Bibui.Key.Escape })
+                foreach (var ev in runtime.UnconsumedEvents)
+                    if (ev is { IsKeyDown: true, Key: Bibui.Key.Escape })
                     {
                         escape = true;
-                        handle.Eat();
+                        ev.Eat();
                     }
 
             if (ran is not null)

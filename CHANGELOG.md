@@ -14,6 +14,31 @@ before it was published.
 
 ### Changed
 
+- **One thread owns frames and input: the app's loop (breaking).**
+  - A frame's input goes in with the frame: `runtime.BeginBuild(window.Events)`
+    turns what the keyboard and mouse did into the frame's events, and empties
+    the list. `BeginFrame` no longer applies input, and `WindowInput` is gone.
+  - Every `WindowEvent` carries the modifiers held when it happened, stamped by
+    the platform from the OS's state at that moment; the runtime keeps no
+    record of them. `SilkWindow.HeldModifiers` is gone.
+  - `runtime.UnconsumedEvents` gives the events themselves:
+    `foreach (var ev in runtime.UnconsumedEvents) if (...) ev.Eat();`.
+    `BibUiEventHandle` is gone; `Eat`, `Consumed` and `Next` are on
+    `BibUiEvent`. Events come from a pool the end of each frame empties, so
+    input allocates nothing per frame; an event lives until `EndBuild`.
+  - The app steps its `BibuiTestServer` from its loop:
+    `runtime.BeginBuild(server?.Step(window.Events) ?? window.Events)`.
+    `Step` runs the command in hand a frame at a time and, while one runs,
+    gives the frame's keyboard and mouse events in place of the window's. A click is
+    a move, a press and a release, each in a frame of its own; `press` with
+    `ctrl` presses Ctrl around the key. Commands, screenshots and recordings
+    all run on the loop's thread.
+  - `runtime.FrameLock` and the runtime's internal locks are gone. The runtime
+    is the loop's: only `RequestFrame` (and `WakeUp`), `FramesRequested` and
+    `FrameCount` are safe from other threads.
+  - `runtime.DispatchFill` is gone (`BibuiPage.Fill` does the same);
+    `runtime.DispatchClick` says whether it clicked anything.
+
 - **The app owns its loop (breaking).** A frame is
   `runtime.BeginBuild()`, the app's build, `runtime.EndBuild()`, then the
   app's renderer drawing `runtime.DrawList`, all inside a loop the app writes
@@ -24,7 +49,7 @@ before it was published.
   using var skia = new SkiaRenderer(window.Gl);
   while (SilkWindow.BeginFrame(window, runtime))
   {
-      runtime.BeginBuild(); Build(); runtime.EndBuild();
+      runtime.BeginBuild(window.Events); Build(); runtime.EndBuild();
       skia.Draw(runtime.DrawList);
       SilkWindow.EndFrame(window, runtime);
   }
@@ -33,8 +58,9 @@ before it was published.
     `IPlatformHost`, `ISkiaGpuPlatformHost`, `SilkPlatformHost` and
     `WaylandPlatformHost` are gone. A window is `SilkWindow` (Bibui.Platform.Silk)
     or `WaylandWindow` (Bibui.Platform.Wayland): `Open`, then `BeginFrame`
-    (waits for a frame to be wanted, applies input) and `EndFrame` (presents).
-    `WindowInput` is the input translation they share.
+    (waits for a frame to be wanted, with what the keyboard and mouse did in
+    `window.Events`) and `EndFrame` (presents). The loop hands the events to
+    `runtime.BeginBuild`.
   - Renderers are bound to a window's target when they are made:
     `new SkiaRenderer(window.Gl)` draws onto its GL framebuffer, and
     `new SkiaRenderer(window.Cpu)` or `new ManagedRenderer(window.Cpu)` into
@@ -78,8 +104,7 @@ before it was published.
   - Textures are made on the renderer: `skia.CreateTexture(...)` or
     `managed.CreateTexture(...)`, as before on the backends.
   - `BibuiTestServer.StartIfEnabled(runtime, port, draw)` draws its screenshots
-    and recordings with the function it is given, under `runtime.FrameLock`,
-    which a frame also holds while it builds.
+    and recordings with the function it is given.
   - The managed renderer's damage tracking compares one frame's `DrawList` with
     the last before anything is drawn, and redraws only the changed rects from
     the list, instead of recording canvas calls; pixels are unchanged.

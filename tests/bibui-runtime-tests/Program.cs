@@ -2930,8 +2930,10 @@ static string TestServerOut() =>
 // A server on runtime, and the app's loop it waits on.
 BibuiTestServer NewTestServer(BibuiRuntime runtime, int port, string? output = null)
 {
+    var server = new BibuiTestServer(runtime, output ?? TestServerOut(), port, TestServerToken, writeTokenFile: false, draw: new SkiaRenderer().Draw);
+    runtime.Serve(server);
     runtime.RunLoop();
-    return new(runtime, output ?? TestServerOut(), port, TestServerToken, writeTokenFile: false, draw: new SkiaRenderer().Draw);
+    return server;
 }
 static void StopTestServer(BibuiTestServer server)
 {
@@ -2948,7 +2950,8 @@ void WithKeyboardServer(Action<Func<object, string>, List<BibUiEvent>> body)
     var seen = new List<BibUiEvent>();
     runtime.SetBuild(() =>
     {
-        foreach (var handle in runtime.UnconsumedEvents) seen.Add(handle.Event);
+        // Copies: an event lives until the frame ends, and the pool hands it out again.
+        foreach (var ev in runtime.UnconsumedEvents) { var copy = new BibUiEvent(); copy.CopyFrom(ev); seen.Add(copy); }
         return new Box { Id = "canvas" }.Px(100f, 100f);
     }, new SurfaceOptions { Width = 120, Height = 120, ScaleFactor = 1f });
     runtime.Step();
@@ -3194,14 +3197,14 @@ Run("WorkflowClient requests are byte-identical to the reflection-serialised for
 Console.WriteLine();
 Console.WriteLine("BibuiTestServer security");
 
-// A runtime with something on it, for a server to drive.
+// A runtime with something on it, for a server to drive. Its loop is started
+// once its server is known: one loop per runtime, as an app has.
 BibuiRuntime SecurityRuntime()
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() => new Box { Id = "canvas" }.Px(40f, 40f),
         new SurfaceOptions { Width = 60, Height = 60, ScaleFactor = 1f });
     runtime.Step();
-    runtime.RunLoop();
     return runtime;
 }
 
@@ -3269,9 +3272,12 @@ Run("TestServer with BIBUI_TEST_SERVER=1 starts, and writes its token for the us
         Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", runtimeDir);
         var port = nextTestPort++;
         string tokenFile;
-        using (var server = BibuiTestServer.StartIfEnabled(SecurityRuntime(), port, new SkiaRenderer().Draw))
+        var securityRuntime = SecurityRuntime();
+        using (var server = BibuiTestServer.StartIfEnabled(securityRuntime, port, new SkiaRenderer().Draw))
         {
             IsTrue(server is not null, "the opt-in starts a server");
+            securityRuntime.Serve(server!);
+            securityRuntime.RunLoop();
             tokenFile = server!.TokenFile;
             Eq(Path.Combine(runtimeDir, $"bibui-test-server-{port}.token"), tokenFile, "the token file is under XDG_RUNTIME_DIR");
             Eq(server.Token, File.ReadAllText(tokenFile), "it holds the token");
@@ -5718,7 +5724,7 @@ Run("Claims: saying nothing takes nothing, and Disabled says it out loud", () =>
 // one arrangement in which a press and its release share an Interaction —
 // everywhere else it is fresh on each ask, so nothing carries between them.
 //
-// The streak on a MouseDown is what WindowInput counts: presses
+// The streak on a MouseDown is what BeginBuild counts: presses
 // within 500ms and 5px of each other. The MouseUp carries none of its own.
 
 (BibuiRuntime Page, Box Button) Clickable()
@@ -6097,7 +6103,7 @@ Run("Menu: Escape closes the open menu and is eaten", () =>
                 runtime.MenuItem("menu-copy", "Copy");
                 menu.End();
             }
-            escapesLeft += runtime.UnconsumedEvents.Count(h => h.Event is { IsKeyDown: true, Key: Bibui.Key.Escape });
+            escapesLeft += runtime.UnconsumedEvents.Count(h => h is { IsKeyDown: true, Key: Bibui.Key.Escape });
         }
         return page;
     }, new SurfaceOptions { Width = 200, Height = 200 });
@@ -6338,8 +6344,8 @@ Run("BibUiEvent.IsKeyDown: a shortcut handler sees arrows and Enter that reach t
     var seen = new List<Bibui.Key>();
     runtime.SetBuild(() =>
     {
-        foreach (var handle in runtime.UnconsumedEvents)
-            if (handle.Event.IsKeyDown) { seen.Add(handle.Event.Key); handle.Eat(); }
+        foreach (var ev in runtime.UnconsumedEvents)
+            if (ev.IsKeyDown) { seen.Add(ev.Key); ev.Eat(); }
         return runtime.Box().Px(10f, 10f);
     }, new SurfaceOptions { Width = 100, Height = 100 });
     runtime.Step();
@@ -6567,7 +6573,7 @@ Run("Fonts.Measure: a longer text is wider, and nothing has no width", () =>
                     events == uint.MaxValue ? Bibui.Runtime.TextField.SingleLineEvents : events);
             }
             if (line.Pressed) focused = true;
-            submitLeft |= runtime.UnconsumedEvents.Any(h => h.Event.Kind == BibUiEventKind.Submit);
+            submitLeft |= runtime.UnconsumedEvents.Any(h => h.Kind == BibUiEventKind.Submit);
         }
         return parent;
     }, new SurfaceOptions { Width = 400, Height = 300 });
@@ -6930,42 +6936,70 @@ Run("Button: disabled reports nothing", () =>
 
 // ── Window input: what a platform's BeginFrame hands the runtime ─────────────
 
-Run("WindowInput: a press and release a window reports are one click on the button", () =>
+Run("BeginBuild: a press and release a window reports are one click on the button", () =>
 {
     var (rt, clicks) = MountButton();
-    var input = new WindowInput();
+    var events = new List<WindowEvent>();
     rt.Step();
-    input.Events.Add(WindowEvent.Mouse(WindowEventKind.MouseDown, 20f, 20f, MouseButton.Left));
-    IsTrue(input.Apply(rt, KeyModifiers.None), "what arrived is reported");
-    rt.Step();
-    input.Events.Add(WindowEvent.Mouse(WindowEventKind.MouseUp, 20f, 20f, MouseButton.Left));
-    input.Apply(rt, KeyModifiers.None);
+    events.Add(WindowEvent.Mouse(WindowEventKind.MouseDown, 20f, 20f, MouseButton.Left));
+    rt.Step(events);
+    Eq(0, events.Count, "BeginBuild empties the list it was given");
+    events.Add(WindowEvent.Mouse(WindowEventKind.MouseUp, 20f, 20f, MouseButton.Left));
+    rt.Step(events);
     rt.Step();
     Eq(1, clicks(), "a press and release the window reported are one click");
-    Eq(0, input.Events.Count, "and Apply drained them");
 });
 
-Run("WindowInput: Super held is reported as Ctrl too", () =>
+// What a key-down carried, read in the frame its events went into.
+KeyModifiers ModifiersOfPress(BibuiRuntime rt, List<WindowEvent> events)
+{
+    rt.BeginBuild(events);
+    var seen = KeyModifiers.None;
+    foreach (var ev in rt.UnconsumedEvents)
+        if (ev.Kind == BibUiEventKind.Press) seen = ev.Modifiers;
+    rt.BuildTree();
+    rt.EndBuild();
+    return seen;
+}
+
+Run("BeginBuild: an event's modifiers are what it says was held", () =>
 {
     var (rt, _) = MountButton();
-    var input = new WindowInput();
     rt.Step();
-    input.Events.Add(WindowEvent.KeyPress(Key.F5));
-    input.Apply(rt, KeyModifiers.Super);
-    var seen = KeyModifiers.None;
-    foreach (var h in rt.UnconsumedEvents)
-        if (h.Event.Kind == BibUiEventKind.Press) seen = h.Event.Modifiers;
+    Eq(KeyModifiers.Ctrl, ModifiersOfPress(rt, [WindowEvent.KeyPress(Key.F5, KeyModifiers.Ctrl)]), "Ctrl held");
+    Eq(KeyModifiers.None, ModifiersOfPress(rt, [WindowEvent.KeyPress(Key.F5)]), "and nothing remembered after it");
+});
+
+Run("BeginBuild: Super held is reported as Ctrl too", () =>
+{
+    var (rt, _) = MountButton();
+    rt.Step();
+    var seen = ModifiersOfPress(rt, [WindowEvent.KeyPress(Key.F5, KeyModifiers.Super)]);
     IsTrue((seen & KeyModifiers.Ctrl) != 0, $"Cmd+key should read as Ctrl+key, saw {seen}");
     IsTrue((seen & KeyModifiers.Super) != 0, "and stay distinguishable as Super");
 });
 
-Run("WindowInput: a typed emoji enters the field whole", () =>
+Run("BeginBuild: moves in a frame are one move, where the pointer ended up", () =>
+{
+    var (rt, _) = MountButton();
+    rt.Step();
+    rt.BeginBuild([
+        WindowEvent.Mouse(WindowEventKind.MouseMove, 1f, 1f, MouseButton.Unknown),
+        WindowEvent.Mouse(WindowEventKind.MouseMove, 5f, 6f, MouseButton.Unknown),
+        WindowEvent.Mouse(WindowEventKind.MouseMove, 9f, 7f, MouseButton.Unknown)]);
+    var moves = rt.UnconsumedEvents.Where(e => e.Kind == BibUiEventKind.MouseMove).Select(e => (e.X, e.Y)).ToList();
+    rt.BuildTree();
+    rt.EndBuild();
+    Eq(1, moves.Count, "one move");
+    IsTrue(moves[0] == (9f, 7f), $"at the last position, got {moves[0]}");
+});
+
+Run("BeginBuild: a typed emoji enters the field whole", () =>
 {
     var (rt, text, _) = TextFieldRuntime("");
-    var input = new WindowInput();
-    foreach (var r in "a\U0001F600".EnumerateRunes()) input.Events.Add(WindowEvent.Text(r));
-    input.Apply(rt, KeyModifiers.None);
-    rt.Step();
+    var events = new List<WindowEvent>();
+    foreach (var r in "a\U0001F600".EnumerateRunes()) events.Add(WindowEvent.Text(r));
+    rt.Step(events);
     Eq("a\U0001F600", Value(text), "both characters, the emoji as its two chars");
 });
 

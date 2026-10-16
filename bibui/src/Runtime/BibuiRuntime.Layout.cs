@@ -16,7 +16,7 @@ public sealed partial class BibuiRuntime
     public ParentScope PushParent(UiNode box)
     {
         ArgumentNullException.ThrowIfNull(box);
-        lock (_syncRoot) _parentStack.Add(box);
+        _parentStack.Add(box);
         return new ParentScope(this, box);
     }
 
@@ -109,16 +109,13 @@ public sealed partial class BibuiRuntime
     /// </summary>
     public Box Spring()
     {
-        lock (_syncRoot)
-        {
-            var parent = _parentStack.Count > 0 ? _parentStack[^1]
-                : throw new InvalidOperationException("A spring is along its parent's axis, and there is no parent in scope.");
-            var spring = Box();
-            bool along = parent.ChildLayoutAxis == LayoutAxis.X;
-            spring.SizeX = along ? SemanticSize.ParentPct(1f, 0f) : SemanticSize.Pixels(0f);
-            spring.SizeY = along ? SemanticSize.Pixels(0f) : SemanticSize.ParentPct(1f, 0f);
-            return spring;
-        }
+        var parent = _parentStack.Count > 0 ? _parentStack[^1]
+            : throw new InvalidOperationException("A spring is along its parent's axis, and there is no parent in scope.");
+        var spring = Box();
+        bool along = parent.ChildLayoutAxis == LayoutAxis.X;
+        spring.SizeX = along ? SemanticSize.ParentPct(1f, 0f) : SemanticSize.Pixels(0f);
+        spring.SizeY = along ? SemanticSize.Pixels(0f) : SemanticSize.ParentPct(1f, 0f);
+        return spring;
     }
 
     /// <summary>
@@ -140,11 +137,8 @@ public sealed partial class BibuiRuntime
     public AxisScope PushAxis(LayoutAxis axis)
     {
         int depth;
-        lock (_syncRoot)
-        {
-            _axisStack.Add(axis);
-            depth = _axisStack.Count;
-        }
+        _axisStack.Add(axis);
+        depth = _axisStack.Count;
         return new AxisScope(this, depth);
     }
 
@@ -165,11 +159,8 @@ public sealed partial class BibuiRuntime
     public FontSizeScope PushFontSize(FontSize size)
     {
         int depth;
-        lock (_syncRoot)
-        {
-            _fontSizeStack.Add(size);
-            depth = _fontSizeStack.Count;
-        }
+        _fontSizeStack.Add(size);
+        depth = _fontSizeStack.Count;
         return new FontSizeScope(this, depth);
     }
 
@@ -183,23 +174,17 @@ public sealed partial class BibuiRuntime
     public FontFaceScope PushFontFace(FontSlot? family = null, FontWeight? weight = null)
     {
         int depth;
-        lock (_syncRoot)
-        {
-            var outer = FaceInScope();
-            _faceStack.Add((family ?? outer.Family, weight ?? outer.Weight));
-            depth = _faceStack.Count;
-        }
+        var outer = FaceInScope();
+        _faceStack.Add((family ?? outer.Family, weight ?? outer.Weight));
+        depth = _faceStack.Count;
         return new FontFaceScope(this, depth);
     }
 
     private SizeScope PushSize(List<SemanticSize> stack, SemanticSize size)
     {
         int depth;
-        lock (_syncRoot)
-        {
-            stack.Add(size);
-            depth = stack.Count;
-        }
+        stack.Add(size);
+        depth = stack.Count;
         return new SizeScope(this, stack, depth);
     }
 
@@ -221,13 +206,10 @@ public sealed partial class BibuiRuntime
         public void Dispose()
         {
             if (_runtime is null) return;
-            lock (_runtime._syncRoot)
-            {
-                var stack = _runtime._parentStack;
-                if (stack.Count == 0 || stack[^1] != _box)
-                    throw new InvalidOperationException($"PushParent('{_box.Id}') was disposed out of order.");
-                stack.RemoveAt(stack.Count - 1);
-            }
+            var stack = _runtime._parentStack;
+            if (stack.Count == 0 || stack[^1] != _box)
+                throw new InvalidOperationException($"PushParent('{_box.Id}') was disposed out of order.");
+            stack.RemoveAt(stack.Count - 1);
         }
     }
 
@@ -257,12 +239,9 @@ public sealed partial class BibuiRuntime
 
         public void Dispose()
         {
-            lock (_runtime._syncRoot)
-            {
-                if (_stack.Count != _depth)
-                    throw new InvalidOperationException("A size scope was disposed out of order.");
-                _stack.RemoveAt(_stack.Count - 1);
-            }
+            if (_stack.Count != _depth)
+                throw new InvalidOperationException("A size scope was disposed out of order.");
+            _stack.RemoveAt(_stack.Count - 1);
         }
     }
 
@@ -280,13 +259,10 @@ public sealed partial class BibuiRuntime
 
         public void Dispose()
         {
-            lock (_runtime._syncRoot)
-            {
-                var stack = _runtime._fontSizeStack;
-                if (stack.Count != _depth)
-                    throw new InvalidOperationException("PushFontSize was disposed out of order.");
-                stack.RemoveAt(stack.Count - 1);
-            }
+            var stack = _runtime._fontSizeStack;
+            if (stack.Count != _depth)
+                throw new InvalidOperationException("PushFontSize was disposed out of order.");
+            stack.RemoveAt(stack.Count - 1);
         }
     }
 
@@ -304,13 +280,10 @@ public sealed partial class BibuiRuntime
 
         public void Dispose()
         {
-            lock (_runtime._syncRoot)
-            {
-                var stack = _runtime._faceStack;
-                if (stack.Count != _depth)
-                    throw new InvalidOperationException("PushFontFace was disposed out of order.");
-                stack.RemoveAt(stack.Count - 1);
-            }
+            var stack = _runtime._faceStack;
+            if (stack.Count != _depth)
+                throw new InvalidOperationException("PushFontFace was disposed out of order.");
+            stack.RemoveAt(stack.Count - 1);
         }
     }
 
@@ -328,13 +301,10 @@ public sealed partial class BibuiRuntime
 
         public void Dispose()
         {
-            lock (_runtime._syncRoot)
-            {
-                var stack = _runtime._axisStack;
-                if (stack.Count != _depth)
-                    throw new InvalidOperationException("PushAxis was disposed out of order.");
-                stack.RemoveAt(stack.Count - 1);
-            }
+            var stack = _runtime._axisStack;
+            if (stack.Count != _depth)
+                throw new InvalidOperationException("PushAxis was disposed out of order.");
+            stack.RemoveAt(stack.Count - 1);
         }
     }
 }

@@ -34,7 +34,7 @@ using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Hello", 4
 using var skia = new SkiaRenderer(window.Gl);   // Bibui.Raster.Skia
 while (SilkWindow.BeginFrame(window, runtime))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(window.Events);
     var button = runtime.Button("hello", "Click me");
     if (button.Clicked) clicks++;
     UiNode.PushIntoParent(runtime.ParentInScope,

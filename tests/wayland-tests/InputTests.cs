@@ -100,7 +100,7 @@ internal static unsafe class InputTests
             Assert.Eq(null, kb.Press(KEY_A), "Alt+a types nothing");
             kb.UpdateKey(KEY_LEFTALT, false);
 
-            // Super is reported as Super; WindowInput folds it into Ctrl, as for the Silk host.
+            // Super is reported as Super; the runtime folds it into Ctrl, as for the Silk host.
             kb.UpdateKey(KEY_LEFTMETA, true);
             Assert.Eq(KeyModifiers.Super, kb.HeldModifiers);
             kb.UpdateKey(KEY_LEFTSHIFT, true);
@@ -423,7 +423,7 @@ internal static unsafe class InputTests
     private static (PointerFrame, List<WindowEvent>) Pointer()
     {
         var events = new List<WindowEvent>();
-        return (new PointerFrame(events.Add), events);
+        return (new PointerFrame(events.Add, () => KeyModifiers.None), events);
     }
 
     private static string Describe(List<WindowEvent> events)

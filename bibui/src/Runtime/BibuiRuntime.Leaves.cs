@@ -33,8 +33,7 @@ public sealed partial class BibuiRuntime
     public Text Text(ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null,
         FontSlot? family = null)
     {
-        lock (_syncRoot)
-            return DescribeText(_texts.Next(), text, fontSize, textColor, family);
+        return DescribeText(_texts.Next(), text, fontSize, textColor, family);
     }
 
     /// <summary>
@@ -54,11 +53,8 @@ public sealed partial class BibuiRuntime
     /// </summary>
     public Font FontInScope(FontSize? size = null, FontSlot? family = null)
     {
-        lock (_syncRoot)
-        {
-            var face = FaceInScope();
-            return Fonts.FontOf(size ?? SizeInScope(), family ?? face.Family, face.Weight, _theme, _surface.ScaleFactor);
-        }
+        var face = FaceInScope();
+        return Fonts.FontOf(size ?? SizeInScope(), family ?? face.Family, face.Weight, _theme, _surface.ScaleFactor);
     }
 
     /// <summary>
@@ -70,9 +66,8 @@ public sealed partial class BibuiRuntime
         UiColor? textColor = null, FontSlot? family = null)
     {
         ArgumentNullException.ThrowIfNull(id);
-        lock (_syncRoot)
-            return DescribeText(_retainedTexts.FromKey(id, id, static key => new Text { Id = key }),
-                text, fontSize, textColor, family);
+        return DescribeText(_retainedTexts.FromKey(id, id, static key => new Text { Id = key }),
+            text, fontSize, textColor, family);
     }
 
     /// <summary>
@@ -93,17 +88,14 @@ public sealed partial class BibuiRuntime
         if (!Bibui.Icon.IsKnown(name))
             throw new ArgumentException($"There is no icon called '{name}' (see Icon.IsKnown; an app adds its own with Icons.Register at start-up).", nameof(name));
 #endif
-        lock (_syncRoot)
-        {
-            var icon = _icons.Next();
-            ResetNode(icon);
-            icon.SizeX = icon.SizeY = SemanticSize.Text();
-            LinkUnder(icon, parent: null);
-            icon.ResetIcon();
-            icon.Name = name;
-            icon.Size = size is { } pixels ? FontSize.Px(pixels) : SizeInScope();
-            return icon;
-        }
+        var icon = _icons.Next();
+        ResetNode(icon);
+        icon.SizeX = icon.SizeY = SemanticSize.Text();
+        LinkUnder(icon, parent: null);
+        icon.ResetIcon();
+        icon.Name = name;
+        icon.Size = size is { } pixels ? FontSize.Px(pixels) : SizeInScope();
+        return icon;
     }
 
     /// <summary>
@@ -112,16 +104,13 @@ public sealed partial class BibuiRuntime
     /// </summary>
     public Spinner Spinner(float diameter = Bibui.Draw.SpinnerPainter.DefaultDiameter)
     {
-        lock (_syncRoot)
-        {
-            var spinner = _spinners.Next();
-            ResetNode(spinner);
-            spinner.SizeX = spinner.SizeY = SemanticSize.Pixels(diameter);
-            LinkUnder(spinner, parent: null);
-            spinner.ResetSpinner();
-            spinner.Diameter = diameter;
-            return spinner;
-        }
+        var spinner = _spinners.Next();
+        ResetNode(spinner);
+        spinner.SizeX = spinner.SizeY = SemanticSize.Pixels(diameter);
+        LinkUnder(spinner, parent: null);
+        spinner.ResetSpinner();
+        spinner.Diameter = diameter;
+        return spinner;
     }
 
     /// <summary>
@@ -132,17 +121,14 @@ public sealed partial class BibuiRuntime
     /// </summary>
     public Box Box()
     {
-        lock (_syncRoot)
-        {
-            var box = _boxes.Next();
-            ResetForBuild(box);
-            box.Claims = InteractionKinds.None;
-            box.ChildLayoutAxis = _axisStack.Count > 0 ? _axisStack[^1] : LayoutAxis.X;
-            if (_sizeXStack.Count > 0) box.SizeX = _sizeXStack[^1];
-            if (_sizeYStack.Count > 0) box.SizeY = _sizeYStack[^1];
-            LinkUnder(box, parent: null);
-            return box;
-        }
+        var box = _boxes.Next();
+        ResetForBuild(box);
+        box.Claims = InteractionKinds.None;
+        box.ChildLayoutAxis = _axisStack.Count > 0 ? _axisStack[^1] : LayoutAxis.X;
+        if (_sizeXStack.Count > 0) box.SizeX = _sizeXStack[^1];
+        if (_sizeYStack.Count > 0) box.SizeY = _sizeYStack[^1];
+        LinkUnder(box, parent: null);
+        return box;
     }
 
     /// <summary>
@@ -155,9 +141,8 @@ public sealed partial class BibuiRuntime
     {
         get
         {
-            lock (_syncRoot)
-                return _parentStack.Count > 0 ? _parentStack[^1]
-                    : throw new InvalidOperationException("Nothing is pushed: there is no parent in scope.");
+            return _parentStack.Count > 0 ? _parentStack[^1]
+                : throw new InvalidOperationException("Nothing is pushed: there is no parent in scope.");
         }
     }
 
@@ -169,16 +154,13 @@ public sealed partial class BibuiRuntime
     /// </summary>
     public Box Gap(float pixels)
     {
-        lock (_syncRoot)
-        {
-            var parent = _parentStack.Count > 0 ? _parentStack[^1]
-                : throw new InvalidOperationException("A gap is along its parent's axis, and there is no parent in scope.");
-            var gap = Box();
-            bool along = parent.ChildLayoutAxis == LayoutAxis.X;
-            gap.SizeX = along ? SemanticSize.Pixels(pixels) : SemanticSize.Pixels(0f);
-            gap.SizeY = along ? SemanticSize.Pixels(0f) : SemanticSize.Pixels(pixels);
-            return gap;
-        }
+        var parent = _parentStack.Count > 0 ? _parentStack[^1]
+            : throw new InvalidOperationException("A gap is along its parent's axis, and there is no parent in scope.");
+        var gap = Box();
+        bool along = parent.ChildLayoutAxis == LayoutAxis.X;
+        gap.SizeX = along ? SemanticSize.Pixels(pixels) : SemanticSize.Pixels(0f);
+        gap.SizeY = along ? SemanticSize.Pixels(0f) : SemanticSize.Pixels(pixels);
+        return gap;
     }
 
     // A text is the one node sized by what it holds: on an axis with nothing
@@ -200,11 +182,11 @@ public sealed partial class BibuiRuntime
     }
 
     // The family and weight pushed with PushFontFace, or the body family at its
-    // regular weight. Under _syncRoot.
+    // regular weight.
     private (FontSlot Family, FontWeight Weight) FaceInScope() =>
         _faceStack.Count > 0 ? _faceStack[^1] : (FontSlot.Body, FontWeight.Regular);
 
-    // The size pushed with PushFontSize, or Md. Under _syncRoot.
+    // The size pushed with PushFontSize, or Md.
     private FontSize SizeInScope() => _fontSizeStack.Count > 0 ? _fontSizeStack[^1] : ComponentSize.Md;
 
     private void RewindLeaves()
