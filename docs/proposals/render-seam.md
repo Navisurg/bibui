@@ -42,7 +42,6 @@ public sealed class DrawList
     public ReadOnlySpan<float> Floats { get; }      // path verb arguments, gradient stops
     public ReadOnlySpan<Rgba> Colors { get; }       // gradient colours
     public ReadOnlySpan<ushort> Glyphs { get; }     // glyph ids
-    public ReadOnlySpan<char> Chars { get; }        // text, until glyphs replace it
 
     // Shared, longer-lived things an op names by id.
     public PathTable Paths { get; }                 // cached paths (icons, check marks, arcs)
@@ -102,7 +101,6 @@ Every call `DrawContext` and the painter make on `IRasterCanvas` today, as an op
 | `DrawPoints` | `Points` | |
 | `DrawImage`, `DrawPixels` | `Texture` | See Textures |
 | `DrawBackdropBlur` | `BackdropBlur` | A renderer that can't read back its target skips it, as today |
-| `DrawText` | `Text` | Until the text step; then `Glyphs` replaces it |
 | `DrawGlyphRun` | `Glyphs` | Face id, size, glyph range, position range, origin, colour |
 
 Things that are the core's job, not the renderer's, stay on the core side: hover and press colour blending, theme resolution, logical-to-physical scaling, dash lengths, shadow geometry, and animation (`ctx.Animate`, `ctx.Sawtooth`, and the "still animating" answer the loop reads).
@@ -173,13 +171,13 @@ Each step's gate is the same: the runtime tests, `damage-tests`, and the fixture
 
 1. **Text out of the rasterizer.** `Fonts` runs on the core's FreeType + HarfBuzz text engine, and the canvas's only text call becomes `DrawGlyphs`. This is already decided (the text-engine proposal).
 2. **Textures replace images in the draw layer.** `TextureHandle`, `DrawTexture`, and each renderer's texture functions. `DrawImage`, `DrawBitmap` and `DrawPixels` leave `DrawContext`.
-3. **The `DrawList`.** `DrawContext` records. A replay function executes the list onto the existing `IRasterCanvas`, so the interface survives this step but only the replay calls it, and byte-identical pixels prove the op set is complete. Anything not yet converted to a value (a `RasterImage` before step 2, a backend typeface before step 1) rides along as an index into a per-frame object list that steps 1, 2 and 5 empty.
+3. **The `DrawList`.** `DrawContext` records. A replay function executes the list onto the existing `IRasterCanvas`, so the interface survives this step but only the replay calls it, and byte-identical pixels prove the op set is complete. Text and textures are already values by then (steps 1 and 2), so every op is a value from the start.
 4. **Custom draws get the `Box`** (`DrawCallback(Box box, DrawContext ctx)`) and lose `Canvas` and `Backend`.
 5. **Renderers replace `IRasterBackend`.** `SkiaDraw` and `ManagedDraw`; damage tracking over `DrawList`s; hosts as modules that run their own loop and execute the list. `IRasterBackend`, `IRasterCanvas`, `IRasterSurface`, `IPlatformHost`, `ISkiaGpuPlatformHost` and `IBibuiPage` are deleted.
 6. **Paint vocabulary:** colour matrix, LUT, blend modes, source rect, texture formats.
 7. **Texture kinds:** Static, Stream, Dynamic.
 
-1, 2 and 3 can run in parallel. 3 carries text as `Text` ops replayed through the old `DrawText` until 1 lands. 4 needs 3, and 5 needs 1 to 4.
+1, 2 and 3 run in that order. Text goes first: layout stops depending on the rasterizer, and the riskiest step (measuring with FreeType, proven only by the fixtures) is retired before anything builds on it. 4 needs 3, and 5 needs 1 to 4.
 
 ## Decided
 
