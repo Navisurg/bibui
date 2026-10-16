@@ -14,6 +14,37 @@ before it was published.
 
 ### Changed
 
+- **Renderers draw the `DrawList`; the runtime holds no backend (breaking).**
+  `runtime.EndBuild()` builds, lays out and records a frame into
+  `runtime.DrawList`, and the loop owner draws it with the renderer it chose:
+  `SkiaRenderer` (Bibui.Raster.Skia) onto an `SKSurface` or into CPU memory,
+  or `ManagedRenderer` (Bibui.Raster.Managed.Backend) into CPU memory.
+  `RasterPixels` describes memory the caller owns, and `DrawToPixels` is a
+  renderer's `Draw` handed to code that only has pixels to fill.
+  - `IRasterBackend`, `IRasterCanvas`, `IRasterSurface`, `RasterPath`,
+    `SkiaRasterBackend` and `ManagedRasterBackend` are gone, and with them
+    `WithSkia()`, `WithManagedRasterizer()`, `WithRaster(backend)`,
+    `runtime.Raster` and `DrawContext.Backend`. `BibuiRuntime.Create()` is all
+    a runtime needs.
+  - `runtime.Render()`, `runtime.RenderTo()`, `BibuiRenderer.Render`,
+    `BibuiRenderer.RenderTo`, `RenderOutput`, `LastOutput` and `CapturePixels`
+    are gone. A PNG is a frame drawn into a CPU buffer and encoded with
+    `Bibui.Imaging.Png`. `BibuiRenderer` lays out and records
+    (`Record(root, surface, theme)`); it draws nothing.
+  - Textures are made on the renderer: `skia.CreateTexture(...)` or
+    `managed.CreateTexture(...)`, as before on the backends.
+  - Hosts are given what they draw with: `WithSilk(skia)` takes a
+    `SkiaRenderer`, and `WithWayland(managed.Draw, options)` a `DrawToPixels`.
+    `BibuiTestServer.StartIfEnabled(runtime, port, draw)` draws its screenshots
+    and recordings with the function it is given, under `runtime.FrameLock`,
+    which a host also holds while it builds and draws.
+  - The managed renderer's damage tracking compares one frame's `DrawList` with
+    the last before anything is drawn, and redraws only the changed rects from
+    the list, instead of recording canvas calls; pixels are unchanged.
+  - `Bibui.Testing`'s `BibuiPage` draws `Screenshot()` with Skia on the CPU, or
+    with the function `BibuiPage.From(runtime, draw)` is given. `IBibuiPage`
+    is gone.
+
 - **A `Box.Draw` callback is handed its box, and draws in the box's space,
   clipped to it (breaking).** `DrawCallback` is `(Box box, DrawContext ctx)`:
   the box is there for its `HotT`, `ActiveT` and key. (0,0) is the box's
@@ -87,37 +118,30 @@ before it was published.
 
 - **The draw layer knows textures, never images (breaking).** An app gets an
   image's pixels into memory its own way (`Bibui.Imaging.Png`, a video
-  decoder, its own code) and makes a texture on the backend it chose.
-  - `SkiaRasterBackend` and `ManagedRasterBackend` have `CreateTexture(rgba,
-    width, height)`, `UpdateTexture` and `ReleaseTexture`, which return and
-    take a `TextureHandle`. The app owns the texture. A released handle, or
+  decoder, its own code) and makes a texture on the renderer it chose.
+  - `SkiaRenderer` and `ManagedRenderer` have `CreateTexture(rgba, width,
+    height)`, `UpdateTexture` and `ReleaseTexture`, which return and take a
+    `TextureHandle`. The app owns the texture. A released handle, or
     `TextureHandle.None`, draws nothing.
-  - `IRasterCanvas.DrawTexture(texture, dest, paint)` and
-    `DrawContext.DrawTexture` replace `DrawImage` and `DrawPixels`. `RasterImage`
-    and `DrawContext.DrawBitmap` are gone: for a video frame, update one texture
-    every frame and draw it.
-  - `IRasterBackend` loses `CreateImage`, `DecodeImage` and `EncodePng`. Frame
-    PNGs (`RenderOutput.PngBytes`) are encoded by `Bibui.Imaging.Png`, and the
-    managed backend's own PNG codec is gone.
+  - `DrawContext.DrawTexture` replaces `DrawImage` and `DrawPixels`.
+    `RasterImage` and `DrawContext.DrawBitmap` are gone: for a video frame,
+    update one texture every frame and draw it.
+  - Images are not decoded or encoded by a renderer: frame PNGs are encoded by
+    `Bibui.Imaging.Png`, and the managed backend's own PNG codec is gone.
   - The component gallery's Texture page shows both: a texture made once, and
     one whose pixels change every frame.
 
-- **Runtimes and windows are made with `Create`, and the backend and host are
+- **Runtimes and windows are made with `Create`, and the renderer and host are
   always chosen (breaking).**
-  `BibuiWindow.Create(BibuiRuntime.Create().WithSkia()).WithSilk().Run(title: "App")`.
-  - `BibuiRuntime` and `BibuiWindow` have no public constructors. Instead of
-    `new BibuiRuntime(backend)`, write `BibuiRuntime.Create()` followed by
-    `.WithSkia()` (Bibui.Raster.Skia), `.WithManagedRasterizer()`
-    (Bibui.Raster.Managed.Backend) or `.WithRaster(backend)`, before the
-    runtime first draws or measures. Instead of `new BibuiWindow(runtime, host)`,
-    write `BibuiWindow.Create(runtime)` followed by `.WithSilk()`
-    (Bibui.Platform.Silk), `.WithWayland(options)` (Bibui.Platform.Wayland) or
-    `.WithHost(host)`.
-  - There is no default backend: `new BibuiRuntime()`, `new BibuiRenderer()`
-    and `RasterBackends` are gone, and Bibui.Raster.Skia no longer registers
-    itself. Nothing is loaded by name, so nothing warns under trimming or AOT.
-    A runtime with no backend throws when it first draws, and a window with no
-    host throws when it runs, each saying what to call.
+  `BibuiWindow.Create(BibuiRuntime.Create()).WithSilk(new SkiaRenderer()).Run(title: "App")`.
+  - `BibuiRuntime` and `BibuiWindow` have no public constructors: write
+    `BibuiRuntime.Create()`, and `BibuiWindow.Create(runtime)` followed by
+    `.WithSilk(skia)` (Bibui.Platform.Silk), `.WithWayland(draw, options)`
+    (Bibui.Platform.Wayland) or `.WithHost(host)`.
+  - There is no default renderer: `RasterBackends` is gone, and
+    Bibui.Raster.Skia no longer registers itself. Nothing is loaded by name, so
+    nothing warns under trimming or AOT. A window with no host throws when it
+    runs, saying what to call.
 - **Components are called on the runtime (breaking).** Every component named
   by an id is an extension method on `BibuiRuntime`, and its static function
   is gone: `runtime.Button(id, "Save")` for `Button.Build(runtime, id, "Save")`.

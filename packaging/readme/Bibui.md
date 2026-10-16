@@ -2,13 +2,13 @@
 
 A code-first native UI library for .NET. Application code describes each frame
 through a runtime; a small layout solver sizes and places the whole tree; a
-painter draws it through a raster backend. Components (`Button`, `Switch`,
+painter records it into a draw list, which a renderer you choose draws. Components (`Button`, `Switch`,
 `Slider`, `Dialog`, `Select`, text fields and more) are plain functions that
 compose boxes and return what happened. There are no callbacks: a box claims
 what it takes, and you ask about it.
 
 This package holds the core, the runtime (`BibuiRuntime`, `BibuiWindow`) and the
-components. Add a window host and a raster backend:
+components. Add a window host and a renderer:
 
 | Package | What it adds |
 |---|---|
@@ -27,7 +27,8 @@ using Bibui.Runtime;
 using Bibui.Runtime.Platform;
 using static Bibui.Arrange;
 
-var runtime = BibuiRuntime.Create().WithSkia();
+var runtime = BibuiRuntime.Create();
+using var skia = new SkiaRenderer();
 int clicks = 0;
 
 runtime.Mount(() =>
@@ -43,7 +44,7 @@ runtime.Mount(() =>
         .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(24f) });
 });
 
-BibuiWindow.Create(runtime).WithSilk().Run("Hello");
+BibuiWindow.Create(runtime).WithSilk(skia).Run("Hello");
 ```
 
 The first release supports Linux. Documentation, samples and the source are at

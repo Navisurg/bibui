@@ -14,7 +14,7 @@ result.
 | Silk + Skia | `Bibui`, `Bibui.Platform.Silk` | **No, JIT only for now** |
 
 The Silk + Skia route is JIT-only for now. bibui's own Silk host and Skia
-backend are AOT compatible, but Silk.NET itself is not trim-safe: it finds its
+renderer are AOT compatible, but Silk.NET itself is not trim-safe: it finds its
 platform by reflection and resolves native library paths through
 `Assembly.Location`, so an AOT publish reports Silk.NET's own warnings (IL2072,
 IL3000, IL3002). Those cannot be suppressed for one assembly, and bibui does not
@@ -23,7 +23,7 @@ Wayland + managed route when you need a native binary. This may change if
 Silk.NET becomes trim-safe or GPU rendering comes to the Wayland host.
 
 Your build code does not depend on the route. Only `Program.cs`, which picks
-the host and the backend, differs.
+the host and the renderer, differs.
 
 ## Set up the project
 
@@ -56,9 +56,9 @@ publish. `InvariantGlobalization` is optional. It leaves out the ICU culture
 data, which a UI that formats its numbers with the invariant culture does not
 need.
 
-## Name the backend
+## Name the renderer
 
-Pass the raster backend to the runtime yourself:
+Construct the renderer yourself and hand it to the host:
 
 ```csharp
 using Bibui;
@@ -67,7 +67,8 @@ using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
 using static Bibui.Arrange;
 
-var runtime = BibuiRuntime.Create().WithManagedRasterizer();
+var runtime = BibuiRuntime.Create();
+var managed = new ManagedRenderer();
 int count = 0;
 
 runtime.Mount(() =>
@@ -83,14 +84,15 @@ if (!WaylandPlatformHost.IsSupported)
     Console.Error.WriteLine("This app needs a Wayland session.");
     return 1;
 }
-BibuiWindow.Create(runtime).WithWayland(new WaylandHostOptions { AppId = "dev.example.counter" })
+BibuiWindow.Create(runtime).WithWayland(managed.Draw, new WaylandHostOptions { AppId = "dev.example.counter" })
     .Run("Counter");
 return 0;
 ```
 
-There is no default backend: `BibuiRuntime.Create()` is followed by the
-backend you choose (`.WithManagedRasterizer()`, `.WithSkia()` or
-`.WithRaster(backend)`), so the trimmer sees the type you name and keeps it.
+There is no default renderer: the runtime only records each frame into a
+`DrawList`, and the renderer that draws it is one you construct
+(`new ManagedRenderer()` or `new SkiaRenderer()`), so the trimmer sees the type
+you name and keeps it.
 
 The host is chosen the same way, after `BibuiWindow.Create(runtime)`. bibui looks nothing up at run time: no
 platform discovery, no plug-in loading, no reflection over your types.
@@ -145,7 +147,7 @@ dotnet run                                                          # JIT, Silk 
 dotnet publish -c Release -r linux-x64 -p:PublishAot=true -p:AppRoute=wayland -o out
 ```
 
-Code that names `SilkPlatformHost` or `SkiaRasterBackend` goes inside
+Code that names `SilkPlatformHost` or `SkiaRenderer` goes inside
 `#if !WAYLAND_ONLY`.
 
 ## Trimming rules for your code
@@ -197,15 +199,19 @@ broken; with `TreatWarningsAsErrors` that warning fails the build.
 ## Checking a publish in CI
 
 Headless machines have no Wayland session, so check the binary without a
-window. Give the app a flag that mounts, renders one frame and exits:
+window. Give the app a flag that mounts, builds one frame and exits:
 
 ```csharp
 if (args.Contains("--first-frame"))
 {
-    _ = runtime.Render();   // builds, lays out and paints one frame; throws if any of it fails
+    runtime.EndBuild();   // builds and lays out one frame into runtime.DrawList; throws if either fails
     return 0;
 }
 ```
+
+Drawing is the renderer's, not the runtime's. To exercise the rasterizer as
+well, draw `runtime.DrawList` into a buffer with `managed.Draw` before
+returning.
 
 Then publish with warnings as errors and run it:
 
