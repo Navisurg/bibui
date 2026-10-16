@@ -260,7 +260,7 @@ internal sealed class DamageRecorder
     {
         ref var op = ref _f.NewOp(OpKind.Texture);
         op.Texture = texture; op.Rect = dest; op.Paint = paint;
-        ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(0x27UL, texture.Value), version), dest), paint);
+        ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(0x27UL, texture.Id), texture.Generation), version), dest), paint);
         Draw(ref op, h, Bounds(Inflate(dest, 1f), paint));
     }
 

@@ -6,21 +6,22 @@ namespace Bibui.Raster;
 /// creates textures through its backend (<c>CreateTexture</c>), owns them, and
 /// releases them; <see cref="IRasterCanvas.DrawTexture"/> draws one.
 ///
-/// <para><see cref="None"/> (zero) draws nothing, and so does a handle whose
-/// texture was released: neither is an error.</para>
+/// <para><see cref="Id"/> names a slot in the backend's table (one past its
+/// index, so zero is none) and <see cref="Generation"/> the texture that slot
+/// held when the handle was made. <see cref="None"/> draws nothing, and so does
+/// a handle whose texture was released: neither is an error.</para>
 /// </summary>
-public readonly record struct TextureHandle(ulong Value)
+public readonly record struct TextureHandle(ulong Id, ulong Generation)
 {
     public static TextureHandle None => default;
 
-    public bool IsNone => Value == 0;
+    public bool IsNone => Id == 0;
 }
 
 /// <summary>
 /// A backend's textures by <see cref="TextureHandle"/>: slots reused through a
 /// free list, each with a generation, so a released handle never finds the
-/// texture that took its slot. A handle is the slot plus one in its low 32 bits
-/// and the generation in its high 32. Each texture also has a content version,
+/// texture that took its slot. Each texture also has a content version,
 /// bumped when it is replaced, for a backend that compares frames.
 ///
 /// <para>Confined to the rendering thread, like the backend that owns it.</para>
@@ -28,7 +29,7 @@ public readonly record struct TextureHandle(ulong Value)
 public sealed class TextureTable<T> where T : class
 {
     private T?[] _items = new T?[16];
-    private uint[] _generations = new uint[16];
+    private ulong[] _generations = new ulong[16];
     private uint[] _versions = new uint[16];
     private int[] _free = new int[16];
     private int _freeCount;
@@ -52,7 +53,7 @@ public sealed class TextureTable<T> where T : class
         }
         _items[slot] = texture;
         _versions[slot]++;
-        return new(((ulong)_generations[slot] << 32) | (uint)(slot + 1));
+        return new((ulong)slot + 1, _generations[slot]);
     }
 
     /// <summary>The texture behind <paramref name="handle"/>, or null for none or a released one.</summary>
@@ -93,8 +94,8 @@ public sealed class TextureTable<T> where T : class
 
     private int Slot(TextureHandle handle)
     {
-        int slot = (int)(uint)handle.Value - 1;
-        if (slot < 0 || slot >= _used || _items[slot] is null) return -1;
-        return _generations[slot] == (uint)(handle.Value >> 32) ? slot : -1;
+        if (handle.Id == 0 || handle.Id > (ulong)_used) return -1;
+        int slot = (int)(handle.Id - 1);
+        return _items[slot] is not null && _generations[slot] == handle.Generation ? slot : -1;
     }
 }
