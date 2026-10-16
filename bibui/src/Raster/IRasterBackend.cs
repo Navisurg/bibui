@@ -69,19 +69,6 @@ public interface IRasterBackend : IDisposable
     /// </summary>
     byte[] EncodePng(ReadOnlySpan<byte> bgraPremul, int width, int height);
 
-    // ── Text ─────────────────────────────────────────────────────────────────
-    // Faces, metrics and measuring are bibui's own (Fonts, on FreeType +
-    // HarfBuzz), never a backend's. A run is one face: bibui splits a string
-    // before it gets here, so a backend never does font fallback itself.
-
-    /// <summary>
-    /// The glyphs and advances <paramref name="text"/> maps to in
-    /// <paramref name="font"/> — a shaped run that
-    /// <see cref="IRasterCanvas.DrawGlyphRun"/> draws. The advances must be
-    /// the ones bibui measures with.
-    /// </summary>
-    ShapedRun ShapeText(in RasterFont font, ReadOnlySpan<char> text);
-
     // ── Frame clock ──────────────────────────────────────────────────────────
 
     /// <summary>One frame finished: evict whatever the backend caches by touch.</summary>
@@ -171,19 +158,19 @@ public interface IRasterCanvas
     void DrawBackdropBlur(PixelRect region, RectF clip, float sigma);
 
     // ── Text ─────────────────────────────────────────────────────────────────
+    // Faces, shaping and measuring are bibui's own (Fonts, on FreeType +
+    // HarfBuzz); a backend only draws the glyphs it is handed.
 
     /// <summary>
-    /// One run of text in one typeface, its baseline at (<paramref name="x"/>,
-    /// <paramref name="baselineY"/>). Returns its advance — what bibui's
-    /// <see cref="Fonts"/> measures — so a caller laying runs end to end does
-    /// not ask twice.
+    /// <paramref name="glyphs"/> of <paramref name="face"/> at
+    /// <paramref name="sizePx"/> physical px per em, each at its position in
+    /// <paramref name="positions"/>, relative to the origin (<paramref name="x"/>,
+    /// <paramref name="baselineY"/>).
+    ///
+    /// <para>There is one rendering mode, and a backend must match it: glyphs at
+    /// subpixel positions, outlines autohinted at full strength, grayscale
+    /// antialiasing. Hinting moves the ink, never the positions.</para>
     /// </summary>
-    float DrawText(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color);
-
-    /// <summary>
-    /// A shaped run: <paramref name="glyphs"/> at <paramref name="positions"/>,
-    /// which are relative to the origin (<paramref name="x"/>, <paramref name="baselineY"/>).
-    /// </summary>
-    void DrawGlyphRun(ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
-        float x, float baselineY, in RasterFont font, Rgba color);
+    void DrawGlyphs(FontFace face, float sizePx, ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
+        float x, float baselineY, Rgba color);
 }

@@ -288,30 +288,15 @@ internal sealed class DamageRecorder
 
     // ── Text ─────────────────────────────────────────────────────────────────
 
-    /// <summary>Records a run; <paramref name="drawn"/> is its advance when the canvas drew it (a teed frame), else it is measured.</summary>
-    internal float DrawText(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color, float? drawn)
+    internal void DrawGlyphs(FontFace face, float sizePx, ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
+        float x, float baselineY, Rgba color)
     {
-        ref var op = ref _f.NewOp(OpKind.Text);
-        // The chars are the caller's and may be reused once this returns: kept to be replayed.
-        op.Start = Tee ? 0 : _f.Store(text);
-        op.Count = text.Length;
-        op.A = x; op.B = baselineY; op.Font = font; op.Color = color;
-        ulong content = Hash64.Bytes(MemoryMarshal.AsBytes(text));
-        float advance = drawn ?? Advance(font, content, text);
-        ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(0x2DUL, (ulong)text.Length), content), x, baselineY),
-            (ulong)(uint)font.Face.Id << 32 | color.Argb), font.Size);
-        Draw(ref op, h, Bounds(TextBox(x, x + advance, baselineY, font), default));
-        return advance;
-    }
-
-    internal void DrawGlyphRun(ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
-        float x, float baselineY, in RasterFont font, Rgba color)
-    {
-        ref var op = ref _f.NewOp(OpKind.GlyphRun);
+        ref var op = ref _f.NewOp(OpKind.Glyphs);
+        // The glyphs and positions are the caller's and may be reused once this returns: kept to be replayed.
         op.Start = Tee ? 0 : _f.Store(glyphs);
         op.Start2 = Tee ? 0 : _f.Store(positions);
         op.Count = glyphs.Length;
-        op.A = x; op.B = baselineY; op.Font = font; op.Color = color;
+        op.A = x; op.B = baselineY; op.Face = face; op.Size = sizePx; op.Color = color;
         float l = 0f, r = 0f, t = 0f, b = 0f;
         foreach (var p in positions)
         {
@@ -319,32 +304,10 @@ internal sealed class DamageRecorder
             t = MathF.Min(t, p.Y); b = MathF.Max(b, p.Y);
         }
         ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(0x2BUL, glyphs), positions), x, baselineY);
-        h = Hash64.Mix(Hash64.Mix(h, (ulong)(uint)font.Face.Id << 32 | color.Argb), font.Size);
-        var box = TextBox(x + l, x + r + font.Size, baselineY, font);
+        h = Hash64.Mix(Hash64.Mix(h, (ulong)(uint)face.Id << 32 | color.Argb), sizePx);
+        var box = TextBox(x + l, x + r + sizePx, baselineY, face, sizePx);
         box = new RectF(box.Left, box.Top + t, box.Right, box.Bottom + b);
         Draw(ref op, h, Bounds(box, default));
-    }
-
-    // A run's advance is what DrawText would have returned, which a recorded
-    // frame must hand back without drawing. Measuring shapes the run, and the
-    // replay shapes it again to draw it, so the same runs frame after frame are
-    // answered from here: two frames' worth, the older half dropped as it fills.
-    // Runs are keyed by a 64-bit hash of their chars: a collision would hand
-    // back another run's advance, at odds of 2^-64 per pair of runs.
-    private Dictionary<(int, float, ulong, int), float> _advances = [], _olderAdvances = [];
-
-    private float Advance(in RasterFont font, ulong content, ReadOnlySpan<char> text)
-    {
-        var key = (font.Face.Id, font.Size, content, text.Length);
-        if (_advances.TryGetValue(key, out float a)) return a;
-        if (!_olderAdvances.TryGetValue(key, out a)) a = ManagedRasterBackend.Strike(font).Measure(text);
-        if (_advances.Count >= 8192)
-        {
-            (_olderAdvances, _advances) = (_advances, _olderAdvances);
-            _advances.Clear();
-        }
-        _advances[key] = a;
-        return a;
     }
 
     // ── Plumbing ─────────────────────────────────────────────────────────────
@@ -386,16 +349,16 @@ internal sealed class DamageRecorder
     // stacked accents). Metrics are cached per face and size for the recorder's life.
     private readonly Dictionary<(int, float), TextMetrics> _metrics = [];
 
-    private RectF TextBox(float left, float right, float baseline, in RasterFont font)
+    private RectF TextBox(float left, float right, float baseline, FontFace face, float sizePx)
     {
-        var key = (font.Face.Id, font.Size);
+        var key = (face.Id, sizePx);
         if (!_metrics.TryGetValue(key, out var m))
         {
-            var fm = ManagedRasterBackend.Strike(font).Metrics;
+            var fm = ManagedRasterBackend.Strike(face, sizePx).Metrics;
             _metrics[key] = m = new TextMetrics(fm.Ascent, fm.Descent, fm.Leading);
         }
-        float pad = font.Size * 0.25f + 1f;
-        return new(left - pad, baseline + MathF.Min(m.Ascent, -font.Size) - pad, right + pad, baseline + MathF.Max(m.Descent, font.Size * 0.3f) + pad);
+        float pad = sizePx * 0.25f + 1f;
+        return new(left - pad, baseline + MathF.Min(m.Ascent, -sizePx) - pad, right + pad, baseline + MathF.Max(m.Descent, sizePx * 0.3f) + pad);
     }
 
     private RectF DeviceBounds(RectF local)

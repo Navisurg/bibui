@@ -50,10 +50,6 @@ internal sealed class DrawingContext
     /// <inheritdoc cref="FrameInput.ReducedMotion"/>
     public bool ReducedMotion => _input.ReducedMotion;
 
-    /// <summary>The font one run of text is drawn in: a face at this size in physical px.</summary>
-    internal RasterFont Font(FontFace face, float logicalFontSize)
-        => new(face, logicalFontSize * _scale);
-
     /// <inheritdoc cref="Fonts.Metrics"/>
     internal TextMetrics Metrics(float logicalFontSize, string? family, int weight)
         => _fonts.Metrics(logicalFontSize, family, weight, _scale);

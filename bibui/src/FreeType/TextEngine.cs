@@ -195,7 +195,7 @@ public sealed class TextEngine : IDisposable
 
     /// <summary>
     /// Draws glyphs at explicit positions, relative to the origin (<paramref name="x"/>,
-    /// <paramref name="baselineY"/>): the shape of bibui's <c>IRasterCanvas.DrawGlyphRun</c>.
+    /// <paramref name="baselineY"/>): the shape of bibui's <c>IRasterCanvas.DrawGlyphs</c>.
     /// </summary>
     public void DrawGlyphs(in PixelTarget dst, FontStrike strike, ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
         float x, float baselineY, TextColor color, PixelClip? clip = null, MaskBlend blend = MaskBlend.LegacyN32)

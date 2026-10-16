@@ -18,16 +18,20 @@ public readonly ref partial struct DrawContext
     /// <paramref name="baselineY"/>. Position is physical; <paramref name="size"/>
     /// is logical, as everywhere a font size is named.
     ///
-    /// Takes the description rather than a paint, because one text is not one
-    /// paint: a font without a glyph falls back, so the run split decides how
-    /// many typefaces this draw needs.
+    /// Each run is shaped by <see cref="Fonts"/> and handed to the canvas as
+    /// glyphs, so the backend draws exactly what was measured.
     /// </summary>
     private void DrawRuns(ReadOnlySpan<char> text, float x, float baselineY,
         float size, Rgba color, string? family, int weight)
     {
         float cursor = x;
+        float sizePx = size * Scale;
         for (var run = Fonts.SplitRuns(text, family, weight); run is not null; run = run.Next)
-            cursor += Canvas.DrawText(text[run.Start..run.End], cursor, baselineY, _ctx.Font(run.Face, size), color);
+        {
+            var shaped = Fonts.Shape(text[run.Start..run.End], run.Face, sizePx);
+            Canvas.DrawGlyphs(run.Face, sizePx, shaped.Glyphs, shaped.Positions, cursor, baselineY, color);
+            cursor += shaped.Width;
+        }
     }
 
     /// <summary>Ascent and descent of the base font — one baseline for every run.</summary>
@@ -60,11 +64,18 @@ public readonly ref partial struct DrawContext
     /// ascent at <paramref name="top"/>. What a <see cref="Text"/> is drawn with.
     /// </summary>
     internal void DrawTextTop(ReadOnlySpan<char> text, float x, float top, in Font font, ReadOnlySpan<char> color)
+        => DrawText(text, x, top, font, Color(color));
+
+    /// <summary>
+    /// One line of <paramref name="text"/> in <paramref name="font"/>, drawn as a
+    /// <see cref="Text"/> is: logical position, its ascent at <paramref name="top"/>.
+    /// Measure it with <see cref="Fonts"/> and the same font.
+    /// </summary>
+    public void DrawText(ReadOnlySpan<char> text, float x, float top, in Font font, Rgba color)
     {
         if (text.IsEmpty) return;
-        var c = Color(color);
         float baselineY = (top * Scale) - FontMetrics(font.Size, font.Family, font.Weight).Ascent;
-        DrawRuns(text, x * Scale, baselineY, font.Size, c, font.Family, font.Weight);
+        DrawRuns(text, x * Scale, baselineY, font.Size, color, font.Family, font.Weight);
     }
 
     // An icon with no path: one glyph, centred in the logical rect.

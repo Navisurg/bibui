@@ -36,6 +36,7 @@ public sealed class Fonts : IDisposable
     private readonly ResourceCache<MetricsKey, TextMetrics> _metrics;
     private readonly ResourceCache<MeasureKey, float> _measures;
     private readonly ResourceCache<WrapKey, TextLine> _lines;
+    private readonly ResourceCache<ShapeKey, ShapedText> _shapes;
 
     /// <summary>Fonts on a text engine of their own, which the renderer owns with them.</summary>
     internal Fonts()
@@ -44,6 +45,7 @@ public sealed class Fonts : IDisposable
         _metrics = Create<MetricsKey, TextMetrics>();
         _measures = Create<MeasureKey, float>();
         _lines = Create<WrapKey, TextLine>();
+        _shapes = Create<ShapeKey, ShapedText>();
     }
 
     private ResourceCache<TKey, TValue> Create<TKey, TValue>() where TKey : notnull
@@ -261,6 +263,38 @@ public sealed class Fonts : IDisposable
     }
 
 
+    // ── Shaping ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// One run of <paramref name="text"/> as glyphs in <paramref name="face"/> at
+    /// <paramref name="sizePx"/> physical px: one glyph per code point through the
+    /// face's cmap, each at the sum of the linear advances before it. Measuring
+    /// sums the same advances in the same order, so what is drawn is what was
+    /// measured. Cached, so the same text frame after frame is shaped once.
+    /// </summary>
+    internal ShapedText Shape(ReadOnlySpan<char> text, FontFace face, float sizePx)
+    {
+        var key = ShapeKey.For(text, face, sizePx);
+        return _shapes.TryGet(key, out var shaped) ? shaped : _shapes.Add(key, ShapeUncached(text, face, sizePx));
+    }
+
+    private ShapedText ShapeUncached(ReadOnlySpan<char> text, FontFace face, float sizePx)
+    {
+        var run = _engine.ScratchRun;
+        face.Strike(sizePx).Shape(text, run);
+        var glyphs = new ushort[run.Count];
+        var positions = new System.Numerics.Vector2[run.Count];
+        float pen = 0f;
+        for (int i = 0; i < glyphs.Length; i++)
+        {
+            glyphs[i] = (ushort)run.Glyphs[i];
+            positions[i] = new(pen, 0f);
+            pen += run.Advances[i];
+        }
+        run.Clear();
+        return new ShapedText(glyphs, positions, pen);
+    }
+
     // ── Lines ────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -450,6 +484,14 @@ public sealed class TextLine
 /// text it was split from, linked to the runs before and after it. A cached
 /// chain: read it, never relink it.
 /// </summary>
+/// <summary>A run shaped for drawing: glyph ids, their positions from the run's origin, and its advance.</summary>
+internal sealed class ShapedText(ushort[] glyphs, System.Numerics.Vector2[] positions, float width)
+{
+    public ushort[] Glyphs { get; } = glyphs;
+    public System.Numerics.Vector2[] Positions { get; } = positions;
+    public float Width { get; } = width;
+}
+
 internal sealed class TextRun(FontFace face, int start, int end)
 {
     public FontFace Face { get; } = face;
