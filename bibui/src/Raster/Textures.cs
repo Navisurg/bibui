@@ -19,83 +19,110 @@ public readonly record struct TextureHandle(ulong Id, ulong Generation)
 }
 
 /// <summary>
-/// A backend's textures by <see cref="TextureHandle"/>: slots reused through a
-/// free list, each with a generation, so a released handle never finds the
-/// texture that took its slot. Each texture also has a content version,
-/// bumped when it is replaced, for a backend that compares frames.
+/// One texture's place in a <see cref="TextureTable{T}"/>: the backend's resource,
+/// and what decides which handles still name it. A node is made once per slot and
+/// reused after its texture is released, on the live list or the free list,
+/// never both, so one <see cref="Next"/> serves whichever it is on.
+/// </summary>
+public sealed class TextureNode<T> where T : class
+{
+    internal TextureNode(ulong id) => Id = id;
+
+    /// <summary>The slot, one past its index: every handle to this node carries it.</summary>
+    public readonly ulong Id;
+
+    /// <summary>The backend's texture; null while the node is free.</summary>
+    public T? Item;
+
+    /// <summary>Bumped when the texture is released, so an older handle stops matching.</summary>
+    public ulong Generation;
+
+    /// <summary>Bumped when a texture is put here or replaced: what damage tracking compares.</summary>
+    public uint Version;
+
+    /// <summary>The next live node, or the next free one while this node is free.</summary>
+    public TextureNode<T>? Next;
+
+    /// <summary>The previous live node: release unlinks without walking. Unused while free.</summary>
+    public TextureNode<T>? Prev;
+}
+
+/// <summary>
+/// A backend's textures by <see cref="TextureHandle"/>. A handle is a plain
+/// value, so a lookup goes through an array of nodes indexed by its
+/// <see cref="TextureHandle.Id"/>; the nodes themselves are on two intrusive
+/// lists, the live ones from <see cref="FirstLive"/> and the free ones waiting
+/// to be reused. A released node's generation moves on, so a released handle
+/// never finds the texture that took its slot.
 ///
 /// <para>Confined to the rendering thread, like the backend that owns it.</para>
 /// </summary>
 public sealed class TextureTable<T> where T : class
 {
-    private T?[] _items = new T?[16];
-    private ulong[] _generations = new ulong[16];
-    private uint[] _versions = new uint[16];
-    private int[] _free = new int[16];
-    private int _freeCount;
-    private int _used;
+    private TextureNode<T>[] _nodes = new TextureNode<T>[16];
+    private int _count;
+    private TextureNode<T>? _firstFree;
+
+    /// <summary>The first live texture's node; the rest follow by <see cref="TextureNode{T}.Next"/>.</summary>
+    public TextureNode<T>? FirstLive { get; private set; }
 
     /// <summary>Stores <paramref name="texture"/> and returns its handle.</summary>
     public TextureHandle Add(T texture)
     {
         ArgumentNullException.ThrowIfNull(texture);
-        int slot;
-        if (_freeCount > 0) slot = _free[--_freeCount];
+        var node = _firstFree;
+        if (node is not null) _firstFree = node.Next;
         else
         {
-            if (_used == _items.Length)
-            {
-                Array.Resize(ref _items, _used * 2);
-                Array.Resize(ref _generations, _used * 2);
-                Array.Resize(ref _versions, _used * 2);
-            }
-            slot = _used++;
+            if (_count == _nodes.Length) Array.Resize(ref _nodes, _count * 2);
+            node = _nodes[_count] = new TextureNode<T>((ulong)_count + 1);
+            _count++;
         }
-        _items[slot] = texture;
-        _versions[slot]++;
-        return new((ulong)slot + 1, _generations[slot]);
+        node.Item = texture;
+        node.Version++;
+        node.Prev = null;
+        node.Next = FirstLive;
+        if (FirstLive is not null) FirstLive.Prev = node;
+        FirstLive = node;
+        return new(node.Id, node.Generation);
     }
 
     /// <summary>The texture behind <paramref name="handle"/>, or null for none or a released one.</summary>
-    public T? Get(TextureHandle handle) => Slot(handle) is int slot and >= 0 ? _items[slot] : null;
+    public T? Get(TextureHandle handle) => Node(handle)?.Item;
 
     /// <summary>Its content version: different after every <see cref="Replace"/>. Zero for none.</summary>
-    public uint Version(TextureHandle handle) => Slot(handle) is int slot and >= 0 ? _versions[slot] : 0;
+    public uint Version(TextureHandle handle) => Node(handle)?.Version ?? 0;
 
     /// <summary>Puts <paramref name="texture"/> behind <paramref name="handle"/> and returns the one it replaced, or null when the handle is stale.</summary>
     public T? Replace(TextureHandle handle, T texture)
     {
         ArgumentNullException.ThrowIfNull(texture);
-        if (Slot(handle) is not (int slot and >= 0)) return null;
-        var old = _items[slot];
-        _items[slot] = texture;
-        _versions[slot]++;
+        if (Node(handle) is not { } node) return null;
+        var old = node.Item;
+        node.Item = texture;
+        node.Version++;
         return old;
     }
 
     /// <summary>Releases <paramref name="handle"/> and returns its texture to dispose, or null when it was none or already released.</summary>
     public T? Remove(TextureHandle handle)
     {
-        if (Slot(handle) is not (int slot and >= 0)) return null;
-        var old = _items[slot];
-        _items[slot] = null;
-        _generations[slot]++;
-        if (_freeCount == _free.Length) Array.Resize(ref _free, _free.Length * 2);
-        _free[_freeCount++] = slot;
+        if (Node(handle) is not { } node) return null;
+        if (node.Prev is not null) node.Prev.Next = node.Next; else FirstLive = node.Next;
+        if (node.Next is not null) node.Next.Prev = node.Prev;
+        var old = node.Item;
+        node.Item = null;
+        node.Generation++;
+        node.Prev = null;
+        node.Next = _firstFree;
+        _firstFree = node;
         return old;
     }
 
-    /// <summary>Every live texture, for a backend that disposes them with itself.</summary>
-    public IEnumerable<T> Live()
+    private TextureNode<T>? Node(TextureHandle handle)
     {
-        for (int i = 0; i < _used; i++)
-            if (_items[i] is { } item) yield return item;
-    }
-
-    private int Slot(TextureHandle handle)
-    {
-        if (handle.Id == 0 || handle.Id > (ulong)_used) return -1;
-        int slot = (int)(handle.Id - 1);
-        return _items[slot] is not null && _generations[slot] == handle.Generation ? slot : -1;
+        if (handle.Id == 0 || handle.Id > (ulong)_count) return null;
+        var node = _nodes[handle.Id - 1];
+        return node.Item is not null && node.Generation == handle.Generation ? node : null;
     }
 }

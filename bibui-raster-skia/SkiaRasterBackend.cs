@@ -207,7 +207,7 @@ public sealed class SkiaRasterBackend : IRasterBackend
     {
         foreach (var d in _disposables) d.Dispose();
         foreach (var typeface in _typefaces.Values) typeface.Dispose();
-        foreach (var texture in _textures.Live()) texture.Dispose();
+        for (var node = _textures.FirstLive; node is not null; node = node.Next) node.Item!.Dispose();
         _typefaces.Clear();
         _wrapped?.Dispose();
         _wrapped = null;
