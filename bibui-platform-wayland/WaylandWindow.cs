@@ -7,12 +7,13 @@ namespace Bibui.Platform.Wayland;
 public static class WaylandWindow
 {
     /// <summary>
-    /// Opens <paramref name="window"/> on a new <see cref="WaylandPlatformHost"/>:
-    /// <c>BibuiWindow.Create(runtime).WithWayland()</c>.
+    /// Opens <paramref name="window"/> on a new <see cref="WaylandPlatformHost"/>
+    /// that draws frames with <paramref name="draw"/>, the app's renderer:
+    /// <c>BibuiWindow.Create(runtime).WithWayland(managed.Draw)</c>.
     /// </summary>
-    public static BibuiWindow WithWayland(this BibuiWindow window, WaylandHostOptions? options = null)
+    public static BibuiWindow WithWayland(this BibuiWindow window, Bibui.Draw.DrawToPixels draw, WaylandHostOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(window);
-        return window.WithHost(new WaylandPlatformHost(options));
+        return window.WithHost(new WaylandPlatformHost(draw, options));
     }
 }

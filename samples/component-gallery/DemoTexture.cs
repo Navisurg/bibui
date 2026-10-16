@@ -1,12 +1,12 @@
 using Bibui;
-using Bibui.Raster;
+using Bibui.Draw;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Raster.Skia;
 using Bibui.Runtime;
 
 /// <summary>
 /// Textures: pixels the gallery makes itself, drawn by bibui as a handle. bibui
-/// has no image component; an app that shows an image knows which backend it
+/// has no image component; an app that shows an image knows which renderer it
 /// chose, gets the pixels into memory its own way (decoded with
 /// <c>Bibui.Imaging.Png</c>, from a video decoder, or made, as here), and makes
 /// a texture there. It owns the texture: this page keeps its two for the life
@@ -15,6 +15,10 @@ using Bibui.Runtime;
 internal static class DemoTexture
 {
     private const int Size = 32;
+
+    // The renderer the gallery chose: the one set is where its textures live.
+    internal static SkiaRenderer? Skia;
+    internal static ManagedRenderer? Managed;
 
     private static TextureHandle s_still, s_moving;
     private static readonly byte[] s_pixels = new byte[Size * Size * 4];
@@ -25,15 +29,15 @@ internal static class DemoTexture
         if (s_still.IsNone)
         {
             Checker(s_pixels);
-            s_still = Create(runtime, s_pixels);
+            s_still = Create(s_pixels);
             Sweep(s_pixels, 0f);
-            s_moving = Create(runtime, s_pixels);
+            s_moving = Create(s_pixels);
         }
 
         // The same handle every frame, its pixels rewritten: a video frame's path.
         s_time += runtime.Dt;
         Sweep(s_pixels, s_time);
-        Update(runtime, s_moving, s_pixels);
+        Update(s_moving, s_pixels);
         runtime.RequestFrame();
 
         return Arrange.Column(
@@ -53,21 +57,13 @@ internal static class DemoTexture
             new Paint { Fill = Rgba.Black, Filter = FilterQuality.None, Antialias = false }),
     }.Px(Size * 6f, Size * 6f);
 
-    // The gallery chose its backend, so it knows where its textures live.
-    private static TextureHandle Create(BibuiRuntime runtime, byte[] rgba) => runtime.Raster switch
-    {
-        SkiaRasterBackend skia => skia.CreateTexture(rgba, Size, Size),
-        ManagedRasterBackend managed => managed.CreateTexture(rgba, Size, Size),
-        _ => TextureHandle.None,
-    };
+    private static TextureHandle Create(byte[] rgba)
+        => Skia?.CreateTexture(rgba, Size, Size) ?? Managed?.CreateTexture(rgba, Size, Size) ?? TextureHandle.None;
 
-    private static void Update(BibuiRuntime runtime, TextureHandle texture, byte[] rgba)
+    private static void Update(TextureHandle texture, byte[] rgba)
     {
-        switch (runtime.Raster)
-        {
-            case SkiaRasterBackend skia: skia.UpdateTexture(texture, rgba, Size, Size); break;
-            case ManagedRasterBackend managed: managed.UpdateTexture(texture, rgba, Size, Size); break;
-        }
+        Skia?.UpdateTexture(texture, rgba, Size, Size);
+        Managed?.UpdateTexture(texture, rgba, Size, Size);
     }
 
     private static void Checker(byte[] px)

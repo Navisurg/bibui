@@ -2,6 +2,7 @@ using Bibui;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 using ComponentGallery;
+using Bibui.Draw;
 using Bibui.Raster.Skia;
 using Bibui.Runtime.Platform;
 using Bibui.Platform.Wayland;
@@ -64,10 +65,16 @@ if (options.Check)
     return;
 }
 
-var runtime = options.Raster == GalleryRaster.Managed
-    ? BibuiRuntime.Create().WithManagedRasterizer()
-    : BibuiRuntime.Create().WithSkia();
+var runtime = BibuiRuntime.Create();
 HotReloadListener.Register(runtime.RequestFrame);
+
+// The renderer --raster names: what the window draws with, and where the
+// texture page makes its textures.
+SkiaRenderer? skia = options.Raster == GalleryRaster.Skia ? new SkiaRenderer() : null;
+ManagedRenderer? managed = options.Raster == GalleryRaster.Managed ? new ManagedRenderer() : null;
+DemoTexture.Skia = skia;
+DemoTexture.Managed = managed;
+DrawToPixels draw = skia is not null ? skia.Draw : managed!.Draw;
 
 runtime.MountStateful(
     initialState: InitialState(),
@@ -79,22 +86,23 @@ runtime.MountStateful(
 // CI's start-up check: one frame headless, then exit; a throw fails it.
 if (options.FirstFrame)
 {
-    runtime.Render();
+    runtime.EndBuild();
+    Pixels(runtime, draw);
     return;
 }
 
 // Off unless asked for: BIBUI_TEST_SERVER=1 (test_all_pages.sh says how).
-using var testServer = BibuiTestServer.StartIfEnabled(runtime, options.Port);
+using var testServer = BibuiTestServer.StartIfEnabled(runtime, options.Port, draw);
 
 var window = options.Host == GalleryHost.Wayland
-    ? BibuiWindow.Create(runtime).WithWayland(
+    ? BibuiWindow.Create(runtime).WithWayland(draw,
         new Bibui.Platform.Wayland.WaylandHostOptions
         {
             AppId = "bibui-component-gallery",
             MinWidth = ShellLayout.MinWidth,
             MinHeight = ShellLayout.MinHeight,
         })
-    : BibuiWindow.Create(runtime).WithSilk();
+    : BibuiWindow.Create(runtime).WithSilk(skia!);
 window.Run("Component Gallery");
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -325,13 +333,15 @@ static void WriteReferences(GalleryOptions options)
         options.Accent is null ? "reference" : "reference-seed"));
     var theme = options.Theme();
     var sizes = options.Sizes.Count > 0 ? options.Sizes : [(Surface().Width, Surface().Height)];
+    using var skia = new SkiaRenderer();
+    DemoTexture.Skia = skia;   // the texture page's textures, on the renderer that draws it
     foreach (var (width, height) in sizes)
     {
         // One size writes straight into the directory; several, a folder each.
         var dir = sizes.Count == 1 ? outDir : Path.Combine(outDir, $"{width}x{height}");
         Directory.CreateDirectory(dir);
         foreach (var (name, state, dropDown) in Pages())
-            WriteReference(dir, name, state, dropDown, theme, new SurfaceOptions { Width = width, Height = height });
+            WriteReference(dir, name, state, dropDown, theme, new SurfaceOptions { Width = width, Height = height }, skia);
     }
     Console.WriteLine($"Done — references in {outDir}");
 }
@@ -353,14 +363,14 @@ static IEnumerable<(string Name, GalleryState State, string? DropDown)> Pages()
 // A page that cannot be rendered — a layout ring, say — leaves what it threw
 // instead of a picture, and the rest go on.
 static void WriteReference(string outDir, string name, GalleryState state, string? dropDown,
-    Bibui.Theming.ThemeTokens theme, SurfaceOptions surface)
+    Bibui.Theming.ThemeTokens theme, SurfaceOptions surface, SkiaRenderer skia)
 {
-    var runtime = BibuiRuntime.Create().WithSkia();
+    var runtime = BibuiRuntime.Create();
     runtime.MountStateful(state, (s, set) => BuildGallery(runtime, s, set), theme, surface);
     if (dropDown is not null) runtime.OpenDropDown(dropDown);
     try
     {
-        File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime));
+        File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime, skia));
         Console.WriteLine($"  wrote {name}.png");
     }
     catch (Exception e)
@@ -370,12 +380,24 @@ static void WriteReference(string outDir, string name, GalleryState state, strin
     }
 }
 
-// Three frames: laid out, and wrapped at that width.
-static byte[] RenderSettled(BibuiRuntime runtime)
+// Three frames: laid out, and wrapped at that width; the last drawn with Skia.
+static byte[] RenderSettled(BibuiRuntime runtime, SkiaRenderer skia)
 {
-    byte[] png = [];
-    for (int i = 0; i < 3; i++) png = runtime.Render().PngBytes;
-    return png;
+    for (int i = 0; i < 3; i++) runtime.EndBuild();
+    int w = SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor);
+    int h = SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor);
+    return Bibui.Imaging.Png.Encode(Pixels(runtime, skia.Draw), w, h, w * 4,
+        Bibui.Imaging.ChannelOrder.Bgra, Bibui.Imaging.AlphaMode.Premultiplied);
+}
+
+// The runtime's last frame, drawn by draw into a new BGRA buffer.
+static byte[] Pixels(BibuiRuntime runtime, DrawToPixels draw)
+{
+    int w = SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor);
+    int h = SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor);
+    var bgra = GC.AllocateArray<byte>(w * h * 4, pinned: true);
+    draw(runtime.DrawList, new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), w, h, w * 4));
+    return bgra;
 }
 
 // ── Layout check ──────────────────────────────────────────────────────────────
@@ -389,6 +411,8 @@ static int CheckLayouts(GalleryOptions options)
         ? options.Sizes
         : [(ShellLayout.MinWidth, ShellLayout.MinHeight), (840, 600), (900, 700), (1100, 820), (1600, 1000)];
     int pages = 0, faulty = 0;
+    using var skia = new SkiaRenderer();
+    DemoTexture.Skia = skia;   // the texture page's textures, on the renderer that draws it
     foreach (var (width, height) in sizes)
     {
         string? dir = options.OutDir is { } o ? Path.Combine(Path.GetFullPath(o), $"{width}x{height}") : null;
@@ -398,14 +422,14 @@ static int CheckLayouts(GalleryOptions options)
         foreach (var (name, state, dropDown) in Pages().Append(menu))
         {
             pages++;
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.MountStateful(state, (s, set) => BuildGallery(runtime, s, set), options.Theme(),
                 new SurfaceOptions { Width = width, Height = height });
             if (dropDown is not null) runtime.OpenDropDown(dropDown);
             List<LayoutCheck.Fault> faults;
             try
             {
-                byte[] png = RenderSettled(runtime);
+                byte[] png = RenderSettled(runtime, skia);
                 if (dir is not null) File.WriteAllBytes(Path.Combine(dir, $"{name}.png"), png);
                 faults = LayoutCheck.Check(runtime, runtime.FindById("gallery")!, width, height);
             }

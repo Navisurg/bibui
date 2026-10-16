@@ -146,7 +146,7 @@ public sealed partial class BibuiRuntime
     /// one-frame lag the bounds it hit-tests against already have. Once per
     /// render, so a build that runs twice cannot step anything twice.
     /// </summary>
-    private void EndBuild()
+    private void SweepFrame()
     {
         bool animating;
         lock (_syncRoot)

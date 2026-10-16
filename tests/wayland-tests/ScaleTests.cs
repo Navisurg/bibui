@@ -11,7 +11,7 @@ namespace Bibui.WaylandTests;
 /// HiDPI and cursors without a window: scale arithmetic in 120ths, which scale wins, a
 /// scale change reallocating the buffer pool, the cursor-shape mapping and
 /// when a cursor is set. One live probe draws a 1.25× frame into a real wl_shm
-/// buffer and compares it with Render(), creating no surface.
+/// buffer and compares it with the same frame drawn packed, creating no surface.
 /// </summary>
 internal static unsafe class ScaleTests
 {
@@ -69,17 +69,17 @@ internal static unsafe class ScaleTests
                 }
         });
 
-        t.Run("scale: ResizeSurface at 1.25 keeps an odd logical size, and Render is the buffer's size", () =>
+        t.Run("scale: ResizeSurface at 1.25 keeps an odd logical size, and the frame is the buffer's size", () =>
         {
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             runtime.Mount(() => Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box())),
                 new Bibui.SurfaceOptions { Width = 100, Height = 100, ScaleFactor = 1f });
             var (w, h) = WaylandPlatformHost.FramebufferSize(1001, 202, 150);
             runtime.ResizeSurface(w, h, SurfaceScale.ToFactor(150));
             Assert.Eq((1001, 202), (runtime.SurfaceWidth, runtime.SurfaceHeight), "logical, not truncated to 1000");
-            var output = runtime.Render();
-            Assert.Eq((1251, 253), (output.Width, output.Height), "render size");
-            Assert.Eq(1251 * 253 * 4, output.RawBgraBytes.Length, "pixels");
+            runtime.EndBuild();
+            Assert.Eq((1251, 253), (SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor),
+                SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor)), "the frame's physical size");
         });
 
         // ── Which scale ──────────────────────────────────────────────────────
@@ -241,7 +241,8 @@ internal static unsafe class ScaleTests
             var (physW, physH) = WaylandPlatformHost.FramebufferSize(202, 101, scale120);
             Assert.Eq((253, 126), (physW, physH), "physical size");
 
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
+            using var skia = new SkiaRenderer();
             runtime.Mount(() =>
             {
                 var box = Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box())).Styled(new Bibui.Style
@@ -258,13 +259,16 @@ internal static unsafe class ScaleTests
             }, new Bibui.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });
             runtime.ResizeSurface(physW, physH, SurfaceScale.ToFactor(scale120)); // as the host does
 
-            pool = new BufferPool<ShmBuffer>(new ShmAllocator(_shm, runtime.Raster, bufferListener, null), depth: 2);
+            pool = new BufferPool<ShmBuffer>(new ShmAllocator(_shm, bufferListener, null), depth: 2);
             var buffer = pool.TryAcquire(physW, physH)!;
-            runtime.RenderTo(buffer.Surface);
+            runtime.EndBuild();
+            skia.Draw(runtime.DrawList, buffer.Pixels);
             var shmPixels = new ReadOnlySpan<byte>((void*)buffer.Map, physW * physH * 4).ToArray();
-            var reference = runtime.Render();
-            Assert.Eq((physW, physH), (reference.Width, reference.Height), "Render() at the same physical size");
-            Assert.True(shmPixels.AsSpan().SequenceEqual(reference.RawBgraBytes), "shm pixels equal Render()'s, byte for byte");
+            Assert.Eq((physW, physH), (SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor),
+                SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor)), "the frame at the buffer's physical size");
+            var reference = new byte[physW * physH * 4];
+            fixed (byte* p = reference) skia.Draw(runtime.DrawList, new Bibui.Draw.RasterPixels((nint)p, physW, physH, physW * 4));
+            Assert.True(shmPixels.AsSpan().SequenceEqual(reference), "shm pixels equal the frame drawn packed, byte for byte");
             Assert.True(shmPixels.Any(b => b != shmPixels[0]), "something was drawn");
             Assert.True(WaylandNative.wl_display_roundtrip(display) >= 0, "the compositor accepted pool and buffer");
 

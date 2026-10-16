@@ -24,7 +24,7 @@ static partial class IconNameTests
 
         run("runtime.Icon: an unknown name throws in a debug build and draws a letter in release", () =>
         {
-            var runtime = BibuiRuntime.Create().WithSkia();
+            var runtime = BibuiRuntime.Create();
             Exception? thrown = null;
             runtime.Mount(
                 () =>
@@ -38,7 +38,7 @@ static partial class IconNameTests
                     return row;
                 },
                 new SurfaceOptions { Width = 100, Height = 40 });
-            runtime.Render();
+            runtime.EndBuild();
 #if DEBUG
             Check(thrown is not null && thrown.Message.Contains("folder-open"), "a debug build names the icon it does not have");
 #else

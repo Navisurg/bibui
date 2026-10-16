@@ -1,6 +1,6 @@
 using System.IO.Hashing;
 using System.Runtime.InteropServices;
-using Bibui.Raster;
+using Bibui.Draw;
 
 namespace Bibui.Renderer;
 
@@ -164,16 +164,15 @@ internal sealed class AnimCell
 }
 
 /// <summary>
-/// Per-renderer caches for render resources and derived values that are otherwise
-/// re-created on every draw call. Owned by the renderer (one per BibuiRenderer,
-/// alongside its Fonts) and handed to each
-/// frame's DrawingContext; EndFrame runs once per painted frame, and ticks the
-/// raster backend's own caches with it.
+/// Per-renderer caches for what recording a frame would otherwise re-create on
+/// every draw call. Owned by the renderer (one per BibuiRenderer, alongside its
+/// Fonts) and handed to each frame's DrawingContext; EndFrame runs once per
+/// recorded frame. What draws the list keeps its own native caches.
 ///
 /// Caching is safe for parity because every key encodes all inputs that affect
 /// the value — identical draw commands produce identical pixels whether the
-/// paint object is fresh or reused. That property is enforced by the byte-exact
-/// Render/RenderTo parity test and the verifier spec suite.
+/// paint object is fresh or reused. That property is enforced by the verifier
+/// spec suite.
 /// </summary>
 /// Caches are constructed *here* and nowhere else, so the frame tick and the
 /// disposal are derived from that one list rather than restated per cache. A
@@ -185,22 +184,17 @@ internal sealed class RenderCaches : IDisposable
     private readonly List<Action> _endFrames = [];
     private readonly List<IDisposable> _disposables = [];
 
-    /// <summary>The raster backend these caches hold resources of. Owned: disposed with them.</summary>
-    public readonly IRasterBackend Backend;
-
     // Geometry that repeats across frames, as bibui's own paths: a draw list
-    // names these, and the replay keeps the native path it builds from each.
-    // Paints are not here: a paint is a value (RasterPaint) the backend resolves
-    // to whatever it keeps. Text measurement, metrics and line breaks are
+    // names these, and a renderer keeps the native path it builds from each.
+    // Paints are not here: a paint is a value the op carries, and a renderer
+    // resolves it to whatever it keeps. Text measurement, metrics and line breaks are
     // Fonts', which keeps its own.
     public readonly ResourceCache<CacheKey, VectorPath> Paths;
 
-    public RenderCaches(IRasterBackend backend)
+    public RenderCaches()
     {
-        Backend = backend;
         Paths = Create<CacheKey, VectorPath>();
         Anims = Create<AnimKey, AnimCell>(keepFrames: 1);
-        _endFrames.Add(backend.EndFrame);
     }
 
     private readonly VectorPath _scratchPath = new();
@@ -250,6 +244,5 @@ internal sealed class RenderCaches : IDisposable
         {
             disposable.Dispose();
         }
-        Backend.Dispose();
     }
 }

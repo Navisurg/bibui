@@ -1,12 +1,12 @@
-namespace Bibui.Raster;
+namespace Bibui.Draw;
 
 /// <summary>
-/// A texture, as the draw layer names it: a value the raster backend gave out
-/// and knows the meaning of. bibui never sees what is behind it. Usage code
-/// creates textures through its backend (<c>CreateTexture</c>), owns them, and
-/// releases them; <see cref="IRasterCanvas.DrawTexture"/> draws one.
+/// A texture, as the draw layer names it: a value a renderer gave out and knows
+/// the meaning of. bibui never sees what is behind it. Usage code creates
+/// textures through its renderer (<c>CreateTexture</c>), owns them, and
+/// releases them; a <see cref="DrawOpKind.Texture"/> op draws one.
 ///
-/// <para><see cref="Id"/> names a slot in the backend's table (one past its
+/// <para><see cref="Id"/> names a slot in the renderer's table (one past its
 /// index, so zero is none) and <see cref="Generation"/> the texture that slot
 /// held when the handle was made. <see cref="None"/> draws nothing, and so does
 /// a handle whose texture was released: neither is an error.</para>

@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Bibui.Renderer;
+using Bibui.Draw;
 using Bibui.TextEdit;
 
 namespace Bibui.Runtime;
@@ -27,6 +27,12 @@ namespace Bibui.Runtime;
 /// written only inside <see cref="OutputDirectory"/>: <c>screenshot</c> and
 /// <c>start_recording</c> take paths relative to it.</para>
 ///
+/// <para>A command builds frames on the server's thread, under the runtime's
+/// <see cref="BibuiRuntime.FrameLock"/>, as the window's loop does on its own.
+/// Screenshots and recordings draw the runtime's <see cref="BibuiRuntime.DrawList"/>
+/// with the function the server was given, under the same lock; without one
+/// they are refused.</para>
+///
 /// <para>Protocol: each request and response is a single JSON line. Commands are
 /// dispatched synchronously — the response is sent once the action completes.
 /// The <c>start_recording</c> command begins streaming frames to FFmpeg;
@@ -44,6 +50,8 @@ public sealed class BibuiTestServer : IDisposable
     public const string OutputVariable = "BIBUI_TEST_SERVER_OUT";
 
     private readonly BibuiRuntime _runtime;
+    // What a screenshot and a recording draw the frame's list with; null refuses both.
+    private readonly DrawToPixels? _draw;
     private readonly int _port;
     private readonly string _outputDir;
     private readonly byte[] _token;
@@ -67,8 +75,12 @@ public sealed class BibuiTestServer : IDisposable
     /// <param name="port">The loopback port.</param>
     /// <param name="token">The token a request must carry, 16 characters or more; null for a random one.</param>
     /// <param name="writeTokenFile">Whether <see cref="Start"/> writes the token to <see cref="TokenFile"/>.</param>
+    /// <param name="draw">
+    /// Draws a frame's list into pixels, for <c>screenshot</c> and <c>start_recording</c>:
+    /// the app's renderer, on the CPU. Null refuses both.
+    /// </param>
     public BibuiTestServer(BibuiRuntime runtime, string outputDirectory, int port = DefaultPort,
-        string? token = null, bool writeTokenFile = true)
+        string? token = null, bool writeTokenFile = true, DrawToPixels? draw = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
@@ -76,6 +88,7 @@ public sealed class BibuiTestServer : IDisposable
             throw new ArgumentException("A token must be at least 16 characters.", nameof(token));
 
         _runtime = runtime;
+        _draw = draw;
         _port = port;
         _outputDir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputDirectory));
         Token = token ?? Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
@@ -105,14 +118,15 @@ public sealed class BibuiTestServer : IDisposable
     /// and returns it; otherwise returns null and opens nothing. Its output directory
     /// is <c>BIBUI_TEST_SERVER_OUT</c>, or <c>bibui-test-output</c> under the working
     /// directory. Where the token is, not the token, is written to stderr.
+    /// <paramref name="draw"/> is what screenshots are drawn with; null refuses them.
     /// </summary>
-    public static BibuiTestServer? StartIfEnabled(BibuiRuntime runtime, int port = DefaultPort)
+    public static BibuiTestServer? StartIfEnabled(BibuiRuntime runtime, int port = DefaultPort, DrawToPixels? draw = null)
     {
         if (!IsEnabled) return null;
         var output = Environment.GetEnvironmentVariable(OutputVariable);
         if (string.IsNullOrWhiteSpace(output))
             output = Path.Combine(Directory.GetCurrentDirectory(), "bibui-test-output");
-        var server = new BibuiTestServer(runtime, output, port);
+        var server = new BibuiTestServer(runtime, output, port, draw: draw);
         server.Start();
         Console.Error.WriteLine(
             $"[BibuiTestServer] listening on 127.0.0.1:{port}; token in {server.TokenFile}; output in {server.OutputDirectory}");
@@ -359,8 +373,8 @@ public sealed class BibuiTestServer : IDisposable
     /// </summary>
     private void Settle()
     {
-        _runtime.Render();
-        _runtime.Render();
+        _runtime.EndBuild();
+        _runtime.EndBuild();
     }
 
     private string HandleClick(JsonNode node)
@@ -416,7 +430,7 @@ public sealed class BibuiTestServer : IDisposable
     /// One continuous pointer gesture: press at the first point, move through the rest,
     /// release at the last — with NO render in between.
     ///
-    /// <para>This exists because the per-command handlers each call <see cref="BibuiRuntime.Render"/>,
+    /// <para>This exists because the per-command handlers each build a frame (<see cref="BibuiRuntime.EndBuild"/>),
     /// which means a test-driven drag gets a fresh frame between every move. A real pointer
     /// does not: mouse moves arrive far faster than frames, so build code acting on a drag
     /// is holding state from an older frame. Any app that writes back a captured
@@ -445,13 +459,13 @@ public sealed class BibuiTestServer : IDisposable
 
         var start = At(0);
         _runtime.ProcessEvent(Mouse(BibUiEventKind.MouseDown, MouseButton.Left, start.X, start.Y));
-        if (renderEach) _runtime.Render();
+        if (renderEach) _runtime.EndBuild();
 
         for (int i = 1; i < pts.Count; i++)
         {
             var p = At(i);
             _runtime.ProcessEvent(Mouse(BibUiEventKind.MouseMove, MouseButton.Left, p.X, p.Y));
-            if (renderEach) _runtime.Render();
+            if (renderEach) _runtime.EndBuild();
         }
 
         var end = At(pts.Count - 1);
@@ -579,11 +593,11 @@ public sealed class BibuiTestServer : IDisposable
 
     // ── Query handlers ─────────────────────────────────────────────────────
 
-    // Rendered first, so a query answers for the frame a person would be looking at.
+    // A frame first, so a query answers for the frame a person would be looking at.
     private UiNode? Find(JsonNode node)
     {
         var id = RequireId(node);
-        _runtime.Render();
+        _runtime.EndBuild();
         return _runtime.FindById(id);
     }
 
@@ -612,13 +626,21 @@ public sealed class BibuiTestServer : IDisposable
     {
         var path = ResolveOutputPath(
             node["path"]?.GetValue<string>() ?? throw new ArgumentException("screenshot requires 'path'"));
-        var output = _runtime.Render();
+        if (_draw is null) return Err("This server was started without a renderer to draw screenshots with");
+        byte[] bgra;
+        int width, height;
+        lock (_runtime.FrameLock)
+        {
+            _runtime.EndBuild();
+            (bgra, width, height) = Pixels();
+        }
+        var png = Imaging.Png.Encode(bgra, width, height, width * 4, Imaging.ChannelOrder.Bgra, Imaging.AlphaMode.Premultiplied);
 
         // Written beside the target and renamed over it, so a link put in the
         // target's place after the check is replaced, not written through.
         var temp = Path.Combine(Path.GetDirectoryName(path)!, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
         using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write))
-            stream.Write(output.PngBytes);
+            stream.Write(png);
         File.Move(temp, path, overwrite: true);
         return Ok();
     }
@@ -669,16 +691,16 @@ public sealed class BibuiTestServer : IDisposable
             if (_recording) return Err("Already recording");
         }
 
-        var first = _runtime.Render();
-        int width  = first.Width;
-        int height = first.Height;
+        if (_draw is null) return Err("This server was started without a renderer to record with");
+        int width, height;
+        lock (_runtime.FrameLock)
+        {
+            _runtime.EndBuild();
+            (_, width, height) = Pixels();
+        }
 
         lock (_recordLock)
             _recording = true;
-
-        // GPU-rendered windows produce pixel-less frames by default; ask the
-        // runtime to read pixels back while we record. No-op on the CPU path.
-        _runtime.CapturePixels = true;
 
         _recordThread = new Thread(() =>
         {
@@ -692,7 +714,6 @@ public sealed class BibuiTestServer : IDisposable
                 // down the host process from a background thread.
                 Console.Error.WriteLine($"[BibuiTestServer] recording failed: {ex.Message}");
                 lock (_recordLock) _recording = false;
-                _runtime.CapturePixels = false;
             }
         })
         {
@@ -715,7 +736,6 @@ public sealed class BibuiTestServer : IDisposable
         // Block until the record thread closes FFmpeg and the file is finalised
         _recordThread?.Join();
         _recordThread = null;
-        _runtime.CapturePixels = false;
 
         return Ok();
     }
@@ -758,27 +778,15 @@ public sealed class BibuiTestServer : IDisposable
         var       stdin = proc.StandardInput.BaseStream;
 
         const int frameMs = 1000 / 30;
-        RenderOutput? lastOutput = null;
-        byte[]?       lastRgba   = null;
-
         while (_recording)
         {
-            var output = _runtime.LastOutput;
-            // Skip frames without pixel data (immediate-mode frames rendered
-            // before CapturePixels took effect).
-            if (output is { HasPixels: true })
-            {
-                // Convert only when the frame has changed (each render is a new output)
-                if (!ReferenceEquals(output, lastOutput))
-                {
-                    lastRgba   = BgraToRgba(output.RawBgraBytes, output.Width, output.Height, width, height);
-                    lastOutput = output;
-                }
-
-                if (lastRgba is not null)
-                    stdin.Write(lastRgba, 0, lastRgba.Length);
-            }
-
+            // The frame the window last built, drawn again here: recording adds
+            // no frames of its own, so it does not speed up what it records.
+            byte[] bgra;
+            int srcW, srcH;
+            lock (_runtime.FrameLock) (bgra, srcW, srcH) = Pixels();
+            var rgba = BgraToRgba(bgra, srcW, srcH, width, height);
+            stdin.Write(rgba, 0, rgba.Length);
             Thread.Sleep(frameMs);
         }
 
@@ -787,10 +795,22 @@ public sealed class BibuiTestServer : IDisposable
     }
 
     /// <summary>
+    /// The last frame's list, drawn into a new buffer the runtime's physical size.
+    /// Under <see cref="BibuiRuntime.FrameLock"/>, which the caller holds.
+    /// </summary>
+    private unsafe (byte[] Bgra, int Width, int Height) Pixels()
+    {
+        int w = SurfaceOptions.PhysicalSize(_runtime.SurfaceWidth, _runtime.ScaleFactor);
+        int h = SurfaceOptions.PhysicalSize(_runtime.SurfaceHeight, _runtime.ScaleFactor);
+        var bgra = new byte[w * h * 4];
+        fixed (byte* p = bgra) _draw!(_runtime.DrawList, new RasterPixels((nint)p, w, h, w * 4));
+        return (bgra, w, h);
+    }
+
+    /// <summary>
     /// The frame as the RGBA ffmpeg is told to expect, nearest-neighbour scaled
     /// to the recording size when the window has since been resized. Straight
-    /// off the frame's own pixels — no PNG round trip, and no raster backend,
-    /// which belongs to the render thread.
+    /// off the frame's own pixels, no PNG round trip.
     /// </summary>
     private static byte[] BgraToRgba(byte[] bgra, int srcW, int srcH, int width, int height)
     {

@@ -1,4 +1,3 @@
-using Bibui.Raster.Skia;
 using Bibui.Runtime.Platform;
 using SkiaSharp;
 
@@ -88,13 +87,5 @@ namespace Bibui.Runtime
                     ?? throw new InvalidOperationException($"SKSurface.Create failed for {info.Width}x{info.Height} {info.ColorType}.");
             }
         }
-
-        /// <summary>
-        /// <see cref="BibuiRuntime.RenderTo(Bibui.Raster.IRasterSurface)"/> onto a surface
-        /// made with SkiaSharp — typically a GPU surface over a window's framebuffer,
-        /// which is how the Skia GPU host presents. Only on the Skia raster backend.
-        /// </summary>
-        public static void RenderTo(this BibuiRuntime runtime, SKSurface target) =>
-            runtime.RenderTo(SkiaRendering.Backend(runtime.Raster).Wrap(target));
     }
 }

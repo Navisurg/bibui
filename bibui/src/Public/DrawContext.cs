@@ -1,18 +1,19 @@
 using System.Numerics;
-using Bibui.Raster;
+using Bibui.Draw;
 using Bibui.Renderer;
 using Bibui.Theming;
 
 namespace Bibui;
 
 /// <summary>
-/// A complete description of a paint's own fields. This *is* the cache key — every
-/// field that changes the object is here, so a new requirement is a new field
-/// rather than a new key type.
+/// A complete description of a paint's own fields, as a <see cref="DrawOp"/>
+/// carries them: every field that changes what is drawn is here, so a renderer
+/// that caches native paints keys them on it, and a new requirement is a new
+/// field rather than a new key type.
 ///
-/// Effects (a gradient, a blur, a dash) are not part of the spec: they ride
-/// beside it in a <see cref="RasterPaint"/>, which a <see cref="Paint"/>
-/// maps to, and the raster backend keys its own objects on both.
+/// Effects (a gradient, a blur, a dash) are not part of the spec: a
+/// <see cref="DrawOp"/> carries them beside it, and a renderer that keeps
+/// native paints keys them on both.
 /// </summary>
 public readonly record struct PaintSpec
 {
@@ -43,8 +44,8 @@ public readonly record struct PaintSpec
 /// every frame.
 ///
 /// One vocabulary, bibui's: value types (<see cref="Rgba"/>, <see cref="RectF"/>,
-/// Vector2, <see cref="PaintSpec"/>, <see cref="RasterPaint"/>), its own
-/// <see cref="VectorPath"/>, and texture handles. Nothing here is a backend's,
+/// Vector2, <see cref="Paint"/>), its own <see cref="VectorPath"/>, and texture
+/// handles. Nothing here is a backend's,
 /// so a component written against it draws on any backend, and nothing is
 /// drawn while it records: a renderer executes the list after.
 ///
@@ -70,9 +71,6 @@ public readonly ref partial struct DrawContext
 
     // The frame's draws: every method below records into it.
     private DrawList List => _ctx.List;
-
-    /// <summary>The raster backend painting this frame — for the textures a draw makes on it.</summary>
-    public IRasterBackend Backend => _ctx.Backend;
 
     /// <summary>
     /// The box's rect in physical pixels, in its own space: (0,0) is its

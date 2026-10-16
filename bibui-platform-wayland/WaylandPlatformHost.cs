@@ -38,10 +38,11 @@ public sealed record WaylandHostOptions
 /// Linux under a Wayland compositor only (Hyprland is the one it is built for).
 ///
 /// <list type="bullet">
-/// <item><b>Present</b>: the runtime's raster backend draws into a free shm
-/// buffer (no copy), which is attached, damaged whole, and committed with a
-/// frame callback. The whole buffer is damaged on every commit, whether or
-/// not the raster backend repainted all of it.</item>
+/// <item><b>Present</b>: the runtime builds the frame, and the host's draw
+/// function (the app's renderer) draws its list into a free shm buffer (no
+/// copy), which is attached, damaged whole, and committed with a frame
+/// callback. The whole buffer is damaged on every commit, whether or not the
+/// renderer repainted all of it.</item>
 /// <item><b>Pacing</b> (<see cref="PacesFrames"/>): Present first waits for the
 /// previous frame's callback, so the compositor sets the frame rate and an idle
 /// window draws nothing. A pending configure skips the wait: a resize is drawn
@@ -72,6 +73,9 @@ public sealed record WaylandHostOptions
 public sealed unsafe class WaylandPlatformHost : IPlatformHost
 {
     private readonly WaylandHostOptions _options;
+
+    // What a frame's list is drawn into a buffer with: the app's renderer.
+    private readonly Bibui.Draw.DrawToPixels _draw;
 
     // Connection and globals
     private nint _display;
@@ -110,8 +114,12 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
     private readonly WaylandScaleAndCursor _scale = new();
     private readonly IWaylandFeature[] _features;
 
-    public WaylandPlatformHost(WaylandHostOptions? options = null)
+    /// <param name="draw">Draws a frame's list into a shm buffer: the app's renderer, e.g. <c>managed.Draw</c>.</param>
+    /// <param name="options">How the window is set up.</param>
+    public WaylandPlatformHost(Bibui.Draw.DrawToPixels draw, WaylandHostOptions? options = null)
     {
+        ArgumentNullException.ThrowIfNull(draw);
+        _draw = draw;
         _options = options ?? new WaylandHostOptions();
         if (_options.Buffers is < 2 or > 4) throw new ArgumentOutOfRangeException(nameof(options), "Buffers must be 2, 3 or 4");
         // Input reports its serials for the clipboard's set_selection, and
@@ -189,7 +197,7 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
         if (_compositor.IsNull || _shm.IsNull || _wmBase.IsNull)
             throw new InvalidOperationException("The compositor lacks wl_compositor, wl_shm or xdg_wm_base.");
 
-        _pool = new BufferPool<ShmBuffer>(new ShmAllocator(_shm, runtime.Raster, BufferListener, data), _options.Buffers);
+        _pool = new BufferPool<ShmBuffer>(new ShmAllocator(_shm, BufferListener, data), _options.Buffers);
 
         _surface = _compositor.CreateSurface();
         _scale.Attach(_compositor, _shm, _surface); // scale listeners and the viewport
@@ -331,7 +339,11 @@ public sealed unsafe class WaylandPlatformHost : IPlatformHost
         }
 
         long t0 = Stopwatch.GetTimestamp();
-        runtime.RenderTo(buffer.Surface);
+        lock (runtime.FrameLock)
+        {
+            runtime.EndBuild();
+            _draw(runtime.DrawList, buffer.Pixels);
+        }
         long t1 = Stopwatch.GetTimestamp();
 
         if (_ackSerial is uint serial)

@@ -181,7 +181,7 @@ public sealed partial class BibuiRuntime
     }
 
     // The frame's opening marker, before build() runs.
-    private void BeginBuild()
+    private void BeginDropDowns()
     {
         lock (_syncRoot)
         {

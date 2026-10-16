@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Bibui.Theming;
-using Bibui.Raster;
+using Bibui.Draw;
 using Bibui.Renderer;
 using Bibui.TextEdit;
 
@@ -17,87 +17,43 @@ namespace Bibui.Runtime;
 /// </summary>
 public sealed partial class BibuiRuntime
 {
-    // Made on first use, from the backend WithRaster chose: the backend is
-    // chosen after Create(), and its fonts and caches are made with it.
-    private BibuiRenderer? _renderer;
-    private IRasterBackend? _chosenRaster;
-    private readonly object _rendererLock = new();
-
-    private BibuiRenderer Renderer
-    {
-        get
-        {
-            if (Volatile.Read(ref _renderer) is { } renderer) return renderer;
-            lock (_rendererLock)
-            {
-                if (_renderer is null)
-                {
-                    var raster = _chosenRaster ?? throw new InvalidOperationException(
-                        "No raster backend: choose one after BibuiRuntime.Create() — .WithSkia() (Bibui.Raster.Skia), " +
-                        ".WithManagedRasterizer() (Bibui.Raster.Managed.Backend) or .WithRaster(backend).");
-                    _chosenRaster = null;
-                    Volatile.Write(ref _renderer, new BibuiRenderer(raster));
-                }
-                return _renderer!;
-            }
-        }
-    }
+    // Lays out and records every frame; what draws the list is the loop
+    // owner's choice, and none of the runtime's business.
+    private readonly BibuiRenderer Renderer = new();
 
     private BibuiRuntime() { }
 
     /// <summary>
-    /// A runtime, with no raster backend yet: choose one before it first draws
-    /// or measures — <c>BibuiRuntime.Create().WithSkia()</c> (Bibui.Raster.Skia),
-    /// <c>.WithManagedRasterizer()</c> (Bibui.Raster.Managed.Backend) or
-    /// <c>.WithRaster(backend)</c>. Chosen explicitly — no discovery, so nothing
-    /// here needs reflection.
+    /// A runtime. It lays frames out and records them into <see cref="DrawList"/>;
+    /// whoever runs the loop draws that list with the renderer it chose.
     /// </summary>
     public static BibuiRuntime Create() => new();
 
     /// <summary>
-    /// Makes <paramref name="raster"/>, which the runtime now owns, the backend
-    /// it draws with. Returns the runtime, so it chains after <see cref="Create"/>;
-    /// a second choice replaces the first. Only before the runtime first draws or
-    /// measures: after that its fonts and caches belong to the backend it has.
-    /// </summary>
-    public BibuiRuntime WithRaster(IRasterBackend raster)
-    {
-        ArgumentNullException.ThrowIfNull(raster);
-        lock (_rendererLock)
-        {
-            if (_renderer is not null)
-                throw new InvalidOperationException(
-                    "The raster backend is chosen before the runtime first draws or measures: " +
-                    "call WithRaster (WithSkia, WithManagedRasterizer) straight after BibuiRuntime.Create().");
-            _chosenRaster?.Dispose();
-            _chosenRaster = raster;
-        }
-        return this;
-    }
-
-    /// <summary>The raster backend frames are painted with.</summary>
-    public IRasterBackend Raster => Renderer.Raster;
-
-    /// <summary>
-    /// The last frame's draws, in paint order: recorded after layout, then drawn.
-    /// Valid until the next frame records.
+    /// The last frame's draws, in paint order: recorded by <see cref="EndBuild"/>.
+    /// Valid until the next frame records; read it under <see cref="FrameLock"/>
+    /// when another thread may build.
     /// </summary>
     public DrawList DrawList => Renderer.DrawList;
     private readonly object _syncRoot = new();
-    // Held around the build+Skia portion of Render(). Without this, two threads
-    // (the window's render loop and the test server) can race and corrupt Skia
-    // state — observed as SIGSEGV when navigating routes via the test server
-    // while the window is rendering at max FPS.
+    // Held around a frame: building and recording it, and whatever draws the
+    // list it recorded. Two threads build frames (the window's loop and the
+    // test server); without it one resets the list the other is drawing.
     private readonly object _renderLock = new();
+
+    /// <summary>
+    /// The frame's lock: <see cref="EndBuild"/> takes it, and so must a caller
+    /// that draws <see cref="DrawList"/> while another thread may build the next
+    /// frame (a window and <see cref="BibuiTestServer"/>). Re-entrant.
+    /// </summary>
+    public object FrameLock => _renderLock;
 
     // ── Core app state ───────────────────────────────────────────────────────
     private Func<UiNode>? _build;
     private ThemeTokens _theme = ThemeLoader.BibuiDark();
     private SurfaceOptions _surface = new();
-    private RenderOutput? _lastOutput;
     private UiNode? _lastTree;
     private Dictionary<string, Box> _interactiveBoxes = new();
-    private bool _capturePixels;
 
     // ── Pointer state ────────────────────────────────────────────────────────
     private float _mouseX = float.NaN;
@@ -106,7 +62,7 @@ public sealed partial class BibuiRuntime
     // ── Per-frame UI event queue ─────────────────────────────────────────────
     // Pushed by BibuiWindow on every OS key event; iterated by widgets in the
     // build callback via UnconsumedEvents.
-    // Cleared at the end of each Render().
+    // Cleared at the end of each EndBuild().
     private readonly List<BibUiEventHandle> _frameEvents = new();
 
     /// <summary>
@@ -210,7 +166,6 @@ public sealed partial class BibuiRuntime
         lock (_syncRoot)
         {
             _theme = theme;
-            _lastOutput = null;
             _lastTree = null;
         }
         RequestFrame();
@@ -274,7 +229,6 @@ public sealed partial class BibuiRuntime
             _build = () => build((T)boxedState!, setState);
             _surface = surface ?? new SurfaceOptions { Width = 800, Height = 600, ScaleFactor = 1f };
             _theme = theme;
-            _lastOutput = null;
             _lastTree = null;
             _interactiveBoxes = new();
         }
@@ -283,16 +237,16 @@ public sealed partial class BibuiRuntime
 
     private static readonly bool _profile = Environment.GetEnvironmentVariable("BIBUI_PROFILE") == "1";
 
-    // ── Rendering ────────────────────────────────────────────────────────────
+    // ── The frame ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns the current render output, re-rendering only if the state is
-    /// dirty since the last call. Safe to call frequently.
+    /// One frame: runs the mounted build, lays the tree out and records it into
+    /// <see cref="DrawList"/>, then sweeps what nobody asked for. Draws nothing:
+    /// the loop owner draws the list with its renderer. A frame still animating
+    /// asks for the next (<see cref="RequestFrame"/>).
     /// </summary>
-    public RenderOutput Render()
+    public void EndBuild()
     {
-        // Slow path: serialize the build+Skia work. Another thread may have
-        // rendered while we were waiting, so re-check dirty inside the lock.
         lock (_renderLock)
         {
             Func<UiNode>? build;
@@ -305,101 +259,45 @@ public sealed partial class BibuiRuntime
                 theme = PaintedTheme(_theme);
             }
 
-            return RenderLocked(build, surface, theme);
-        }
-    }
-
-    /// <summary>
-    /// Immediate-mode fast path: paints one frame directly onto a caller-supplied
-    /// surface — one from <see cref="Raster"/>, or one over memory a host owns
-    /// (<see cref="IRasterBackend.CreateSurface(in RasterPixels)"/>, e.g. a
-    /// <c>wl_shm</c> buffer). Always re-renders —
-    /// no dirty check, and (unless <see cref="CapturePixels"/>
-    /// is set) no pixel readback or PNG factory. The caller owns the surface
-    /// lifecycle and any flush/present step.
-    /// </summary>
-    public void RenderTo(IRasterSurface target)
-    {
-        lock (_renderLock)
-        {
-            Func<UiNode>? build;
-            SurfaceOptions surface;
-            ThemeTokens theme;
-            bool capturePixels;
-            lock (_syncRoot)
-            {
-                build = _build ?? throw new InvalidOperationException("Runtime not mounted. Call Mount or MountStateful first.");
-                surface = _surface;
-                theme = PaintedTheme(_theme);
-                capturePixels = _capturePixels;
-            }
-
-            BeginBuild();
+            var t0 = Stopwatch.GetTimestamp();
+            BeginDropDowns();
             var tree = build();
             EndDropDowns(tree);
+            var t1 = Stopwatch.GetTimestamp();
             var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
-            // Every rect is solved before anything is painted.
+            // Every rect is solved before anything is recorded.
             Renderer.Layout(tree, surface, theme);
             var pointerTransforms = transformed ? PointerTransforms(tree) : null;
+            var t2 = Stopwatch.GetTimestamp();
 
-            // Capture after build() so state the host sets while building
-            // lands in this frame, matching the readback path's capture timing.
+            // Captured after build(), so state the app sets while building lands
+            // in this frame.
             FrameInput input;
             lock (_syncRoot) input = CaptureFrameInput();
-            Renderer.RenderTo(target, tree, surface, theme, input);
+            Renderer.Record(tree, surface, theme, input);
+            var t3 = Stopwatch.GetTimestamp();
 
-            // Every path repaints unconditionally, so the only thing keeping an
-            // animation going is the loop being told to iterate.
-            if (Renderer.IsAnimating) RequestFrame();
-
-            int physW = SurfaceOptions.PhysicalSize(surface.Width, surface.ScaleFactor);
-            int physH = SurfaceOptions.PhysicalSize(surface.Height, surface.ScaleFactor);
-
-            // With CapturePixels on, read the frame back here on the render thread —
-            // the only thread where a GPU surface's GRContext is valid. The buffer is
-            // freshly allocated per frame (not pooled) because consumers (e.g. the
-            // test server's recorder) read it from other threads after we return.
-            byte[] rawPixels = [];
-            if (capturePixels)
+            if (_profile)
             {
-                rawPixels = new byte[physW * physH * 4];
-                if (!target.ReadPixels(rawPixels, physW, physH))
-                    rawPixels = [];
+                double freq = Stopwatch.Frequency / 1000.0;
+                Console.WriteLine(
+                    $"[Runtime.EndBuild]  build={(t1 - t0) / freq:F2}ms  " +
+                    $"CollectBoxes+Layout={(t2 - t1) / freq:F2}ms  record={(t3 - t2) / freq:F2}ms");
             }
-
-            Func<byte[]> pngFactory;
-            if (rawPixels.Length > 0)
-            {
-                var capturedRaw = rawPixels;
-                int cw = physW, ch = physH;
-                // PNG encoding is pure CPU work over the captured buffer — safe to
-                // run lazily on whatever thread first asks for PngBytes.
-                pngFactory = () => Imaging.Png.Encode(capturedRaw, cw, ch, cw * 4,
-                    Imaging.ChannelOrder.Bgra, Imaging.AlphaMode.Premultiplied);
-            }
-            else
-            {
-                pngFactory = static () => throw new InvalidOperationException(
-                    "PNG bytes are not available from RenderTo(); set CapturePixels or use Render() for the readback pipeline.");
-            }
-
-            var output = new RenderOutput
-            {
-                RawBgraBytes = rawPixels,
-                Width = physW,
-                Height = physH,
-                PngFactory = pngFactory,
-            };
 
             lock (_syncRoot)
             {
                 _interactiveBoxes = interactiveBoxes;
                 _pointerTransforms = pointerTransforms;
-                _lastOutput = output;
                 _lastTree = tree;
             }
 
-            EndBuild();         // sweep whatever nobody asked for this frame
+            // Will the next frame differ from this one? Asked of the renderer,
+            // which knows because it stepped the values: a hover fade, an easing
+            // height, a client draw calling ctx.Animate.
+            if (Renderer.IsAnimating) RequestFrame();
+
+            SweepFrame();       // sweep whatever nobody asked for this frame
             ClearFrameEvents(); // per-frame events: drop the leftovers
         }
     }
@@ -416,81 +314,6 @@ public sealed partial class BibuiRuntime
         ReducedMotion   = ReducedMotion,
     };
 
-    private RenderOutput RenderLocked(Func<UiNode> build, SurfaceOptions surface, ThemeTokens theme)
-    {
-        // Set per-frame time before build() so both the host's build code and
-        // the renderer (incl. CustomDraw lambdas) see the same TimeMs/Dt. Dt is
-        // clamped to 0.1s so a backgrounded window doesn't return with a huge
-        // delta that would jump animations to their target on resume.
-        // Build and render outside the lock (CPU-bound, no shared state written)
-        var t0 = Stopwatch.GetTimestamp();
-        BeginBuild();
-        var tree = build();
-        EndDropDowns(tree);
-        var t1 = Stopwatch.GetTimestamp();
-        var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
-        // Every rect is solved before anything is painted.
-        Renderer.Layout(tree, surface, theme);
-        var pointerTransforms = transformed ? PointerTransforms(tree) : null;
-        var t2 = Stopwatch.GetTimestamp();
-        // Capture after build() so state the host sets while building
-        // lands in this frame.
-        FrameInput input;
-        lock (_syncRoot) input = CaptureFrameInput();
-        var output = Renderer.Render(tree, surface, theme, input);
-        var t3 = Stopwatch.GetTimestamp();
-
-        if (_profile)
-        {
-            double freq = Stopwatch.Frequency / 1000.0;
-            Console.WriteLine(
-                $"[Runtime.Render]  build={Ms(t1-t0,freq):F2}ms  " +
-                $"CollectBoxes+Layout={Ms(t2-t1,freq):F2}ms  " +
-                $"Paint(+readback)={Ms(t3-t2,freq):F2}ms");
-        }
-
-        // Will the next frame differ from this one? Asked of the renderer, which
-        // knows because it stepped the values, instead of by hunting the tree
-        // for one hardcoded component kind — that scan could never see a hover
-        // fade, an easing height, or a client CustomDraw calling ctx.Animate.
-        bool animating = Renderer.IsAnimating;
-
-        lock (_syncRoot)
-        {
-            _interactiveBoxes = interactiveBoxes;
-            _pointerTransforms = pointerTransforms;
-            _lastOutput = output;
-            _lastTree = tree;
-        }
-
-        // The readback path's own continuation: ask the loop for the frame that
-        // would consume it.
-        if (animating) RequestFrame();
-
-        EndBuild();         // sweep whatever nobody asked for this frame
-        ClearFrameEvents(); // per-frame events: drop the leftovers
-
-        return output;
-
-        static double Ms(long ticks, double freq) => ticks / freq;
-    }
-
-    public RenderOutput? LastOutput { get { lock (_syncRoot) return _lastOutput; } }
-
-    /// <summary>
-    /// When true, the immediate-mode path (<see cref="RenderTo"/>) reads the
-    /// rendered pixels back from the target surface each frame, so
-    /// <see cref="LastOutput"/> carries real pixels and a working PNG factory.
-    /// The readback runs on the render thread (required for GPU surfaces); PNG
-    /// encoding stays lazy and is safe to trigger from any thread. Enable only
-    /// while a consumer needs pixels (screenshots, video recording) — readback
-    /// negates the fast path's zero-copy benefit.
-    /// </summary>
-    public bool CapturePixels
-    {
-        get { lock (_syncRoot) return _capturePixels; }
-        set { lock (_syncRoot) _capturePixels = value; }
-    }
     /// <summary>
     /// The active theme tokens. Use inside build lambdas to style nodes with
     /// semantic colors (e.g. <c>BackgroundColor = UiColor.Surface</c>) instead
@@ -541,7 +364,6 @@ public sealed partial class BibuiRuntime
                 Height      = SurfaceOptions.LogicalSize(physicalHeight, scale),
                 ScaleFactor = scale,
             };
-            _lastOutput = null;
             _lastTree = null;
         }
         RequestFrame();
@@ -551,8 +373,7 @@ public sealed partial class BibuiRuntime
     //
     // Nothing here renders: dispatch reads the last painted frame's rects, which
     // is the frame the user was looking at. A caller driving the runtime by hand
-    // renders itself. Rendering from in here is also never cheap: Render()
-    // always renders.
+    // builds the next frame itself (EndBuild).
 
     /// <summary>
     /// Clicks the box named <paramref name="id"/>: a press and a release at its
@@ -591,9 +412,9 @@ public sealed partial class BibuiRuntime
     /// <summary>
     /// Replaces the whole text of the field named <paramref name="id"/> with
     /// <paramref name="newValue"/>, the way a person would: presses the field —
-    /// which its application focuses — renders, then selects all and types the
-    /// value, or deletes for an empty one. The keys are queued; the next render
-    /// applies them. No-ops if no box that asks carries the name.
+    /// which its application focuses — builds a frame, then selects all and types
+    /// the value, or deletes for an empty one. The keys are queued; the next
+    /// frame applies them. No-ops if no box that asks carries the name.
     /// </summary>
     public void DispatchFill(string id, string newValue)
     {
@@ -603,7 +424,7 @@ public sealed partial class BibuiRuntime
         if (!asks) return;
 
         DispatchClick(id);
-        Render();
+        EndBuild();
         var keys = new List<BibUiEvent> { BibuiWindow.BibUiEventFromKey(Key.A, ctrl: true, shift: false) };
         if (newValue.Length == 0)
             keys.Add(BibuiWindow.BibUiEventFromKey(Key.Backspace, ctrl: false, shift: false));

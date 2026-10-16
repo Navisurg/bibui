@@ -1,5 +1,5 @@
 using System.Numerics;
-using Bibui.Raster;
+using Bibui.Draw;
 using Bibui.Renderer;
 
 namespace Bibui;
@@ -153,7 +153,7 @@ public readonly ref partial struct DrawContext
     /// </summary>
     internal void BlurBackdrop(float x, float y, float w, float h, float sigma)
     {
-        if (sigma <= 0f || !_ctx.CanBlurBackdrop)
+        if (sigma <= 0f)
         {
             return;
         }
