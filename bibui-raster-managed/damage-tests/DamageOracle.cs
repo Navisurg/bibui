@@ -57,9 +57,9 @@ internal static class DamageOracle
             }
 
             var target = sd[f % ring]!;
-            full.EndBuild();
+            full.Step();
             fullRenderer.Draw(full.DrawList, sf!);
-            dmg.EndBuild();
+            dmg.Step();
             dmgRenderer.Draw(dmg.DrawList, target);
             if (dmgRenderer.LastRepaint is not null) partial++;
 
@@ -76,7 +76,7 @@ internal static class DamageOracle
         var rt = BibuiRuntime.Create();
         rt.TargetHz = 60f;
         var (build, s) = scene.Setup(rt, renderer);
-        rt.Mount(build, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = scene.Width, Height = scene.Height, ScaleFactor = scene.Scale });
+        rt.SetBuild(build, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = scene.Width, Height = scene.Height, ScaleFactor = scene.Scale });
         step = s;
         return rt;
     }

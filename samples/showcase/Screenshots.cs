@@ -91,12 +91,11 @@ internal static class Screenshots
 
     public static byte[] Render(DrawToPixels draw, App app, int w, int h, Action<BibuiRuntime, int> script, int frames = 10)
     {
-        var rt = BibuiRuntime.Create();
-        rt.Mount(() => app.Build(rt), app.Theme(), new SurfaceOptions { Width = w, Height = h, ScaleFactor = 1f });
+        var rt = app.Headless(w, h);
         for (int f = 0; f < frames; f++)
         {
             script(rt, f);
-            rt.EndBuild();
+            app.Frame(rt);
         }
         return FramePixels.Png(rt, draw);
     }

@@ -68,7 +68,7 @@ public abstract class UiNode
     /// sibling the runtime has since reset and reused) are not the node's to
     /// change.
     /// </summary>
-    private static void Unlink(UiNode node)
+    internal static void Unlink(UiNode node)
     {
         UiNode parent = node.Parent!;
         UiNode? prev = node.Prev, next = node.Next;

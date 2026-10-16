@@ -16,7 +16,7 @@ namespace Bibui.Platform.Wayland;
 ///
 /// <para><b>Scroll units</b> are the Silk host's: GLFW's sign (positive Y is
 /// the wheel turned away from the user — up; positive X is left) and one wheel
-/// notch is 1.0, which BibuiWindow multiplies by 32 px. A wheel says how far it
+/// notch is 1.0, which WindowInput multiplies by 32 px. A wheel says how far it
 /// turned in value120 (120 a notch, a fraction of that from a high-resolution
 /// wheel), or before version 8 in whole axis_discrete steps; a touchpad or
 /// other continuous source has only the axis value, in surface pixels, which

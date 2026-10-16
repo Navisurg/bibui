@@ -46,6 +46,9 @@ public sealed partial class BibuiRuntime
         lock (_syncRoot)
         {
             var box = _retainedBoxes.FromKey(id, id, static key => new Box { Id = key });
+            // Acquired again this frame: out of where it was first linked, so
+            // that parent's children do not still name it.
+            if (box.Parent is not null && box.Parent.FirstChild is not null) UiNode.Unlink(box);
             ResetForBuild(box);
             box.Claims = claims;
             box.ChildLayoutAxis = _axisStack.Count > 0 ? _axisStack[^1] : LayoutAxis.X;
@@ -122,7 +125,8 @@ public sealed partial class BibuiRuntime
     private void LinkUnder(UiNode node, UiNode? parent)
     {
         parent ??= _parentStack.Count > 0 ? _parentStack[^1] : null;
-        if (parent is null) return;
+        // A box acquired again inside its own scope is not its own child.
+        if (parent is null || parent == node) return;
         node.Parent = parent;
         node.Prev = parent.LastChild;
         if (parent.LastChild is not null) parent.LastChild.Next = node;

@@ -14,17 +14,20 @@ dotnet new console -n Stepper
 cd Stepper
 dotnet add package Bibui
 dotnet add package Bibui.Platform.Silk
+dotnet add package Bibui.Raster.Skia
 ```
 
-`Bibui` is the library. `Bibui.Platform.Silk` is a host: it opens the window
-(GLFW), renders with Skia on OpenGL, and falls back to the CPU when there is no
-GPU. It runs on the JIT; for a single native binary, section 7 moves the same
-app to the other host, Wayland with the managed rasterizer.
+`Bibui` is the library. `Bibui.Platform.Silk` is a platform: it opens the
+window (GLFW) and puts frames on screen with OpenGL. `Bibui.Raster.Skia` is the
+renderer that draws them, with Skia on the GPU. This route runs on the JIT; for a single
+native binary, section 7 moves the same app to the other platform, Wayland with
+the managed rasterizer.
 
 ### Building against a clone instead
 
 To work against the source rather than the packages, clone the repository and
-reference the host's project. It brings `Bibui` with it:
+reference the platform's and the renderer's projects. They bring `Bibui` with
+them:
 
 ```bash
 git clone https://github.com/Navisurg/bibui ../bibui
@@ -33,6 +36,7 @@ git clone https://github.com/Navisurg/bibui ../bibui
 ```xml
 <ItemGroup>
   <ProjectReference Include="../bibui/bibui-platform-silk/bibui-platform-silk.csproj" />
+  <ProjectReference Include="../bibui/bibui-raster-skia/bibui-raster-skia.csproj" />
 </ItemGroup>
 ```
 
@@ -48,22 +52,35 @@ using Bibui.Runtime.Platform;
 using static Bibui.Arrange;
 
 var runtime = BibuiRuntime.Create();
-using var skia = new SkiaRenderer();
 var hello = "Hello, bibui";
 
-runtime.Mount(() =>
-    Column(runtime.Text(hello)).FillX().FillY().Padded(EdgeInsets.All(24f)));
-
-BibuiWindow.Create(runtime).WithSilk(skia).Run("Stepper");
+using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Stepper", 800, 600));
+using var skia = new SkiaRenderer(window.Gl);
+while (SilkWindow.BeginFrame(window, runtime))
+{
+    runtime.BeginBuild();
+    UiNode.PushIntoParent(runtime.ParentInScope,
+        Column(runtime.Text(hello)).FillX().FillY().Padded(EdgeInsets.All(24f)));
+    runtime.EndBuild();
+    skia.Draw(runtime.DrawList);
+    SilkWindow.EndFrame(window, runtime);
+}
 ```
 
 `dotnet run` opens an 800 × 600 window.
 
-- `new SkiaRenderer()` is the renderer that draws each frame, and
-  `WithSilk(skia)` hands it to the window. bibui never looks one up at run
-  time; you pass it.
-- `Mount` takes a build function. bibui calls it whenever a frame is needed,
-  lays out the tree it returns, and paints it.
+- The app owns the loop. `BeginFrame` waits until there is a frame to draw
+  (input, or a frame the runtime asked for) and returns false once the window
+  closes. `EndFrame` puts the frame on screen.
+- Between `BeginBuild` and `EndBuild` you build one frame. The runtime owns the
+  frame's root: what you build with nothing pushed lands under it, and a tree
+  made with `Arrange` (`Column(...)`) is linked there with `PushIntoParent`.
+  `EndBuild` lays the tree out and records it into `runtime.DrawList`.
+- `new SkiaRenderer(window.Gl)` is the renderer, drawing into the window's GL
+  framebuffer; `skia.Draw(runtime.DrawList)` draws the frame. bibui never looks
+  one up at run time; you make it. `SkiaRenderer.ForGl(window.Gl)` answers null
+  where Skia cannot use the GL context, and `new SkiaRenderer(window.Cpu)` then
+  draws on the CPU instead.
 - `Column(...)` stacks its items vertically and is as large as they are.
   `FillX()` and `FillY()` make it fill its parent, the window.
 - Every node has a size on each axis: in pixels (`.Px(...)`), a share of its
@@ -121,46 +138,42 @@ Two things to notice:
   the same items. A fill inside a parent sized by its children is the usual
   cause of a `LayoutException`.
 
-The app holds its state in a record and mounts with `MountStateful`. The build
-function gets the current state and a `setState` handle. Add `App.cs`:
+The app's state is the app's own fields; bibui never holds it. Add `App.cs`:
 
 ```csharp
 using Bibui;
 using Bibui.Runtime;
 using static Bibui.Arrange;
 
-/// <summary>The app's state. bibui never holds it; the build reads it and asks for a new one.</summary>
-public record AppState(int Count);
-
-public static class App
+public sealed class App
 {
     const string ResetLabel = "Reset";
 
-    public static void Mount(BibuiRuntime runtime, string theme = "default-dark") =>
-        runtime.MountStateful(new AppState(0), (state, setState) =>
-        {
-            // Ask first: the stepper's buttons, then the reset box.
-            var stepper = Stepper.Build(runtime, "count", state.Count);
-            if (stepper.Value != state.Count) setState.Set(state with { Count = stepper.Value });
+    /// <summary>The app's state: a field the build reads and a press writes.</summary>
+    public int Count;
 
-            Box reset = runtime.BoxFromId("reset", InteractionKinds.LeftPress);
-            Interaction press = runtime.InteractionsFor(reset);
-            if (press.Clicked) setState.Set(state with { Count = 0 });
+    /// <summary>One frame, built between the runtime's BeginBuild and EndBuild.</summary>
+    public void Build(BibuiRuntime runtime)
+    {
+        // Ask first: the reset box, then the stepper, which shows the value after both.
+        Box reset = runtime.BoxFromId("reset", InteractionKinds.LeftPress);
+        Interaction press = runtime.InteractionsFor(reset);
+        if (press.Clicked) Count = 0;
 
-            // Then describe.
-            reset.Px(120f, 36f);
-            reset.Style.CornerRadius = 8f;
-            reset.Style.Padding = EdgeInsets.All(8f);
-            reset.Style.BackgroundColor = press.Hovering ? UiColor.Accent : UiColor.SurfaceRaised;
-            using (runtime.PushParent(reset))
-                runtime.Text(ResetLabel, textColor: press.Hovering ? TextColor.AccentForeground : TextColor.Primary);
+        var stepper = Stepper.Build(runtime, "count", Count);
+        Count = stepper.Value;
 
-            return Column(stepper.Node, Space(16f), reset)
-                .FillX().FillY()
-                .Padded(EdgeInsets.All(24f));
-        },
-        surface: new SurfaceOptions { Width = 480, Height = 320 },
-        theme: theme);
+        // Then describe.
+        reset.Px(120f, 36f);
+        reset.Style.CornerRadius = 8f;
+        reset.Style.Padding = EdgeInsets.All(8f);
+        reset.Style.BackgroundColor = press.Hovering ? UiColor.Accent : UiColor.SurfaceRaised;
+        using (runtime.PushParent(reset))
+            runtime.Text(ResetLabel, textColor: press.Hovering ? TextColor.AccentForeground : TextColor.Primary);
+
+        UiNode.PushIntoParent(runtime.ParentInScope,
+            Column(stepper.Node, Space(16f), reset).FillX().FillY().Padded(EdgeInsets.All(24f)));
+    }
 }
 ```
 
@@ -172,14 +185,24 @@ using Bibui.Runtime;
 using Bibui.Runtime.Platform;
 
 var runtime = BibuiRuntime.Create();
-using var skia = new SkiaRenderer();
-App.Mount(runtime);
-BibuiWindow.Create(runtime).WithSilk(skia).Run("Stepper");
+var app = new App();
+
+using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Stepper", 480, 320));
+using var skia = new SkiaRenderer(window.Gl);
+while (SilkWindow.BeginFrame(window, runtime))
+{
+    runtime.BeginBuild();
+    app.Build(runtime);
+    runtime.EndBuild();
+    skia.Draw(runtime.DrawList);
+    SilkWindow.EndFrame(window, runtime);
+}
 ```
 
-`setState.Set` stores the new state and asks for a frame, and the next build
-sees it. Keeping `App.Mount` apart from `Program.cs` lets a test mount the same
-app without a window (section 6).
+A press writes `Count`, and the next frame the runtime builds reads it. Keeping
+`App.Build` apart from `Program.cs` lets a test build the same app without a
+window (section 6). [`samples/counter`](../samples/counter/Program.cs) is this
+loop in full, on both platforms.
 
 ## 4. Using an interaction
 
@@ -206,16 +229,16 @@ full.
 
 ## 5. Theming in one line
 
-The last argument of `Mount` and `MountStateful` is a theme name:
+Set the theme on the runtime, by name, before the loop:
 
 ```csharp
-App.Mount(runtime, theme: "default-light");
+runtime.SetTheme(ThemeRegistry.Load("default-light"));   // namespace Bibui.Theming
 ```
 
 `ThemeRegistry.Names` lists the themes available, `default-dark` and
-`default-light` among them. To switch while
-the app runs, call `runtime.SetTheme(ThemeLoader.DefaultLight())` (namespace
-`Bibui.Theming`). Theme files, your own themes and the token list are in the
+`default-light` among them. The same call switches while the app runs, for
+example `runtime.SetTheme(ThemeLoader.DefaultLight())` from a click; the next
+frame is painted in it. Theme files, your own themes and the token list are in the
 [theming guide](theming.md).
 
 ## 6. A headless test with BibuiPage
@@ -237,8 +260,8 @@ dotnet add reference ../Stepper/Stepper.csproj
 ```
 
 ```csharp
-using Bibui.Runtime;
 using Bibui.Testing;
+using Bibui.Theming;
 using Xunit;
 
 public class StepperTests
@@ -246,9 +269,7 @@ public class StepperTests
     [Fact]
     public void Plus_adds_one_and_reset_returns_to_zero()
     {
-        var runtime = BibuiRuntime.Create();
-        App.Mount(runtime);
-        using var page = BibuiPage.From(runtime);
+        using var page = BibuiPage.Launch(new App().Build);
 
         page.Click("count-up");
         page.Click("count-up");
@@ -261,9 +282,7 @@ public class StepperTests
     [Fact]
     public void The_first_frame_renders()
     {
-        var runtime = BibuiRuntime.Create();
-        App.Mount(runtime, theme: "default-light");
-        using var page = BibuiPage.From(runtime);
+        using var page = BibuiPage.Launch(new App().Build, theme: ThemeLoader.DefaultLight());
 
         byte[] png = page.Screenshot();
         Assert.Equal(0x89, png[0]);   // a PNG
@@ -275,7 +294,9 @@ public class StepperTests
 dotnet run
 ```
 
-`page.Click(id)` presses the middle of the box with that id. `GetText`,
+`BibuiPage.Launch` makes a runtime with no window and builds a frame with the
+build you hand it, as the app's loop does. `page.Click(id)` presses the middle
+of the box with that id and builds the frame the press causes. `GetText`,
 `GetBounds`, `FindById`, `Fill`, `Press` and `Screenshot` cover reading and
 typing. The page draws its screenshots with Skia on the CPU, so the test needs
 no renderer of its own. Ids come from `BoxFromId`, `TextFromId` and the `id`
@@ -292,21 +313,33 @@ dotnet add package Bibui.Platform.Wayland
 dotnet add package Bibui.Raster.Managed.Backend
 ```
 
-`Program.cs` names the managed rasterizer and the Wayland host. `App.cs` and
-`Stepper.cs` do not change:
+`Program.cs` names the Wayland window and the managed rasterizer. The loop is
+the same, and `App.cs` and `Stepper.cs` do not change:
 
 ```csharp
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
+using Bibui.Runtime.Platform;
 
 var runtime = BibuiRuntime.Create();
-var managed = new ManagedRenderer();
-App.Mount(runtime);
+var app = new App();
 
-var host = new WaylandPlatformHost(managed.Draw, new WaylandHostOptions { AppId = "dev.example.stepper" });
-BibuiWindow.Create(runtime).WithHost(host).Run("Stepper");
+using var window = WaylandWindow.Open(runtime, new PlatformWindowOptions("Stepper", 480, 320),
+    new WaylandHostOptions { AppId = "dev.example.stepper" });
+using var managed = new ManagedRenderer(window.Cpu);
+while (WaylandWindow.BeginFrame(window, runtime))
+{
+    runtime.BeginBuild();
+    app.Build(runtime);
+    runtime.EndBuild();
+    managed.Draw(runtime.DrawList);
+    WaylandWindow.EndFrame(window, runtime);
+}
 ```
+
+The window draws on the CPU: `window.Cpu` is the `wl_shm` buffer of this frame,
+and the renderer bound to it draws there.
 
 Publish:
 
@@ -317,7 +350,7 @@ dotnet publish -c Release -r linux-x64 -p:PublishAot=true -o out
 
 Native AOT needs `clang` and the zlib development headers (`zlib1g-dev` on
 Debian and Ubuntu). The result is a single executable of about 5 MB that runs
-under a Wayland compositor. `WaylandPlatformHost.IsSupported` tells you whether
+under a Wayland compositor. `WaylandWindow.IsSupported` tells you whether
 the current session can open a window.
 
 The Silk + Skia route is JIT-only for now: Silk.NET itself is not trim-safe,

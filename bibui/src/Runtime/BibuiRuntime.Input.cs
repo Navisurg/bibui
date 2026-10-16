@@ -19,21 +19,22 @@ public sealed partial class BibuiRuntime
 
     /// <summary>
     /// How this reaches the system clipboard. By default, the clipboard of the
-    /// <see cref="Platform.IPlatformHost"/> the runtime's window runs on, and
-    /// none (null, nothing written) for a runtime with no window. A seam
-    /// because a test asserting on the real clipboard would clobber whatever the
-    /// developer had copied, and headless CI may have none at all.
+    /// window the runtime runs in (<see cref="WindowClipboard"/>, set by the
+    /// platform when it opens), and none (null, nothing written) for a runtime
+    /// with no window. A seam because a test asserting on the real clipboard
+    /// would clobber whatever the developer had copied, and headless CI may have
+    /// none at all.
     /// </summary>
     public Func<string?> ClipboardGet
     {
-        get => _clipboardGet ??= () => PlatformHost?.GetClipboardText();
+        get => _clipboardGet ??= () => WindowClipboard.Get?.Invoke();
         set => _clipboardGet = value;
     }
 
     /// <inheritdoc cref="ClipboardGet"/>
     public Action<string> ClipboardSet
     {
-        get => _clipboardSet ??= text => PlatformHost?.SetClipboardText(text);
+        get => _clipboardSet ??= text => WindowClipboard.Set?.Invoke(text);
         set => _clipboardSet = value;
     }
 
@@ -43,10 +44,11 @@ public sealed partial class BibuiRuntime
     private Action<string>? _clipboardSet;
 
     /// <summary>
-    /// The platform the runtime's window runs on, set by <see cref="BibuiWindow"/>.
-    /// What the default <see cref="ClipboardGet"/> and <see cref="ClipboardSet"/> reach.
+    /// The clipboard of the window the runtime runs in: set by a platform when it
+    /// opens. What the default <see cref="ClipboardGet"/> and
+    /// <see cref="ClipboardSet"/> reach; an app that set its own keeps it.
     /// </summary>
-    internal Platform.IPlatformHost? PlatformHost { get; set; }
+    public (Func<string?>? Get, Action<string>? Set) WindowClipboard { get; set; }
 
     /// <summary>
     /// Acts on everything the window said happened this frame, in order. Called

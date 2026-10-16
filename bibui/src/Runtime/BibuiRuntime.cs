@@ -56,9 +56,8 @@ public sealed partial class BibuiRuntime
     public object FrameLock => _renderLock;
 
     // ── Core app state ───────────────────────────────────────────────────────
-    private Func<UiNode>? _build;
     private ThemeTokens _theme = ThemeLoader.BibuiDark();
-    private SurfaceOptions _surface = new();
+    private SurfaceOptions _surface = new() { Width = 800, Height = 600, ScaleFactor = 1f };
     private UiNode? _lastTree;
     private Dictionary<string, Box> _interactiveBoxes = new();
 
@@ -67,7 +66,7 @@ public sealed partial class BibuiRuntime
     private float _mouseY = float.NaN;
 
     // ── Per-frame UI event queue ─────────────────────────────────────────────
-    // Pushed by BibuiWindow on every OS key event; iterated by widgets in the
+    // Pushed by a window's input on every OS key event; iterated by widgets in the
     // build callback via UnconsumedEvents.
     // Cleared at the end of each EndBuild().
     private readonly List<BibUiEventHandle> _frameEvents = new();
@@ -104,9 +103,10 @@ public sealed partial class BibuiRuntime
     private int _framesRequested = FramesPerRequest;
 
     /// <summary>
-    /// Frames the host still owes. Zero means the loop may go back to waiting
-    /// on events. Public because a host driving its own loop needs it, in the
-    /// same way it needs <see cref="WakeUp"/> and <see cref="ConsumeFrame"/>.
+    /// Frames the loop still owes. Zero means it may go back to waiting on
+    /// events. Public because a platform's BeginFrame reads it and takes one
+    /// (<see cref="ConsumeFrame"/>) for the frame it starts, as it sets
+    /// <see cref="WakeUp"/>.
     /// </summary>
     public int FramesRequested => Volatile.Read(ref _framesRequested);
 
@@ -132,14 +132,20 @@ public sealed partial class BibuiRuntime
     }
 
     /// <summary>
-    /// Wakes a host that blocks between frames — for BibuiWindow, a call to
-    /// <c>ContinueEvents()</c>. Set by the host; invoked on any state change,
+    /// Wakes a window that blocks between frames — for Silk, a call to
+    /// <c>ContinueEvents()</c>. Set by the platform when it opens a window; invoked on any state change,
     /// from any thread (main, Timer thread, VideoService pump, etc.), so a
     /// handler must be non-blocking and thread-safe.
     /// </summary>
     public Action? WakeUp { get; set; }
 
-    /// <summary>Called by the host after a frame is drawn. Saturates at zero.</summary>
+    // At least one frame owed, without topping up a request already counting down.
+    private void OweOneFrame()
+    {
+        if (Interlocked.CompareExchange(ref _framesRequested, 1, 0) == 0) WakeUp?.Invoke();
+    }
+
+    /// <summary>Called by the platform as a frame starts (its BeginFrame), before it is built. Saturates at zero.</summary>
     public void ConsumeFrame()
     {
         int n;
@@ -154,19 +160,27 @@ public sealed partial class BibuiRuntime
     // ── Mounting ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Mounts a static (non-interactive) build function. Use this for read-only
-    /// inspection of a fixed UI tree. For interactive apps, use MountStateful.
+    /// The surface frames are laid out on: logical size and scale. A window
+    /// sets it when it opens and on every resize; a headless caller sets it
+    /// once. Asks for a frame.
     /// </summary>
-    public void Mount(Func<UiNode> build, SurfaceOptions? surface = null, string theme = "bibui-dark")
-        => MountStateful<object?>(null, (_, __) => build(), surface, theme);
-
-    /// <summary>Mounts a static build function with an explicit <see cref="ThemeTokens"/> (custom theme).</summary>
-    public void Mount(Func<UiNode> build, ThemeTokens theme, SurfaceOptions? surface = null)
-        => MountStateful<object?>(null, (_, __) => build(), theme, surface);
+    public SurfaceOptions Surface
+    {
+        get { lock (_syncRoot) return _surface; }
+        set
+        {
+            lock (_syncRoot)
+            {
+                _surface = value;
+                _lastTree = null;
+            }
+            RequestFrame();
+        }
+    }
 
     /// <summary>
-    /// Replaces the active theme on a mounted runtime and invalidates so the next render re-tints.
-    /// The supported, thread-safe way to swap themes at runtime (no reflection on private state).
+    /// Replaces the active theme and asks for a frame, which is painted in it.
+    /// Safe from any thread.
     /// </summary>
     public void SetTheme(ThemeTokens theme)
     {
@@ -178,97 +192,77 @@ public sealed partial class BibuiRuntime
         RequestFrame();
     }
 
-    /// <summary>
-    /// Mounts a stateful app. The build function receives the current state and
-    /// a <see cref="SetState{T}"/> handle. Call <c>setState.Set(newState)</c> from
-    /// synchronous handlers and <c>setState.Update(s =&gt; ...)</c> from async
-    /// continuations (post-<c>await</c> code) to avoid stale-closure clobbering.
-    /// </summary>
-    public void MountStateful<T>(
-        T initialState,
-        Func<T, SetState<T>, UiNode> build,
-        SurfaceOptions? surface = null,
-        string theme = "bibui-dark")
-        => MountStatefulCore(initialState, build, ThemeRegistry.Load(theme), surface);
-
-    /// <summary>
-    /// Mounts a stateful app with an explicit <see cref="ThemeTokens"/> object, so apps can drive a
-    /// fully custom theme (e.g. a custom accent that flows into every component) without reflecting
-    /// onto private runtime state.
-    /// </summary>
-    public void MountStateful<T>(
-        T initialState,
-        Func<T, SetState<T>, UiNode> build,
-        ThemeTokens theme,
-        SurfaceOptions? surface = null)
-        => MountStatefulCore(initialState, build, theme, surface);
-
-    private void MountStatefulCore<T>(
-        T initialState,
-        Func<T, SetState<T>, UiNode> build,
-        ThemeTokens theme,
-        SurfaceOptions? surface)
-    {
-        object? boxedState = initialState;
-
-        void Set(T newState)
-        {
-            lock (_syncRoot)
-            {
-                boxedState = newState;
-            }
-            RequestFrame();
-        }
-
-        void Update(Func<T, T> updater)
-        {
-            lock (_syncRoot)
-            {
-                boxedState = updater((T)boxedState!);
-            }
-            RequestFrame();
-        }
-
-        var setState = new SetState<T>(Set, Update);
-
-        lock (_syncRoot)
-        {
-            _build = () => build((T)boxedState!, setState);
-            _surface = surface ?? new SurfaceOptions { Width = 800, Height = 600, ScaleFactor = 1f };
-            _theme = theme;
-            _lastTree = null;
-            _interactiveBoxes = new();
-        }
-        RequestFrame();
-    }
-
     private static readonly bool _profile = Environment.GetEnvironmentVariable("BIBUI_PROFILE") == "1";
 
     // ── The frame ────────────────────────────────────────────────────────────
 
+    // The frame's root: the runtime's own box, the size of the surface. What
+    // the app builds with nothing else pushed lands under it.
+    private readonly Box _root = new();
+
+    // This frame's surface and theme, as BeginBuild found them: the whole frame
+    // is laid out and painted on the same pair, whatever another thread sets.
+    private SurfaceOptions _frameSurface = null!;
+    private ThemeTokens _frameTheme = null!;
+    private long _buildStarted;
+
     /// <summary>
-    /// One frame: runs the mounted build, lays the tree out and records it into
-    /// <see cref="DrawList"/>, then sweeps what nobody asked for. Draws nothing:
-    /// the loop owner draws the list with its renderer. A frame still animating
-    /// asks for the next (<see cref="RequestFrame"/>).
+    /// Opens a frame: everything built from here to <see cref="EndBuild"/> is
+    /// this frame's tree. The runtime's root is the parent in scope, so a
+    /// component built with nothing else pushed lands under it, and a node built
+    /// some other way is linked under <see cref="ParentInScope"/>. One node built
+    /// at the top is the frame's tree and fills the surface, as a window's
+    /// content does; several are stacked top to bottom. Holds
+    /// <see cref="FrameLock"/> until <see cref="EndBuild"/>.
+    /// </summary>
+    public void BeginBuild()
+    {
+        Monitor.Enter(_renderLock);
+        lock (_syncRoot)
+        {
+            _frameSurface = _surface;
+            _frameTheme = PaintedTheme(_theme);
+        }
+        _buildStarted = Stopwatch.GetTimestamp();
+        BeginDropDowns();
+        ResetForBuild(_root);
+        _root.SizeX = _root.SizeY = SemanticSize.ParentPct(1f);
+        _root.ChildLayoutAxis = LayoutAxis.Y;
+        lock (_syncRoot) _parentStack.Add(_root);
+    }
+
+    /// <summary>
+    /// Closes the frame <see cref="BeginBuild"/> opened: lays the tree out and
+    /// records it into <see cref="DrawList"/>, then sweeps what nobody asked
+    /// for. Draws nothing: the loop owner draws the list with its renderer. A
+    /// frame still animating asks for the next (<see cref="RequestFrame"/>).
     /// </summary>
     public void EndBuild()
     {
-        lock (_renderLock)
+        try
         {
-            Func<UiNode>? build;
-            SurfaceOptions surface;
-            ThemeTokens theme;
             lock (_syncRoot)
             {
-                build = _build ?? throw new InvalidOperationException("Runtime not mounted. Call Mount or MountStateful first.");
-                surface = _surface;
-                theme = PaintedTheme(_theme);
+                if (_parentStack.Count == 0 || _parentStack[^1] != _root)
+                    throw new InvalidOperationException(
+                        "EndBuild without its BeginBuild, or with a PushParent scope still open; use scopes with `using`.");
+                _parentStack.RemoveAt(_parentStack.Count - 1);
+            }
+            var surface = _frameSurface;
+            var theme = _frameTheme;
+
+            // The frame's tree. One node built at the top is it, and fills the
+            // surface, as a window's content does; several are stacked top to
+            // bottom under the root, which fills it.
+            UiNode tree = _root;
+            if (_root.FirstChild is { } only && only == _root.LastChild)
+            {
+                (_root.FirstChild, _root.LastChild) = (null, null);
+                (only.Parent, only.Prev, only.Next) = (null, null, null);
+                tree = only;
             }
 
-            var t0 = Stopwatch.GetTimestamp();
-            BeginDropDowns();
-            var tree = build();
+            var t0 = _buildStarted;
             EndDropDowns(tree);
             var t1 = Stopwatch.GetTimestamp();
             var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
@@ -280,8 +274,8 @@ public sealed partial class BibuiRuntime
             var pointerTransforms = transformed ? PointerTransforms(tree) : null;
             var t2 = Stopwatch.GetTimestamp();
 
-            // Captured after build(), so state the app sets while building lands
-            // in this frame.
+            // Captured after the build, so state the app sets while building
+            // lands in this frame.
             FrameInput input;
             lock (_syncRoot) input = CaptureFrameInput();
             _painter.Record(DrawList, tree, surface, theme, input);
@@ -310,10 +304,24 @@ public sealed partial class BibuiRuntime
             // height, a client draw calling ctx.Animate.
             if (_painter.IsAnimating) RequestFrame();
 
+            // A frame that handled input built from state the input then changed:
+            // what a click did shows in the frame after it, so one more is owed.
+            if (_frameEvents.Count > 0) OweOneFrame();
+
             SweepFrame();       // sweep whatever nobody asked for this frame
             ClearFrameEvents(); // per-frame events: drop the leftovers
+            Interlocked.Increment(ref _frames);
+        }
+        finally
+        {
+            Monitor.Exit(_renderLock);
         }
     }
+
+    private long _frames;
+
+    /// <summary>Frames built so far: <see cref="EndBuild"/> counts one each. Read from any thread.</summary>
+    public long FrameCount => Interlocked.Read(ref _frames);
 
     // What a text is measured in, for the frame being laid out; a field so the
     // delegate the solver calls is made once.
@@ -359,7 +367,7 @@ public sealed partial class BibuiRuntime
 
 
     // ── UI event queue ───────────────────────────────────────────────────────
-    // All access is main-thread-only: BibuiWindow enqueues from the GLFW input
+    // All access is main-thread-only: a window's input enqueues from its
     // pump, the build callback iterates during RenderLocked, ClearFrameEvents
     // runs at the end of RenderLocked. No locks needed.
 
@@ -448,11 +456,13 @@ public sealed partial class BibuiRuntime
     /// <summary>
     /// Replaces the whole text of the field named <paramref name="id"/> with
     /// <paramref name="newValue"/>, the way a person would: presses the field —
-    /// which its application focuses — builds a frame, then selects all and types
-    /// the value, or deletes for an empty one. The keys are queued; the next
-    /// frame applies them. No-ops if no box that asks carries the name.
+    /// which its application focuses — lets <paramref name="frame"/> build a frame,
+    /// then selects all and types the value, or deletes for an empty one. The keys
+    /// are queued; the next frame applies them. No-ops if no box that asks carries
+    /// the name. The runtime does not build frames: <paramref name="frame"/> is
+    /// the caller's, as a test's frame or a wait for the app's loop.
     /// </summary>
-    public void DispatchFill(string id, string newValue)
+    public void DispatchFill(string id, string newValue, Action frame)
     {
         ArgumentNullException.ThrowIfNull(newValue);
         bool asks;
@@ -460,10 +470,10 @@ public sealed partial class BibuiRuntime
         if (!asks) return;
 
         DispatchClick(id);
-        EndBuild();
-        var keys = new List<BibUiEvent> { BibuiWindow.BibUiEventFromKey(Key.A, ctrl: true, shift: false) };
+        frame();
+        var keys = new List<BibUiEvent> { BibUiEvent.FromKey(Key.A, ctrl: true, shift: false) };
         if (newValue.Length == 0)
-            keys.Add(BibuiWindow.BibUiEventFromKey(Key.Backspace, ctrl: false, shift: false));
+            keys.Add(BibUiEvent.FromKey(Key.Backspace, ctrl: false, shift: false));
         foreach (var rune in newValue.EnumerateRunes())
             keys.Add(new BibUiEvent { Kind = BibUiEventKind.Text, Char = rune.IsBmp ? (char)rune.Value : '\0', CodePoint = (uint)rune.Value });
         ProcessEvents(keys);

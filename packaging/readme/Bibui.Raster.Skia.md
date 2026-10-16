@@ -2,7 +2,7 @@
 
 Bibui's renderer on SkiaSharp. `SkiaRenderer` draws a frame's `DrawList`
 (clips, layers, shapes, paths, textures, backdrop blur and text) with Skia on
-the CPU or, through `Bibui.Platform.Silk`, on the GPU.
+the CPU or on the GPU.
 
 ```csharp
 using Bibui.Raster.Skia;
@@ -13,7 +13,12 @@ skia.Draw(runtime.DrawList, surface);   // an SKSurface of your own
 skia.Draw(runtime.DrawList, pixels);    // or RasterPixels: BGRA8888 premultiplied, yours
 ```
 
-`BibuiWindow.Create(runtime).WithSilk(skia)` hands it to a window.
+Bound to a window's target, it draws there: `new SkiaRenderer(window.Gl)` on
+the GPU, through a `Bibui.Platform.Silk` window's GL framebuffer, or
+`new SkiaRenderer(window.Cpu)` into the memory a window presents; then
+`skia.Draw(runtime.DrawList)` each frame. `SkiaRenderer.ForGl(window.Gl)`
+answers null when Skia cannot use the GL context, and the app falls back to
+the CPU if it wants to.
 `CreateTexture`, `UpdateTexture` and `ReleaseTexture` make the textures a
 custom draw callback draws.
 

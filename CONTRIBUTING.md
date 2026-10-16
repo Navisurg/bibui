@@ -26,7 +26,7 @@ system libraries at run time:
 - `libwayland-client` and `libxkbcommon` for `Bibui.Platform.Wayland`.
 
 Each library is its own project: `bibui` holds the core, the runtime
-(`BibuiRuntime`, `BibuiWindow`) and the components, and the window hosts,
+(`BibuiRuntime`) and the components, and the platform windows,
 renderers and text engine are projects beside it. Build the ones you
 touch, in Release, as CI does:
 

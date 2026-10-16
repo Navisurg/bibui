@@ -17,16 +17,16 @@ using Bibui.Theming;
 
 ## Using a theme
 
-A runtime is mounted with a theme, either by name or as a value:
+A runtime is given its theme with `SetTheme`, as a value or by name:
 
 ```csharp
-runtime.Mount(build, ThemeLoader.BibuiLight());                    // a value
-runtime.Mount(build, theme: "default-dark");                       // a registered name
-runtime.MountStateful(new AppState(), BuildApp, ThemeLoader.BibuiDark());
+runtime.SetTheme(ThemeLoader.BibuiLight());                        // a value
+runtime.SetTheme(ThemeRegistry.Load("default-dark"));              // a registered name
 ```
 
-`runtime.SetTheme(theme)` swaps the theme of a mounted runtime. The next frame
-is painted with the new one, with nothing rebuilt by hand. `runtime.Theme` is
+`runtime.SetTheme(theme)` works before the first frame and at any time after,
+from any thread. The next frame is painted with the new one, with nothing
+rebuilt by hand. `runtime.Theme` is
 the theme in force.
 
 Names are resolved in one table, `ThemeRegistry`, so a name that works in one
@@ -200,7 +200,7 @@ Register it by path. `RegisterFile` returns the name it was registered under:
 
 ```csharp
 string name = ThemeRegistry.RegisterFile("themes/ocean.json");   // "ocean"
-runtime.Mount(build, theme: name);
+runtime.SetTheme(ThemeRegistry.Load(name));
 ```
 
 To read a file without registering it, use `ThemeFile.Load(path)`, or
@@ -244,7 +244,7 @@ ocean.json: density.mode = "tight" is not one of: compact, default, comfortable.
 ```
 
 The parent is looked up when the theme is *resolved* (when it is loaded or
-mounted), so a file may be registered before the theme it extends. A missing
+set), so a file may be registered before the theme it extends. A missing
 parent, or themes that extend each other in a ring, throw
 `InvalidOperationException` at that point:
 
@@ -434,29 +434,26 @@ if (Theme.Contrast(t.Colors.AccentForeground, t.Colors.Accent) < Theme.MinTextCo
 ## Seeing your theme
 
 The quickest check is to draw a few components headless with your theme and
-look at the PNG (usings: `Bibui.Imaging`, `Bibui.Draw`, `Bibui.Raster.Skia`,
-`System.Runtime.InteropServices`):
+look at the PNG (using `Bibui.Raster.Skia`):
 
 ```csharp
 var runtime = BibuiRuntime.Create();
-ThemeTokens mine = ThemeRegistry.Load(ThemeRegistry.RegisterFile("themes/ocean.json"));
+runtime.SetTheme(ThemeRegistry.Load(ThemeRegistry.RegisterFile("themes/ocean.json")));
+runtime.Surface = new SurfaceOptions { Width = 360, Height = 80, ScaleFactor = 1f };
 const string save = "Save", sync = "Sync";
 
-runtime.Mount(() =>
+runtime.BeginBuild();
+UiNode.PushIntoParent(runtime.ParentInScope,
     Arrange.Row(
         runtime.Button("save", save),
         Arrange.Space(12f),
         runtime.Switch("sync", on: true, label: sync))
     .Px(360f, 80f)
-    .Padded(EdgeInsets.All(24f)),
-    mine, new SurfaceOptions { Width = 360, Height = 80, ScaleFactor = 1f });
-
+    .Padded(EdgeInsets.All(24f)));
 runtime.EndBuild();
-int w = runtime.SurfaceWidth, h = runtime.SurfaceHeight;   // physical px at scale 1
-var pixels = GC.AllocateArray<byte>(w * h * 4, pinned: true);
+
 using var skia = new SkiaRenderer();
-skia.Draw(runtime.DrawList, new RasterPixels(Marshal.UnsafeAddrOfPinnedArrayElement(pixels, 0), w, h, w * 4));
-File.WriteAllBytes("ocean.png", Png.Encode(pixels, w, h, w * 4, ChannelOrder.Bgra, AlphaMode.Premultiplied));
+File.WriteAllBytes("ocean.png", FramePixels.Png(runtime, skia.Draw));
 ```
 
 The component gallery sample shows every component on one page and is the

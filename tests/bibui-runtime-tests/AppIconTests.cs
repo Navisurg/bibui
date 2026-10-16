@@ -65,7 +65,7 @@ static class AppIconTests
     static byte[] Render(string? icon)
     {
         var runtime = BibuiRuntime.Create();
-        runtime.Mount(
+        runtime.SetBuild(
             () =>
             {
                 var row = Arrange.Row().Px(40f, 40f);

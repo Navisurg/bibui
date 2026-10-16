@@ -34,11 +34,33 @@ using FtTextColor = Bibui.FreeType.TextColor;
 /// </summary>
 public sealed class ManagedRenderer : IDisposable
 {
+    /// <summary>A renderer bound to nothing: it draws into the memory or the surface each call names.</summary>
     public ManagedRenderer(Antialiasing antialiasing = Antialiasing.BaselineCompatible)
     {
         Antialiasing = antialiasing;
         Damage = new DamageTracker();
     }
+
+    /// <summary>
+    /// A renderer bound to <paramref name="target"/>, memory a platform presents:
+    /// <see cref="Draw(DrawList)"/> draws into whatever memory it holds then. A
+    /// platform that cycles buffers points it at each in turn; damage tracking
+    /// knows each buffer by its memory.
+    /// </summary>
+    public ManagedRenderer(CpuTarget target, Antialiasing antialiasing = Antialiasing.BaselineCompatible)
+        : this(antialiasing)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        _target = target;
+    }
+
+    // The memory this renderer is bound to, or null; fixed for its life.
+    private readonly CpuTarget? _target;
+
+    /// <summary>Draws <paramref name="list"/> into the memory the bound target holds now.</summary>
+    public void Draw(DrawList list)
+        => Draw(list, (_target ?? throw new InvalidOperationException(
+            "This renderer is bound to no target: draw with Draw(list, pixels).")).Pixels);
 
     public Antialiasing Antialiasing { get; }
 

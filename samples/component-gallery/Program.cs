@@ -66,44 +66,70 @@ if (options.Check)
 }
 
 var runtime = BibuiRuntime.Create();
+runtime.SetTheme(options.Theme());
+runtime.Surface = Surface();
 HotReloadListener.Register(runtime.RequestFrame);
-
-// The renderer --raster names: what the window draws with, and where the
-// texture page makes its textures.
-SkiaRenderer? skia = options.Raster == GalleryRaster.Skia ? new SkiaRenderer() : null;
-ManagedRenderer? managed = options.Raster == GalleryRaster.Managed ? new ManagedRenderer() : null;
-DemoTexture.Skia = skia;
-DemoTexture.Managed = managed;
-DrawToPixels draw = skia is not null ? skia.Draw : managed!.Draw;
-
-runtime.MountStateful(
-    initialState: InitialState(),
-
-    build: (state, setState) => BuildGallery(runtime, state, setState),
-    theme: options.Theme(),
-    surface: Surface());
+var gallery = new Gallery { State = InitialState() };
 
 // CI's start-up check: one frame headless, then exit; a throw fails it.
 if (options.FirstFrame)
 {
+    using var cpu = new SkiaRenderer();
+    DemoTexture.Skia = cpu;
+    runtime.BeginBuild();
+    BuildGallery(runtime, gallery);
     runtime.EndBuild();
-    FramePixels.Bgra(runtime, draw, out _, out _);
+    FramePixels.Bgra(runtime, cpu.Draw, out _, out _);
     return;
 }
 
-// Off unless asked for: BIBUI_TEST_SERVER=1 (test_all_pages.sh says how).
-using var testServer = BibuiTestServer.StartIfEnabled(runtime, options.Port, draw);
+// Off unless asked for: BIBUI_TEST_SERVER=1 (test_all_pages.sh says how). Its
+// screenshots draw with a renderer of their own: the window's is the loop's.
+using var testServer = BibuiTestServer.StartIfEnabled(runtime, options.Port,
+    options.Raster == GalleryRaster.Managed ? new ManagedRenderer().Draw : new SkiaRenderer().Draw);
 
-var window = options.Host == GalleryHost.Wayland
-    ? BibuiWindow.Create(runtime).WithWayland(draw,
-        new Bibui.Platform.Wayland.WaylandHostOptions
-        {
-            AppId = "bibui-component-gallery",
-            MinWidth = ShellLayout.MinWidth,
-            MinHeight = ShellLayout.MinHeight,
-        })
-    : BibuiWindow.Create(runtime).WithSilk(skia!);
-window.Run("Component Gallery");
+var size = new PlatformWindowOptions("Component Gallery", Surface().Width, Surface().Height);
+if (options.Host == GalleryHost.Wayland)
+{
+    using var window = WaylandWindow.Open(runtime, size, new WaylandHostOptions
+    {
+        AppId = "bibui-component-gallery",
+        MinWidth = ShellLayout.MinWidth,
+        MinHeight = ShellLayout.MinHeight,
+    });
+    // The renderer --raster names, bound to the window's memory; the texture page makes its textures on it.
+    SkiaRenderer? skia = options.Raster == GalleryRaster.Skia ? new SkiaRenderer(window.Cpu) : null;
+    ManagedRenderer? managed = skia is null ? new ManagedRenderer(window.Cpu) : null;
+    (DemoTexture.Skia, DemoTexture.Managed) = (skia, managed);
+    while (WaylandWindow.BeginFrame(window, runtime))
+    {
+        runtime.BeginBuild();
+        BuildGallery(runtime, gallery);
+        runtime.EndBuild();
+        if (skia is not null) skia.Draw(runtime.DrawList);
+        else managed!.Draw(runtime.DrawList);
+        WaylandWindow.EndFrame(window, runtime);
+    }
+    skia?.Dispose();
+    managed?.Dispose();
+}
+else
+{
+    using var window = SilkWindow.Open(runtime, size);
+    using var skia = new SkiaRenderer(window.Gl);
+    DemoTexture.Skia = skia;   // the texture page's textures, on the renderer that draws them
+    window.OnRefresh = Frame;  // keeps drawing during a resize on Windows and macOS
+    while (SilkWindow.BeginFrame(window, runtime)) Frame();
+
+    void Frame()
+    {
+        runtime.BeginBuild();
+        BuildGallery(runtime, gallery);
+        runtime.EndBuild();
+        skia.Draw(runtime.DrawList);
+        SilkWindow.EndFrame(window, runtime);
+    }
+}
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
@@ -124,7 +150,7 @@ static (string Group, string[] Routes)[] NavGroups() => new[]
 
 // Beside the page at its width, or, folded (width 0), the whole window under
 // the menu bar, which carries the title instead.
-static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState, float width)
+static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, Gallery gallery, float width)
 {
     var groups = NavGroups();
     bool folded = width == 0f;
@@ -166,13 +192,13 @@ static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, SetState<Ga
             if (Entry($"nav-group-{GalleryHelpers.Slug(groupLabel)}",
                     groupOpen ? $"{groupLabel} -" : $"{groupLabel} +",
                     36f, groupOpen))
-                setState.Set(state with { OpenSidebarGroup = groupOpen ? null : groupLabel });
+                gallery.State = state with { OpenSidebarGroup = groupOpen ? null : groupLabel };
 
             if (!groupOpen) continue;
             foreach (var comp in components)
             {
                 if (Entry($"nav-{comp}", comp, 32f, state.Route == comp))
-                    setState.Set(state with { Route = comp, OpenSidebarGroup = groupLabel, MenuOpen = false });
+                    gallery.State = state with { Route = comp, OpenSidebarGroup = groupLabel, MenuOpen = false };
             }
         }
     }
@@ -199,11 +225,11 @@ static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, SetState<Ga
 
 // The bar across the top of a window too narrow for the sidebar: the title, and
 // the button that shows the sidebar in place of the page, or the page again.
-static UiNode BuildMenuBar(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState)
+static UiNode BuildMenuBar(BibuiRuntime runtime, GalleryState state, Gallery gallery)
 {
     var toggle = runtime.Button("nav-menu",
         state.MenuOpen ? "Close" : "Components", ghost: true, size: ComponentSize.Sm);
-    if (toggle.Clicked) setState.Set(state with { MenuOpen = !state.MenuOpen });
+    if (toggle.Clicked) gallery.State = state with { MenuOpen = !state.MenuOpen };
 
     return Arrange.Row("menu-bar",
             Arrange.CentredY(Bold(runtime, "Gallery", ComponentSize.Lg, TextColor.Primary)),
@@ -222,13 +248,13 @@ static UiNode BuildMenuBar(BibuiRuntime runtime, GalleryState state, SetState<Ga
 // The page scrolls in a view with its bar beside it, so a page taller than the
 // window is all there; its text wraps at the width the window leaves it.
 
-static UiNode BuildContentPanel(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState, ShellLayout shell)
+static UiNode BuildContentPanel(BibuiRuntime runtime, GalleryState state, Gallery gallery, ShellLayout shell)
 {
     var panel = runtime.BoxFromId("content");
     var view = runtime.BoxFromId("content-scroll",
         InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, panel);
 
-    var demoNode = BuildDemo(runtime, state, setState);
+    var demoNode = BuildDemo(runtime, state, gallery);
     float width = ShellLayout.PageWidth(runtime);
 
     var page = Arrange.Column(
@@ -270,26 +296,26 @@ static UiNode Wrapped(BibuiRuntime runtime, string text, float width, ComponentS
 
 // ── Per-component demos (delegated to per-category classes) ──────────────────
 
-static UiNode BuildDemo(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState) => state.Route switch
+static UiNode BuildDemo(BibuiRuntime runtime, GalleryState state, Gallery gallery) => state.Route switch
 {
     "Button" or "Input" or "Textarea" or "TextField" or "Checkbox" or "Switch" or "RadioGroup"
         or "Select" or "Slider" or "Toggle" or "ToggleGroup" or "DatePicker" or "Calendar"
         or "TimePicker" or "ColorPicker"
-            => DemoInputs.Build(runtime, state.Route, state.Inputs, s => setState.Set(state with { Inputs = s })),
+            => DemoInputs.Build(runtime, state.Route, state.Inputs, s => gallery.State = state with { Inputs = s }),
     "Text" or "Badge" or "Avatar" or "Card" or "Alert" or "Separator" or "Label"
         or "Progress" or "Skeleton" or "Spinner" or "RatioBox"
         or "KeyboardShortcut" or "Table" or "Markdown" or "Texture" or "PagedTable" or "FormField" or "ListItem" or "EmptyState"
         or "Toast"
-            => DemoDisplay.Build(runtime, state.Route, state.Display, s => setState.Set(state with { Display = s })),
+            => DemoDisplay.Build(runtime, state.Route, state.Display, s => gallery.State = state with { Display = s }),
     "Dialog" or "AlertDialog" or "Popover" or "HoverPreview" or "Tooltip"
         or "Drawer" or "DropdownMenu" or "ContextMenu" or "CommandPalette"
-            => DemoOverlays.Build(runtime, state.Route, state.Overlays, s => setState.Set(state with { Overlays = s })),
+            => DemoOverlays.Build(runtime, state.Route, state.Overlays, s => gallery.State = state with { Overlays = s }),
     "Tabs" or "Accordion" or "Expander" or "NavBar" or "Sidebar"
         or "Breadcrumb" or "Pagination" or "MenuBar"
-            => DemoNavigation.Build(runtime, state.Route, state.Navigation, s => setState.Set(state with { Navigation = s })),
+            => DemoNavigation.Build(runtime, state.Route, state.Navigation, s => gallery.State = state with { Navigation = s }),
     "Scrollbar" => DemoScrollbar.Build(runtime),
     "SplitPane" or "Carousel" or "ButtonStrip" or "Stack" or "InteractiveBox" or "Section"
-            => DemoLayout.Build(runtime, state.Route, state.Layout, s => setState.Set(state with { Layout = s })),
+            => DemoLayout.Build(runtime, state.Route, state.Layout, s => gallery.State = state with { Layout = s }),
     _ => runtime.Text("Select a component from the sidebar.", textColor: TextColor.Secondary),
 };
 
@@ -301,22 +327,28 @@ static SurfaceOptions Surface() => new() { Width = 1100, Height = 820 };
 
 // Wide, the sidebar sits beside the page; narrow, it folds behind a menu bar and
 // takes the page's place while it is open.
-static UiNode BuildGallery(BibuiRuntime runtime, GalleryState state, SetState<GalleryState> setState)
+static void BuildGallery(BibuiRuntime runtime, Gallery gallery)
 {
+    var state = gallery.State;
     var shell = ShellLayout.For(runtime.SurfaceWidth);
     var style = new Style { BackgroundColor = UiColor.Background };
+    UiNode page;
     if (!shell.Folded)
     {
-        var sidebar = BuildSidebar(runtime, state, setState, shell.SidebarWidth);
-        var content = BuildContentPanel(runtime, state, setState, shell);
-        return Arrange.Row("gallery", sidebar.FillY(), content.FillY()).FillX().FillY().Styled(style);
+        var sidebar = BuildSidebar(runtime, state, gallery, shell.SidebarWidth);
+        var content = BuildContentPanel(runtime, state, gallery, shell);
+        page = Arrange.Row("gallery", sidebar.FillY(), content.FillY()).FillX().FillY().Styled(style);
     }
-
-    var bar = BuildMenuBar(runtime, state, setState);
-    var body = state.MenuOpen
-        ? BuildSidebar(runtime, state, setState, 0f)
-        : BuildContentPanel(runtime, state, setState, shell);
-    return Arrange.Column("gallery", bar, body.FillY()).FillX().FillY().Styled(style);
+    else
+    {
+        var bar = BuildMenuBar(runtime, state, gallery);
+        var body = state.MenuOpen
+            ? BuildSidebar(runtime, state, gallery, 0f)
+            : BuildContentPanel(runtime, state, gallery, shell);
+        page = Arrange.Column("gallery", bar, body.FillY()).FillX().FillY().Styled(style);
+    }
+    // Built with Arrange, so linked here: under the frame's root.
+    UiNode.PushIntoParent(runtime.ParentInScope, page);
 }
 
 static GalleryState InitialState() => new(Route: "Button", OpenSidebarGroup: "Inputs & Forms");
@@ -366,11 +398,12 @@ static void WriteReference(string outDir, string name, GalleryState state, strin
     Bibui.Theming.ThemeTokens theme, SurfaceOptions surface, SkiaRenderer skia)
 {
     var runtime = BibuiRuntime.Create();
-    runtime.MountStateful(state, (s, set) => BuildGallery(runtime, s, set), theme, surface);
+    runtime.SetTheme(theme);
+    runtime.Surface = surface;
     if (dropDown is not null) runtime.OpenDropDown(dropDown);
     try
     {
-        File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime, skia));
+        File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime, new Gallery { State = state }, skia));
         Console.WriteLine($"  wrote {name}.png");
     }
     catch (Exception e)
@@ -381,9 +414,14 @@ static void WriteReference(string outDir, string name, GalleryState state, strin
 }
 
 // Three frames: laid out, and wrapped at that width; the last drawn with Skia.
-static byte[] RenderSettled(BibuiRuntime runtime, SkiaRenderer skia)
+static byte[] RenderSettled(BibuiRuntime runtime, Gallery gallery, SkiaRenderer skia)
 {
-    for (int i = 0; i < 3; i++) runtime.EndBuild();
+    for (int i = 0; i < 3; i++)
+    {
+        runtime.BeginBuild();
+        BuildGallery(runtime, gallery);
+        runtime.EndBuild();
+    }
     return FramePixels.Png(runtime, skia.Draw);
 }
 
@@ -410,13 +448,13 @@ static int CheckLayouts(GalleryOptions options)
         {
             pages++;
             var runtime = BibuiRuntime.Create();
-            runtime.MountStateful(state, (s, set) => BuildGallery(runtime, s, set), options.Theme(),
-                new SurfaceOptions { Width = width, Height = height });
+            runtime.SetTheme(options.Theme());
+            runtime.Surface = new SurfaceOptions { Width = width, Height = height };
             if (dropDown is not null) runtime.OpenDropDown(dropDown);
             List<LayoutCheck.Fault> faults;
             try
             {
-                byte[] png = RenderSettled(runtime, skia);
+                byte[] png = RenderSettled(runtime, new Gallery { State = state }, skia);
                 if (dir is not null) File.WriteAllBytes(Path.Combine(dir, $"{name}.png"), png);
                 faults = LayoutCheck.Check(runtime, runtime.FindById("gallery")!, width, height);
             }
@@ -455,3 +493,9 @@ static string? OpenedDropDown(string route) => route switch
     "Section" => "demo-colormap-list",
     _ => null,
 };
+
+/// <summary>The gallery's state: one record, replaced as the gallery's controls change it.</summary>
+sealed class Gallery
+{
+    public GalleryState State = null!;
+}

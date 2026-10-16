@@ -193,7 +193,7 @@ public ref struct TextOp
 
         // copy — fill CopyString from the original selection. Does not mutate
         // the buffer or cursor/mark. Cursor/mark are preserved because the
-        // Copy event sets KeepMark (see BibuiWindow). Placed BEFORE Delete so
+        // Copy event sets KeepMark (see BibUiEvent.FromKey). Placed BEFORE Delete so
         // Cut (Copy|Delete) still captures the selection before it's cleared.
         if ((ev.Flags & TextActionFlags.Copy) != 0)
         {

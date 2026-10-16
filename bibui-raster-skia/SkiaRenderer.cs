@@ -6,9 +6,11 @@ using SkiaSharp;
 namespace Bibui.Raster.Skia;
 
 /// <summary>
-/// Draws a <see cref="DrawList"/> with Skia: onto an <see cref="SKSurface"/> the
-/// caller made (a GPU surface over a window's framebuffer, a CPU one), or into
-/// CPU memory the caller owns.
+/// Draws a <see cref="DrawList"/> with Skia. Bound to the target a platform
+/// presents — a window's GL framebuffer (<see cref="GlTarget"/>, on the GPU) or
+/// memory it shows (<see cref="CpuTarget"/>) — it draws a frame with
+/// <see cref="Draw(DrawList)"/>. Unbound, or besides, it draws onto an
+/// <see cref="SKSurface"/> the caller made, or into CPU memory the caller owns.
 ///
 /// <para>Holds what Skia draws with, built once from what the ops describe and
 /// reused while frames keep asking for it: paints by content, text paints and
@@ -21,6 +23,113 @@ namespace Bibui.Raster.Skia;
 /// </summary>
 public sealed class SkiaRenderer : IDisposable
 {
+    /// <summary>A renderer bound to nothing: it draws into the memory or the surface each call names.</summary>
+    public SkiaRenderer() { }
+
+    /// <summary>
+    /// A renderer bound to <paramref name="target"/>, memory a platform presents:
+    /// <see cref="Draw(DrawList)"/> draws into whatever memory it holds then.
+    /// </summary>
+    public SkiaRenderer(CpuTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        _pixelTarget = target;
+    }
+
+    /// <summary>
+    /// A renderer bound to <paramref name="target"/>, a window's GL framebuffer:
+    /// Skia's GPU context is made on that GL context, which must be current on
+    /// this thread. Throws when Skia cannot drive it; <see cref="ForGl"/> answers
+    /// null instead.
+    /// </summary>
+    public SkiaRenderer(GlTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        _gpu = GpuContext(target) ?? throw new InvalidOperationException("Skia cannot draw with this GL context.");
+        _glTarget = target;
+    }
+
+    /// <summary>
+    /// A renderer bound to <paramref name="target"/>, or null when Skia cannot
+    /// drive its GL context (too old, software GL without what Skia needs). The
+    /// caller falls back, e.g. to <c>new SkiaRenderer(window.Cpu)</c>.
+    /// </summary>
+    public static SkiaRenderer? ForGl(GlTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return GpuContext(target) is { } gpu ? new SkiaRenderer(target, gpu) : null;
+    }
+
+    private SkiaRenderer(GlTarget target, GRContext gpu) => (_glTarget, _gpu) = (target, gpu);
+
+    // ── The bound target ─────────────────────────────────────────────────────
+    // One of the two, or neither; fixed for the renderer's life.
+
+    private readonly CpuTarget? _pixelTarget;
+    private readonly GlTarget? _glTarget;
+
+    // Skia's GPU context on the GL target's context, and the surface over its
+    // framebuffer, remade when the size changes.
+    private readonly GRContext? _gpu;
+    private GRBackendRenderTarget? _gpuTarget;
+    private SKSurface? _gpuSurface;
+    private int _gpuWidth, _gpuHeight;
+
+    /// <summary>
+    /// Byte budget for Skia's GPU resource cache (glyph atlases, uploaded
+    /// textures, gradient ramps), on a GL-bound renderer; ignored otherwise.
+    /// </summary>
+    public long GpuResourceCacheLimit
+    {
+        get => _gpu?.GetResourceCacheLimit() ?? 0;
+        set => _gpu?.SetResourceCacheLimit(value);
+    }
+
+    private static GRContext? GpuContext(GlTarget target)
+    {
+        var get = target.GetProcAddress;
+        using var gl = GRGlInterface.Create(name => get(name));
+        if (gl is null) return null;
+        var context = GRContext.CreateGl(gl);
+        // Bounded: a long-running window would otherwise grow toward Skia's
+        // much larger default budget.
+        context?.SetResourceCacheLimit(96 * 1024 * 1024);
+        return context;
+    }
+
+    /// <summary>
+    /// Draws <paramref name="list"/> into the target this renderer is bound to:
+    /// the GL framebuffer at its current size, then flushed for the swap that
+    /// follows; or the memory the pixel target holds now.
+    /// </summary>
+    public void Draw(DrawList list)
+    {
+        if (_gpu is not null)
+        {
+            var t = _glTarget!;
+            // Skia caches GL state between draws, and anything else touching
+            // the context invalidates that cache. Cheap when nothing changed.
+            _gpu.ResetContext();
+            if (_gpuSurface is null || _gpuWidth != t.Width || _gpuHeight != t.Height)
+            {
+                _gpuSurface?.Dispose();
+                _gpuTarget?.Dispose();
+                const uint GlRgba8 = 0x8058;
+                _gpuTarget = new GRBackendRenderTarget(t.Width, t.Height, sampleCount: 0, t.StencilBits,
+                    new GRGlFramebufferInfo(t.Framebuffer, GlRgba8));
+                _gpuSurface = SKSurface.Create(_gpu, _gpuTarget, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888)
+                    ?? throw new InvalidOperationException("Skia made no surface over the GL framebuffer.");
+                (_gpuWidth, _gpuHeight) = (t.Width, t.Height);
+            }
+            Draw(list, _gpuSurface);
+            _gpuSurface.Canvas.Flush();
+            _gpu.Flush();
+            return;
+        }
+        if (_pixelTarget is null) throw new InvalidOperationException("This renderer is bound to no target: draw with Draw(list, pixels).");
+        Draw(list, _pixelTarget.Pixels);
+    }
+
     // A paint owns the Skia children it was built with (shader, filters, dash),
     // so a child can never be evicted from under a live paint: they go together.
     private readonly ResourceCache<CacheKey, SkiaPaintEntry> _paints = new();
@@ -312,6 +421,11 @@ public sealed class SkiaRenderer : IDisposable
 
     public void Dispose()
     {
+        // The GPU context goes before the window's GL context does: dispose
+        // the renderer first.
+        _gpuSurface?.Dispose();
+        _gpuTarget?.Dispose();
+        _gpu?.Dispose();
         _paints.Dispose();
         _textPaints.Dispose();
         _textFonts.Dispose();

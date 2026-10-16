@@ -14,6 +14,46 @@ before it was published.
 
 ### Changed
 
+- **The app owns its loop (breaking).** A frame is
+  `runtime.BeginBuild()`, the app's build, `runtime.EndBuild()`, then the
+  app's renderer drawing `runtime.DrawList`, all inside a loop the app writes
+  between the window's `BeginFrame` and `EndFrame`. `samples/counter` is the
+  whole of it:
+  ```csharp
+  using var window = SilkWindow.Open(runtime, new("App", 800, 600));
+  using var skia = new SkiaRenderer(window.Gl);
+  while (SilkWindow.BeginFrame(window, runtime))
+  {
+      runtime.BeginBuild(); Build(); runtime.EndBuild();
+      skia.Draw(runtime.DrawList);
+      SilkWindow.EndFrame(window, runtime);
+  }
+  ```
+  - `BibuiWindow` (`Create`, `WithSilk`, `WithWayland`, `WithHost`, `Run`),
+    `IPlatformHost`, `ISkiaGpuPlatformHost`, `SilkPlatformHost` and
+    `WaylandPlatformHost` are gone. A window is `SilkWindow` (Bibui.Platform.Silk)
+    or `WaylandWindow` (Bibui.Platform.Wayland): `Open`, then `BeginFrame`
+    (waits for a frame to be wanted, applies input) and `EndFrame` (presents).
+    `WindowInput` is the input translation they share.
+  - Renderers are bound to a window's target when they are made:
+    `new SkiaRenderer(window.Gl)` draws onto its GL framebuffer, and
+    `new SkiaRenderer(window.Cpu)` or `new ManagedRenderer(window.Cpu)` into
+    its CPU pixels, which the window presents. `SkiaRenderer.ForGl` gives null
+    where GL is unusable, so an app can fall back to the CPU target; nothing
+    falls back for it. Bibui.Platform.Silk no longer references SkiaSharp.
+  - `runtime.Mount`, `MountStateful` and `SetState<T>` are gone. The runtime
+    owns the frame's root: what is built with nothing pushed lands under it,
+    sized to `runtime.Surface`. State is the app's own fields; a handler
+    writes one and the next frame builds from it.
+  - `SilkWindow.OnRefresh` is called while a window is being resized (where
+    GLFW blocks the loop); set it to draw a frame.
+  - `WindowFrameProfile` and `BIBUI_PROFILE_FRAMES` are gone: time the blocks
+    of the loop that interest you.
+  - `BibuiTestServer` builds no frames of its own: its commands wait for the
+    app's loop to run them (`runtime.FrameCount`).
+  - `BibuiPage.Launch` takes a build, and `BibuiPage.From(runtime, build)` the
+    function that builds a frame's tree; `page.Frame()` runs one.
+
 - **Renderers draw the `DrawList`; the runtime holds no backend (breaking).**
   `runtime.EndBuild()` builds, lays out and records a frame into
   `runtime.DrawList`, and the loop owner draws it with the renderer it chose:
@@ -37,11 +77,9 @@ before it was published.
     `FontRegistry` are in `Bibui`.
   - Textures are made on the renderer: `skia.CreateTexture(...)` or
     `managed.CreateTexture(...)`, as before on the backends.
-  - Hosts are given what they draw with: `WithSilk(skia)` takes a
-    `SkiaRenderer`, and `WithWayland(managed.Draw, options)` a `DrawToPixels`.
-    `BibuiTestServer.StartIfEnabled(runtime, port, draw)` draws its screenshots
+  - `BibuiTestServer.StartIfEnabled(runtime, port, draw)` draws its screenshots
     and recordings with the function it is given, under `runtime.FrameLock`,
-    which a host also holds while it builds and draws.
+    which a frame also holds while it builds.
   - The managed renderer's damage tracking compares one frame's `DrawList` with
     the last before anything is drawn, and redraws only the changed rects from
     the list, instead of recording canvas calls; pixels are unchanged.
@@ -135,17 +173,12 @@ before it was published.
   - The component gallery's Texture page shows both: a texture made once, and
     one whose pixels change every frame.
 
-- **Runtimes and windows are made with `Create`, and the renderer and host are
-  always chosen (breaking).**
-  `BibuiWindow.Create(BibuiRuntime.Create()).WithSilk(new SkiaRenderer()).Run(title: "App")`.
-  - `BibuiRuntime` and `BibuiWindow` have no public constructors: write
-    `BibuiRuntime.Create()`, and `BibuiWindow.Create(runtime)` followed by
-    `.WithSilk(skia)` (Bibui.Platform.Silk), `.WithWayland(draw, options)`
-    (Bibui.Platform.Wayland) or `.WithHost(host)`.
+- **Runtimes are made with `Create`, and the renderer is always chosen
+  (breaking).** `BibuiRuntime` has no public constructor: write
+  `BibuiRuntime.Create()`.
   - There is no default renderer: `RasterBackends` is gone, and
     Bibui.Raster.Skia no longer registers itself. Nothing is loaded by name, so
-    nothing warns under trimming or AOT. A window with no host throws when it
-    runs, saying what to call.
+    nothing warns under trimming or AOT.
 - **Components are called on the runtime (breaking).** Every component named
   by an id is an extension method on `BibuiRuntime`, and its static function
   is gone: `runtime.Button(id, "Save")` for `Button.Build(runtime, id, "Save")`.
@@ -218,22 +251,20 @@ before it was published.
   the box.
 - **The package split.** bibui core references no SkiaSharp: drawing goes
   through `IRasterBackend`. The packages are `Bibui` (nodes, layout, painter,
-  text, theming, and the runtime: the frame loop, interactions, components
-  and `BibuiWindow`), `Bibui.Testing`, `Bibui.Raster.Skia`,
+  text, theming, and the runtime: the frame, interactions and components), `Bibui.Testing`, `Bibui.Raster.Skia`,
   `Bibui.Platform.Silk`, `Bibui.Platform.Wayland`, `Bibui.Raster.Managed`,
   `Bibui.Raster.Managed.Backend` and `Bibui.Text.FreeType`. Referencing `Bibui.Raster.Skia` makes Skia the default backend for
   `new BibuiRenderer()` and `new BibuiRuntime()`.
-- **`BibuiWindow` takes its platform host.** `new BibuiWindow(runtime)` is
-  now `new BibuiWindow(runtime, new SilkPlatformHost())` (GLFW + OpenGL, in
-  `Bibui.Platform.Silk`) or `new WaylandPlatformHost()`. `Bibui.Key` and
+- **The window is a platform package's.** GLFW + OpenGL is
+  `Bibui.Platform.Silk`, Wayland `Bibui.Platform.Wayland`. `Bibui.Key` and
   `Bibui.MouseButton` are bibui's own types.
 - **Skia-specific API moved to the Skia packages.**
   `renderer.RenderTo(SKSurface, ...)` and `SkiaSurface` live in
   `Bibui.Raster.Skia`.
 - **Drawing types are named for what they are:** `SkiaContext` is
   `DrawContext`, `SkiaDraw` is `DrawCallback`, `SkiaKey` is `CacheKey`.
-- **The runtime is part of `Bibui`.** `BibuiRuntime`, `BibuiWindow`, the
-  platform-host seam and the components moved from the `Bibui.Runtime`
+- **The runtime is part of `Bibui`.** `BibuiRuntime`, the
+  window input and the components moved from the `Bibui.Runtime`
   package into `Bibui`; reference `Bibui` alone.
 - **Theme types are `Bibui.Theming`**, merged into `Bibui` from the former
   `Bibui.Contracts` package.

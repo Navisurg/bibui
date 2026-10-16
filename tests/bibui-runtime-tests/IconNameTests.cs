@@ -26,7 +26,7 @@ static partial class IconNameTests
         {
             var runtime = BibuiRuntime.Create();
             Exception? thrown = null;
-            runtime.Mount(
+            runtime.SetBuild(
                 () =>
                 {
                     var row = Arrange.Row().Px(100f, 40f);
@@ -38,7 +38,7 @@ static partial class IconNameTests
                     return row;
                 },
                 new SurfaceOptions { Width = 100, Height = 40 });
-            runtime.EndBuild();
+            runtime.Step();
 #if DEBUG
             Check(thrown is not null && thrown.Message.Contains("folder-open"), "a debug build names the icon it does not have");
 #else

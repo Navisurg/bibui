@@ -7,7 +7,7 @@ namespace Bibui.Platform.Wayland;
 /// A part of the host that binds globals of its own. The registry offers each
 /// global to every feature in turn; whichever binds it owns it, listens on it,
 /// and destroys it in <see cref="Destroy"/>. Listeners queue what happened
-/// through the host's sink and nothing else — the same rule BibuiWindow keeps:
+/// through the host's sink and nothing else — the same rule WindowInput keeps:
 /// no runtime call from inside the platform's dispatch.
 ///
 /// <para>This is how seat input, the clipboard and HiDPI

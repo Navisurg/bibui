@@ -31,7 +31,7 @@ present.
 
 ## In a window
 
-- **Present.** The Wayland host draws into a shared-memory buffer, so presenting
+- **Present.** The Wayland window is drawn into a shared-memory buffer, so presenting
   costs 0.01–0.03 ms and needs no GL upload or readback. On the GPU path the CPU
   side of a 600-button frame is about 5.5 ms p50, which records the frame and
   flushes it.
@@ -56,7 +56,10 @@ rasterizer are in gradients and wide strokes.
 ## Measuring
 
 The numbers come from the maintainers' benchmark harness, which is not part of
-this repository. `BIBUI_PROFILE=1` prints a per-render breakdown of time and
-allocation by phase in any app. When you compare numbers, run on a quiet machine
+this repository. `BIBUI_PROFILE=1` prints, for every frame, the time
+`EndBuild` spent building, laying out and recording. Drawing and presenting
+happen in the app's own loop, so an app times them itself: wrap a
+`Stopwatch.GetTimestamp()` around the build, the renderer's `Draw` and the
+window's `EndFrame` in the loop. When you compare numbers, run on a quiet machine
 and record the load average with them: on a busy machine the medians inflate and
 p99 becomes mostly scheduler noise.
