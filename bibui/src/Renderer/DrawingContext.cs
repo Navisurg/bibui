@@ -44,6 +44,29 @@ internal sealed class DrawingContext
         Theme = theme;
         SurfaceWidth = width;
         SurfaceHeight = height;
+        PaintDepth = 0;
+    }
+
+    // The current paint: what a draw without its own is drawn in. A stack reused
+    // from frame to frame; the painter restores its depth after every callback,
+    // so one that forgets a pop does not leak its paint into the next.
+    private Paint[] _paints = new Paint[8];
+
+    internal int PaintDepth { get; set; }
+
+    internal Paint CurrentPaint => PaintDepth > 0 ? _paints[PaintDepth - 1] : DefaultPaint;
+
+    private static readonly Paint DefaultPaint = Paint.Filled(Rgba.Black);
+
+    internal void PushPaint(in Paint paint)
+    {
+        if (PaintDepth == _paints.Length) Array.Resize(ref _paints, PaintDepth * 2);
+        _paints[PaintDepth++] = paint;
+    }
+
+    internal void PopPaint()
+    {
+        if (PaintDepth > 0) PaintDepth--;
     }
 
     // Owned by the renderer, shared across frames.

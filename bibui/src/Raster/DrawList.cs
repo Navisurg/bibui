@@ -9,17 +9,17 @@ public enum DrawOpKind : byte
     Clear,
     /// <summary>Clips to <see cref="DrawOp.Rect"/>.</summary>
     PushClip,
-    /// <summary>Moves the origin by (A, B).</summary>
-    PushTranslate,
-    /// <summary>Moves the origin by (A, B), then scales by C.</summary>
-    PushScale,
-    /// <summary>Applies <see cref="DrawOp.Matrix"/> before the current transform: current = Matrix × current.</summary>
+    /// <summary>
+    /// Applies <see cref="DrawOp.Matrix"/> before the current transform: current =
+    /// Matrix × current. A translation and a scale are matrices like any other; a
+    /// renderer may take the cheaper path for them.
+    /// </summary>
     PushTransform,
     /// <summary>Draws what follows into a layer composited at <see cref="DrawOp.Alpha"/>.</summary>
     PushOpacity,
     Pop,
-    /// <summary><see cref="DrawOp.Rect"/> with corner radii (A, B), in the op's paint.</summary>
-    RoundRect,
+    /// <summary><see cref="DrawOp.Rect"/> with corner radii (A, B), in the op's paint: a plain rect at 0.</summary>
+    Rect,
     /// <summary>From (A, B) to (C, D).</summary>
     Line,
     /// <summary>A path: <see cref="DrawList.PathAt"/>(Resource) when Resource ≥ 0, else verbs and args from the payload.</summary>
@@ -59,7 +59,7 @@ public struct DrawOp
     public PointMode Mode;          // Points
     public byte Alpha;              // PushOpacity
     public Rgba Color;              // Clear, Glyphs
-    public RectF Rect;              // RoundRect, PushClip, Texture, BackdropBlur's clip
+    public RectF Rect;              // Rect, PushClip, Texture, BackdropBlur's clip
     public float A, B, C, D;        // see DrawOpKind
     public Matrix3x2 Matrix;        // PushTransform
     public int Start, Count;        // payload: points, glyphs, path verbs

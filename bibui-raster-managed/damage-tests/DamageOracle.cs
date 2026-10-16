@@ -482,7 +482,7 @@ internal static class DamageOracle
                             pts[i] = (r.Left + (r.Right - r.Left) * i / (data.Length - 1), r.Bottom - (r.Bottom - r.Top) * data[i] / 60f);
                         ctx.DrawFilledPathGradient(pts, r.Top, r.Bottom, new Rgba(59, 130, 246, 90));
                         ctx.DrawPolyline(pts, new Rgba(59, 130, 246), 2f);
-                        ctx.DrawEdge(r.Left, r.Bottom, r.Right, r.Bottom, 1f, "#3f3f46", dashed: true);
+                        ctx.DrawEdge(r.Left, r.Bottom, r.Right, r.Bottom, 1f, DrawContext.Color("#3f3f46"), dashed: true);
                     },
                 }.Px(300f, 120f);
                 return Page(Arrange.Column(
@@ -534,7 +534,7 @@ internal static class DamageOracle
                             own.LineTo(ctx.Rect.Left + 460, ctx.Rect.Top + 100);
                             own.LineTo(ctx.Rect.Left + 380, ctx.Rect.Top + 100);
                             own.Close();
-                            ctx.DrawPath(own, ctx.Fill(new Rgba(234, 179, 8)));
+                            ctx.DrawPath(own, Paint.Filled(new Rgba(234, 179, 8)));
                         }
                     },
                 }.FillX().Px(height: 120f);
@@ -560,7 +560,7 @@ internal static class DamageOracle
                     {
                         // The scene is at scale 1, so logical and physical px agree.
                         float l = ctx.Rect.Left, t = ctx.Rect.Top;
-                        var white = ctx.Fill(new Rgba(255, 255, 255));
+                        var white = Paint.Filled(new Rgba(255, 255, 255));
                         var backend = (ManagedRasterBackend)ctx.Backend;
                         if (image.IsNone) image = backend.CreateTexture(Checkerboard(16), 16, 16);
 
@@ -583,18 +583,21 @@ internal static class DamageOracle
 
                         Span<Vector2> pts = stackalloc Vector2[8];
                         for (int i = 0; i < 8; i++) pts[i] = new(l + 30 + i * 20, t + 120 + (i == frame % 8 ? 6 : 0));
-                        ctx.DrawPoints(PointMode.Points, pts, ctx.Stroke(new Rgba(234, 179, 8), 4f));
+                        ctx.DrawPoints(PointMode.Points, pts, Paint.Stroked(new Rgba(234, 179, 8), 4f));
 
                         var font = new Font(14f, null, 400, 1f);
                         ctx.DrawText($"frame {frame / 6}", l + 30, t + 156, font, new Rgba(255, 255, 255));
                         ctx.DrawText("glyphs", l + 200, t + 156, font, new Rgba(56, 189, 248));
 
                         ctx.PushTransform(Matrix3x2.CreateScale(1f + frame / 10 % 3 * 0.25f, 1f) * Matrix3x2.CreateTranslation(l + 400, t + 120));
-                        ctx.DrawRoundRect(new RectF(0, 0, 40, 30), 6, fill: ctx.Fill(new Rgba(34, 197, 94)));
+                        ctx.DrawRect(new RectF(0, 0, 40, 30), 6, Paint.Filled(new Rgba(34, 197, 94)));
                         ctx.PopTransform();
-                        ctx.PushTranslation(l + 400, t + 180 + frame % 5);
-                        ctx.DrawRoundRect(new RectF(0, 0, 40, 30), 6, fill: ctx.Fill(new Rgba(239, 68, 68)));
-                        ctx.PopTranslation();
+                        // The same paint for what follows, pushed once.
+                        ctx.PushPaint(Paint.Filled(new Rgba(239, 68, 68)));
+                        ctx.PushTransform(Matrix3x2.CreateTranslation(l + 400, t + 180 + frame % 5));
+                        ctx.DrawRect(new RectF(0, 0, 40, 30), 6);
+                        ctx.PopTransform();
+                        ctx.PopPaint();
                     },
                 }.Px(520f, 240f);
                 return Page(Arrange.Column(canvas, Arrange.Space(8f), rt.Button("cc", "Hover me").Node), 0f);

@@ -31,12 +31,10 @@ internal sealed class DrawListReplay : IDisposable
             {
                 case DrawOpKind.Clear: canvas.Clear(op.Color); break;
                 case DrawOpKind.PushClip: canvas.Save(); canvas.ClipRect(op.Rect); break;
-                case DrawOpKind.PushTranslate: canvas.Save(); canvas.Translate(op.A, op.B); break;
-                case DrawOpKind.PushScale: canvas.Save(); canvas.Translate(op.A, op.B); canvas.Scale(op.C, op.C); break;
-                case DrawOpKind.PushTransform: canvas.Save(); canvas.SetMatrix(op.Matrix * canvas.TotalMatrix); break;
+                case DrawOpKind.PushTransform: canvas.Save(); Transform(canvas, op.Matrix); break;
                 case DrawOpKind.PushOpacity: canvas.SaveLayerAlpha(op.Alpha); break;
                 case DrawOpKind.Pop: canvas.Restore(); break;
-                case DrawOpKind.RoundRect: canvas.DrawRoundRect(op.Rect, op.A, op.B, Paint(op, list)); break;
+                case DrawOpKind.Rect: canvas.DrawRoundRect(op.Rect, op.A, op.B, Paint(op, list)); break;
                 case DrawOpKind.Line: canvas.DrawLine(op.A, op.B, op.C, op.D, Paint(op, list)); break;
                 case DrawOpKind.Path: canvas.DrawPath(Path(op, list), Paint(op, list)); break;
                 case DrawOpKind.Points: canvas.DrawPoints(op.Mode, list.Points.Slice(op.Start, op.Count), Paint(op, list)); break;
@@ -47,6 +45,20 @@ internal sealed class DrawListReplay : IDisposable
                         list.Points.Slice(op.Start2, op.Count), op.A, op.B, op.Color);
                     break;
             }
+        }
+    }
+
+    // A translation as a translation, a uniform scale after it as a scale, and
+    // anything else as the whole matrix before the canvas's own: the cheapest
+    // call that draws it, and the calls the frame was drawn with before it
+    // was recorded.
+    private static void Transform(IRasterCanvas canvas, in System.Numerics.Matrix3x2 m)
+    {
+        if (m.M12 != 0f || m.M21 != 0f || m.M11 != m.M22) canvas.SetMatrix(m * canvas.TotalMatrix);
+        else
+        {
+            canvas.Translate(m.M31, m.M32);
+            if (m.M11 != 1f) canvas.Scale(m.M11, m.M11);
         }
     }
 

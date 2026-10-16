@@ -1,3 +1,4 @@
+using System.Numerics;
 using Bibui;
 using Bibui.Theming;
 using Bibui.Renderer.Components;
@@ -77,11 +78,17 @@ internal sealed class Painter
         // pushed around the node and its subtree, outside the fade, so a
         // transparency layer is composited where the node is drawn.
         bool moved = node.Style.HasTransform;
-        if (moved) ctx.PushTransform(node.Style.TransformFor(node.Rect, node.Extent));
+        if (moved)
+        {
+            // The style's transform is over logical px; the same map over physical
+            // px is down to logical, through it, and back up.
+            float s = ctx.Scale;
+            ctx.PushTransform(Matrix3x2.CreateScale(1f / s) * node.Style.TransformFor(node.Rect, node.Extent) * Matrix3x2.CreateScale(s));
+        }
 
         // Style.Opacity fades this node and its whole subtree via a transparency layer.
         bool fade = node.Style.Opacity < 1f;
-        if (fade) ctx.PushOpacityLayer(node.Style.Opacity);
+        if (fade) ctx.PushOpacity(node.Style.Opacity);
 
         // BackdropBlur must run before the decoration paints this node's own fill/border, so it
         // blurs only what's already behind it — never this node's own content.
@@ -110,16 +117,21 @@ internal sealed class Painter
             // cuts their presses (InteractionsFor), so what is drawn and what
             // is pressed agree. Nothing else clips.
             bool clips = node is Box { Claims: var claims } && (claims & InteractionKinds.Clip) != 0;
-            if (clips) ctx.PushClip(frame.X, frame.Y, frame.Width, frame.Height);
+            if (clips) ctx.PushClip(ctx.Physical(frame.X, frame.Y, frame.Width, frame.Height));
             for (var child = node.FirstChild; child is not null; child = child.Next == child ? null : child.Next)
                 Node(child, theme, ctx);
             if (clips) ctx.PopClip();
         }
 
         if (node is Box { Draw: { } draw })
+        {
+            // A callback's paints are its own: whatever it leaves pushed is dropped.
+            int paints = _drawing.PaintDepth;
             draw(ctx.For(frame.X, frame.Y, frame.Width, frame.Height));
+            _drawing.PaintDepth = paints;
+        }
 
-        if (fade) ctx.PopOpacityLayer();
+        if (fade) ctx.PopOpacity();
         if (moved) ctx.PopTransform();
     }
 
@@ -136,7 +148,7 @@ internal sealed class Painter
         float size = icon.Size.In(theme);
         float w = MathF.Min(frame.Width, size), h = MathF.Min(frame.Height, size);
         ctx.DrawIcon(icon.Name, frame.X + w / 2f, frame.Y + h / 2f, MathF.Min(w, h),
-            (icon.Color ?? UiColor.TextPrimary).Resolve(theme.Colors));
+            DrawContext.Color((icon.Color ?? UiColor.TextPrimary).Resolve(theme.Colors)));
     }
 
     /// <summary>

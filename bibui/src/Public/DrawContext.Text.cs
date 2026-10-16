@@ -67,18 +67,19 @@ public readonly ref partial struct DrawContext
     /// ascent at <paramref name="top"/>. What a <see cref="Text"/> is drawn with.
     /// </summary>
     internal void DrawTextTop(ReadOnlySpan<char> text, float x, float top, in Font font, ReadOnlySpan<char> color)
-        => DrawText(text, x, top, font, Color(color));
+        => DrawText(text, x * Scale, top * Scale, font, Color(color));
 
     /// <summary>
     /// One line of <paramref name="text"/> in <paramref name="font"/>, drawn as a
-    /// <see cref="Text"/> is: logical position, its ascent at <paramref name="top"/>.
-    /// Measure it with <see cref="Fonts"/> and the same font.
+    /// <see cref="Text"/> is: at (<paramref name="x"/>, <paramref name="top"/>) in
+    /// physical px, its ascent at the top. Measure it with <see cref="Fonts"/> and
+    /// the same font.
     /// </summary>
     public void DrawText(ReadOnlySpan<char> text, float x, float top, in Font font, Rgba color)
     {
         if (text.IsEmpty) return;
-        float baselineY = (top * Scale) - FontMetrics(font.Size, font.Family, font.Weight).Ascent;
-        DrawRuns(text, x * Scale, baselineY, font.Size, color, font.Family, font.Weight);
+        float baselineY = top - FontMetrics(font.Size, font.Family, font.Weight).Ascent;
+        DrawRuns(text, x, baselineY, font.Size, color, font.Family, font.Weight);
     }
 
     // An icon with no path: one glyph, centred in the logical rect.
@@ -104,10 +105,7 @@ public readonly ref partial struct DrawContext
     /// app does not fall over. An unknown name is still a mistake: check one that
     /// comes from data with <see cref="Icon.IsKnown"/>.
     /// </summary>
-    public void DrawIcon(string? iconName, float cx, float cy, float size, ReadOnlySpan<char> color)
-        => DrawIcon(iconName, cx, cy, size, Color(color));
-
-    public void DrawIcon(string? iconName, float cx, float cy, float size, Rgba color)
+    internal void DrawIcon(string? iconName, float cx, float cy, float size, Rgba color)
     {
         var srcPath = SvgPathParser.Parse(IconRegistry.Get(iconName));
         if (srcPath is null)
@@ -137,15 +135,11 @@ public readonly ref partial struct DrawContext
             static (p, path) => path.AddPath(p.srcPath, Matrix3x2.CreateScale(p.s, p.s)));
 
         float strokeW = MathF.Max(1f, 1.5f * (size / 18f) * Scale);
-        var paint = Paint(PaintSpec.Stroke(color, strokeW) with
-        {
-            StrokeCap = StrokeCap.Round,
-            StrokeJoin = StrokeJoin.Round,
-        });
+        var paint = new Paint { Stroke = color, StrokeWidth = strokeW, Cap = StrokeCap.Round, Join = StrokeJoin.Round };
 
-        PushTranslation(cx - size / 2f, cy - size / 2f);
+        PushTransform(Matrix3x2.CreateTranslation((cx - size / 2f) * Scale, (cy - size / 2f) * Scale));
         DrawPath(scaledPath, paint);
-        PopTranslation();
+        PopTransform();
     }
 
     /// <summary>
@@ -157,7 +151,7 @@ public readonly ref partial struct DrawContext
     /// way to cache it. Exposing the surface would hand callers a factory for
     /// exactly the uncached native objects the rest of this API exists to avoid.
     /// </summary>
-    public void BlurBackdrop(float x, float y, float w, float h, float sigma)
+    internal void BlurBackdrop(float x, float y, float w, float h, float sigma)
     {
         if (sigma <= 0f || !_ctx.CanBlurBackdrop)
         {

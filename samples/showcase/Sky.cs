@@ -57,17 +57,17 @@ internal static class Sky
         ctx.DrawRRectGradient(L.Left, L.Top, L.Width, L.Height, radius,
             [(0f, "#0B1030"), (0.55f, "#070A1C"), (1f, "#04050D")],
             (0f, 0f), (0f, 1f), strokeColor: default, strokeWidth: null);
-        var glow = ctx.RadialGradient(new Vector2(cx * s, (cy + R * 0.9f) * s), R * 1.6f * s,
+        var glow = RasterShader.Radial(new Vector2(cx * s, (cy + R * 0.9f) * s), R * 1.6f * s,
             [pal.Accent.WithAlpha(46), pal.Accent.WithAlpha(0)], [0f, 1f]);
-        ctx.DrawRoundRect(ctx.Physical(L.Left, L.Top, L.Width, L.Height), radius * s, fill: ctx.Paint(PaintSpec.Fill(Rgba.White), glow));
+        ctx.DrawRect(ctx.Physical(L.Left, L.Top, L.Width, L.Height), radius * s, new Paint { Fill = Rgba.White, Shader = glow });
 
         // The dome: lighter at the horizon, as a real sky is, darkest at the zenith.
-        var dome = ctx.RadialGradient(new Vector2(cx * s, cy * s), R * s,
+        var dome = RasterShader.Radial(new Vector2(cx * s, cy * s), R * s,
             [DrawContext.Color("#060918"), DrawContext.Color("#0C1433"), DrawContext.Color("#1A2350")], [0f, 0.72f, 1f]);
-        ctx.DrawRoundRect(ctx.Physical(cx - R, cy - R, 2 * R, 2 * R), R * s, fill: ctx.Paint(PaintSpec.Fill(Rgba.White), dome));
+        ctx.DrawRect(ctx.Physical(cx - R, cy - R, 2 * R, 2 * R), R * s, new Paint { Fill = Rgba.White, Shader = dome });
 
         // The galactic band: a chain of soft blots along it, blurred into one glow.
-        var band = ctx.Paint(PaintSpec.Fill(new Rgba(170, 180, 255, 34)), blurSigma: R * 0.07f * s);
+        var band = new Paint { Fill = new Rgba(170, 180, 255, 34), Blur = R * 0.07f * s };
         for (double theta = 0; theta < 360; theta += 5)
         {
             var (ra, dec) = Data.Band(theta);
@@ -75,25 +75,25 @@ internal static class Sky
             if (alt < 2) continue;
             var (x, y) = Project(alt, az, R);
             float br = R * 0.09f;
-            ctx.DrawRoundRect(ctx.Physical(cx + x - br, cy + y - br, 2 * br, 2 * br), br * s, fill: band);
+            ctx.DrawRect(ctx.Physical(cx + x - br, cy + y - br, 2 * br, 2 * br), br * s, band);
         }
 
         // The alt-az grid: rings at 30° and 60°, spokes every 45°, ticks round the horizon.
         if (grid)
         {
             var gridColor = new Rgba(150, 165, 230, 46);
-            var dashed = ctx.Paint(PaintSpec.Stroke(gridColor, 1f * s), dash: new DashPattern(3f * s, 5f * s));
+            var dashed = new Paint { Stroke = gridColor, StrokeWidth = 1f * s, Dash = new DashPattern(3f * s, 5f * s) };
             foreach (float alt in (ReadOnlySpan<float>)[30f, 60f])
             {
                 float rr = R * (90f - alt) / 90f;
-                // A path is a backend handle the frame may draw later, so it comes from
-                // the frame's cache, keyed on what it is built from, never disposed here.
+                // A ring of a size is the same path every frame, so it comes from the
+                // frame's cache, keyed on what it is built from.
                 float pr = rr * s;
                 var ring = ctx.Path(CacheKey.Of([CacheKey.Bits(pr), 0x5C1]), pr,
                     static (r, p) => p.AddArc(new RectF(0f, 0f, 2f * r, 2f * r), 0f, 360f));
-                ctx.PushTranslation(cx - rr, cy - rr);
+                ctx.PushTransform(Matrix3x2.CreateTranslation((cx - rr) * s, (cy - rr) * s));
                 ctx.DrawPath(ring, dashed);
-                ctx.PopTranslation();
+                ctx.PopTransform();
             }
             for (int k = 0; k < 8; k++)
             {
@@ -127,8 +127,8 @@ internal static class Sky
             {
                 bins2[n2++] = p;
                 var tint = star.Tint switch { 0 => new Rgba(190, 210, 255), 1 => new Rgba(255, 226, 190), _ => Rgba.White };
-                ctx.DrawRoundRect(new RectF(p.X - 5 * s, p.Y - 5 * s, p.X + 5 * s, p.Y + 5 * s), 5 * s,
-                    fill: ctx.Paint(PaintSpec.Fill(tint.WithAlpha(90)), blurSigma: 2.5f * s));
+                ctx.DrawRect(new RectF(p.X - 5 * s, p.Y - 5 * s, p.X + 5 * s, p.Y + 5 * s), 5 * s,
+                    new Paint { Fill = tint.WithAlpha(90), Blur = 2.5f * s });
             }
             else if (b > 0.18f) bins1[n1++] = p;
             else bins0[n0++] = p;
@@ -151,8 +151,11 @@ internal static class Sky
             var path = ctx.Path(CacheKey.Of([CacheKey.Bits(q.Item1), CacheKey.Bits(q.Item2), CacheKey.Bits(q.Item3),
                     CacheKey.Bits(q.Item4), CacheKey.Bits(q.Item5), CacheKey.Bits(q.Item6), 0x51E]), q,
                 static (c, p) => { p.MoveTo(c.Item1, c.Item2); p.QuadTo(c.Item3, c.Item4, c.Item5, c.Item6); });
-            ctx.DrawPath(path, ctx.Paint(PaintSpec.Stroke(pal.Accent.WithAlpha(200), 1.5f * s) with { StrokeCap = StrokeCap.Round },
-                dash: new DashPattern(5f * s, 5f * s)));
+            ctx.DrawPath(path, new Paint
+            {
+                Stroke = pal.Accent.WithAlpha(200), StrokeWidth = 1.5f * s, Cap = StrokeCap.Round,
+                Dash = new DashPattern(5f * s, 5f * s),
+            });
         }
 
         // Targets: a ring in the colour of their state; the chosen one gets a turning reticle.
@@ -191,6 +194,6 @@ internal static class Sky
     private static void DrawDots(DrawContext ctx, ReadOnlySpan<Vector2> pts, float size, Rgba color)
     {
         if (pts.IsEmpty) return;
-        ctx.DrawPoints(PointMode.Points, pts, ctx.Paint(PaintSpec.Stroke(color, size) with { StrokeCap = StrokeCap.Round, IsAntialias = true }));
+        ctx.DrawPoints(PointMode.Points, pts, new Paint { Stroke = color, StrokeWidth = size, Cap = StrokeCap.Round });
     }
 }

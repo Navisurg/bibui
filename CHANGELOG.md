@@ -26,8 +26,8 @@ before it was published.
     `DrawGlyphRun`, `IRasterBackend.ShapeText`, `RasterFont` and `ShapedRun`
     are gone.
   - `DrawContext.DrawText(text, x, top, font, color)` draws one line of text as
-    a `Text` node is drawn: shaped by `Fonts`, with fallback runs, in logical
-    coordinates. Use it rather than drawing glyphs by hand.
+    a `Text` node is drawn: shaped by `Fonts`, with fallback runs, at a
+    physical position. Use it rather than drawing glyphs by hand.
   - `FontFace` replaces `RasterTypeface`. `Fonts.Face(family, weight)` and
     `DrawContext.Fonts` give a draw that hands a raster canvas glyphs its face.
   - `IRasterBackend` loses `LoadTypeface`, `MatchFamily`, `MatchCharacter`,
@@ -48,9 +48,28 @@ before it was published.
   - A `DrawOp` is a fixed-size value with no references; points, glyphs, path
     verbs and gradient colours live in the list's payload, and kept paths and
     faces are named by index. The list is reused from frame to frame.
-  - `DrawContext` records instead of drawing. `DrawContext.Canvas` is gone, and
-    with it `SkiaCustomDraw`: a custom draw uses `DrawContext`, which every
-    backend can execute.
+  - `DrawContext` records instead of drawing, and is primitives only, in
+    physical px: `DrawRect(rect, radius)` (a plain rect at radius 0),
+    `DrawPath`, `DrawLine`, `DrawPoints`, `DrawTexture` and `DrawText`, each in
+    the current paint or a `Paint` of its own; `PushClip`, `PushTransform`
+    (translations and scales are transforms; `PushTranslation` and `PushScale`
+    are gone), `PushOpacity` and `PushPaint`, each with its pop. What a draw
+    becomes in the list is the core's to decide, and a renderer may draw an op
+    however it likes.
+  - `Paint` is the look of a draw: fill and/or stroke colour, stroke width,
+    cap, join, dash, gradient (`RasterShader`), blur (a soft shadow), sampling
+    and antialiasing. It replaces `ctx.Paint`, `ctx.Fill`, `ctx.Stroke`,
+    `ctx.LinearGradient` and `ctx.RadialGradient` (use `RasterShader.Linear`
+    and `RasterShader.Radial`) and `DrawRoundRect`'s fill and stroke paints.
+  - Shapes composed of primitives are usage code, in `DrawShapes`:
+    `DrawRRect`, `DrawShadow`, `DrawEdge`, `DrawCheckMark`, `DrawArc`,
+    `DrawPolyline`, `DrawFilledPath`, `DrawFilledPathGradient` and
+    `DrawRRectGradient`, as extension methods written against the public
+    `DrawContext` alone, in logical px and `Rgba` (their hex-string overloads
+    and `DrawVerticalLine` are gone). `DrawIcon` and `BlurBackdrop` are the
+    painter's own.
+  - `DrawContext.Canvas` is gone, and with it `SkiaCustomDraw`: a custom draw
+    uses `DrawContext`, which every backend can execute.
   - Paths are bibui's own `VectorPath` (verbs and arguments, `AddPath` under a
     transform), not a backend's. `ctx.Path(key, build)` builds and keeps one;
     `ctx.DrawPath` draws it, or copies any other path into the list.
