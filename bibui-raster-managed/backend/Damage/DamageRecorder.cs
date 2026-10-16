@@ -17,7 +17,7 @@ namespace Bibui.Raster.Managed.Backend.Damage;
 /// canvas draws every call as well as recording it, and the record keeps only
 /// what the next frame is compared on, not what a replay would need.</para>
 /// </summary>
-internal sealed class DamageRecorder(ManagedRasterBackend backend)
+internal sealed class DamageRecorder
 {
     private DamageFrame _f = null!;
 
@@ -299,7 +299,7 @@ internal sealed class DamageRecorder(ManagedRasterBackend backend)
         ulong content = Hash64.Bytes(MemoryMarshal.AsBytes(text));
         float advance = drawn ?? Advance(font, content, text);
         ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(Hash64.Mix(0x2DUL, (ulong)text.Length), content), x, baselineY),
-            (ulong)(uint)font.Typeface.Id << 32 | color.Argb), font.Size);
+            (ulong)(uint)font.Face.Id << 32 | color.Argb), font.Size);
         Draw(ref op, h, Bounds(TextBox(x, x + advance, baselineY, font), default));
         return advance;
     }
@@ -319,7 +319,7 @@ internal sealed class DamageRecorder(ManagedRasterBackend backend)
             t = MathF.Min(t, p.Y); b = MathF.Max(b, p.Y);
         }
         ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(0x2BUL, glyphs), positions), x, baselineY);
-        h = Hash64.Mix(Hash64.Mix(h, (ulong)(uint)font.Typeface.Id << 32 | color.Argb), font.Size);
+        h = Hash64.Mix(Hash64.Mix(h, (ulong)(uint)font.Face.Id << 32 | color.Argb), font.Size);
         var box = TextBox(x + l, x + r + font.Size, baselineY, font);
         box = new RectF(box.Left, box.Top + t, box.Right, box.Bottom + b);
         Draw(ref op, h, Bounds(box, default));
@@ -335,9 +335,9 @@ internal sealed class DamageRecorder(ManagedRasterBackend backend)
 
     private float Advance(in RasterFont font, ulong content, ReadOnlySpan<char> text)
     {
-        var key = (font.Typeface.Id, font.Size, content, text.Length);
+        var key = (font.Face.Id, font.Size, content, text.Length);
         if (_advances.TryGetValue(key, out float a)) return a;
-        if (!_olderAdvances.TryGetValue(key, out a)) a = backend.MeasureText(font, text);
+        if (!_olderAdvances.TryGetValue(key, out a)) a = ManagedRasterBackend.Strike(font).Measure(text);
         if (_advances.Count >= 8192)
         {
             (_olderAdvances, _advances) = (_advances, _olderAdvances);
@@ -388,8 +388,12 @@ internal sealed class DamageRecorder(ManagedRasterBackend backend)
 
     private RectF TextBox(float left, float right, float baseline, in RasterFont font)
     {
-        var key = (font.Typeface.Id, font.Size);
-        if (!_metrics.TryGetValue(key, out var m)) _metrics[key] = m = backend.GetMetrics(font);
+        var key = (font.Face.Id, font.Size);
+        if (!_metrics.TryGetValue(key, out var m))
+        {
+            var fm = ManagedRasterBackend.Strike(font).Metrics;
+            _metrics[key] = m = new TextMetrics(fm.Ascent, fm.Descent, fm.Leading);
+        }
         float pad = font.Size * 0.25f + 1f;
         return new(left - pad, baseline + MathF.Min(m.Ascent, -font.Size) - pad, right + pad, baseline + MathF.Max(m.Descent, font.Size * 0.3f) + pad);
     }

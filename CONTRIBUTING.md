@@ -18,11 +18,11 @@ describes.
 
 ## Building
 
-You need the .NET 10 SDK. On Linux, the managed text engine and the Wayland
-host load system libraries at run time:
+You need the .NET 10 SDK. On Linux, bibui's text and the Wayland host load
+system libraries at run time:
 
 - FreeType and HarfBuzz (`libfreetype6`, `libharfbuzz0b` on Debian/Ubuntu)
-  for `Bibui.Text.FreeType` and the managed raster backend;
+  for `Bibui`, which measures and shapes all text with them;
 - `libwayland-client` and `libxkbcommon` for `Bibui.Platform.Wayland`.
 
 Each library is its own project: `bibui` holds the core, the runtime

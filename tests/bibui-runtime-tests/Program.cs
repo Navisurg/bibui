@@ -2793,18 +2793,13 @@ Run("Raster: a shaped glyph run draws the same pixels as the string it came from
     // On Skia the two paths must agree exactly, so a renderer can move to
     // shaped runs without a pixel moving.
     using var backend = new Bibui.Raster.Skia.SkiaRasterBackend();
-    byte[] inter;
-    using (var stream = typeof(BibuiRenderer).Assembly.GetManifestResourceStream("Bibui.Assets.Fonts.Inter-Regular.ttf")!)
-    {
-        inter = new byte[stream.Length];
-        stream.ReadExactly(inter);
-    }
-    var typeface = backend.LoadTypeface(inter);
-    IsTrue(typeface is not null, "the embedded Inter loads");
-    IsTrue(typeface!.HasGlyph('A') && !typeface.HasGlyph(0x10FFFD), "glyph coverage is the face's own");
+    using var fonts = new Fonts();
+    var face = fonts.Face();
+    IsTrue(face.HasGlyph('A') && !face.HasGlyph(0x10FFFD), "glyph coverage is the face's own");
 
-    var font = new Bibui.Raster.RasterFont(typeface, 17.5f);
+    var font = new Bibui.Raster.RasterFont(face, 17.5f);
     const string text = "Shaped runs, glyph by glyph — 0.5 ffi";
+    float measured = face.Strike(font.Size).Measure(text);
 
     byte[] Paint(Action<Bibui.Raster.IRasterCanvas> draw)
     {
@@ -2825,9 +2820,9 @@ Run("Raster: a shaped glyph run draws the same pixels as the string it came from
 
     IsTrue(fromString.AsSpan().SequenceEqual(fromRun), "glyph-run pixels must equal string pixels");
     IsTrue(fromString.Chunk(4).Distinct().Count() > 2, "text was drawn");
-    IsTrue(MathF.Abs(run.Width - backend.MeasureText(font, text)) < 0.01f,
-        $"shaped advances sum to the measured width ({run.Width} vs {backend.MeasureText(font, text)})");
-    Eq(backend.MeasureText(font, text), drawnAdvance, "DrawText returns the advance MeasureText gives");
+    IsTrue(MathF.Abs(run.Width - measured) < 0.01f,
+        $"shaped advances sum to the measured width ({run.Width} vs {measured})");
+    Eq(measured, drawnAdvance, "Skia's DrawText returns the advance bibui's FreeType measuring gives");
 });
 
 Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and gradients", () =>

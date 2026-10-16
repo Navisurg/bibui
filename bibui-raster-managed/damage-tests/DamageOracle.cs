@@ -581,7 +581,7 @@ internal static class DamageOracle
                         for (int i = 0; i < 8; i++) pts[i] = new(l + 30 + i * 20, t + 120 + (i == frame % 8 ? 6 : 0));
                         c.DrawPoints(PointMode.Points, pts, ctx.Stroke(new Rgba(234, 179, 8), 4f));
 
-                        var font = new RasterFont(ctx.Backend.DefaultTypeface, 14f);
+                        var font = new RasterFont(ctx.Fonts.Face(), 14f);
                         c.DrawText($"frame {frame / 6}", l + 30, t + 170, font, new Rgba(255, 255, 255));
                         var run = ctx.Backend.ShapeText(font, "glyphs");
                         var at = new Vector2[run.Glyphs.Length];

@@ -1,4 +1,4 @@
-namespace Bibui.Text.FreeType;
+namespace Bibui.FreeType;
 
 /// <summary>
 /// The text "preblend": before a coverage mask is blended, each coverage value is

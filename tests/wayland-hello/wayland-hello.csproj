@@ -13,10 +13,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../bibui-platform-wayland/bibui-platform-wayland.csproj" />
-    <!-- The host brings no rasterizer: the managed one, with FreeType/HarfBuzz text. -->
+    <!-- The host brings no rasterizer: the managed one. -->
     <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
-    <!-- Comes in with the backend anyway; named here only to alias it:
-         its namespace Bibui.Text.FreeType collides with the type Bibui.Text. -->
-    <ProjectReference Include="../../bibui-text-freetype/Bibui.Text.FreeType.csproj" Aliases="freetype" />
   </ItemGroup>
 </Project>

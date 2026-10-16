@@ -1,6 +1,6 @@
-using Bibui.Text.FreeType.Native;
+using Bibui.FreeType.Native;
 
-namespace Bibui.Text.FreeType;
+namespace Bibui.FreeType;
 
 /// <summary>
 /// One <see cref="FontData"/> opened in one <see cref="TextEngine"/>: the size-free

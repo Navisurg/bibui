@@ -63,7 +63,8 @@ public readonly ref partial struct DrawContext
 {
     private readonly DrawingContext _ctx;
     private RenderCaches _caches => _ctx.Caches;
-    private Fonts Fonts => _ctx.Fonts;
+    /// <summary>The renderer's fonts: what this frame's text was measured with.</summary>
+    public Fonts Fonts => _ctx.Fonts;
 
     /// <summary>What this wraps, for the renderer to keep where a ref struct cannot go.</summary>
     internal DrawingContext Drawing => _ctx;

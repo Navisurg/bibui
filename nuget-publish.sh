@@ -33,7 +33,6 @@ PROJECTS=(
   "bibui-testing/bibui-testing.csproj"
   # The raw Wayland host and the managed raster backend
   # with its FreeType/HarfBuzz text — an app on these ships no Skia or Silk.
-  "bibui-text-freetype/Bibui.Text.FreeType.csproj"
   "bibui-raster-managed/src/Bibui.Raster.Managed.csproj"
   "bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj"
   "bibui-platform-wayland/bibui-platform-wayland.csproj"

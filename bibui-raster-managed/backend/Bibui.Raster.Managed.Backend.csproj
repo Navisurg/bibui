@@ -6,8 +6,9 @@
     bibui's IRasterBackend on the managed rasterizer core, with
     text from the FreeType/HarfBuzz engine. It references bibui for the
     interface, which brings no SkiaSharp with it, and it calls
-    no Skia: shapes, clips, layers, images, PNG and text all go through
-    Bibui.Raster.Managed and Bibui.Text.FreeType.
+    no Skia: shapes, clips, layers, images and PNG go through
+    Bibui.Raster.Managed, and text is drawn from the glyph masks of bibui's
+    own FreeType/HarfBuzz engine.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -20,15 +21,13 @@
     <NuGetAudit>false</NuGetAudit>
     <IsAotCompatible>true</IsAotCompatible>
     <PackageId>Bibui.Raster.Managed.Backend</PackageId>
-    <Description>bibui's IRasterBackend on the managed rasterizer, with text from Bibui.Text.FreeType: draws with no SkiaSharp.</Description>
+    <Description>bibui's IRasterBackend on the managed rasterizer: draws with no SkiaSharp.</Description>
     <PackageTags>$(PackageTags);rasterizer;rendering;aot</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../src/Bibui.Raster.Managed.csproj" />
     <ProjectReference Include="../../bibui/bibui.csproj" />
-    <!-- Aliased: its namespace Bibui.Text.FreeType collides with the type Bibui.Text in bibui (CS0434). -->
-    <ProjectReference Include="../../bibui-text-freetype/Bibui.Text.FreeType.csproj" Aliases="freetype" />
   </ItemGroup>
 
   <ItemGroup>
