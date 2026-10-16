@@ -1,7 +1,6 @@
 using System.Numerics;
 using Bibui;
 using Bibui.Draw;
-using Bibui.Renderer;
 using Bibui.Runtime;
 
 namespace Showcase;

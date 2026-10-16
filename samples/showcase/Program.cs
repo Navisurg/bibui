@@ -94,7 +94,7 @@ if (Has("--first-frame"))
     var rt = BibuiRuntime.Create();
     rt.Mount(() => app.Build(rt), app.Theme(), new SurfaceOptions { Width = 1440, Height = 900, ScaleFactor = 1f });
     rt.EndBuild();
-    _ = Screenshots.Pixels(rt, NewDraw())[0];
+    _ = FramePixels.Bgra(rt, NewDraw(), out _, out _)[0];
     double ms = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
     Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
         $"FIRST_FRAME main_ms={ms:F2} rss_mb={Environment.WorkingSet / 1048576.0:F1}"));

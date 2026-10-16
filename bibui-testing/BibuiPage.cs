@@ -1,4 +1,3 @@
-using Bibui.Imaging;
 using Bibui.Draw;
 using Bibui.Raster.Skia;
 using Bibui.TextEdit;
@@ -340,11 +339,7 @@ public sealed class BibuiPage : IDisposable
     public byte[] Screenshot()
     {
         Render();
-        int w = SurfaceOptions.PhysicalSize(_runtime.SurfaceWidth, _runtime.ScaleFactor);
-        int h = SurfaceOptions.PhysicalSize(_runtime.SurfaceHeight, _runtime.ScaleFactor);
-        var bgra = GC.AllocateArray<byte>(w * h * 4, pinned: true);
-        _draw(_runtime.DrawList, new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), w, h, w * 4));
-        return Png.Encode(bgra, w, h, w * 4, ChannelOrder.Bgra, AlphaMode.Premultiplied);
+        return FramePixels.Png(_runtime, _draw);
     }
 
     // ── IDisposable ──────────────────────────────────────────────────────────

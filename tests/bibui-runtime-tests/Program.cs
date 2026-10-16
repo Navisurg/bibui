@@ -4,7 +4,6 @@ using Bibui.Theming;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Raster.Skia;
-using Bibui.Renderer;
 using Bibui.Runtime;
 using Bibui.Runtime.Platform;
 using Bibui.Testing;
@@ -2759,9 +2758,9 @@ Run("DrawList: recording a frame after the first allocates nothing", () =>
     }, new SurfaceOptions { Width = 400, Height = 300 });
     runtime.EndBuild();
 
-    var caches = new Bibui.Renderer.RenderCaches();
+    var caches = new Bibui.Draw.RenderCaches();
     using var fonts = new Fonts();
-    var painter = new Bibui.Renderer.Painter(caches, fonts);
+    var painter = new Bibui.Draw.Painter(caches, fonts);
     var list = new Bibui.Draw.DrawList();
     var surface = new SurfaceOptions { Width = 400, Height = 300 };
     var theme = runtime.Theme;
@@ -2814,10 +2813,7 @@ Run("Box.Draw: a callback draws in its box's space, clipped to the box, and its 
     }.Px(40f, 40f);
     var after = new Box { Draw = (_, ctx) => ctx.DrawRect(ctx.Rect, 0f, Paint.Filled(green)) }.Px(40f, 40f);
     var root = Arrange.Row(drawn, after).Padded(new EdgeInsets(20f, 0f, 0f, 30f));
-    var renderer = new BibuiRenderer();
-    var surface = new SurfaceOptions { Width = 160, Height = 100, ScaleFactor = 1f };
-    renderer.Layout(root, surface, ThemeLoader.NeutralDark());
-    var px = renderer.Frame(root, surface, ThemeLoader.NeutralDark()).RawBgraBytes;
+    var px = Frames.Frame(root, new SurfaceOptions { Width = 160, Height = 100, ScaleFactor = 1f }, ThemeLoader.NeutralDark()).RawBgraBytes;
     bool Is(int x, int y, Rgba c) { int i = (y * 160 + x) * 4; return px[i] == c.B && px[i + 1] == c.G && px[i + 2] == c.R; }
 
     IsTrue(ReferenceEquals(drawn, handed), "the callback is handed its box");
@@ -2831,7 +2827,6 @@ Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and 
 {
     // The former Skia escape hatch: paints are values, paths and
     // gradients are the backend's handles, and none of it names SkiaSharp.
-    var renderer = new BibuiRenderer();
     var root = new Box
     {
             Draw = (_, ctx) =>
@@ -2850,9 +2845,7 @@ Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and 
                 ctx.DrawPath(tri, new Paint { Stroke = Rgba.White, StrokeWidth = 2f, Dash = new Bibui.Draw.DashPattern(4f, 2f) });
             },
     }.Px(120f, 60f);
-    var surface = new SurfaceOptions { Width = 120, Height = 60, ScaleFactor = 1f };
-    renderer.Layout(root, surface, ThemeLoader.NeutralDark());
-    var output = renderer.Frame(root, surface, ThemeLoader.NeutralDark());
+    var output = Frames.Frame(root, new SurfaceOptions { Width = 120, Height = 60, ScaleFactor = 1f }, ThemeLoader.NeutralDark());
     var px = output.RawBgraBytes;
     // BGRA: left edge red-ish, right edge blue-ish, from the gradient.
     int Px(int x, int y) => (y * 120 + x) * 4;
@@ -2919,10 +2912,11 @@ Run("DrawContext.Resolve: follows a theme changed between the build and the pain
             ctx.DrawRect(ctx.Rect, 0f, Paint.Filled(surface));
         },
     }.Px(40f, 40f);
-    var renderer = new BibuiRenderer();
-    var options = new SurfaceOptions { Width = 40, Height = 40, ScaleFactor = 1f };
-    renderer.Layout(root, options, light);             // built and laid out in one theme
-    var output = renderer.Frame(root, options, dark);  // painted in another
+    var runtime = BibuiRuntime.Create();
+    runtime.Mount(() => root, light, new SurfaceOptions { Width = 40, Height = 40, ScaleFactor = 1f });
+    runtime.EndBuild();                // a frame in one theme
+    runtime.SetTheme(dark);            // then the theme changes
+    var output = runtime.Frame();      // and the next frame is painted in it
 
     IsTrue(ReferenceEquals(dark, seen), "ctx.Theme is the theme the frame is painted in");
     Eq(Expect(dark, UiColor.Accent), accent, "a token resolves against the painting theme");

@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Bibui.Renderer;
+namespace Bibui;
 
 /// <summary>
 /// A content-addressed, touch-evicted cache for render resources (paints,

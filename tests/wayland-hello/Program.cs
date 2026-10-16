@@ -135,10 +135,7 @@ runtime.Mount(() =>
 if (args.Contains("--first-frame"))
 {
     runtime.EndBuild();
-    int w = runtime.SurfaceWidth, h = runtime.SurfaceHeight;
-    var pixels = GC.AllocateArray<byte>(w * h * 4, pinned: true);
-    managed.Draw(runtime.DrawList, new Bibui.Draw.RasterPixels(
-        System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(pixels, 0), w, h, w * 4));
+    FramePixels.Bgra(runtime, managed.Draw, out _, out _);
     return 0;
 }
 

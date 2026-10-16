@@ -3,7 +3,6 @@ using System.Runtime.CompilerServices;
 using Bibui.Draw;
 using Bibui.FreeType;
 using Bibui.Raster.Managed.Backend.Damage;
-using Bibui.Renderer;
 using BPaintStyle = Bibui.PaintStyle;
 using BStrokeCap = Bibui.StrokeCap;
 using BStrokeJoin = Bibui.StrokeJoin;

@@ -1,5 +1,4 @@
 using Bibui;
-using Bibui.Imaging;
 using Bibui.Draw;
 using Bibui.Runtime;
 using Bibui.TextEdit;
@@ -99,17 +98,7 @@ internal static class Screenshots
             script(rt, f);
             rt.EndBuild();
         }
-        return Png.Encode(Pixels(rt, draw), w, h, w * 4, ChannelOrder.Bgra, AlphaMode.Premultiplied);
-    }
-
-    /// <summary>The runtime's last frame, drawn by <paramref name="draw"/> into a new BGRA buffer.</summary>
-    public static byte[] Pixels(BibuiRuntime rt, DrawToPixels draw)
-    {
-        int w = SurfaceOptions.PhysicalSize(rt.SurfaceWidth, rt.ScaleFactor);
-        int h = SurfaceOptions.PhysicalSize(rt.SurfaceHeight, rt.ScaleFactor);
-        var bgra = GC.AllocateArray<byte>(w * h * 4, pinned: true);
-        draw(rt.DrawList, new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), w, h, w * 4));
-        return bgra;
+        return FramePixels.Png(rt, draw);
     }
 
     private static void HoverAt(BibuiRuntime rt, string id, float fx, float fy)

@@ -30,26 +30,21 @@ public static class Frames
     public static Pixels Frame(this BibuiRuntime runtime, DrawToPixels? draw = null)
     {
         runtime.EndBuild();
-        return Pixels.Of(runtime.DrawList,
-            SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor),
-            SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor),
-            draw ?? Skia.Draw);
+        return runtime.LastFrame(draw);
     }
 
-    /// <summary>The runtime's last frame, drawn again with Skia: what is on screen, without building another.</summary>
-    public static Pixels LastFrame(this BibuiRuntime runtime) => Pixels.Of(runtime.DrawList,
-        SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor),
-        SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor),
-        Skia.Draw);
-
-    /// <summary>Records the laid-out <paramref name="root"/> with <paramref name="renderer"/> and draws it, Skia by default.</summary>
-    public static Pixels Frame(this BibuiRenderer renderer, UiNode root, SurfaceOptions surface, Bibui.Theming.ThemeTokens theme,
-        DrawToPixels? draw = null)
+    /// <summary>The runtime's last frame, drawn again (Skia by default): what is on screen, without building another.</summary>
+    public static Pixels LastFrame(this BibuiRuntime runtime, DrawToPixels? draw = null)
     {
-        renderer.Record(root, surface, theme);
-        return Pixels.Of(renderer.DrawList,
-            SurfaceOptions.PhysicalSize(surface.Width, surface.ScaleFactor),
-            SurfaceOptions.PhysicalSize(surface.Height, surface.ScaleFactor),
-            draw ?? Skia.Draw);
+        var bgra = FramePixels.Bgra(runtime, draw ?? Skia.Draw, out int w, out int h);
+        return new Pixels(bgra, w, h);
+    }
+
+    /// <summary>A free-standing tree as a runtime's whole frame, built and drawn with Skia.</summary>
+    public static Pixels Frame(UiNode root, SurfaceOptions surface, Bibui.Theming.ThemeTokens theme)
+    {
+        var runtime = BibuiRuntime.Create();
+        runtime.Mount(() => root, theme, surface);
+        return runtime.Frame();
     }
 }

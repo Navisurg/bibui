@@ -1,5 +1,4 @@
 using System.Numerics;
-using Bibui.Renderer;
 using Bibui.Theming;
 
 namespace Bibui.Runtime;

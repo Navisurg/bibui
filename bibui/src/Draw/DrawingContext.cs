@@ -2,7 +2,7 @@ using Bibui;
 using Bibui.Draw;
 using Bibui.Theming;
 
-namespace Bibui.Renderer;
+namespace Bibui.Draw;
 
 internal sealed class DrawingContext
 {

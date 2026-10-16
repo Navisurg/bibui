@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Bibui.Theming;
 using Bibui.Draw;
-using Bibui.Renderer;
 using Bibui.TextEdit;
 
 namespace Bibui.Runtime;
@@ -17,11 +16,19 @@ namespace Bibui.Runtime;
 /// </summary>
 public sealed partial class BibuiRuntime
 {
-    // Lays out and records every frame; what draws the list is the loop
+    // What a frame is laid out and recorded with: the fonts text is measured
+    // and drawn in, the caches recording reads, and the painter that records.
+    // One set per runtime, for its life. What draws the list is the loop
     // owner's choice, and none of the runtime's business.
-    private readonly BibuiRenderer Renderer = new();
+    private readonly Fonts _fonts = new();
+    private readonly RenderCaches _caches = new();
+    private readonly Painter _painter;
 
-    private BibuiRuntime() { }
+    private BibuiRuntime()
+    {
+        _painter = new Painter(_caches, _fonts);
+        _measure = MeasureLeaf;
+    }
 
     /// <summary>
     /// A runtime. It lays frames out and records them into <see cref="DrawList"/>;
@@ -34,7 +41,7 @@ public sealed partial class BibuiRuntime
     /// Valid until the next frame records; read it under <see cref="FrameLock"/>
     /// when another thread may build.
     /// </summary>
-    public DrawList DrawList => Renderer.DrawList;
+    public DrawList DrawList { get; } = new();
     private readonly object _syncRoot = new();
     // Held around a frame: building and recording it, and whatever draws the
     // list it recorded. Two threads build frames (the window's loop and the
@@ -265,8 +272,11 @@ public sealed partial class BibuiRuntime
             EndDropDowns(tree);
             var t1 = Stopwatch.GetTimestamp();
             var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
-            // Every rect is solved before anything is recorded.
-            Renderer.Layout(tree, surface, theme);
+            // Every rect is solved before anything is recorded. A text measures
+            // itself in this runtime's fonts.
+            (_measureTheme, _measureScale) = (theme, surface.ScaleFactor);
+            LayoutSolver.Layout(tree, System.Numerics.Vector2.Zero,
+                new System.Numerics.Vector2(surface.Width, surface.Height), _measure);
             var pointerTransforms = transformed ? PointerTransforms(tree) : null;
             var t2 = Stopwatch.GetTimestamp();
 
@@ -274,7 +284,10 @@ public sealed partial class BibuiRuntime
             // in this frame.
             FrameInput input;
             lock (_syncRoot) input = CaptureFrameInput();
-            Renderer.Record(tree, surface, theme, input);
+            _painter.Record(DrawList, tree, surface, theme, input);
+            // What nobody asked for lately is evicted from the caches recording read.
+            _caches.EndFrame();
+            _fonts.EndFrame();
             var t3 = Stopwatch.GetTimestamp();
 
             if (_profile)
@@ -292,13 +305,36 @@ public sealed partial class BibuiRuntime
                 _lastTree = tree;
             }
 
-            // Will the next frame differ from this one? Asked of the renderer,
+            // Will the next frame differ from this one? Asked of the painter,
             // which knows because it stepped the values: a hover fade, an easing
             // height, a client draw calling ctx.Animate.
-            if (Renderer.IsAnimating) RequestFrame();
+            if (_painter.IsAnimating) RequestFrame();
 
             SweepFrame();       // sweep whatever nobody asked for this frame
             ClearFrameEvents(); // per-frame events: drop the leftovers
+        }
+    }
+
+    // What a text is measured in, for the frame being laid out; a field so the
+    // delegate the solver calls is made once.
+    private readonly MeasureLeaf _measure;
+    private ThemeTokens? _measureTheme;
+    private float _measureScale = 1f;
+
+    // What a leaf sized by what it holds measures: a text its lines, an icon
+    // its side.
+    private System.Numerics.Vector2 MeasureLeaf(UiNode node, float width)
+    {
+        switch (node)
+        {
+            case Text text:
+                var measured = _fonts.Measure(text, Fonts.FontOf(text, _measureTheme!, _measureScale));
+                return new System.Numerics.Vector2(measured.Width, measured.Height);
+            case Icon icon:
+                float side = icon.Size.In(_measureTheme!);
+                return new System.Numerics.Vector2(side, side);
+            default:
+                throw new InvalidOperationException($"{node.GetType().Name} '{node.Id}' is sized by its content, and has none.");
         }
     }
 

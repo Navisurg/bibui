@@ -1,6 +1,5 @@
+using Bibui.Draw;
 using Bibui.Theming;
-using Bibui.Renderer;
-using Bibui.Renderer.Components;
 using Bibui.FreeType;
 using Bibui.TextEdit;
 

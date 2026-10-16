@@ -1,4 +1,3 @@
-using Bibui.Renderer;
 
 namespace Bibui.Runtime;
 
@@ -39,11 +38,11 @@ public sealed partial class BibuiRuntime
     }
 
     /// <summary>
-    /// What this runtime measures and draws text with: its renderer's own
+    /// What this runtime measures and draws text with: its own
     /// <see cref="Bibui.Fonts"/>, so a string measured here is the width layout
     /// gives a text with that content, from the same cache.
     /// </summary>
-    public Fonts Fonts => Renderer.Fonts;
+    public Fonts Fonts => _fonts;
 
     /// <summary>
     /// The font a <see cref="Text"/> built at this point would be set
@@ -111,7 +110,7 @@ public sealed partial class BibuiRuntime
     /// A spinner <paramref name="diameter"/> px across, linked under the parent
     /// in scope. Its size is said here, once, as an icon's is.
     /// </summary>
-    public Spinner Spinner(float diameter = Bibui.Renderer.Components.SpinnerRenderer.DefaultDiameter)
+    public Spinner Spinner(float diameter = Bibui.Draw.SpinnerPainter.DefaultDiameter)
     {
         lock (_syncRoot)
         {

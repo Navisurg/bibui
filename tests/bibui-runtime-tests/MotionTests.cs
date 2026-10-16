@@ -1,6 +1,5 @@
 using System.Numerics;
 using Bibui;
-using Bibui.Renderer;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 using Bibui.Theming;

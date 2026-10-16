@@ -29,8 +29,12 @@ before it was published.
   - `runtime.Render()`, `runtime.RenderTo()`, `BibuiRenderer.Render`,
     `BibuiRenderer.RenderTo`, `RenderOutput`, `LastOutput` and `CapturePixels`
     are gone. A PNG is a frame drawn into a CPU buffer and encoded with
-    `Bibui.Imaging.Png`. `BibuiRenderer` lays out and records
-    (`Record(root, surface, theme)`); it draws nothing.
+    `Bibui.Imaging.Png`: `FramePixels.Png(runtime, draw)` does both, and
+    `FramePixels.Bgra` gives the pixels. `BibuiRenderer` is gone: the runtime
+    lays out and records its frames itself.
+  - The draw layer is `Bibui.Draw` (`DrawList`, `VectorPath`, textures, paint
+    values). `Bibui.Renderer` is gone: `AnimKey`, `ResourceCache` and
+    `FontRegistry` are in `Bibui`.
   - Textures are made on the renderer: `skia.CreateTexture(...)` or
     `managed.CreateTexture(...)`, as before on the backends.
   - Hosts are given what they draw with: `WithSilk(skia)` takes a
@@ -83,7 +87,7 @@ before it was published.
 
 - **A frame is recorded into a `DrawList`, then drawn (breaking).** After
   layout, the painter and every custom draw record their draws, in tree
-  order, into the renderer's `DrawList` (`BibuiRenderer.DrawList`), and the
+  order, into the runtime's `DrawList` (`runtime.DrawList`), and the
   renderer then executes it onto the surface: build → layout → draw ops →
   render. Pixels are unchanged.
   - A `DrawOp` is a fixed-size value with no references; points, glyphs, path

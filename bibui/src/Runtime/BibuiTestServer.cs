@@ -627,14 +627,12 @@ public sealed class BibuiTestServer : IDisposable
         var path = ResolveOutputPath(
             node["path"]?.GetValue<string>() ?? throw new ArgumentException("screenshot requires 'path'"));
         if (_draw is null) return Err("This server was started without a renderer to draw screenshots with");
-        byte[] bgra;
-        int width, height;
+        byte[] png;
         lock (_runtime.FrameLock)
         {
             _runtime.EndBuild();
-            (bgra, width, height) = Pixels();
+            png = FramePixels.Png(_runtime, _draw);
         }
-        var png = Imaging.Png.Encode(bgra, width, height, width * 4, Imaging.ChannelOrder.Bgra, Imaging.AlphaMode.Premultiplied);
 
         // Written beside the target and renamed over it, so a link put in the
         // target's place after the check is replaced, not written through.
@@ -696,7 +694,7 @@ public sealed class BibuiTestServer : IDisposable
         lock (_runtime.FrameLock)
         {
             _runtime.EndBuild();
-            (_, width, height) = Pixels();
+            FramePixels.Bgra(_runtime, _draw, out width, out height);
         }
 
         lock (_recordLock)
@@ -784,7 +782,7 @@ public sealed class BibuiTestServer : IDisposable
             // no frames of its own, so it does not speed up what it records.
             byte[] bgra;
             int srcW, srcH;
-            lock (_runtime.FrameLock) (bgra, srcW, srcH) = Pixels();
+            lock (_runtime.FrameLock) bgra = FramePixels.Bgra(_runtime, _draw!, out srcW, out srcH);
             var rgba = BgraToRgba(bgra, srcW, srcH, width, height);
             stdin.Write(rgba, 0, rgba.Length);
             Thread.Sleep(frameMs);
@@ -792,19 +790,6 @@ public sealed class BibuiTestServer : IDisposable
 
         stdin.Close();
         proc.WaitForExit();
-    }
-
-    /// <summary>
-    /// The last frame's list, drawn into a new buffer the runtime's physical size.
-    /// Under <see cref="BibuiRuntime.FrameLock"/>, which the caller holds.
-    /// </summary>
-    private unsafe (byte[] Bgra, int Width, int Height) Pixels()
-    {
-        int w = SurfaceOptions.PhysicalSize(_runtime.SurfaceWidth, _runtime.ScaleFactor);
-        int h = SurfaceOptions.PhysicalSize(_runtime.SurfaceHeight, _runtime.ScaleFactor);
-        var bgra = new byte[w * h * 4];
-        fixed (byte* p = bgra) _draw!(_runtime.DrawList, new RasterPixels((nint)p, w, h, w * 4));
-        return (bgra, w, h);
     }
 
     /// <summary>

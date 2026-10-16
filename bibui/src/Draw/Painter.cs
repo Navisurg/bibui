@@ -1,10 +1,9 @@
 using System.Numerics;
 using Bibui;
 using Bibui.Theming;
-using Bibui.Renderer.Components;
 using Bibui.Draw;
 
-namespace Bibui.Renderer;
+namespace Bibui.Draw;
 
 /// <summary>
 /// Draws a laid-out tree. Every node's <see cref="UiNode.Rect"/>,
@@ -106,7 +105,7 @@ internal sealed class Painter
         {
             case Text text: DrawText(text, frame, theme, ctx); break;
             case Icon icon: DrawIcon(icon, frame, theme, ctx); break;
-            case Spinner spinner: SpinnerRenderer.Draw(SpinnerRenderer.FromNative(spinner), frame, theme, ctx); break;
+            case Spinner spinner: SpinnerPainter.Draw(SpinnerPainter.FromNative(spinner), frame, theme, ctx); break;
         }
 
         if (node.FirstChild is not null)

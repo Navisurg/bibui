@@ -1,9 +1,8 @@
 using Bibui.Theming;
-using Bibui.Renderer;
 
-namespace Bibui.Renderer.Components;
+namespace Bibui.Draw;
 
-internal static class SpinnerRenderer
+internal static class SpinnerPainter
 {
     // ── Typed model ───────────────────────────────────────────────────────────
 

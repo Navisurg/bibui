@@ -87,7 +87,7 @@ runtime.MountStateful(
 if (options.FirstFrame)
 {
     runtime.EndBuild();
-    Pixels(runtime, draw);
+    FramePixels.Bgra(runtime, draw, out _, out _);
     return;
 }
 
@@ -384,20 +384,7 @@ static void WriteReference(string outDir, string name, GalleryState state, strin
 static byte[] RenderSettled(BibuiRuntime runtime, SkiaRenderer skia)
 {
     for (int i = 0; i < 3; i++) runtime.EndBuild();
-    int w = SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor);
-    int h = SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor);
-    return Bibui.Imaging.Png.Encode(Pixels(runtime, skia.Draw), w, h, w * 4,
-        Bibui.Imaging.ChannelOrder.Bgra, Bibui.Imaging.AlphaMode.Premultiplied);
-}
-
-// The runtime's last frame, drawn by draw into a new BGRA buffer.
-static byte[] Pixels(BibuiRuntime runtime, DrawToPixels draw)
-{
-    int w = SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor);
-    int h = SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor);
-    var bgra = GC.AllocateArray<byte>(w * h * 4, pinned: true);
-    draw(runtime.DrawList, new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), w, h, w * 4));
-    return bgra;
+    return FramePixels.Png(runtime, skia.Draw);
 }
 
 // ── Layout check ──────────────────────────────────────────────────────────────
