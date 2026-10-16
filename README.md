@@ -107,8 +107,8 @@ discovered at run time.
   libwayland-client, and `ManagedRenderer` draws on the CPU into its
   shared-memory buffers, with a rasterizer written in C# and FreeType/HarfBuzz
   text. There is no GLFW, GL or Skia on this route, and it publishes as a
-  single Native AOT binary of about 5 MB. The counter runs on it too:
-  `dotnet run --project samples/counter -- --wayland`.
+  single Native AOT binary of about 5 MB:
+  `dotnet run --project tests/wayland-hello`.
 
   ```bash
   dotnet publish -c Release -r linux-x64 -p:PublishAot=true

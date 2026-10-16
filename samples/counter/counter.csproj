@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- The README's quick start, on both routes: Silk + Skia, or Wayland + the managed rasterizer. -->
+  <!-- The README's quick start: a Silk window drawn with Skia. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -12,7 +12,5 @@
     <ProjectReference Include="../../bibui/bibui.csproj" />
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
-    <ProjectReference Include="../../bibui-platform-wayland/bibui-platform-wayland.csproj" />
-    <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
   </ItemGroup>
 </Project>

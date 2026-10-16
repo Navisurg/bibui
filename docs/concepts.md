@@ -762,8 +762,7 @@ owner of the loop chose draws that list. Two pieces connect it to the outside:
 
 There are two complete combinations.
 
-Both are in [`samples/counter`](../samples/counter/Program.cs), which runs the
-same build on either.
+[`samples/counter`](../samples/counter/Program.cs) is the first, in full.
 
 **Cross-platform: Silk window and Skia raster.** `SilkWindow` (package
 `Bibui.Platform.Silk`) opens a window through GLFW and presents with OpenGL. It

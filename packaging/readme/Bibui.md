@@ -53,7 +53,7 @@ while (SilkWindow.BeginFrame(window, runtime))
 The app owns the loop: the window waits for input and puts frames on screen,
 the runtime builds and records them, and the renderer draws them. The app's
 state is its own fields; a click writes one and the next frame reads it.
-`samples/counter` is the same on both platforms.
+`samples/counter` is this loop in full.
 
 The first release supports Linux. Documentation, samples and the source are at
 <https://github.com/Navisurg/bibui>. Licensed under Apache-2.0.

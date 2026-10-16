@@ -59,7 +59,7 @@ need.
 ## Name the renderer
 
 Open the window and construct the renderer yourself, bound to the window's
-memory. This is the Wayland half of [`samples/counter`](../samples/counter/Program.cs):
+memory:
 
 ```csharp
 using Bibui;
@@ -132,7 +132,7 @@ reference:
 | Executable | about **5.2 MB**, one file |
 | First rendered frame (1440 × 900), from spawn | about **29 ms** |
 
-The counter above and the [getting-started](getting-started.md) app publish
+The app above and the [getting-started](getting-started.md) app publish
 to about 5 MB as well. Most of that is bibui and the managed rasterizer, so it
 grows slowly with your own code; `System.Text.Json`, for example, adds about
 half a megabyte.

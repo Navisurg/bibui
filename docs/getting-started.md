@@ -201,8 +201,8 @@ while (SilkWindow.BeginFrame(window, runtime))
 
 A press writes `Count`, and the next frame the runtime builds reads it. Keeping
 `App.Build` apart from `Program.cs` lets a test build the same app without a
-window (section 6). [`samples/counter`](../samples/counter/Program.cs) is this
-loop in full, on both platforms.
+window (section 6). [`samples/counter`](../samples/counter/Program.cs) is the
+same loop with the build inline.
 
 ## 4. Using an interaction
 
