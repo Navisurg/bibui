@@ -37,9 +37,9 @@ public sealed class DrawList
     public ReadOnlySpan<DrawOp> Ops { get; }
 
     // Variable-size data, which an op indexes by (Start, Count).
-    public ReadOnlySpan<Vector2> Points { get; }    // points, positions, path points
+    public ReadOnlySpan<Vector2> Points { get; }    // points, glyph positions
     public ReadOnlySpan<PathVerb> Verbs { get; }    // path verbs
-    public ReadOnlySpan<float> Floats { get; }      // arc parameters, gradient stops
+    public ReadOnlySpan<float> Floats { get; }      // path verb arguments, gradient stops
     public ReadOnlySpan<Rgba> Colors { get; }       // gradient colours
     public ReadOnlySpan<ushort> Glyphs { get; }     // glyph ids
     public ReadOnlySpan<char> Chars { get; }        // text, until glyphs replace it
@@ -72,10 +72,11 @@ public struct DrawOp
 
 **Nothing in an op is a reference.** That's the difference from `DamageOp`, which holds `object? Ref` for paths and images, and from `RasterPaint`, which holds a `RasterShader` class. Each of those becomes a value or an id:
 
-- **Paths.** Path data is verbs plus points, described by bibui and not owned by any backend.
-  - A cached path (`ctx.Path(key, build)`: icons, check marks, arcs) lives in the `PathTable` under a stable id, and a renderer caches its native path by that id.
+- **Paths.** A path is bibui's own `Path`: a sealed class with `MoveTo`, `LineTo`, `QuadTo`, `CubicTo`, `ArcTo`, `AddArc` and `Close`, which writes verbs and their float arguments. It's today's internal `RecordedPath`, made public. `IPathBuilder` and `RasterPath` go: with paths as core data there's one kind of path, so nothing to abstract over.
+  - A cached path (`ctx.Path(key, build)`: icons, check marks, arcs) lives in the `PathTable` under a stable id, and a renderer caches its native path by that id. `build` is handed a `Path`, so callers that call its methods don't change.
   - A one-frame path (`DrawPolyline`, `DrawFilledPath`: chart geometry that changes every frame) is written straight into the payload arrays and built fresh by the renderer.
-  - `IPathBuilder` stays the way you describe a path; its target becomes bibui's own path data instead of a `RasterPath`.
+  - The SVG icon parser writes into a `Path` directly.
+  - A table entry can be a path scaled by a factor (an icon at its size). The renderer builds the native path and then scales it, as `AddPath(source, scale)` does today. Skia turns `ArcTo` into curves before the scale, so scaling the arguments first would move pixels.
 - **Gradients.** Kind, start, end and radius sit inline in `Shading`; the colours and stops are ranges into `Colors` and `Floats`. A renderer caches its native shader by the content key that `CacheKey.OfGradient` already computes.
 - **Font faces.** An op names a face by `FaceTable` id; the renderer keeps its own native typeface per id (Skia: `SKTypeface.FromData` over the face's font file).
 - **Textures.** An op carries a `TextureHandle` value (see Textures, below).
