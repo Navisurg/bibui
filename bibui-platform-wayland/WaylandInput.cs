@@ -268,10 +268,11 @@ internal sealed unsafe class WaylandInput : IWaylandFeature
         }
     }
 
-    private void EmitText(string? text)
+    internal void EmitText(string? text)
     {
         if (text is null) return;
-        foreach (var c in text) _emit(WindowEvent.Text(c));
+        // One event per character: an emoji is two chars, and half of one types nothing.
+        foreach (var r in text.EnumerateRunes()) _emit(WindowEvent.Text(r));
     }
 
     // ── Repeat ───────────────────────────────────────────────────────────────

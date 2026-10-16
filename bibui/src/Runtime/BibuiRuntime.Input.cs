@@ -98,9 +98,10 @@ public sealed partial class BibuiRuntime
     // from the frame's events when it asks; this does not know whether one did.
     private void OnKeyChar(BibUiEvent ev)
     {
-        char ch = ev.Char ?? '\0';
-        if (!char.IsControl(ch))
-            OnUnhandledKey?.Invoke(ch.ToString());
+        // CodePoint, or Char for an event made with only that.
+        uint codePoint = ev.CodePoint != 0 ? ev.CodePoint : ev.Char ?? '\0';
+        if (System.Text.Rune.TryCreate(codePoint, out var rune) && !System.Text.Rune.IsControl(rune))
+            OnUnhandledKey?.Invoke(rune.ToString());
     }
 
     // ── OS → BibUiEvent translation ──────────────────────────────────────────

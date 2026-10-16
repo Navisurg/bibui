@@ -138,12 +138,14 @@ public sealed class WindowInput
             }
 
             case WindowEventKind.KeyChar:
-                if (!char.IsControl(e.Char))
+                if (!System.Text.Rune.IsControl(e.CodePoint))
                 {
+                    // Char is the character only where one char holds it; CodePoint always is.
                     _intents.Add(new BibUiEvent
                     {
                         Kind = BibUiEventKind.Text, Key = Key.Unknown,
-                        Char = e.Char, CodePoint = e.Char,
+                        Char = e.CodePoint.IsBmp ? (char)e.CodePoint.Value : null,
+                        CodePoint = (uint)e.CodePoint.Value,
                     });
                 }
                 break;

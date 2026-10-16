@@ -372,4 +372,12 @@ before it was published.
   pipeline.
 - The `Bibui.Contracts` and `Bibui.Runtime` packages (merged into `Bibui`).
 
+### Fixed
+
+- A typed character above U+FFFF (an emoji, from Compose or an xkb layout)
+  reaches a text field whole. On the Wayland window it was sent as two halves
+  and the first one threw; on the Silk window it was cut to 16 bits and typed
+  the wrong character. `WindowEvent.Text` takes a `Rune`, and a text field
+  ignores a code point that is no character instead of throwing.
+
 [Unreleased]: https://github.com/Navisurg/bibui/commits/main

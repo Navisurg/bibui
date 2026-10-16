@@ -11,6 +11,8 @@
     <AssemblyName>Bibui.Platform.Silk</AssemblyName>
     <RootNamespace>Bibui.Runtime.Platform</RootNamespace>
     <Nullable>enable</Nullable>
+    <!-- GLFW's char callback takes the window's handle as a pointer. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IsAotCompatible>true</IsAotCompatible>
