@@ -56,25 +56,9 @@ public sealed class SkiaRasterCanvas : IRasterCanvas
 
     // ── Images ───────────────────────────────────────────────────────────────
 
-    public void DrawImage(RasterImage image, RectF dest, in RasterPaint paint)
+    public void DrawTexture(TextureHandle texture, RectF dest, in RasterPaint paint)
     {
-        var native = image as SkiaImage ?? throw new ArgumentException(
-            $"A {image.GetType().Name} is not a Skia image; it came from another raster backend.", nameof(image));
-        Native.DrawImage(native.Native, dest.ToSk(), _backend.Paint(paint));
-    }
-
-    public unsafe void DrawPixels(ReadOnlySpan<byte> rgba, int width, int height, RectF dest, in RasterPaint paint)
-    {
-        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-        fixed (byte* p = rgba)
-        {
-            // FromPixels (zero-copy): the image references the caller's bytes
-            // directly. Safe because the CPU rasterizer consumes them
-            // synchronously inside DrawImage, before the pin is released.
-            using var pixmap = new SKPixmap(info, (nint)p, width * 4);
-            using var image = SKImage.FromPixels(pixmap);
-            Native.DrawImage(image, dest.ToSk(), _backend.Paint(paint));
-        }
+        if (_backend.Texture(texture) is { } image) Native.DrawImage(image, dest.ToSk(), _backend.Paint(paint));
     }
 
     public void DrawBackdropBlur(PixelRect region, RectF clip, float sigma)

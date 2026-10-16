@@ -105,7 +105,7 @@ static (string Group, string[] Routes)[] NavGroups() => new[]
             "Select", "Slider", "Toggle",
             "ToggleGroup", "DatePicker", "Calendar", "TimePicker", "ColorPicker" }),
         ("Display", new[] { "Text", "Badge", "Avatar", "Card", "Alert", "Separator", "Label",
-            "Progress", "Skeleton", "Spinner", "RatioBox", "KeyboardShortcut", "Table", "Markdown",
+            "Progress", "Skeleton", "Spinner", "RatioBox", "KeyboardShortcut", "Table", "Markdown", "Texture",
             "PagedTable", "FormField", "ListItem", "EmptyState", "Toast" }),
         ("Overlays", new[] { "Dialog", "AlertDialog", "Popover", "HoverPreview", "Tooltip",
             "Drawer", "DropdownMenu", "ContextMenu", "CommandPalette" }),
@@ -270,7 +270,7 @@ static UiNode BuildDemo(BibuiRuntime runtime, GalleryState state, SetState<Galle
             => DemoInputs.Build(runtime, state.Route, state.Inputs, s => setState.Set(state with { Inputs = s })),
     "Text" or "Badge" or "Avatar" or "Card" or "Alert" or "Separator" or "Label"
         or "Progress" or "Skeleton" or "Spinner" or "RatioBox"
-        or "KeyboardShortcut" or "Table" or "Markdown" or "PagedTable" or "FormField" or "ListItem" or "EmptyState"
+        or "KeyboardShortcut" or "Table" or "Markdown" or "Texture" or "PagedTable" or "FormField" or "ListItem" or "EmptyState"
         or "Toast"
             => DemoDisplay.Build(runtime, state.Route, state.Display, s => setState.Set(state with { Display = s })),
     "Dialog" or "AlertDialog" or "Popover" or "HoverPreview" or "Tooltip"

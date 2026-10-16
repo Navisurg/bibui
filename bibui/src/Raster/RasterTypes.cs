@@ -187,18 +187,3 @@ public abstract class RasterPath : IPathBuilder, IDisposable
 
     protected virtual void Dispose(bool disposing) { }
 }
-
-/// <summary>An immutable bitmap a backend holds in its own form.</summary>
-public abstract class RasterImage : IDisposable
-{
-    public abstract int Width { get; }
-    public abstract int Height { get; }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing) { }
-}

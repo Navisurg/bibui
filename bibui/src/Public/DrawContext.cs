@@ -131,9 +131,16 @@ public readonly ref partial struct DrawContext
     public void DrawPoints(PointMode mode, ReadOnlySpan<Vector2> points, in RasterPaint paint)
         => Canvas.DrawPoints(mode, points, paint);
 
-    /// <summary>Draws <paramref name="image"/> into <paramref name="dest"/> (physical px).</summary>
-    public void DrawImage(RasterImage image, RectF dest, in RasterPaint paint)
-        => Canvas.DrawImage(image, dest, paint);
+    /// <summary>
+    /// Draws <paramref name="texture"/> into <paramref name="dest"/> (physical px).
+    /// The texture comes from the backend the app chose (its <c>CreateTexture</c>);
+    /// the app owns and releases it. The paint's alpha modulates it, so an opaque
+    /// paint draws it as it is; for a full-screen video frame,
+    /// <see cref="FilterQuality.Low"/> and no antialiasing avoid building mipmaps
+    /// every frame.
+    /// </summary>
+    public void DrawTexture(TextureHandle texture, RectF dest, in RasterPaint paint)
+        => Canvas.DrawTexture(texture, dest, paint);
 
     /// <summary>Clips to a physical rect until the matching <see cref="PopClip"/>.</summary>
     public void PushClip(RectF rect)
@@ -497,27 +504,6 @@ public readonly ref partial struct DrawContext
 
     private static float Distance(Vector2 a, Vector2 b)
         => MathF.Sqrt(MathF.Pow(b.X - a.X, 2) + MathF.Pow(b.Y - a.Y, 2));
-
-    /// <summary>Blits RGBA8888 pixels into the given logical rect.</summary>
-    public void DrawBitmap(byte[] rgbaBytes, int srcWidth, int srcHeight,
-        float destX, float destY, float destW, float destH)
-    {
-        var destRect = new RectF(
-            destX * Scale, destY * Scale,
-            (destX + destW) * Scale, (destY + destH) * Scale);
-        // FilterQuality.Low (linear) instead of Medium (mipmaps). Mipmap
-        // generation runs every render and dominates the per-frame cost for
-        // full-screen video; linear filtering looks fine at typical video
-        // display sizes. AA off — no rotation, axis-aligned blit.
-        // Opaque black, not default: DrawImage modulates the image by the
-        // paint's alpha, and default(Rgba) is transparent.
-        Canvas.DrawPixels(rgbaBytes, srcWidth, srcHeight, destRect, Paint(new PaintSpec
-        {
-            Color = Rgba.Black,
-            FilterQuality = FilterQuality.Low,
-            IsAntialias = false,
-        }));
-    }
 
     /// <summary>Shifts the origin until the matching <see cref="PopTranslation"/>.</summary>
     public void PushTranslation(float dx, float dy)

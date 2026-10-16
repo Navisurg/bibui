@@ -92,25 +92,38 @@ public sealed class SkiaRasterBackend : IRasterBackend
 
     // ── Images ───────────────────────────────────────────────────────────────
 
-    public RasterImage CreateImage(ReadOnlySpan<byte> rgba, int width, int height)
+    // ── Textures ─────────────────────────────────────────────────────────────
+    // Created by usage code, which owns them: bibui only draws a handle.
+
+    private readonly TextureTable<SKImage> _textures = new();
+
+    /// <summary>
+    /// A texture copied from straight-alpha RGBA8888 pixels (<c>width * 4</c>
+    /// bytes a row). The caller owns it: <see cref="ReleaseTexture"/> frees it.
+    /// </summary>
+    public TextureHandle CreateTexture(ReadOnlySpan<byte> rgba, int width, int height)
+        => _textures.Add(Image(rgba, width, height));
+
+    /// <summary>
+    /// Replaces the pixels behind <paramref name="texture"/>, at any size. A
+    /// released handle is left alone.
+    /// </summary>
+    public void UpdateTexture(TextureHandle texture, ReadOnlySpan<byte> rgba, int width, int height)
+    {
+        if (_textures.Get(texture) is null) return;
+        _textures.Replace(texture, Image(rgba, width, height))?.Dispose();
+    }
+
+    /// <summary>Frees <paramref name="texture"/>; drawing it afterwards draws nothing.</summary>
+    public void ReleaseTexture(TextureHandle texture) => _textures.Remove(texture)?.Dispose();
+
+    internal SKImage? Texture(TextureHandle texture) => _textures.Get(texture);
+
+    private static SKImage Image(ReadOnlySpan<byte> rgba, int width, int height)
     {
         var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-        var image = SKImage.FromPixelCopy(info, rgba, width * 4)
+        return SKImage.FromPixelCopy(info, rgba, width * 4)
             ?? throw new ArgumentException($"Pixels do not describe a {width}x{height} RGBA image.", nameof(rgba));
-        return new SkiaImage(image);
-    }
-
-    public RasterImage? DecodeImage(ReadOnlySpan<byte> encoded)
-    {
-        var image = SKImage.FromEncodedData(encoded);
-        return image is null ? null : new SkiaImage(image);
-    }
-
-    public byte[] EncodePng(ReadOnlySpan<byte> bgraPremul, int width, int height)
-    {
-        using var img = SKImage.FromPixelCopy(Bgra(width, height), bgraPremul);
-        using var data = img.Encode(SKEncodedImageFormat.Png, 100);
-        return data.ToArray();
     }
 
     // ── Typefaces ────────────────────────────────────────────────────────────
@@ -194,6 +207,7 @@ public sealed class SkiaRasterBackend : IRasterBackend
     {
         foreach (var d in _disposables) d.Dispose();
         foreach (var typeface in _typefaces.Values) typeface.Dispose();
+        for (var node = _textures.FirstLive; node is not null; node = node.Next) node.Item!.Dispose();
         _typefaces.Clear();
         _wrapped?.Dispose();
         _wrapped = null;
@@ -274,18 +288,5 @@ internal readonly record struct TextPaintKey(UInt128 Hash)
             typefaceId,
         ];
         return new(XxHash128.HashToUInt128(MemoryMarshal.AsBytes(parts)));
-    }
-}
-
-/// <summary>An SKImage as a bibui image.</summary>
-internal sealed class SkiaImage(SKImage native) : RasterImage
-{
-    public SKImage Native { get; } = native;
-    public override int Width => Native.Width;
-    public override int Height => Native.Height;
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing) Native.Dispose();
     }
 }

@@ -111,15 +111,41 @@ public sealed class ManagedRasterBackend : IRasterBackend
 
     // ── Images ───────────────────────────────────────────────────────────────
 
-    public RasterImage CreateImage(ReadOnlySpan<byte> rgba, int width, int height) => ManagedImage.FromRgba(rgba, width, height);
+    // ── Textures ─────────────────────────────────────────────────────────────
+    // Created by usage code, which owns them: bibui only draws a handle.
 
-    public RasterImage? DecodeImage(ReadOnlySpan<byte> encoded)
+    private readonly TextureTable<ManagedImage> _textures = new();
+
+    /// <summary>
+    /// A texture copied from straight-alpha RGBA8888 pixels (<c>width * 4</c>
+    /// bytes a row), premultiplied once here. The caller owns it:
+    /// <see cref="ReleaseTexture"/> frees it.
+    /// </summary>
+    public TextureHandle CreateTexture(ReadOnlySpan<byte> rgba, int width, int height)
+        => _textures.Add(ManagedImage.FromRgba(rgba, width, height));
+
+    /// <summary>
+    /// Replaces the pixels behind <paramref name="texture"/>, at any size, reusing
+    /// its storage when the size is unchanged. A released handle is left alone.
+    /// </summary>
+    public void UpdateTexture(TextureHandle texture, ReadOnlySpan<byte> rgba, int width, int height)
     {
-        var rgba = Png.DecodeRgba(encoded, out int w, out int h);
-        return rgba is null ? null : ManagedImage.FromRgba(rgba, w, h);
+        if (_textures.Get(texture) is not { } image) return;
+        if (image.Width == width && image.Height == height)
+        {
+            ManagedImage.Premultiply(rgba, width, height, image.Pixels);
+            _textures.Replace(texture, image);
+        }
+        else _textures.Replace(texture, ManagedImage.FromRgba(rgba, width, height));
     }
 
-    public byte[] EncodePng(ReadOnlySpan<byte> bgraPremul, int width, int height) => Png.EncodeBgraPremul(bgraPremul, width, height);
+    /// <summary>Frees <paramref name="texture"/>; drawing it afterwards draws nothing.</summary>
+    public void ReleaseTexture(TextureHandle texture) => _textures.Remove(texture);
+
+    internal ManagedImage? Texture(TextureHandle texture) => _textures.Get(texture);
+
+    /// <summary>The texture's content version: what damage tracking compares, since a handle stays the same across updates.</summary>
+    internal uint TextureVersion(TextureHandle texture) => _textures.Version(texture);
 
     // ── Text ─────────────────────────────────────────────────────────────────
     // Faces, metrics and measuring are bibui's (Fonts); this draws glyphs from
@@ -229,8 +255,8 @@ public sealed class ManagedPath : RasterPath
     public override bool IsEmpty => Native.IsEmpty;
 }
 
-/// <summary>An immutable premultiplied bitmap (<c>0xAARRGGBB</c>).</summary>
-public sealed class ManagedImage : RasterImage
+/// <summary>A texture's premultiplied pixels (<c>0xAARRGGBB</c>), rewritten in place by an update of the same size.</summary>
+internal sealed class ManagedImage
 {
     private ManagedImage(uint[] pixels, int width, int height)
     {
@@ -240,8 +266,8 @@ public sealed class ManagedImage : RasterImage
     }
 
     internal uint[] Pixels { get; }
-    public override int Width { get; }
-    public override int Height { get; }
+    public int Width { get; }
+    public int Height { get; }
 
     /// <summary>From straight-alpha RGBA8888 bytes.</summary>
     public static ManagedImage FromRgba(ReadOnlySpan<byte> rgba, int width, int height)
@@ -272,7 +298,6 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
 {
     private readonly ManagedRasterBackend _backend;
     private readonly ImageShader _imageShader = new();
-    private uint[] _pixelScratch = [];
 
     // The frame being recorded on this canvas, or null when calls draw directly.
     // A teed recorder records and the call is drawn as well.
@@ -419,21 +444,10 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
 
     // ── Images ───────────────────────────────────────────────────────────────
 
-    public void DrawImage(RasterImage image, RectF dest, in RasterPaint paint)
+    public void DrawTexture(TextureHandle texture, RectF dest, in RasterPaint paint)
     {
-        var img = image as ManagedImage ?? throw new ArgumentException(
-            $"A {image.GetType().Name} is not a managed image; it came from another raster backend.", nameof(image));
-        if (_rec is { } r) { r.DrawImage(img, dest, paint); if (!r.Tee) return; }
-        DrawBitmap(img.Pixels, img.Width, img.Height, dest, paint);
-    }
-
-    public void DrawPixels(ReadOnlySpan<byte> rgba, int width, int height, RectF dest, in RasterPaint paint)
-    {
-        if (_rec is { } r) { r.DrawPixels(rgba, width, height, dest, paint); if (!r.Tee) return; }
-        if (width <= 0 || height <= 0) return;
-        if (_pixelScratch.Length < width * height) _pixelScratch = new uint[width * height];
-        ManagedImage.Premultiply(rgba, width, height, _pixelScratch);
-        DrawBitmap(_pixelScratch, width, height, dest, paint);
+        if (_rec is { } r) { r.DrawTexture(texture, _backend.TextureVersion(texture), dest, paint); if (!r.Tee) return; }
+        if (_backend.Texture(texture) is { } img) DrawBitmap(img.Pixels, img.Width, img.Height, dest, paint);
     }
 
     private void DrawBitmap(uint[] pixels, int width, int height, RectF dest, in RasterPaint paint)
