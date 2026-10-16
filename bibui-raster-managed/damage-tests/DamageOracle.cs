@@ -545,13 +545,28 @@ internal static class DamageOracle
 
         // Every canvas call the scenes above never make, drawn straight onto the
         // canvas by a box's own draw: images (one still, one moving), a pixel
-        // buffer rewritten in place every frame, points, string text, a glyph run,
-        // and shapes under a changing scale and a set matrix.
+        // buffer rewritten in place every frame, points, two runs of glyphs (one
+        // changing), and shapes under a changing scale and a set matrix.
         yield return new Scene("canvas-calls", 520, 300, 1f, 60, rt =>
         {
             int frame = 0;
             RasterImage? image = null;
             var pixels = new byte[32 * 32 * 4];
+            // A run shaped by the engine, its glyphs at the sum of the advances before them.
+            static void Glyphs(IRasterCanvas c, FontFace face, string text, float x, float baseline, Rgba color)
+            {
+                var run = new Bibui.FreeType.GlyphRun();
+                face.Strike(14f).Shape(text, run);
+                var glyphs = new ushort[run.Count];
+                var at = new Vector2[run.Count];
+                for (int i = 0; i < glyphs.Length; i++)
+                {
+                    glyphs[i] = (ushort)run.Glyphs[i];
+                    if (i > 0) at[i] = new(at[i - 1].X + run.Advances[i - 1], 0f);
+                }
+                c.DrawGlyphs(face, 14f, glyphs, at, x, baseline, color);
+            }
+
             UiNode Build()
             {
                 var canvas = new Box
@@ -581,12 +596,9 @@ internal static class DamageOracle
                         for (int i = 0; i < 8; i++) pts[i] = new(l + 30 + i * 20, t + 120 + (i == frame % 8 ? 6 : 0));
                         c.DrawPoints(PointMode.Points, pts, ctx.Stroke(new Rgba(234, 179, 8), 4f));
 
-                        var font = new RasterFont(ctx.Fonts.Face(), 14f);
-                        c.DrawText($"frame {frame / 6}", l + 30, t + 170, font, new Rgba(255, 255, 255));
-                        var run = ctx.Backend.ShapeText(font, "glyphs");
-                        var at = new Vector2[run.Glyphs.Length];
-                        for (int i = 1; i < at.Length; i++) at[i] = new(at[i - 1].X + run.Advances[i - 1], 0f);
-                        c.DrawGlyphRun(run.Glyphs, at, l + 200, t + 170, font, new Rgba(56, 189, 248));
+                        var face = ctx.Fonts.Face();
+                        Glyphs(c, face, $"frame {frame / 6}", l + 30, t + 170, new Rgba(255, 255, 255));
+                        Glyphs(c, face, "glyphs", l + 200, t + 170, new Rgba(56, 189, 248));
 
                         c.Save();
                         c.Translate(l + 400, t + 120);

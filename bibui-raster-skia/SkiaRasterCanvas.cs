@@ -100,26 +100,17 @@ public sealed class SkiaRasterCanvas : IRasterCanvas
 
     // ── Text ─────────────────────────────────────────────────────────────────
 
-    public float DrawText(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color)
-    {
-        var sk = color.ToSk();
-        var paint = _backend.TextPaint(font, sk);
-        using (var blob = SKTextBlob.Create(text, _backend.TextFont(font, sk, paint)))
-            if (blob is not null) Native.DrawText(blob, x, baselineY, paint);
-        return paint.MeasureText(text);
-    }
-
-    public void DrawGlyphRun(ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
-        float x, float baselineY, in RasterFont font, Rgba color)
+    public void DrawGlyphs(FontFace face, float sizePx, ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
+        float x, float baselineY, Rgba color)
     {
         if (glyphs.Length != positions.Length)
             throw new ArgumentException("One position per glyph.", nameof(positions));
         if (glyphs.IsEmpty) return;
 
-        var paint = _backend.TextPaint(font, color.ToSk());
-        using var skFont = paint.ToFont();
+        var sk = color.ToSk();
+        var paint = _backend.TextPaint(face, sizePx, sk);
         using var builder = new SKTextBlobBuilder();
-        builder.AddPositionedRun(glyphs, skFont, positions.AsSk());
+        builder.AddPositionedRun(glyphs, _backend.TextFont(face, sizePx, sk, paint), positions.AsSk());
         using var blob = builder.Build();
         if (blob is not null) Native.DrawText(blob, x, baselineY, paint);
     }

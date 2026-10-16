@@ -2787,42 +2787,57 @@ Run("Raster: RenderTo a surface over caller memory paints what Render() reads ba
     IsTrue(full.RawBgraBytes.Chunk(4).Distinct().Count() > 1, "frame should contain more than the clear color");
 });
 
-Run("Raster: a shaped glyph run draws the same pixels as the string it came from", () =>
+Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string", () =>
 {
-    // A backend with a shaper (HarfBuzz) hands the canvas glyphs, not strings.
-    // On Skia the two paths must agree exactly, so a renderer can move to
-    // shaped runs without a pixel moving.
+    // The canvas is handed glyphs FreeType shaped, never a string. On Skia they
+    // must land exactly where Skia's own string drawing puts them, with the
+    // paint bibui draws text with, so the move to glyphs moved no pixel.
     using var backend = new Bibui.Raster.Skia.SkiaRasterBackend();
     using var fonts = new Fonts();
     var face = fonts.Face();
     IsTrue(face.HasGlyph('A') && !face.HasGlyph(0x10FFFD), "glyph coverage is the face's own");
 
-    var font = new Bibui.Raster.RasterFont(face, 17.5f);
+    const float size = 17.5f;
     const string text = "Shaped runs, glyph by glyph — 0.5 ffi";
-    float measured = face.Strike(font.Size).Measure(text);
+    var shaped = fonts.Shape(text, face, size);
+    Eq(text.Length, shaped.Glyphs.Length, "one glyph per char for this text (no ligatures)");
+    Eq(face.Strike(size).Measure(text), shaped.Width, "the shaped run is as wide as measuring says");
 
-    byte[] Paint(Action<Bibui.Raster.IRasterCanvas> draw)
+    var info = new SkiaSharp.SKImageInfo(360, 48, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
+    static byte[] Read(SkiaSharp.SKSurface surface)
     {
-        using var s = backend.CreateSurface(360, 48);
-        s.Canvas.Clear(Rgba.White);
-        draw(s.Canvas);
-        var px = new byte[360 * 48 * 4];
-        IsTrue(s.ReadPixels(px, 360, 48), "read back");
-        return px;
+        using var pixmap = surface.PeekPixels();
+        return pixmap.GetPixelSpan().ToArray();
     }
 
-    float drawnAdvance = 0f;
-    var fromString = Paint(c => drawnAdvance = c.DrawText(text, 6.25f, 32f, font, Rgba.Black));
+    byte[] fromString;
+    using (var surface = SkiaSharp.SKSurface.Create(info))
+    using (var data = SkiaSharp.SKData.CreateCopy(face.FontFile))
+    using (var typeface = SkiaSharp.SKTypeface.FromData(data))
+    using (var paint = new SkiaSharp.SKPaint
+    {
+        TextSize = size, Typeface = typeface, Color = SkiaSharp.SKColors.Black,
+        IsAntialias = true, SubpixelText = true, LcdRenderText = false,
+        IsAutohinted = true, HintingLevel = SkiaSharp.SKPaintHinting.Full,
+    })
+    {
+        surface.Canvas.Clear(SkiaSharp.SKColors.White);
+        surface.Canvas.DrawText(text, 6.25f, 32f, paint);
+        fromString = Read(surface);
+        Eq(paint.MeasureText(text), shaped.Width, "Skia measures the string as FreeType does");
+    }
 
-    var run = backend.ShapeText(font, text);
-    Eq(text.Length, run.Glyphs.Length, "one glyph per char for this text (no ligatures without a shaper)");
-    var fromRun = Paint(c => c.DrawGlyphRun(run.Glyphs, run.Positions(), 6.25f, 32f, font, Rgba.Black));
+    byte[] fromGlyphs;
+    using (var s = backend.CreateSurface(360, 48))
+    {
+        s.Canvas.Clear(Rgba.White);
+        s.Canvas.DrawGlyphs(face, size, shaped.Glyphs, shaped.Positions, 6.25f, 32f, Rgba.Black);
+        fromGlyphs = new byte[360 * 48 * 4];
+        IsTrue(s.ReadPixels(fromGlyphs, 360, 48), "read back");
+    }
 
-    IsTrue(fromString.AsSpan().SequenceEqual(fromRun), "glyph-run pixels must equal string pixels");
+    IsTrue(fromString.AsSpan().SequenceEqual(fromGlyphs), "glyph pixels must equal Skia's string pixels");
     IsTrue(fromString.Chunk(4).Distinct().Count() > 2, "text was drawn");
-    IsTrue(MathF.Abs(run.Width - measured) < 0.01f,
-        $"shaped advances sum to the measured width ({run.Width} vs {measured})");
-    Eq(measured, drawnAdvance, "Skia's DrawText returns the advance bibui's FreeType measuring gives");
 });
 
 Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and gradients", () =>

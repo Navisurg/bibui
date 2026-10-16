@@ -95,7 +95,6 @@ public sealed class ManagedRasterBackend : IRasterBackend
         return g;
     }
 
-    internal GlyphRun ScratchRun { get; } = new();
     internal PlacedGlyph[] Placed = new PlacedGlyph[64];
 
     // ── Surfaces ─────────────────────────────────────────────────────────────
@@ -126,19 +125,7 @@ public sealed class ManagedRasterBackend : IRasterBackend
     // Faces, metrics and measuring are bibui's (Fonts); this draws glyphs from
     // the face's own engine, on the rendering thread that engine belongs to.
 
-    internal static FontStrike Strike(in RasterFont font, float scale = 1f) => font.Face.Strike(font.Size * scale);
-
-    public ShapedRun ShapeText(in RasterFont font, ReadOnlySpan<char> text)
-    {
-        var run = ScratchRun;
-        Strike(font).Shape(text, run);
-        var glyphs = new ushort[run.Count];
-        var advances = run.Advances.ToArray();
-        var g = run.Glyphs;
-        for (int i = 0; i < glyphs.Length; i++) glyphs[i] = (ushort)g[i];
-        run.Clear();
-        return new ShapedRun(glyphs, advances);
-    }
+    internal static FontStrike Strike(FontFace face, float sizePx, float scale = 1f) => face.Strike(sizePx * scale);
 
     /// <summary>The renderer finished a frame: a damage-tracked one is compared with the last and rasterised now.</summary>
     public void EndFrame() => Damage.End();
@@ -500,41 +487,13 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
 
     // ── Text ─────────────────────────────────────────────────────────────────
 
-    public float DrawText(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color)
-    {
-        if (_rec is { } r)
-        {
-            if (!r.Tee) return r.DrawText(text, x, baselineY, font, color, drawn: null);
-            return r.DrawText(text, x, baselineY, font, color, DrawRun(text, x, baselineY, font, color));
-        }
-        return DrawRun(text, x, baselineY, font, color);
-    }
-
-    private float DrawRun(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color)
-    {
-        var run = _backend.ScratchRun;
-        var strike = ManagedRasterBackend.Strike(font);
-        strike.Shape(text, run);
-        float advance = run.Width;
-        if (TextScale(out float s, out var origin, x, baselineY))
-        {
-            var ds = s == 1f ? strike : ManagedRasterBackend.Strike(font, s);
-            if (ds != strike) ds.Shape(text, run);
-            int n = Place(run.Count);
-            n = ds.Place(run, origin.X, origin.Y, _backend.Placed.AsSpan(0, n));
-            Composite(n, color);
-        }
-        run.Clear();
-        return advance;
-    }
-
-    public void DrawGlyphRun(ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
-        float x, float baselineY, in RasterFont font, Rgba color)
+    public void DrawGlyphs(FontFace face, float sizePx, ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
+        float x, float baselineY, Rgba color)
     {
         if (glyphs.Length != positions.Length) throw new ArgumentException("One position per glyph.", nameof(positions));
-        if (_rec is { } r) { r.DrawGlyphRun(glyphs, positions, x, baselineY, font, color); if (!r.Tee) return; }
+        if (_rec is { } r) { r.DrawGlyphs(face, sizePx, glyphs, positions, x, baselineY, color); if (!r.Tee) return; }
         if (glyphs.IsEmpty || !TextScale(out float s, out var origin, x, baselineY)) return;
-        var strike = ManagedRasterBackend.Strike(font, s);
+        var strike = ManagedRasterBackend.Strike(face, sizePx, s);
         int n = Place(glyphs.Length);
         if (s == 1f) n = strike.Place(glyphs, positions, origin.X, origin.Y, _backend.Placed.AsSpan(0, n));
         else

@@ -130,11 +130,11 @@ public sealed class SkiaRasterBackend : IRasterBackend
     /// The cached paint for one run: a colour, a size and a typeface. Callers
     /// must not dispose or mutate it.
     /// </summary>
-    internal SKPaint TextPaint(in RasterFont font, SKColor color)
+    internal SKPaint TextPaint(FontFace face, float sizePx, SKColor color)
     {
-        var tf = Typeface(font.Face);
-        var key = TextPaintKey.For(font.Size, color, font.Face.Id);
-        return TextPaints.FromKey(key, (font.Size, color, tf),
+        var tf = Typeface(face);
+        var key = TextPaintKey.For(sizePx, color, face.Id);
+        return TextPaints.FromKey(key, (Size: sizePx, color, tf),
             static p => new SKPaint
             {
                 TextSize = p.Size,
@@ -149,22 +149,12 @@ public sealed class SkiaRasterBackend : IRasterBackend
     }
 
     /// <summary>
-    /// The font <see cref="TextPaint"/> draws with, for a text blob built over
-    /// chars: what drawing a string does inside Skia, without the string.
+    /// The font <see cref="TextPaint"/> draws with, for a positioned text blob:
+    /// cached with its paint, so a frame of text builds no fonts.
     /// </summary>
-    internal SKFont TextFont(in RasterFont font, SKColor color, SKPaint paint)
-        => TextFonts.FromKey(TextPaintKey.For(font.Size, color, font.Face.Id), paint,
+    internal SKFont TextFont(FontFace face, float sizePx, SKColor color, SKPaint paint)
+        => TextFonts.FromKey(TextPaintKey.For(sizePx, color, face.Id), paint,
             static p => p.ToFont());
-
-    public ShapedRun ShapeText(in RasterFont font, ReadOnlySpan<char> text)
-    {
-        using var skFont = TextPaint(font, SKColors.Black).ToFont();
-        var glyphs = new ushort[skFont.CountGlyphs(text)];
-        skFont.GetGlyphs(text, glyphs);
-        var advances = new float[glyphs.Length];
-        skFont.GetGlyphWidths(glyphs, advances, Span<SKRect>.Empty, null);
-        return new ShapedRun(glyphs, advances);
-    }
 
     // ── Paints ───────────────────────────────────────────────────────────────
 

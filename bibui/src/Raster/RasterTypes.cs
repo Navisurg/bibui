@@ -129,45 +129,6 @@ public sealed class RasterShader
 }
 
 /// <summary>
-/// A font at a size: what a run of text is measured and drawn in.
-/// <see cref="Size"/> is physical px.
-///
-/// <para>There is one rendering mode, and a backend must match it: glyphs at
-/// subpixel positions from unhinted (linear) advances, outlines autohinted at
-/// full strength, grayscale antialiasing. Hinting moves the ink, never the
-/// advances — layout depends on that.</para>
-/// </summary>
-public readonly record struct RasterFont(FontFace Face, float Size);
-
-/// <summary>A shaped run: one glyph id and one advance (physical px) per glyph.</summary>
-public readonly record struct ShapedRun(ushort[] Glyphs, float[] Advances)
-{
-    /// <summary>The sum of the advances.</summary>
-    public float Width
-    {
-        get
-        {
-            float w = 0f;
-            foreach (var a in Advances) w += a;
-            return w;
-        }
-    }
-
-    /// <summary>Pen positions relative to the run origin: each glyph at the sum of the advances before it.</summary>
-    public Vector2[] Positions()
-    {
-        var p = new Vector2[Advances.Length];
-        float x = 0f;
-        for (int i = 0; i < p.Length; i++)
-        {
-            p[i] = new Vector2(x, 0f);
-            x += Advances[i];
-        }
-        return p;
-    }
-}
-
-/// <summary>
 /// The verbs a path is built from. <see cref="RasterPath"/> implements it, and
 /// so can anything that wants to record a path before a backend exists to
 /// hold it (the SVG icon parser does).

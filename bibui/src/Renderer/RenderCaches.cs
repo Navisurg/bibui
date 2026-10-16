@@ -74,6 +74,18 @@ internal readonly record struct RunsKey(UInt128 Hash)
 }
 
 /// <summary>
+/// One run of text shaped in one face at one physical size: XxHash128 over the
+/// chars, seeded by the face and the size, for the reasons <see cref="RunsKey"/>
+/// gives.
+/// </summary>
+internal readonly record struct ShapeKey(UInt128 Hash)
+{
+    public static ShapeKey For(ReadOnlySpan<char> text, FontFace face, float sizePhysical) =>
+        new(XxHash128.HashToUInt128(MemoryMarshal.AsBytes(text),
+            (long)face.Id << 32 | (uint)BitConverter.SingleToInt32Bits(sizePhysical)));
+}
+
+/// <summary>
 /// A greedy word-wrap layout — which chars land on which line — for one
 /// (text, maxWidth, font, scale). Hash-keyed for the same reason as
 /// <see cref="RunsKey"/>.
