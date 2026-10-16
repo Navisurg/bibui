@@ -1,0 +1,73 @@
+using Bibui.FreeType;
+using FtFont = Bibui.FreeType.Font;
+
+namespace Bibui;
+
+/// <summary>
+/// Which face draws which text: resolves (family, weight) to a <see cref="FontFace"/>
+/// and splits a string into runs of one face each. The policy is bibui's: a
+/// family registered with <see cref="FontRegistry"/>, else the embedded Inter
+/// (Regular below 600, SemiBold from 600 up). Faces come from the one
+/// <see cref="TextEngine"/> its <see cref="Fonts"/> owns, never from a raster
+/// backend, so the backend cannot move layout.
+///
+/// <para>Installed fonts are not looked up, and there is no fallback per
+/// character yet: a named family that is not registered gets Inter, and a
+/// character Inter lacks is drawn as its missing glyph. Text no longer depends
+/// on the machine it runs on.</para>
+/// </summary>
+internal sealed class FontProvider
+{
+    private readonly TextEngine _engine;
+
+    // Per-(family, weight) resolved face. "" family key = the built-in Inter.
+    private readonly Dictionary<(string Family, int Weight), FontFace> _cache = new();
+
+    // One FontFace per engine font, so runs compare faces by reference.
+    private readonly Dictionary<FtFont, FontFace> _faces = new(ReferenceEqualityComparer.Instance);
+
+    // Typeface runs, addressed by a content hash of (text, family, weight) — see RunsKey.
+    // Touch-evicted, because its keys come from arbitrary UI text: text that stops
+    // being drawn falls out on its own. Made by Fonts, which is what ticks it —
+    // this class has no EndFrame of its own to be called out of step.
+    private readonly ResourceCache<RunsKey, TextRun> _runs;
+
+    internal FontProvider(TextEngine engine, ResourceCache<RunsKey, TextRun> runs)
+    {
+        _engine = engine;
+        _runs = runs;
+    }
+
+    public FontFace Regular => Resolve(null, 400);
+
+    public FontFace Resolve(string? family, int weight)
+    {
+        var key = (family ?? "", weight);
+        if (_cache.TryGetValue(key, out var cached)) return cached;
+        var face = Face(Load(family, weight));
+        _cache[key] = face;
+        return face;
+    }
+
+    private FtFont Load(string? family, int weight)
+    {
+        // A registered family is the caller's deliberate ask. Identical bytes open
+        // as one font however often they are handed over.
+        if (family is not null && FontRegistry.TryResolve(family, weight) is { } bytes && _engine.Load(bytes) is { } registered)
+            return registered;
+        return _engine.Resolve(null, weight);
+    }
+
+    private FontFace Face(FtFont font)
+    {
+        if (!_faces.TryGetValue(font, out var face)) _faces[font] = face = new FontFace(font);
+        return face;
+    }
+
+    internal TextRun? SplitRuns(ReadOnlySpan<char> text, string? family, int weight)
+    {
+        if (text.IsEmpty) return null;
+        var key = RunsKey.For(text, family, weight);
+        return _runs.TryGet(key, out var runs) ? runs : _runs.Add(key, new TextRun(Resolve(family, weight), 0, text.Length));
+    }
+}

@@ -1,18 +1,26 @@
 # Bibui.Raster.Skia
 
-Bibui's raster backend on SkiaSharp: surfaces, clips, layers, shapes, paths,
-images, backdrop blur and text, drawn by Skia on the CPU or, through
-`Bibui.Platform.Silk`, on the GPU.
-
-Name it when you create the runtime:
+Bibui's renderer on SkiaSharp. `SkiaRenderer` draws a frame's `DrawList`
+(clips, layers, shapes, paths, textures, backdrop blur and text) with Skia on
+the CPU or on the GPU.
 
 ```csharp
-var runtime = BibuiRuntime.Create().WithSkia();
+using Bibui.Raster.Skia;
+
+using var skia = new SkiaRenderer();
+runtime.EndBuild();
+skia.Draw(runtime.DrawList, surface);   // an SKSurface of your own
+skia.Draw(runtime.DrawList, pixels);    // or RasterPixels: BGRA8888 premultiplied, yours
 ```
 
-Skia-typed extras live here too: `SkiaCustomDraw.Of` draws into a box with an
-`SKCanvas`, and `renderer.RenderTo(SKSurface, …)` renders a frame onto a Skia
-surface of your own.
+Bound to a window's target, it draws there: `new SkiaRenderer(window.Gl)` on
+the GPU, through a `Bibui.Platform.Silk` window's GL framebuffer, or
+`new SkiaRenderer(window.Cpu)` into the memory a window presents; then
+`skia.Draw(runtime.DrawList)` each frame. `SkiaRenderer.ForGl(window.Gl)`
+answers null when Skia cannot use the GL context, and the app falls back to
+the CPU if it wants to.
+`CreateTexture`, `UpdateTexture` and `ReleaseTexture` make the textures a
+custom draw callback draws.
 
 Part of bibui, a code-first native UI library for .NET:
 <https://github.com/Navisurg/bibui>. Licensed under Apache-2.0.

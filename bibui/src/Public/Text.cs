@@ -193,7 +193,7 @@ public ref struct TextOp
 
         // copy — fill CopyString from the original selection. Does not mutate
         // the buffer or cursor/mark. Cursor/mark are preserved because the
-        // Copy event sets KeepMark (see BibuiWindow). Placed BEFORE Delete so
+        // Copy event sets KeepMark (see BibUiEvent.FromKey). Placed BEFORE Delete so
         // Cut (Copy|Delete) still captures the selection before it's cleared.
         if ((ev.Flags & TextActionFlags.Copy) != 0)
         {
@@ -212,9 +212,10 @@ public ref struct TextOp
             op.NewMark = min;
         }
 
-        if (ev.CodePoint != 0)
+        // A code point that is no character (half a surrogate pair, past U+10FFFF)
+        // inserts nothing: input never throws.
+        if (ev.CodePoint != 0 && System.Text.Rune.TryCreate(ev.CodePoint, out var rune))
         {
-            var rune = new System.Text.Rune(ev.CodePoint);
             int written = rune.EncodeToUtf16(buf);
             op.ReplaceString = buf[..written];
 

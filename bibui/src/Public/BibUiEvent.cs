@@ -18,7 +18,7 @@ public enum BibUiEventKind
     // the mouse is travelling would otherwise hit-test wherever it finished.
     MouseDown,  // Button and X/Y are set
     MouseUp,    // Button and X/Y are set
-    MouseMove,  // X/Y are set. At most one per frame — see BibuiWindow.Translate
+    MouseMove,  // X/Y are set. At most one per frame — see BibuiRuntime.BeginBuild
     Release,    // key up. Key is set; the only consumer is key repeat
     Scroll,     // X/Y plus ScrollX/ScrollY
 
@@ -41,10 +41,27 @@ public enum BibUiEventKind
 ///
 /// Mutable, so the translation at the WM boundary builds one up in a single
 /// accumulating pass.
+///
+/// <para>An event the runtime queues lives until the frame's <c>EndBuild</c>: the
+/// runtime takes it from a pool that every frame end empties at once, and hands it
+/// out again the next frame. Read what you need while building; do not keep it.</para>
 /// </summary>
 public sealed class BibUiEvent
 {
     public BibUiEventKind Kind { get; set; } = BibUiEventKind.Null;
+
+    // ── The frame's list ─────────────────────────────────────────────────────
+    // rt: the runtime's. Linked as events are queued, unlinked all at once at
+    // the end of the frame.
+
+    /// <summary>The next event this frame, in the order they happened; null after the last.</summary>
+    public BibUiEvent? Next { get; internal set; }
+
+    /// <summary>Whether something has taken it (<see cref="Eat"/>). <c>UnconsumedEvents</c> skips it from then on.</summary>
+    public bool Consumed { get; private set; }
+
+    /// <summary>Takes the event: whoever asks after this does not see it.</summary>
+    public void Eat() => Consumed = true;
 
     // ── Raw OS info ──────────────────────────────────────────────────────────
     public Key Key { get; set; } = Key.Unknown;
@@ -123,7 +140,7 @@ public sealed class BibUiEvent
     /// </summary>
     internal string? TargetId { get; set; }
 
-    // ── Translated text-editing intent (filled by BibuiWindow) ───────────────
+    // ── Translated text-editing intent (filled by BeginBuild) ───────────────
     public TextActionFlags Flags { get; set; }
     public int Delta { get; set; }
 
@@ -140,6 +157,25 @@ public sealed class BibUiEvent
     /// boundary and stashed here, so TextOp.FromStateAndEvent does no I/O.
     /// </summary>
     public string? PasteData { get; set; }
+
+    /// <summary>Back to what <c>new()</c> gives, for the pool to hand out again.</summary>
+    internal void Reset()
+    {
+        Kind = BibUiEventKind.Null; Next = null; Consumed = false;
+        Key = Key.Unknown; Modifiers = KeyModifiers.None; Char = null;
+        Button = MouseButton.Unknown; X = Y = ScrollX = ScrollY = 0f; ClickCount = 1; TargetId = null;
+        Flags = 0; Delta = DeltaY = 0; CodePoint = 0; PasteData = null;
+    }
+
+    /// <summary>Everything but the list link and the consumed flag, from <paramref name="from"/>.</summary>
+    internal void CopyFrom(BibUiEvent from)
+    {
+        Kind = from.Kind;
+        Key = from.Key; Modifiers = from.Modifiers; Char = from.Char;
+        Button = from.Button; X = from.X; Y = from.Y; ScrollX = from.ScrollX; ScrollY = from.ScrollY;
+        ClickCount = from.ClickCount; TargetId = from.TargetId;
+        Flags = from.Flags; Delta = from.Delta; DeltaY = from.DeltaY; CodePoint = from.CodePoint; PasteData = from.PasteData;
+    }
 
     // ── Actions a keystroke and a menu item both ask for ─────────────────────
     // They accumulate onto the event rather than returning a fresh one, so the
@@ -179,5 +215,113 @@ public sealed class BibUiEvent
 
         var oneLine = clipboardText.Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ');
         PasteData = oneLine;
+    }
+
+    /// <summary>
+    /// Translates a key press into a text-edit intent, with the modifier state supplied rather
+    /// than read from a keyboard. Every caller has it to hand already — the window pump captures
+    /// it with the event, and <see cref="BibuiTestServer"/> synthesises presses over a socket
+    /// with no keyboard at all — so both produce identical events. Duplicating this switch is
+    /// how the two would drift. <paramref name="clipboard"/> is read on Ctrl+V; null means
+    /// there is no clipboard, and the paste is empty.
+    /// </summary>
+    public static BibUiEvent FromKey(Key key, bool ctrl, bool shift, Func<string?>? clipboard = null)
+    {
+        var ev = new BibUiEvent();
+        FillFromKey(ev, key, ctrl, shift, clipboard);
+        return ev;
+    }
+
+    // FromKey into an event the caller has: the runtime's, from its pool.
+    internal static void FillFromKey(BibUiEvent ev, Key key, bool ctrl, bool shift, Func<string?>? clipboard)
+    {
+        ev.Key   = key;
+        ev.Ctrl  = ctrl;
+        ev.Shift = shift;
+
+        // Handle modifiers
+        if (ev.Shift)
+        {
+            ev.Flags |= TextActionFlags.KeepMark;
+        }
+
+        // All other inputs. Kind is assigned per-case so consumers can filter
+        // (text widgets only care about Text/Navigate/Edit; global handlers
+        // get Press for everything else).
+        switch (key)
+        {
+            case Key.Left:
+                ev.Kind   = BibUiEventKind.Navigate;
+                ev.Delta  = -1;
+                if (ev.Ctrl) ev.Flags |= TextActionFlags.WordScan;
+                break;
+            case Key.Right:
+                ev.Kind   = BibUiEventKind.Navigate;
+                ev.Delta  = 1;
+                if (ev.Ctrl) ev.Flags |= TextActionFlags.WordScan;
+                break;
+            case Key.Backspace:
+                ev.Kind   = BibUiEventKind.Edit;
+                ev.Flags |= TextActionFlags.Delete | TextActionFlags.NoNavigationWithSelection;
+                ev.Delta  = -1;
+                // With ctrl, back to the start of the word, as ctrl+left moves.
+                if (ev.Ctrl) ev.Flags |= TextActionFlags.WordScan;
+                break;
+            case Key.Delete:
+                ev.Kind   = BibUiEventKind.Edit;
+                ev.Flags |= TextActionFlags.Delete | TextActionFlags.NoNavigationWithSelection;
+                ev.Delta  = 1;
+                // With ctrl, on to the end of the word, as ctrl+right moves.
+                if (ev.Ctrl) ev.Flags |= TextActionFlags.WordScan;
+                break;
+            case Key.C when ev.Ctrl:
+                ev.Copy();
+                break;
+            case Key.Home:
+                ev.Kind   = BibUiEventKind.Navigate;
+                // Backwards: LineScan takes its direction from the delta, the
+                // same way WordScan does.
+                ev.Delta  = -1;
+                ev.Flags |= TextActionFlags.LineScan;
+                break;
+            case Key.End:
+                ev.Kind   = BibUiEventKind.Navigate;
+                ev.Delta  = 1;
+                ev.Flags |= TextActionFlags.LineScan;
+                break;
+            case Key.A when ev.Ctrl:
+                ev.SelectAll();
+                break;
+            case Key.Enter:
+                ev.Kind = BibUiEventKind.Submit;
+                break;
+            case Key.Up:
+                ev.Kind   = BibUiEventKind.Navigate;
+                ev.DeltaY = -1;
+                break;
+            case Key.Down:
+                ev.Kind   = BibUiEventKind.Navigate;
+                ev.DeltaY = 1;
+                break;
+            case Key.X when ev.Ctrl:
+                // Cut = Copy + Delete; the Copy block fills CopyString first,
+                // then Delete clears the range and collapses the cursor. Said as
+                // a copy that also deletes, because that is what it is.
+                ev.Copy();
+                ev.Flags |= TextActionFlags.Delete;
+                ev.Kind = BibUiEventKind.Edit;   // it deletes, so it is an edit
+                break;
+            case Key.V when ev.Ctrl:
+                // Read the clipboard at the WM boundary so the event stays
+                // I/O-free (and so the splice is testable without touching the
+                // system clipboard).
+                // No clipboard (null) pastes nothing: the host's clipboard
+                // arrives through the argument, as the runtime's ClipboardGet.
+                ev.Paste(clipboard?.Invoke());
+                break;
+            default:
+                ev.Kind = BibUiEventKind.Press;
+                break;
+        }
     }
 }

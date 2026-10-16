@@ -16,7 +16,7 @@
     <NuGetAudit>false</NuGetAudit>
     <UseAppHost>false</UseAppHost>
     <PackageId>Bibui</PackageId>
-    <Description>Bibui, a code-first native UI library: nodes, layout, the painter and BibuiRenderer over an IRasterBackend, text, theming, the runtime (BibuiRuntime, BibuiWindow and the platform-host seam) and the components. Add Bibui.Platform.Silk (GLFW + OpenGL, cross-platform) or Bibui.Platform.Wayland for a window, and Bibui.Raster.Skia (SkiaSharp) or another backend to draw.</Description>
+    <Description>Bibui, a code-first native UI library: nodes, layout, the painter and its DrawList, text, theming, the runtime (BibuiRuntime: BeginBuild/EndBuild, input) and the components. Add Bibui.Platform.Silk (GLFW + OpenGL, cross-platform) or Bibui.Platform.Wayland for a window, and Bibui.Raster.Skia (SkiaSharp) or Bibui.Raster.Managed.Backend to draw the DrawList.</Description>
     <PackageTags>$(PackageTags);layout;components;theming;aot</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <IsPackable>true</IsPackable>

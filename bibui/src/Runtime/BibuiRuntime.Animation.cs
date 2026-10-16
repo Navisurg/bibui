@@ -1,4 +1,3 @@
-using Bibui.Renderer;
 using Bibui.Theming;
 
 namespace Bibui.Runtime;
@@ -69,21 +68,18 @@ public sealed partial class BibuiRuntime
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(property);
-        lock (_syncRoot)
-        {
-            var cell = _eased.FromKey(AnimKey.For(id, property), target,
-                static t => new Eased { Current = t, Target = t });
-            cell.Target = target;
-            cell.Speed = speed ?? _theme.Motion.Default;
-            cell.Epsilon = epsilon;
+        var cell = _eased.FromKey(AnimKey.For(id, property), target,
+            static t => new Eased { Current = t, Target = t });
+        cell.Target = target;
+        cell.Speed = speed ?? _theme.Motion.Default;
+        cell.Epsilon = epsilon;
 
-            return cell.Current;
-        }
+        return cell.Current;
     }
 
     /// <summary>
     /// Steps every value asked for this frame, and says whether any is still
-    /// moving. Caller holds <c>_syncRoot</c>; runs before the cache's own
+    /// moving. Runs before the cache's own
     /// EndFrame, which is what <c>Touched</c> is still comparable against.
     /// </summary>
     private bool StepEased()

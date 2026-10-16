@@ -2,28 +2,28 @@
   <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
   <Import Project="../packaging/PublicPackage.props" />
 
-  <!-- The cross-platform window host — GLFW through Silk.NET, presenting
-       with OpenGL (Skia GPU, or a CPU-raster texture), clipboard through TextCopy
-       and wl-clipboard. bibui names no host of its own:
-       an app opens a window on it with new BibuiWindow(runtime, new SilkPlatformHost()). -->
+  <!-- The cross-platform window: GLFW through Silk.NET, presenting with
+       OpenGL (a renderer draws into its framebuffer, or into memory it uploads),
+       clipboard through TextCopy and wl-clipboard. It references no renderer:
+       an app opens one with SilkWindow.Open(runtime, options) and runs the loop. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Bibui.Platform.Silk</AssemblyName>
     <RootNamespace>Bibui.Runtime.Platform</RootNamespace>
     <Nullable>enable</Nullable>
+    <!-- GLFW's char callback takes the window's handle as a pointer. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IsAotCompatible>true</IsAotCompatible>
     <PackageId>Bibui.Platform.Silk</PackageId>
-    <Description>Bibui cross-platform window host: GLFW + OpenGL through Silk.NET, clipboard through TextCopy. new BibuiWindow(runtime, new SilkPlatformHost()).</Description>
+    <Description>Bibui cross-platform window: GLFW + OpenGL through Silk.NET, clipboard through TextCopy. SilkWindow.Open(runtime, options), then SilkWindow.BeginFrame/EndFrame around each frame.</Description>
     <PackageTags>$(PackageTags);window;glfw;opengl;silk.net</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../bibui/bibui.csproj" />
-    <!-- The GPU path presents through Skia (GRContext, SKSurface over the framebuffer). -->
-    <ProjectReference Include="../bibui-raster-skia/bibui-raster-skia.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Silk.NET.Input.Glfw" Version="2.23.0" />

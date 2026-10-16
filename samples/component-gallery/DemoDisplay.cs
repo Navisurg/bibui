@@ -68,11 +68,11 @@ internal static class DemoDisplay
             line = runtime.EllipsisTextField(id, EllipsisText, EllipsisEdit, EllipsisFocused, events: TextField.SingleLineEvents);
         if (line.Pressed) EllipsisFocused = true;
         if (EllipsisFocused)
-            foreach (var handle in runtime.UnconsumedEvents)
-                if (handle.Event is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: Bibui.TextEdit.BibUiEventKind.Submit })
+            foreach (var ev in runtime.UnconsumedEvents)
+                if (ev is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: Bibui.TextEdit.BibUiEventKind.Submit })
                 {
                     EllipsisFocused = false;
-                    handle.Eat();
+                    ev.Eat();
                 }
         return box;
     }
@@ -129,6 +129,7 @@ internal static class DemoDisplay
     "Alert" => AlertPage(runtime),
 
     "Separator" => SeparatorPage(runtime),
+    "Texture" => DemoTexture.Build(runtime),
 
     "Label" => Arrange.Column(
         Bold(runtime, "Form labels paired with inputs", ComponentSize.Sm, TextColor.Secondary),

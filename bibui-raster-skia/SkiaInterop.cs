@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Bibui.Draw;
 using SkiaSharp;
 
 namespace Bibui.Raster.Skia;
@@ -21,8 +22,6 @@ internal static class SkiaInterop
     public static SKRectI ToSk(this PixelRect r) => new(r.Left, r.Top, r.Right, r.Bottom);
 
     public static SKPoint ToSk(this Vector2 p) => new(p.X, p.Y);
-
-    public static TextMetrics ToTextMetrics(this in SKFontMetrics m) => new(m.Ascent, m.Descent, m.Leading);
 
     // The bibui enums are declared with Skia's values, so these are casts.
     public static SKPaintStyle ToSk(this PaintStyle s) => (SKPaintStyle)(int)s;

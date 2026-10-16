@@ -1,15 +1,16 @@
 using System.Numerics;
 using Bibui;
-using Bibui.Raster;
+using Bibui.Draw;
+using Surface = Bibui.Raster.Managed.Surface;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 using Bibui.Theming;
 
 /// <summary>
-/// The damage oracle: every scene runs on two runtimes side by side, each on
-/// its own managed backend — one drawing every frame whole, one with
-/// <see cref="ManagedRasterBackend.DamageTracking"/> on — fed the same scripted
+/// The damage oracle: every scene runs on two runtimes side by side, each drawn
+/// by its own managed renderer — one drawing every frame whole, one with
+/// <see cref="ManagedRenderer.DamageTracking"/> on — fed the same scripted
 /// input on the same clock, and every frame of the damage-tracked one must
 /// equal the whole one byte for byte. The damage-tracked one draws into a ring
 /// of surfaces, as the Wayland host does, so a surface several frames old is
@@ -22,79 +23,72 @@ internal static class DamageOracle
     /// runtime's build function and the step applied before each frame.
     /// </summary>
     internal sealed record Scene(string Name, int Width, int Height, float Scale, int Frames,
-        Func<BibuiRuntime, (Func<UiNode> Build, Action<int> Step)> Setup);
+        Func<BibuiRuntime, ManagedRenderer, (Func<UiNode> Build, Action<int> Step)> Setup);
 
     internal sealed record Result(int Frames, int Mismatches, int Partial, string? FirstMismatch);
 
     internal static Result Run(Scene scene, int ring)
     {
-        var fullBackend = new ManagedRasterBackend();
-        var dmgBackend = new ManagedRasterBackend { DamageTracking = true };
-        var full = Make(scene, fullBackend, out var stepFull);
-        var dmg = Make(scene, dmgBackend, out var stepDmg);
+        var fullRenderer = new ManagedRenderer();
+        var dmgRenderer = new ManagedRenderer { DamageTracking = true };
+        var full = Make(scene, fullRenderer, out var stepFull);
+        var dmg = Make(scene, dmgRenderer, out var stepDmg);
 
-        IRasterSurface? sf = null;
-        var sd = new IRasterSurface?[ring];
+        Surface? sf = null;
+        var sd = new Surface?[ring];
         int w = 0, h = 0;
-        byte[] a = [], b = [];
+        uint[] a = [], b = [];
         int mismatches = 0, partial = 0;
         string? first = null;
-        try
+        for (int f = 0; f < scene.Frames; f++)
         {
-            for (int f = 0; f < scene.Frames; f++)
+            stepFull(f);
+            stepDmg(f);
+
+            int pw = SurfaceOptions.PhysicalSize(full.SurfaceWidth, full.ScaleFactor);
+            int ph = SurfaceOptions.PhysicalSize(full.SurfaceHeight, full.ScaleFactor);
+            if (pw != w || ph != h)
             {
-                stepFull(f);
-                stepDmg(f);
-
-                int pw = SurfaceOptions.PhysicalSize(full.SurfaceWidth, full.ScaleFactor);
-                int ph = SurfaceOptions.PhysicalSize(full.SurfaceHeight, full.ScaleFactor);
-                if (pw != w || ph != h)
-                {
-                    w = pw; h = ph;
-                    sf?.Dispose();
-                    sf = fullBackend.CreateSurface(w, h);
-                    for (int i = 0; i < ring; i++) { sd[i]?.Dispose(); sd[i] = dmgBackend.CreateSurface(w, h); }
-                    a = new byte[w * h * 4];
-                    b = new byte[w * h * 4];
-                }
-
-                var target = sd[f % ring]!;
-                full.RenderTo(sf!);
-                dmg.RenderTo(target);
-                if (dmgBackend.LastRepaint is not null) partial++;
-
-                sf!.ReadPixels(a, w, h);
-                target.ReadPixels(b, w, h);
-                if (!a.AsSpan().SequenceEqual(b) && mismatches++ == 0)
-                    first = $"frame {f}: {Describe(a, b, w, h)}; repaint {Rects(dmgBackend.LastRepaint)}";
+                w = pw; h = ph;
+                sf = new Surface(w, h);
+                for (int i = 0; i < ring; i++) sd[i] = new Surface(w, h);
+                a = new uint[w * h];
+                b = new uint[w * h];
             }
-        }
-        finally
-        {
-            sf?.Dispose();
-            foreach (var s in sd) s?.Dispose();
+
+            var target = sd[f % ring]!;
+            full.Step();
+            fullRenderer.Draw(full.DrawList, sf!);
+            dmg.Step();
+            dmgRenderer.Draw(dmg.DrawList, target);
+            if (dmgRenderer.LastRepaint is not null) partial++;
+
+            sf!.CopyTo(a);
+            target.CopyTo(b);
+            if (!a.AsSpan().SequenceEqual(b) && mismatches++ == 0)
+                first = $"frame {f}: {Describe(a, b, w, h)}; repaint {Rects(dmgRenderer.LastRepaint)}";
         }
         return new Result(scene.Frames, mismatches, partial, first);
     }
 
-    private static BibuiRuntime Make(Scene scene, ManagedRasterBackend backend, out Action<int> step)
+    private static BibuiRuntime Make(Scene scene, ManagedRenderer renderer, out Action<int> step)
     {
-        var rt = BibuiRuntime.Create().WithRaster(backend);
+        var rt = BibuiRuntime.Create();
         rt.TargetHz = 60f;
-        var (build, s) = scene.Setup(rt);
-        rt.Mount(build, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = scene.Width, Height = scene.Height, ScaleFactor = scene.Scale });
+        var (build, s) = scene.Setup(rt, renderer);
+        rt.SetBuild(build, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = scene.Width, Height = scene.Height, ScaleFactor = scene.Scale });
         step = s;
         return rt;
     }
 
-    private static string Describe(byte[] a, byte[] b, int w, int h)
+    private static string Describe(uint[] a, uint[] b, int w, int h)
     {
         int n = 0, l = w, t = h, r = 0, bt = 0;
-        for (int i = 0; i < a.Length; i += 4)
+        for (int p = 0; p < a.Length; p++)
         {
-            if (a[i] == b[i] && a[i + 1] == b[i + 1] && a[i + 2] == b[i + 2] && a[i + 3] == b[i + 3]) continue;
+            if (a[p] == b[p]) continue;
             n++;
-            int p = i / 4, x = p % w, y = p / w;
+            int x = p % w, y = p / w;
             l = Math.Min(l, x); t = Math.Min(t, y); r = Math.Max(r, x + 1); bt = Math.Max(bt, y + 1);
         }
         return $"{n} px differ in ({l},{t})-({r},{bt})";
@@ -184,7 +178,7 @@ internal static class DamageOracle
 
     internal static IEnumerable<Scene> Scenes()
     {
-        yield return new Scene("button-grid-hover", 900, 520, 1f, 90, rt =>
+        yield return new Scene("button-grid-hover", 900, 520, 1f, 90, (rt, renderer) =>
         {
             UiNode Build()
             {
@@ -202,7 +196,7 @@ internal static class DamageOracle
             });
         });
 
-        yield return new Scene("button-grid-hover-2x", 450, 300, 2f, 60, rt =>
+        yield return new Scene("button-grid-hover-2x", 450, 300, 2f, 60, (rt, renderer) =>
         {
             UiNode Build()
             {
@@ -213,7 +207,7 @@ internal static class DamageOracle
             return (Build, f => { var (x, y) = Wander(f, 450, 300); Move(rt, x, y); });
         });
 
-        yield return new Scene("retained-buttons", 900, 400, 1f, 120, rt =>
+        yield return new Scene("retained-buttons", 900, 400, 1f, 120, (rt, renderer) =>
         {
             var clicks = new int[32];
             UiNode Build()
@@ -237,7 +231,7 @@ internal static class DamageOracle
             });
         });
 
-        yield return new Scene("switches", 500, 360, 1f, 100, rt =>
+        yield return new Scene("switches", 500, 360, 1f, 100, (rt, renderer) =>
         {
             var on = new bool[6];
             UiNode Build()
@@ -262,7 +256,7 @@ internal static class DamageOracle
             });
         });
 
-        yield return new Scene("typing", 600, 380, 1f, 110, rt =>
+        yield return new Scene("typing", 600, 380, 1f, 110, (rt, renderer) =>
         {
             var name = new BibuiStr(64);
             var other = new BibuiStr(64);
@@ -301,7 +295,7 @@ internal static class DamageOracle
             });
         });
 
-        yield return new Scene("app-state", 600, 420, 1f, 80, rt =>
+        yield return new Scene("app-state", 600, 420, 1f, 80, (rt, renderer) =>
         {
             int frame = 0;
             string[] palette = ["#ef4444", "#3b82f6", "#22c55e", "#eab308", "#a855f7"];
@@ -335,7 +329,7 @@ internal static class DamageOracle
             return (Build, f => frame = f);
         });
 
-        yield return new Scene("runtime-animate", 600, 300, 1f, 90, rt =>
+        yield return new Scene("runtime-animate", 600, 300, 1f, 90, (rt, renderer) =>
         {
             int frame = 0;
             UiNode Build()
@@ -354,7 +348,7 @@ internal static class DamageOracle
             return (Build, f => frame = f);
         });
 
-        yield return new Scene("overlays", 640, 420, 1f, 100, rt =>
+        yield return new Scene("overlays", 640, 420, 1f, 100, (rt, renderer) =>
         {
             int frame = 0;
             UiNode Build()
@@ -387,7 +381,7 @@ internal static class DamageOracle
             return (Build, f => { frame = f; var (x, y) = Wander(f, 640, 420); Move(rt, x, y); });
         });
 
-        yield return new Scene("scroll", 500, 400, 1f, 70, rt =>
+        yield return new Scene("scroll", 500, 400, 1f, 70, (rt, renderer) =>
         {
             UiNode Build()
             {
@@ -411,7 +405,7 @@ internal static class DamageOracle
             });
         });
 
-        yield return new Scene("resize", 600, 400, 1f, 60, rt =>
+        yield return new Scene("resize", 600, 400, 1f, 60, (rt, renderer) =>
         {
             UiNode Build()
             {
@@ -428,7 +422,7 @@ internal static class DamageOracle
             });
         });
 
-        yield return new Scene("shadows-gradients", 700, 460, 1f, 100, rt =>
+        yield return new Scene("shadows-gradients", 700, 460, 1f, 100, (rt, renderer) =>
         {
             UiNode Card(int i)
             {
@@ -466,7 +460,7 @@ internal static class DamageOracle
             });
         });
 
-        yield return new Scene("spinners-charts", 640, 360, 1f, 70, rt =>
+        yield return new Scene("spinners-charts", 640, 360, 1f, 70, (rt, renderer) =>
         {
             int frame = 0;
             UiNode Build()
@@ -474,7 +468,7 @@ internal static class DamageOracle
                 var data = Enumerable.Range(0, 12).Select(i => 20f + 15f * MathF.Sin((frame + i * 3) / 5f) + i).ToArray();
                 var chart = new Box
                 {
-                    Draw = ctx =>
+                    Draw = (_, ctx) =>
                     {
                         var r = ctx.Logical;
                         Span<(float X, float Y)> pts = stackalloc (float, float)[data.Length];
@@ -482,7 +476,7 @@ internal static class DamageOracle
                             pts[i] = (r.Left + (r.Right - r.Left) * i / (data.Length - 1), r.Bottom - (r.Bottom - r.Top) * data[i] / 60f);
                         ctx.DrawFilledPathGradient(pts, r.Top, r.Bottom, new Rgba(59, 130, 246, 90));
                         ctx.DrawPolyline(pts, new Rgba(59, 130, 246), 2f);
-                        ctx.DrawEdge(r.Left, r.Bottom, r.Right, r.Bottom, 1f, "#3f3f46", dashed: true);
+                        ctx.DrawEdge(r.Left, r.Bottom, r.Right, r.Bottom, 1f, DrawContext.Color("#3f3f46"), dashed: true);
                     },
                 }.Px(300f, 120f);
                 return Page(Arrange.Column(
@@ -493,7 +487,7 @@ internal static class DamageOracle
             return (Build, f => frame = f);
         });
 
-        yield return new Scene("opacity", 600, 300, 1f, 80, rt =>
+        yield return new Scene("opacity", 600, 300, 1f, 80, (rt, renderer) =>
         {
             int frame = 0;
             UiNode Build()
@@ -512,14 +506,14 @@ internal static class DamageOracle
             return (Build, f => { frame = f; var (x, y) = Wander(f, 600, 300); Move(rt, x, y); });
         });
 
-        yield return new Scene("custom-draw", 500, 300, 1f, 40, rt =>
+        yield return new Scene("custom-draw", 500, 300, 1f, 40, (rt, renderer) =>
         {
             int frame = 0;
             UiNode Build()
             {
                 var canvas = new Box
                 {
-                    Draw = ctx =>
+                    Draw = (_, ctx) =>
                     {
                         // Cached geometry; scratch geometry; and a path the draw builds and drops.
                         float x = 20 + (frame * 9) % 300;
@@ -529,12 +523,12 @@ internal static class DamageOracle
                         ctx.DrawArc(x, 40, 16, 3, new Rgba(56, 189, 248), sweepAngle: 90 + frame * 7 % 270);
                         if (frame % 10 >= 5)
                         {
-                            using var own = ctx.Backend.CreatePath();
-                            own.MoveTo(ctx.Rect.Left + 400, ctx.Rect.Top + 10);
-                            own.LineTo(ctx.Rect.Left + 460, ctx.Rect.Top + 100);
-                            own.LineTo(ctx.Rect.Left + 380, ctx.Rect.Top + 100);
+                            var own = new VectorPath();
+                            own.MoveTo(400, 10);
+                            own.LineTo(460, 100);
+                            own.LineTo(380, 100);
                             own.Close();
-                            ctx.DrawPath(own, ctx.Fill(new Rgba(234, 179, 8)));
+                            ctx.DrawPath(own, Paint.Filled(new Rgba(234, 179, 8)));
                         }
                     },
                 }.FillX().Px(height: 120f);
@@ -543,29 +537,28 @@ internal static class DamageOracle
             return (Build, f => { frame = f; Move(rt, 60 + (f * 5) % 120, 150); });
         });
 
-        // Every canvas call the scenes above never make, drawn straight onto the
-        // canvas by a box's own draw: images (one still, one moving), a pixel
-        // buffer rewritten in place every frame, points, string text, a glyph run,
-        // and shapes under a changing scale and a set matrix.
-        yield return new Scene("canvas-calls", 520, 300, 1f, 60, rt =>
+        // Every draw the scenes above never make, by a box's own draw: a texture
+        // (drawn still and moving), a texture whose pixels are updated every frame,
+        // points, two runs of text (one changing), and shapes under a changing
+        // scale and a translation.
+        yield return new Scene("canvas-calls", 520, 300, 1f, 60, (rt, renderer) =>
         {
             int frame = 0;
-            RasterImage? image = null;
+            TextureHandle image = default, video = default;
             var pixels = new byte[32 * 32 * 4];
             UiNode Build()
             {
                 var canvas = new Box
                 {
-                    Draw = ctx =>
+                    Draw = (_, ctx) =>
                     {
-                        var c = ctx.Canvas;
-                        float l = ctx.Rect.Left, t = ctx.Rect.Top;
-                        var white = ctx.Fill(new Rgba(255, 255, 255));
-                        image ??= ctx.Backend.CreateImage(Checkerboard(16), 16, 16);
+                        // The scene is at scale 1, so logical and physical px agree.
+                        var white = Paint.Filled(new Rgba(255, 255, 255));
+                        if (image.IsNone) image = renderer.CreateTexture(Checkerboard(16), 16, 16);
 
-                        c.DrawImage(image, new RectF(l + 20, t + 20, l + 84, t + 84), white);
-                        float x = l + 120 + frame / 4 % 10 * 8;
-                        c.DrawImage(image, new RectF(x, t + 20, x + 48, t + 68), white);
+                        ctx.DrawTexture(image, new RectF(20, 20, 84, 84), white);
+                        float x = 120 + frame / 4 % 10 * 8;
+                        ctx.DrawTexture(image, new RectF(x, 20, x + 48, 68), white);
 
                         // The same array, rewritten in place: its content is what is drawn.
                         for (int i = 0; i < 32 * 32; i++)
@@ -575,28 +568,28 @@ internal static class DamageOracle
                             pixels[i * 4 + 2] = (byte)(frame * 11);
                             pixels[i * 4 + 3] = 255;
                         }
-                        c.DrawPixels(pixels, 32, 32, new RectF(l + 260, t + 20, l + 324, t + 84), white);
+                        // One handle, its pixels updated every frame: damage must see the change.
+                        if (video.IsNone) video = renderer.CreateTexture(pixels, 32, 32);
+                        else renderer.UpdateTexture(video, pixels, 32, 32);
+                        ctx.DrawTexture(video, new RectF(260, 20, 324, 84), white);
 
                         Span<Vector2> pts = stackalloc Vector2[8];
-                        for (int i = 0; i < 8; i++) pts[i] = new(l + 30 + i * 20, t + 120 + (i == frame % 8 ? 6 : 0));
-                        c.DrawPoints(PointMode.Points, pts, ctx.Stroke(new Rgba(234, 179, 8), 4f));
+                        for (int i = 0; i < 8; i++) pts[i] = new(30 + i * 20, 120 + (i == frame % 8 ? 6 : 0));
+                        ctx.DrawPoints(PointMode.Points, pts, Paint.Stroked(new Rgba(234, 179, 8), 4f));
 
-                        var font = new RasterFont(ctx.Backend.DefaultTypeface, 14f);
-                        c.DrawText($"frame {frame / 6}", l + 30, t + 170, font, new Rgba(255, 255, 255));
-                        var run = ctx.Backend.ShapeText(font, "glyphs");
-                        var at = new Vector2[run.Glyphs.Length];
-                        for (int i = 1; i < at.Length; i++) at[i] = new(at[i - 1].X + run.Advances[i - 1], 0f);
-                        c.DrawGlyphRun(run.Glyphs, at, l + 200, t + 170, font, new Rgba(56, 189, 248));
+                        var font = new Font(14f, null, 400, 1f);
+                        ctx.DrawText($"frame {frame / 6}", 30, 156, font, new Rgba(255, 255, 255));
+                        ctx.DrawText("glyphs", 200, 156, font, new Rgba(56, 189, 248));
 
-                        c.Save();
-                        c.Translate(l + 400, t + 120);
-                        c.Scale(1f + frame / 10 % 3 * 0.25f, 1f);
-                        c.DrawRoundRect(new RectF(0, 0, 40, 30), 6, 6, ctx.Fill(new Rgba(34, 197, 94)));
-                        c.Restore();
-                        c.Save();
-                        c.SetMatrix(Matrix3x2.CreateTranslation(l + 400, t + 180 + frame % 5));
-                        c.DrawRoundRect(new RectF(0, 0, 40, 30), 6, 6, ctx.Fill(new Rgba(239, 68, 68)));
-                        c.Restore();
+                        ctx.PushTransform(Matrix3x2.CreateScale(1f + frame / 10 % 3 * 0.25f, 1f) * Matrix3x2.CreateTranslation(400, 120));
+                        ctx.DrawRect(new RectF(0, 0, 40, 30), 6, Paint.Filled(new Rgba(34, 197, 94)));
+                        ctx.PopTransform();
+                        // The same paint for what follows, pushed once.
+                        ctx.PushPaint(Paint.Filled(new Rgba(239, 68, 68)));
+                        ctx.PushTransform(Matrix3x2.CreateTranslation(400, 180 + frame % 5));
+                        ctx.DrawRect(new RectF(0, 0, 40, 30), 6);
+                        ctx.PopTransform();
+                        ctx.PopPaint();
                     },
                 }.Px(520f, 240f);
                 return Page(Arrange.Column(canvas, Arrange.Space(8f), rt.Button("cc", "Hover me").Node), 0f);
@@ -605,7 +598,7 @@ internal static class DamageOracle
         });
 
         // The dense case damage tracking is for: 600 solid buttons filling a HiDPI surface.
-        yield return new Scene("solid-grid-2x", 900, 700, 2f, 40, rt =>
+        yield return new Scene("solid-grid-2x", 900, 700, 2f, 40, (rt, renderer) =>
         {
             UiNode Build()
             {

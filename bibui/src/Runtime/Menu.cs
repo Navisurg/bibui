@@ -188,10 +188,10 @@ public readonly struct MenuScope
         _inList.Dispose();
         _list.Claims = InteractionKinds.Press;
         var widget = new BibuiWidget(_list, _runtime.InteractionsFor(_list));
-        foreach (var handle in _runtime.UnconsumedEvents)
-            if (handle.Event is { IsKeyDown: true, Key: Key.Escape })
+        foreach (var ev in _runtime.UnconsumedEvents)
+            if (ev is { IsKeyDown: true, Key: Key.Escape })
             {
-                handle.Eat();
+                ev.Eat();
                 _runtime.CloseDropDown(_list.Id!);
             }
         return widget;

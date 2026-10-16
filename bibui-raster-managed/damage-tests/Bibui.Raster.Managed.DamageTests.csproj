@@ -16,7 +16,5 @@
   <ItemGroup>
     <ProjectReference Include="../../bibui/bibui.csproj" />
     <ProjectReference Include="../backend/Bibui.Raster.Managed.Backend.csproj" />
-    <!-- Aliased: its namespace Bibui.Text.FreeType collides with the type Bibui.Text in bibui (CS0434). -->
-    <ProjectReference Include="../../bibui-text-freetype/Bibui.Text.FreeType.csproj" Aliases="freetype" />
   </ItemGroup>
 </Project>

@@ -383,7 +383,7 @@ internal static unsafe class ClipboardTests
 
         t.Run("clipboard live probe: bind the data device manager and a seat, make the device, tear down", () =>
         {
-            if (!WaylandPlatformHost.IsSupported) throw new SkipException("no Wayland session");
+            if (!WaylandWindow.IsSupported) throw new SkipException("no Wayland session");
             Probe();
         });
     }

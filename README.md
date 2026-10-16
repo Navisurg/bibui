@@ -20,54 +20,37 @@ supported yet.
 
 ## Install
 
-bibui needs .NET 10. Add `Bibui` and one host package, which opens the window:
+bibui needs .NET 10. Add `Bibui`, a window package and a renderer package:
 
 ```bash
 dotnet new console -n Counter && cd Counter
 dotnet add package Bibui
 dotnet add package Bibui.Platform.Silk
+dotnet add package Bibui.Raster.Skia
 ```
 
 | Route | Packages | Native AOT |
 |---|---|---|
-| Silk + Skia (GLFW and OpenGL, CPU fallback) | `Bibui`, `Bibui.Platform.Silk` | No, JIT only for now |
+| Silk + Skia (GLFW and OpenGL) | `Bibui`, `Bibui.Platform.Silk`, `Bibui.Raster.Skia` | No, JIT only for now |
 | Wayland + managed raster | `Bibui`, `Bibui.Platform.Wayland`, `Bibui.Raster.Managed.Backend` | Yes |
 | Headless tests | `Bibui.Testing` | |
 
 ## Quick start
 
-Below, a simple bibui app with a label and a button is shown.
-It sets up Skia for rendering and Silk to handle input and window events:
+[`samples/counter`](samples/counter/Program.cs) is a simple bibui app: a label
+and a button that counts its clicks. The app owns its loop:
 
-```csharp
-using Bibui.Raster.Skia;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+- the window waits for input and puts frames on screen (`SilkWindow.BeginFrame`
+  / `EndFrame`);
+- the runtime builds each frame and records it (`runtime.BeginBuild` /
+  `EndBuild`);
+- a renderer draws what was recorded (`skia.Draw`).
 
-var runtime = BibuiRuntime.Create().WithSkia();
-int count = 0;
-
-runtime.Mount(() =>
-{
-    var column = runtime.ColumnFit();
-    using (runtime.PushParent(column))
-    {
-        runtime.Text($"Clicked {count} times");
-
-        var button = runtime.Button(id: "add", "Add one");
-        if (button.Clicked)
-            count++;
-    }
-    return column;
-});
-
-BibuiWindow.Create(runtime).WithSilk().Run(title: "Counter");
-```
-
-Run it from the project created above:
+The build is ordinary code inside that loop, and the app's state is its own
+variables. Run it:
 
 ```bash
-dotnet run
+dotnet run --project samples/counter
 ```
 
 ![The quick start's window after three clicks: "Clicked 3 times" above an "Add one" button](docs/images/quick-start-counter.png)
@@ -113,28 +96,19 @@ Every component, with pictures, is in [Components](docs/components/index.md).
 
 ## Two routes
 
-bibui draws through a raster backend and runs in a window that a host
-provides. You pick both explicitly, and nothing is discovered at run time.
+The runtime records each frame into a draw list; a renderer draws that list,
+into a window a platform provides. You pick both explicitly, and nothing is
+discovered at run time.
 
-- **Silk + Skia.** `SilkPlatformHost` opens the window with GLFW and renders
-  with Skia on OpenGL when it can, falling back to the CPU otherwise
-  (`BIBUI_GPU=0` forces the fallback). This route runs on the JIT only for
-  now: Silk.NET itself is not trim-safe, so it does not publish with Native AOT.
-- **Wayland + managed raster.** `WaylandPlatformHost` talks to the compositor
-  through libwayland-client and draws on the CPU into shared-memory buffers,
-  with a rasterizer written in C# and FreeType/HarfBuzz text. There is no GLFW,
-  GL or Skia on this route, and it publishes as a single Native AOT binary of
-  about 5 MB:
-
-  ```csharp
-  using Bibui.Platform.Wayland;
-  using Bibui.Raster.Managed.Backend;
-
-  var runtime = BibuiRuntime.Create().WithManagedRasterizer();
-  // ... runtime.Mount(...) as above ...
-  BibuiWindow.Create(runtime).WithWayland(new WaylandHostOptions { AppId = "dev.example.counter" })
-      .Run("Counter");
-  ```
+- **Silk + Skia.** `SilkWindow` opens the window with GLFW, and `SkiaRenderer`
+  draws into its OpenGL framebuffer. This route runs on the JIT only for now:
+  Silk.NET itself is not trim-safe, so it does not publish with Native AOT.
+- **Wayland + managed raster.** `WaylandWindow` talks to the compositor through
+  libwayland-client, and `ManagedRenderer` draws on the CPU into its
+  shared-memory buffers, with a rasterizer written in C# and FreeType/HarfBuzz
+  text. There is no GLFW, GL or Skia on this route, and it publishes as a
+  single Native AOT binary of about 5 MB:
+  `dotnet run --project tests/wayland-hello`.
 
   ```bash
   dotnet publish -c Release -r linux-x64 -p:PublishAot=true
@@ -150,11 +124,11 @@ decides which other dependencies it needs. In every case the dependency tree is 
 
 | Package | NuGet dependencies | System libraries |
 |---|---|---|
-| `Bibui` | `System.IO.Hashing` | none |
+| `Bibui` | `System.IO.Hashing` | `libfreetype6`, `libharfbuzz0b` (text) |
 | `Bibui.Raster.Skia` | `SkiaSharp` (with its Linux native assets) | `libfontconfig1` |
-| `Bibui.Platform.Silk` | `Silk.NET` windowing, input and OpenGL (GLFW), `TextCopy`, `Bibui.Raster.Skia` | an OpenGL driver for the GPU path (the CPU fallback works without one); GLFW itself ships with Silk.NET |
+| `Bibui.Platform.Silk` | `Silk.NET` windowing, input and OpenGL (GLFW), `TextCopy` | an OpenGL driver; GLFW itself ships with Silk.NET |
 | `Bibui.Platform.Wayland` | none | `libwayland-client`, `libwayland-cursor`, `libxkbcommon` |
-| `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`, `Bibui.Text.FreeType`) | `libfreetype6`, `libharfbuzz0b` |
+| `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`) | none beyond `Bibui`'s |
 
 The Wayland + managed route has no third-party NuGet dependencies at all, and
 it is the route that publishes with Native AOT; Silk.NET keeps the other on the

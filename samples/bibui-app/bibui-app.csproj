@@ -10,7 +10,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../bibui/bibui.csproj" />
-    <!-- The cross-platform host (GLFW + GL): new BibuiWindow(runtime) opens on it. -->
+    <!-- The window (GLFW + GL) and the renderer that draws into it. -->
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+    <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
   </ItemGroup>
 </Project>

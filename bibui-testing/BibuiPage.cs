@@ -1,119 +1,137 @@
+using Bibui.Draw;
 using Bibui.Raster.Skia;
 using Bibui.TextEdit;
 using Bibui.Theming;
 using Bibui.Runtime;
+using Bibui.Runtime.Platform;
 
 namespace Bibui.Testing;
 
 /// <summary>
-/// Headless implementation of IBibuiPage. Wraps a BibuiRuntime and exposes the
-/// Playwright-style semantic test API. No window or OS interaction is involved.
+/// Playwright-style semantic test API for a bibui runtime, headless: no window
+/// and no OS.
+///
+/// Tests read the tree the runtime laid out, and drive it by dispatching events
+/// through the runtime's event system rather than the OS — the way Playwright
+/// uses Chrome DevTools Protocol to talk to the browser's DOM. Every action
+/// builds the frame it causes. <see cref="Screenshot"/> draws the last frame's
+/// list with the page's renderer, Skia on the CPU unless another is given.
+///
+/// Usage:
+///   page.Click("inc");     // a press and release at the box named "inc"
+///   page.GetText("label");
 /// </summary>
-public sealed class BibuiPage : IBibuiPage
+public sealed class BibuiPage : IDisposable
 {
     private readonly BibuiRuntime _runtime;
+    private readonly DrawToPixels _draw;
+    private readonly SkiaRenderer? _ownRenderer;
     private bool _disposed;
 
-    private BibuiPage(BibuiRuntime runtime)
+    private BibuiPage(BibuiRuntime runtime, Action build, DrawToPixels? draw)
     {
         _runtime = runtime;
+        _build = build;
+        if (draw is null)
+        {
+            _ownRenderer = new SkiaRenderer();
+            draw = _ownRenderer.Draw;
+        }
+        _draw = draw;
         // Point the runtime's copy and paste at this page's own clipboard, so a
         // test never reaches the real one.
         _runtime.ClipboardGet = () => _clipboard;
         _runtime.ClipboardSet = text => _clipboard = text;
 
-        // A page opens on a painted frame, the way a window does. Actions
+        // A page opens on a built frame, the way a window does. Actions
         // hit-test the frame that was on screen when they happened, so the
         // first one needs a frame to have happened.
-        _runtime.Render();
+        Frame();
     }
 
-    // ── Factories ─────────────────────────────────────────────────────────────
+    // What one frame builds, between the page's BeginBuild and EndBuild.
+    private readonly Action _build;
+
+    // ── Factories ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Creates a page with a stateful interactive app.
-    /// The build function receives the current state and a <see cref="SetState{T}"/> handle.
-    /// Calling <c>setState.Set(newState)</c> from build code will cause
-    /// the next inspection or action to re-render with the new state. From async
-    /// continuations call <c>setState.Update(s =&gt; ...)</c> to avoid stale-closure clobbering.
+    /// A page on a runtime of its own. <paramref name="build"/> builds one frame
+    /// into the runtime it is handed, as an app's loop body does between
+    /// <c>BeginBuild</c> and <c>EndBuild</c>; state is the caller's own.
     /// </summary>
-    public static BibuiPage Launch<T>(
-        T initialState,
-        Func<T, SetState<T>, UiNode> build,
-        SurfaceOptions? surface = null,
-        string theme = "bibui-dark")
+    public static BibuiPage Launch(Action<BibuiRuntime> build, SurfaceOptions? surface = null, ThemeTokens? theme = null)
     {
-        var runtime = BibuiRuntime.Create().WithSkia();
-        runtime.MountStateful(initialState, build, surface, theme);
-        return new BibuiPage(runtime);
+        ArgumentNullException.ThrowIfNull(build);
+        var runtime = BibuiRuntime.Create();
+        if (surface is not null) runtime.Surface = surface;
+        if (theme is not null) runtime.SetTheme(theme);
+        return new BibuiPage(runtime, () => build(runtime), null);
     }
 
     /// <summary>
-    /// Creates a stateful page driven by an explicit <see cref="ThemeTokens"/> object — for apps that
-    /// need a custom theme (e.g. a custom accent) without reflecting onto private runtime state.
+    /// A page on a runtime of its own, whose every frame is the tree
+    /// <paramref name="build"/> returns, linked under the frame's root (unless
+    /// the build linked it already). In the theme named <paramref name="theme"/>.
     /// </summary>
-    public static BibuiPage Launch<T>(
-        T initialState,
-        Func<T, SetState<T>, UiNode> build,
-        ThemeTokens theme,
-        SurfaceOptions? surface = null)
+    public static BibuiPage Launch(Func<UiNode> build, SurfaceOptions? surface = null, string theme = "bibui-dark")
+        => Launch(build, ThemeRegistry.Load(theme), surface);
+
+    /// <inheritdoc cref="Launch(Func{UiNode}, SurfaceOptions?, string)"/>
+    public static BibuiPage Launch(Func<UiNode> build, ThemeTokens theme, SurfaceOptions? surface = null)
     {
-        var runtime = BibuiRuntime.Create().WithSkia();
-        runtime.MountStateful(initialState, build, theme, surface);
-        return new BibuiPage(runtime);
+        ArgumentNullException.ThrowIfNull(build);
+        return Launch(runtime =>
+        {
+            var tree = build();
+            if (tree.Parent is null) UiNode.PushIntoParent(runtime.ParentInScope, tree);
+        }, surface, theme);
     }
 
     /// <summary>
-    /// Creates a page with a static (non-interactive) UI tree. Useful for
-    /// visual inspection. For apps with state, use Launch&lt;T&gt;.
+    /// A page on a runtime the caller made. Use this when an external service
+    /// (e.g. VideoService) needs to close over the runtime first.
+    /// <paramref name="build"/> builds one frame into it; <paramref name="draw"/>
+    /// is what <see cref="Screenshot"/> draws with, null for Skia on the CPU.
     /// </summary>
-    public static BibuiPage Launch(
-        Func<UiNode> build,
-        SurfaceOptions? surface = null,
-        string theme = "bibui-dark")
+    public static BibuiPage From(BibuiRuntime runtime, Action build, DrawToPixels? draw = null)
     {
-        var runtime = BibuiRuntime.Create().WithSkia();
-        runtime.Mount(build, surface, theme);
-        return new BibuiPage(runtime);
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(build);
+        return new BibuiPage(runtime, build, draw);
     }
 
     /// <summary>
-    /// Creates a static page driven by an explicit <see cref="ThemeTokens"/> object — for visual
-    /// inspection of a fixed tree under a fully custom theme, with no reflection on runtime state.
+    /// One frame, as the app's loop would build it: <c>BeginBuild</c>, the
+    /// build, <c>EndBuild</c>. Every action builds the frame it causes; call this
+    /// for one that nothing caused (time passing, a value set from outside).
     /// </summary>
-    public static BibuiPage Launch(
-        Func<UiNode> build,
-        ThemeTokens theme,
-        SurfaceOptions? surface = null)
+    public void Frame()
     {
-        var runtime = BibuiRuntime.Create().WithSkia();
-        runtime.Mount(build, theme, surface);
-        return new BibuiPage(runtime);
+        if (_disposed) throw new ObjectDisposedException(nameof(BibuiPage));
+        _runtime.BeginBuild(_keys);
+        _build();
+        _runtime.EndBuild();
     }
 
+    // ── Tree query ───────────────────────────────────────────────────────────
+
     /// <summary>
-    /// Wraps an already-mounted <see cref="BibuiRuntime"/>. Use this when an
-    /// external service (e.g. VideoService) needs to close over the runtime
-    /// before mounting — create and configure the runtime yourself, then pass
-    /// it here to get the full test API.
+    /// The node with the given Id in the tree just rendered, or null. Read what
+    /// is needed from it; the next frame resets and reuses it.
     /// </summary>
-    public static BibuiPage From(BibuiRuntime runtime) => new(runtime);
-
-    // ── IBibuiPage: tree query ────────────────────────────────────────────────
-
     public UiNode? FindById(string id)
     {
-        Render();
+        Frame();
         return _runtime.FindById(id);
     }
 
-    // ── IBibuiPage: actions ───────────────────────────────────────────────────
+    // ── Actions ──────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Presses and releases at the middle of an element, which is what a user
     /// does when they click it.
     ///
-    /// Going through ProcessEvents rather than a dispatch method is the whole
+    /// Going through the event queue rather than a dispatch method is the whole
     /// point: a test then exercises the path a real press takes — hit-testing,
     /// focus, the multi-click streak, drag state — instead of a shortcut past
     /// it. The consequence is that a test can now miss: an element covered by
@@ -132,14 +150,30 @@ public sealed class BibuiPage : IBibuiPage
         });
     }
 
-    /// <summary>One key, as the window would report it.</summary>
-    private void PressKey(Key key, bool ctrl = false, bool shift = false)
-        => _runtime.ProcessEvent(BibuiWindow.BibUiEventFromKey(key, ctrl, shift, _runtime.ClipboardGet));
+    // The keyboard's events for the next frame, which Frame hands to BeginBuild,
+    // as a window's loop hands it the window's. Reused.
+    private readonly List<WindowEvent> _keys = [];
 
+    /// <summary>One key, as the window would report it: the modifiers down around it, all of them up after it.</summary>
+    private void PressKey(Key key, bool ctrl = false, bool shift = false)
+    {
+        var held = (ctrl ? KeyModifiers.Ctrl : 0) | (shift ? KeyModifiers.Shift : 0);
+        if (ctrl) _keys.Add(WindowEvent.KeyPress(Key.ControlLeft, KeyModifiers.Ctrl));
+        if (shift) _keys.Add(WindowEvent.KeyPress(Key.ShiftLeft, held));
+        _keys.Add(WindowEvent.KeyPress(key, held));
+        _keys.Add(WindowEvent.KeyRelease(key, held));
+        if (shift) _keys.Add(WindowEvent.KeyRelease(Key.ShiftLeft, held & ~KeyModifiers.Shift));
+        if (ctrl) _keys.Add(WindowEvent.KeyRelease(Key.ControlLeft));
+    }
+
+    /// <summary>
+    /// Clicks the box with the given Id: a press and a release at its centre.
+    /// No-op if no box that claims a press carries the name.
+    /// </summary>
     public void Click(string id)
     {
         PressAt(id);
-        _runtime.Render();
+        Frame();
     }
 
     /// <summary>
@@ -150,14 +184,14 @@ public sealed class BibuiPage : IBibuiPage
     public void DoubleClick(string id)
     {
         PressAt(id, clickCount: 2);
-        _runtime.Render();
+        Frame();
     }
 
     /// <summary>Three clicks, which on text selects the line.</summary>
     public void TripleClick(string id)
     {
         PressAt(id, clickCount: 3);
-        _runtime.Render();
+        Frame();
     }
 
     /// <summary>
@@ -175,23 +209,40 @@ public sealed class BibuiPage : IBibuiPage
             X      = b.X + b.Width / 2f,
             Y      = b.Y + b.Height / 2f,
         });
-        _runtime.Render();
+        Frame();
     }
 
+    /// <summary>
+    /// Replaces the whole text of the field with the given Id, the way a
+    /// person would: presses it, which its app focuses; then, a frame later,
+    /// selects all and types the value, or deletes for an empty one. Nothing
+    /// when no box that asks carries the name.
+    /// </summary>
     public void Fill(string inputId, string value)
     {
-        _runtime.DispatchFill(inputId, value);
-        _runtime.Render();
+        ArgumentNullException.ThrowIfNull(value);
+        if (!_runtime.DispatchClick(inputId)) return;
+        Frame();
+        PressKey(Key.A, ctrl: true);
+        if (value.Length == 0) PressKey(Key.Backspace);
+        foreach (var rune in value.EnumerateRunes()) _keys.Add(WindowEvent.Text(rune));
+        Frame();
     }
 
-    // ── IBibuiPage: state inspection ──────────────────────────────────────────
+    // ── State inspection ─────────────────────────────────────────────────────
 
+    /// <summary>Returns true if the box with the given Id claims Disabled.</summary>
     public bool IsDisabled(string id)
         => FindById(id) is Box box && (box.Claims & InteractionKinds.Disabled) != 0;
 
+    /// <summary>Returns true if a node with the given Id is in the tree just rendered.</summary>
     public bool IsVisible(string id)
         => FindById(id) is not null;
 
+    /// <summary>
+    /// The words of a text, or of the first text under the node — a button's
+    /// label. Null when there is none.
+    /// </summary>
     public string? GetText(string id)
     {
         var node = FindById(id);
@@ -209,6 +260,7 @@ public sealed class BibuiPage : IBibuiPage
         }
     }
 
+    /// <summary>The logical-pixel rect of the node with the given Id.</summary>
     public System.Drawing.RectangleF GetBounds(string id)
     {
         var node = FindById(id)
@@ -216,36 +268,47 @@ public sealed class BibuiPage : IBibuiPage
         return new(node.Rect.X, node.Rect.Y, node.Extent.X, node.Extent.Y);
     }
 
-    // ── IBibuiPage: async helpers ─────────────────────────────────────────────
+    // ── Async helpers ────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Polls <paramref name="condition"/> up to <paramref name="timeout"/>,
+    /// checking every <paramref name="pollInterval"/>. Throws if the condition
+    /// is not satisfied within the timeout.
+    /// </summary>
     public void WaitFor(Func<bool> condition, TimeSpan timeout, TimeSpan? pollInterval = null, string? message = null)
     {
         var interval = pollInterval ?? TimeSpan.FromMilliseconds(50);
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            _runtime.Render(); // flush any pending invalidations
+            Frame(); // flush any pending invalidations
             if (condition()) return;
             Thread.Sleep(interval);
         }
         throw new TimeoutException(message ?? $"WaitFor condition was not met within {timeout.TotalSeconds:F1}s.");
     }
 
-    // ── IBibuiPage: cursor and keyboard ──────────────────────────────────────
+    // ── Cursor and keyboard ──────────────────────────────────────────────────
 
+    /// <summary>
+    /// Types one character, as the keyboard would. It reaches the field the
+    /// application has focused, which reads it when it asks.
+    /// </summary>
     public void TypeChar(char ch)
     {
-        _runtime.ProcessEvent(new BibUiEvent
-        {
-            Kind = BibUiEventKind.Text, Key = Key.Unknown, Char = ch, CodePoint = ch,
-        });
-        _runtime.Render();
+        _keys.Add(WindowEvent.Text(new System.Text.Rune(ch)));
+        Frame();
     }
 
+    /// <summary>
+    /// One key, with modifiers, as the window would report it. Says what the
+    /// per-key helpers cannot: Delete, Home and End, shift-extends-selection,
+    /// ctrl-jumps-a-word, Ctrl+A.
+    /// </summary>
     public void Press(Key key, bool ctrl = false, bool shift = false)
     {
         PressKey(key, ctrl, shift);
-        _runtime.Render();
+        Frame();
     }
 
     /// <summary>
@@ -259,44 +322,41 @@ public sealed class BibuiPage : IBibuiPage
     }
     private string _clipboard = "";
 
+    /// <summary>Presses Backspace.</summary>
     public void PressBackspace()
     {
         PressKey(Key.Backspace);
-        _runtime.Render();
+        Frame();
     }
 
+    /// <summary>Presses the left arrow.</summary>
     public void PressArrowLeft()
     {
         PressKey(Key.Left);
-        _runtime.Render();
+        Frame();
     }
 
+    /// <summary>Presses the right arrow.</summary>
     public void PressArrowRight()
     {
         PressKey(Key.Right);
-        _runtime.Render();
+        Frame();
     }
 
-    // ── IBibuiPage: visual ────────────────────────────────────────────────────
+    // ── Visual ───────────────────────────────────────────────────────────────
 
+    /// <summary>Returns the current render as a PNG byte array.</summary>
     public byte[] Screenshot()
-        => Render().PngBytes;
+    {
+        Frame();
+        return FramePixels.Png(_runtime, _draw);
+    }
 
-    // ── IDisposable ───────────────────────────────────────────────────────────
+    // ── IDisposable ──────────────────────────────────────────────────────────
 
     public void Dispose()
     {
         _disposed = true;
-        // BibuiRuntime holds no unmanaged resources in Phase 1/2.
-        // IDisposable is implemented so tests can use `using var page = ...`.
-    }
-
-    // ── Private helpers ───────────────────────────────────────────────────────
-
-    private global::Bibui.Renderer.RenderOutput Render()
-    {
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(BibuiPage));
-        return _runtime.Render();
+        _ownRenderer?.Dispose();
     }
 }

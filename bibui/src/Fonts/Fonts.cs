@@ -1,7 +1,6 @@
+using Bibui.Draw;
 using Bibui.Theming;
-using Bibui.Renderer;
-using Bibui.Renderer.Components;
-using Bibui.Raster;
+using Bibui.FreeType;
 using Bibui.TextEdit;
 
 namespace Bibui;
@@ -13,7 +12,9 @@ namespace Bibui;
 /// painter and the runtime all ask this one instance, so a text measured by any
 /// of them is a cache hit for the others, and what is drawn is what was measured.
 ///
-/// <para>It knows nothing about a canvas. Sizes are logical px; a measurement is
+/// <para>It knows nothing about a canvas, and nothing about a raster backend:
+/// faces, metrics and measurements come from the FreeType + HarfBuzz engine it
+/// owns, so whichever backend draws, layout is the same. Sizes are logical px; a measurement is
 /// taken at the physical size, <c>logical × scale</c>, because hinting moves
 /// glyph advances with the pixel size. A <see cref="Font"/> carries its scale,
 /// so what takes one needs nothing else.</para>
@@ -27,20 +28,23 @@ public sealed class Fonts : IDisposable
     private readonly List<Action> _endFrames = [];
     private readonly List<IDisposable> _disposables = [];
 
-    private readonly IRasterBackend _backend;
+    // The one text engine every configuration measures with, whatever draws:
+    // confined to the rendering thread, as Fonts is.
+    private readonly TextEngine _engine = new();
     private readonly FontProvider _provider;
     private readonly ResourceCache<MetricsKey, TextMetrics> _metrics;
     private readonly ResourceCache<MeasureKey, float> _measures;
     private readonly ResourceCache<WrapKey, TextLine> _lines;
+    private readonly ResourceCache<ShapeKey, ShapedText> _shapes;
 
-    /// <summary>Fonts whose typefaces, measurements and metrics come from <paramref name="backend"/>, which the renderer owns.</summary>
-    internal Fonts(IRasterBackend backend)
+    /// <summary>Fonts on a text engine of their own, which the renderer owns with them.</summary>
+    internal Fonts()
     {
-        _backend = backend;
-        _provider = new FontProvider(backend, Create<RunsKey, TextRun>());
+        _provider = new FontProvider(_engine, Create<RunsKey, TextRun>());
         _metrics = Create<MetricsKey, TextMetrics>();
         _measures = Create<MeasureKey, float>();
         _lines = Create<WrapKey, TextLine>();
+        _shapes = Create<ShapeKey, ShapedText>();
     }
 
     private ResourceCache<TKey, TValue> Create<TKey, TValue>() where TKey : notnull
@@ -60,20 +64,28 @@ public sealed class Fonts : IDisposable
     public void Dispose()
     {
         foreach (var disposable in _disposables) disposable.Dispose();
+        _engine.Dispose();
     }
 
     // ── Typefaces and runs ───────────────────────────────────────────────────
 
-    /// <summary>The typeface for a family and weight; see <see cref="FontProvider.Resolve"/>.</summary>
-    internal RasterTypeface Resolve(string? family, int weight) => _provider.Resolve(family, weight);
-
-    /// <summary>The default family at weight 400.</summary>
-    internal RasterTypeface Regular => _provider.Regular;
+    /// <summary>The face for a family and weight; see <see cref="FontProvider.Resolve"/>.</summary>
+    internal FontFace Resolve(string? family, int weight) => _provider.Resolve(family, weight);
 
     /// <summary>
-    /// <paramref name="text"/> split into runs by the typeface that has
-    /// each code point's glyph: the base font where it can, a fallback where
-    /// not. The first run, the rest linked from it; null for empty text.
+    /// The face bibui draws <paramref name="family"/> at <paramref name="weight"/>
+    /// with: the registered font, else the built-in Inter. For a draw that hands
+    /// a raster canvas text directly.
+    /// </summary>
+    public FontFace Face(string? family = null, int weight = 400) => _provider.Resolve(family, weight);
+
+    /// <summary>The default family at weight 400.</summary>
+    internal FontFace Regular => _provider.Regular;
+
+    /// <summary>
+    /// <paramref name="text"/> split into runs of one face each. With no fallback
+    /// per character yet, that is one run in the base face. The first run, the
+    /// rest linked from it; null for empty text.
     /// </summary>
     internal TextRun? SplitRuns(ReadOnlySpan<char> text, string? family, int weight)
         => _provider.SplitRuns(text, family, weight);
@@ -89,8 +101,11 @@ public sealed class Fonts : IDisposable
         => _metrics.FromKey(
             MetricsKey.For(logicalFontSize * scale, family, weight),
             (self: this, logicalFontSize, family, weight, scale),
-            static p => p.self._backend.GetMetrics(
-                new RasterFont(p.self.Resolve(p.family, p.weight), p.logicalFontSize * p.scale)));
+            static p =>
+            {
+                var m = p.self.Resolve(p.family, p.weight).Strike(p.logicalFontSize * p.scale).Metrics;
+                return new TextMetrics(m.Ascent, m.Descent, m.Leading);
+            });
 
     // ── A text node's font ───────────────────────────────────────────────────
 
@@ -232,7 +247,7 @@ public sealed class Fonts : IDisposable
     {
         float total = 0f;
         for (var run = SplitRuns(text, family, weight); run is not null; run = run.Next)
-            total += _backend.MeasureText(new RasterFont(run.Typeface, logicalFontSize * scale), text[run.Start..run.End]);
+            total += run.Face.Strike(logicalFontSize * scale).Measure(text[run.Start..run.End]);
         return total;
     }
 
@@ -246,6 +261,38 @@ public sealed class Fonts : IDisposable
             : _measures.Add(key, MeasureRuns(text, logicalFontSize, family, weight, scale) / scale);
     }
 
+
+    // ── Shaping ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// One run of <paramref name="text"/> as glyphs in <paramref name="face"/> at
+    /// <paramref name="sizePx"/> physical px: one glyph per code point through the
+    /// face's cmap, each at the sum of the linear advances before it. Measuring
+    /// sums the same advances in the same order, so what is drawn is what was
+    /// measured. Cached, so the same text frame after frame is shaped once.
+    /// </summary>
+    internal ShapedText Shape(ReadOnlySpan<char> text, FontFace face, float sizePx)
+    {
+        var key = ShapeKey.For(text, face, sizePx);
+        return _shapes.TryGet(key, out var shaped) ? shaped : _shapes.Add(key, ShapeUncached(text, face, sizePx));
+    }
+
+    private ShapedText ShapeUncached(ReadOnlySpan<char> text, FontFace face, float sizePx)
+    {
+        var run = _engine.ScratchRun;
+        face.Strike(sizePx).Shape(text, run);
+        var glyphs = new ushort[run.Count];
+        var positions = new System.Numerics.Vector2[run.Count];
+        float pen = 0f;
+        for (int i = 0; i < glyphs.Length; i++)
+        {
+            glyphs[i] = (ushort)run.Glyphs[i];
+            positions[i] = new(pen, 0f);
+            pen += run.Advances[i];
+        }
+        run.Clear();
+        return new ShapedText(glyphs, positions, pen);
+    }
 
     // ── Lines ────────────────────────────────────────────────────────────────
 
@@ -436,9 +483,17 @@ public sealed class TextLine
 /// text it was split from, linked to the runs before and after it. A cached
 /// chain: read it, never relink it.
 /// </summary>
-internal sealed class TextRun(RasterTypeface typeface, int start, int end)
+/// <summary>A run shaped for drawing: glyph ids, their positions from the run's origin, and its advance.</summary>
+internal sealed class ShapedText(ushort[] glyphs, System.Numerics.Vector2[] positions, float width)
 {
-    public RasterTypeface Typeface { get; } = typeface;
+    public ushort[] Glyphs { get; } = glyphs;
+    public System.Numerics.Vector2[] Positions { get; } = positions;
+    public float Width { get; } = width;
+}
+
+internal sealed class TextRun(FontFace face, int start, int end)
+{
+    public FontFace Face { get; } = face;
     public int Start { get; } = start;
     public int End { get; } = end;
     public TextRun? Next { get; private set; }

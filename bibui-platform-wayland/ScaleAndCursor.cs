@@ -276,7 +276,7 @@ internal static unsafe class WaylandCursorNative
 /// <summary>
 /// What the pointer's owner (<see cref="WaylandInput"/>) tells the cursor:
 /// which wl_pointer there is, and when it enters and leaves the window.
-/// <see cref="WaylandPlatformHost"/> hands its <see cref="WaylandScaleAndCursor"/>
+/// <see cref="WaylandWindow"/> hands its <see cref="WaylandScaleAndCursor"/>
 /// over as this. All on the loop thread; calling from inside a listener is fine.
 /// </summary>
 internal interface IPointerCursorHooks
@@ -485,7 +485,7 @@ internal sealed unsafe class WaylandScaleAndCursor : IWaylandFeature, IPointerCu
     /// <summary>wl_pointer.leave from the window's surface.</summary>
     public void OnPointerLeave() => _cursor.Leave();
 
-    /// <summary>The host's <see cref="IPlatformHost.SetCursor"/>: shown now if the pointer is inside, else on the next enter.</summary>
+    /// <summary>The window's <see cref="WaylandWindow.SetCursor"/>: shown now if the pointer is inside, else on the next enter.</summary>
     public void SetCursor(CursorShape shape) => _cursor.Set(shape);
 
     public void Destroy()

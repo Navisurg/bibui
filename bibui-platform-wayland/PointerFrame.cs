@@ -16,7 +16,7 @@ namespace Bibui.Platform.Wayland;
 ///
 /// <para><b>Scroll units</b> are the Silk host's: GLFW's sign (positive Y is
 /// the wheel turned away from the user — up; positive X is left) and one wheel
-/// notch is 1.0, which BibuiWindow multiplies by 32 px. A wheel says how far it
+/// notch is 1.0, which the runtime multiplies by 32 px. A wheel says how far it
 /// turned in value120 (120 a notch, a fraction of that from a high-resolution
 /// wheel), or before version 8 in whole axis_discrete steps; a touchpad or
 /// other continuous source has only the axis value, in surface pixels, which
@@ -25,7 +25,7 @@ namespace Bibui.Platform.Wayland;
 /// <para>Positions are surface-local, which is logical window coordinates —
 /// what the Silk host reports too. The scale does not change them.</para>
 /// </summary>
-internal sealed class PointerFrame(Action<WindowEvent> emit)
+internal sealed class PointerFrame(Action<WindowEvent> emit, Func<KeyModifiers> modifiers)
 {
     /// <summary>Axis value per wheel notch for a continuous source: GLFW's divisor.</summary>
     public const float ContinuousPerNotch = 10f;
@@ -34,6 +34,8 @@ internal sealed class PointerFrame(Action<WindowEvent> emit)
     public const float Value120PerNotch = 120f;
 
     private readonly Action<WindowEvent> _emit = emit;
+    // The modifiers held now, stamped on each event as it is reported.
+    private readonly Func<KeyModifiers> _modifiers = modifiers;
 
     /// <summary>True when the pointer sends wl_pointer.frame (version 5 and later).</summary>
     public bool Framed { get; set; } = true;
@@ -132,7 +134,7 @@ internal sealed class PointerFrame(Action<WindowEvent> emit)
     /// <summary>wl_pointer.frame: everything gathered since the last one happened together. Reports it.</summary>
     public void Frame()
     {
-        if (_moved && Inside) _emit(WindowEvent.Mouse(WindowEventKind.MouseMove, X, Y, MouseButton.Unknown));
+        if (_moved && Inside) _emit(WindowEvent.Mouse(WindowEventKind.MouseMove, X, Y, MouseButton.Unknown, _modifiers()));
         _moved = false;
 
         foreach (var (b, down) in _buttons)
@@ -141,18 +143,18 @@ internal sealed class PointerFrame(Action<WindowEvent> emit)
             {
                 if (_held.Contains(b)) continue; // a press the compositor repeated: one is enough
                 _held.Add(b);
-                _emit(WindowEvent.Mouse(WindowEventKind.MouseDown, X, Y, b));
+                _emit(WindowEvent.Mouse(WindowEventKind.MouseDown, X, Y, b, _modifiers()));
             }
             else if (_held.Remove(b))
             {
-                _emit(WindowEvent.Mouse(WindowEventKind.MouseUp, X, Y, b));
+                _emit(WindowEvent.Mouse(WindowEventKind.MouseUp, X, Y, b, _modifiers()));
             }
         }
         _buttons.Clear();
 
         // wl_pointer: positive is down or right. GLFW (and so the Silk host): positive is up or left.
         float sx = 0f - _horizontal.Notches, sy = 0f - _vertical.Notches; // 0f - x: no -0
-        if (sx != 0f || sy != 0f) _emit(WindowEvent.Wheel(X, Y, sx, sy));
+        if (sx != 0f || sy != 0f) _emit(WindowEvent.Wheel(X, Y, sx, sy, _modifiers()));
         _horizontal = default;
         _vertical = default;
     }
@@ -160,7 +162,7 @@ internal sealed class PointerFrame(Action<WindowEvent> emit)
     /// <summary>Releases every button still held, at the last position. Focus left, or the pointer did.</summary>
     public void ReleaseAll()
     {
-        foreach (var b in _held) _emit(WindowEvent.Mouse(WindowEventKind.MouseUp, X, Y, b));
+        foreach (var b in _held) _emit(WindowEvent.Mouse(WindowEventKind.MouseUp, X, Y, b, _modifiers()));
         _held.Clear();
     }
 

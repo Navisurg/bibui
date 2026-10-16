@@ -101,7 +101,8 @@ internal sealed partial class App
 
     // ── The frame ────────────────────────────────────────────────────────────
 
-    public UiNode Build(BibuiRuntime rt)
+    /// <summary>One frame of the app, between the loop's BeginBuild and EndBuild.</summary>
+    public void Build(BibuiRuntime rt)
     {
         ApplyTheme(rt);
         if (Live)
@@ -123,9 +124,27 @@ internal sealed partial class App
         var sidebar = Sidebar(rt, open, h);
         var main = Main(rt, w - SidebarWidth(open), h);
 
-        return Row(sidebar, main)
+        var page = Row(sidebar, main)
             .Px(w, h)
             .Styled(new Style { BackgroundColor = UiColor.Background });
+        UiNode.PushIntoParent(rt.ParentInScope, page);   // built with Arrange: linked under the frame's root
+    }
+
+    /// <summary>One whole frame: BeginBuild with the frame's input (none, headless), the app, EndBuild.</summary>
+    public void Frame(BibuiRuntime rt, List<Bibui.Runtime.Platform.WindowEvent>? events = null)
+    {
+        rt.BeginBuild(events);
+        Build(rt);
+        rt.EndBuild();
+    }
+
+    /// <summary>A runtime for this app, headless, on a <paramref name="w"/> × <paramref name="h"/> surface in its theme.</summary>
+    public BibuiRuntime Headless(int w, int h)
+    {
+        var rt = BibuiRuntime.Create();
+        rt.Surface = new SurfaceOptions { Width = w, Height = h, ScaleFactor = 1f };
+        rt.SetTheme(Theme());
+        return rt;
     }
 
     public static float SidebarWidth(float open) => 76f + 172f * open;
@@ -135,13 +154,12 @@ internal sealed partial class App
     private void Keyboard(BibuiRuntime rt)
     {
         bool focusedNow = false;
-        foreach (var handle in rt.UnconsumedEvents)
+        foreach (var ev in rt.UnconsumedEvents)
         {
-            var ev = handle.Event;
             // The slash that gives the search field the keyboard is not typed into it.
             if (ev is { Kind: BibUiEventKind.Text, Char: '/' } && (focusedNow || !SearchFocused && !NoteFocused))
             {
-                handle.Eat();
+                ev.Eat();
                 continue;
             }
             if (SearchFocused || NoteFocused)
@@ -150,7 +168,7 @@ internal sealed partial class App
                 if (ev is { IsKeyDown: true, Key: Key.Escape } || SearchFocused && ev.Kind == BibUiEventKind.Submit)
                 {
                     SearchFocused = NoteFocused = false;
-                    handle.Eat();
+                    ev.Eat();
                 }
                 continue;
             }
@@ -181,7 +199,7 @@ internal sealed partial class App
                 case Key.Number4: Page = Page.Journal; break;
                 default: used = false; break;
             }
-            if (used) handle.Eat();
+            if (used) ev.Eat();
         }
     }
 

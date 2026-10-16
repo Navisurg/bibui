@@ -177,14 +177,13 @@ public static class TextField
     {
         bool edited = false;
         Span<char> charBuf = stackalloc char[TextOp.MaxCharsPerCodePoint];
-        foreach (var handle in runtime.UnconsumedEvents)
+        foreach (var ev in runtime.UnconsumedEvents)
         {
-            var ev = handle.Event;
             if ((kinds & 1u << (int)ev.Kind) == 0) continue;
             if (ev.Kind == BibUiEventKind.Navigate && ev.DeltaY != 0)
             {
                 MoveVertically(runtime, font, text, edit, wrapWidth, wrap, ev);
-                handle.Eat();
+                ev.Eat();
                 continue;
             }
             var op = TextOp.FromStateAndEvent(text, edit, ev, charBuf);
@@ -193,7 +192,7 @@ public static class TextField
             edit.Cursor = op.NewCursor;
             edit.Mark = op.NewMark;
             if (op.CopyString.Length > 0) runtime.ClipboardSet(new string(op.CopyString));
-            handle.Eat();
+            ev.Eat();
         }
         return edited;
     }

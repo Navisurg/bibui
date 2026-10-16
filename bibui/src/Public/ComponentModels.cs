@@ -63,7 +63,7 @@ public sealed class Icon : UiComponent
     /// (<see cref="Icons.Register"/>), have an icon called <paramref name="name"/>
     /// (ignoring case). Check a name that comes from data before drawing it.
     /// </summary>
-    public static bool IsKnown(string? name) => Bibui.Renderer.IconRegistry.Has(name);
+    public static bool IsKnown(string? name) => Bibui.Draw.IconRegistry.Has(name);
 
     public string Name { get; set; } = "";
 
