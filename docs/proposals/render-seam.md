@@ -146,9 +146,26 @@ SkiaDraw.Execute(DrawList list, SKCanvas canvas);
 ManagedDraw.Execute(DrawList list, RasterPixels target);
 ```
 
-- **The hosts own their renderer.** Silk draws with Skia: on its GPU surface, or on a CPU surface it then uploads. Wayland draws into its shm buffers with the managed rasterizer, or with Skia on the CPU. `IPlatformHost.Present` calls `runtime.EndBuild()`, then executes the list itself. Choosing the renderer moves from the runtime (`BibuiRuntime.Create().WithSkia()`) to the window and host (`BibuiWindow.Create(runtime).WithSilk()` picks Skia).
-- **Headless rendering and tests** call a renderer directly: render the `DrawList` into pixels, and encode them as a PNG if wanted. `Bibui.Testing` does this with the renderer it is given to keep `Screenshot()`.
+- **A host is a module that runs its own loop, with its own renderer.** `SilkHost.Run(runtime, …)` pumps the window's events into the runtime, calls `runtime.EndBuild()`, and executes the list with Skia: on its GPU surface, or on a CPU surface it then uploads. `WaylandHost.Run(runtime, …)` does the same into its shm buffers with the managed rasterizer, or with Skia on the CPU.
+  - **`IPlatformHost` and `ISkiaGpuPlatformHost` go.** `BibuiWindow` only exists to drive a host through `IPlatformHost`. Its shared loop code (frame pacing, the frame profile) becomes functions each host calls.
+  - **Choosing the renderer moves from the runtime to the host.** `BibuiRuntime.Create().WithSkia()` and `BibuiWindow.Create(runtime).WithSilk()` become `SilkHost.Run(runtime, …)`, which draws with Skia. This changes the entry point every app uses.
+  - Tests need no fake host (`ScriptedHost`): they call `runtime.EndBuild()` and render directly.
+- **Headless rendering and tests** call a renderer directly: render the `DrawList` into pixels, and encode them as a PNG if wanted. `Bibui.Testing` does this with the renderer it is given to keep `Screenshot()`. `IBibuiPage` (one implementation, `BibuiPage`) goes.
 - **Damage tracking stays in the managed rasterizer only.** Before rasterizing, it compares this frame's `DrawList` with the last one, as `DamageFrame` does today with the calls it recorded. The hashes, bounds and replay logic stay; only their input changes. Cached paths hash once, by table id and version. A texture hashes by its handle plus a content version the renderer bumps when the texture is updated. Skia doesn't track damage: drawing is likely cheaper than working out what changed.
+
+## Interfaces
+
+bibui has 16 interfaces. What happens to each:
+
+| Interface | Implementations | What happens |
+|---|---|---|
+| `IRasterBackend`, `IRasterCanvas`, `IRasterSurface` | Skia, managed | Go: the `DrawList` and the renderers replace them |
+| `IPathBuilder` | `RasterPath`, `RecordedPath` | Goes: one concrete `Path` |
+| `IPlatformHost`, `ISkiaGpuPlatformHost` | Silk, Wayland, a test host | Go: hosts are modules that run their own loop |
+| `IBibuiPage` | `BibuiPage` | Goes: one implementation |
+| `IPathStroker`, `IMaskBlur` | one each, plus a test fake | Go, outside this rebuild: the managed rasterizer calls its stroker and blur directly instead of through optional properties |
+| `IWaylandFeature`, `IPointerCursorHooks`, `ICursorSink`, `IClipboardWire`, `IBufferAllocator` | Wayland's clipboard, input, cursor and buffers, plus test fakes | Go, outside this rebuild: known features called directly, a cursor kind chosen by an enum, and tests over the data the wire carries instead of injected fakes |
+| `ICoverageSink`, `IHairlineSink` | the managed rasterizer's sinks | **Stay.** They're used only as generic constraints (`where TSink : struct, ICoverageSink`), so each sink gets its own inlined copy of the scanline loop with no virtual calls. That's compile-time specialization, not dispatch |
 
 ## Getting there without changing a pixel
 
@@ -158,7 +175,7 @@ Each step's gate is the same: the runtime tests (with the byte-exact `RenderTo`/
 2. **Textures replace images in the draw layer.** `TextureHandle`, `DrawTexture`, and each renderer's texture functions. `DrawImage`, `DrawBitmap` and `DrawPixels` leave `DrawContext`.
 3. **The `DrawList`.** `DrawContext` records. A replay function executes the list onto the existing `IRasterCanvas`, so the interface survives this step but only the replay calls it, and byte-identical pixels prove the op set is complete. Anything not yet converted to a value (a `RasterImage` before step 2, a backend typeface before step 1) rides along as an index into a per-frame object list that steps 1, 2 and 5 empty.
 4. **Custom draws get the `Box`** (`DrawCallback(Box box, DrawContext ctx)`) and lose `Canvas` and `Backend`.
-5. **Renderers replace `IRasterBackend`.** `SkiaDraw` and `ManagedDraw`, the hosts executing the list, damage tracking over `DrawList`s, and `IRasterBackend` and `IRasterCanvas` deleted.
+5. **Renderers replace `IRasterBackend`.** `SkiaDraw` and `ManagedDraw`; damage tracking over `DrawList`s; hosts as modules that run their own loop and execute the list. `IRasterBackend`, `IRasterCanvas`, `IRasterSurface`, `IPlatformHost`, `ISkiaGpuPlatformHost` and `IBibuiPage` are deleted.
 6. **Paint vocabulary:** colour matrix, LUT, blend modes, source rect, texture formats.
 7. **Texture kinds:** Static, Stream, Dynamic.
 
@@ -179,6 +196,8 @@ Each step's gate is the same: the runtime tests (with the byte-exact `RenderTo`/
 - **Pixels and PNGs come from rendering the `DrawList`,** like any other frame: a renderer draws it into pixels in memory, and whoever wants a PNG encodes those (the codec stays in the core). There is no frame-output path in the core: `RenderOutput` and `PngFactory` go. `Bibui.Testing` renders with a renderer it is given (Skia on the CPU by default) to keep `Screenshot()`.
 
 ## Later
+
+- **Cached paths drawn as textures.** Icons and check marks are the same shape every frame. A renderer may rasterize a cached path once into its own mask atlas (keyed by path id, scale and stroke) and draw quads from it, tinted by the op's colour. This is the renderer's choice, behind the op: the core keeps drawing paths, and creates no textures. A mask is drawn at whole-pixel offsets where icons today land on fractional ones, so pixels would shift slightly. It's an optimization to measure after the rebuild, not part of it. Content an app draws itself (a chart, a dome) can be drawn once into a texture by the app, which needs a renderer to draw ops into a texture: the off-screen surface in the paint vocabulary step.
 
 - **A frame bracket:** `runtime.BeginBuild(); BuildUi(runtime); runtime.EndBuild();`, with the app running its own build code between the two calls instead of handing the runtime a callback with `Mount`. It changes every app's entry point, so it is not part of this rebuild.
 
