@@ -171,15 +171,14 @@ internal sealed partial class App
     /// <summary>The brand mark: an orb lit from the upper left, in the accent.</summary>
     private static Box Orb(BibuiRuntime rt, float size)
     {
-        return new Box
+        var orb = new Box
         {
-            Draw = ctx =>
+            Draw = (_, ctx) =>
             {
                 Rgba accent = ctx.Resolve(UiColor.Accent), deep = ctx.Resolve(UiColor.AccentActive);
                 var r = ctx.Logical;
                 float s = ctx.Scale;
                 float rad = r.Width / 2f;
-                ctx.DrawShadow(r.Left, r.Top, r.Width, r.Height, rad, 0f, 3f, 12f, 0f, accent.WithAlpha(110));
                 var light = Bibui.Raster.RasterShader.Radial(new System.Numerics.Vector2((r.Left + r.Width * 0.32f) * s, (r.Top + r.Height * 0.28f) * s),
                     r.Width * s, [Rgba.White.WithAlpha(235), accent, deep], [0f, 0.42f, 1f]);
                 ctx.DrawRect(ctx.Physical(r.Left, r.Top, r.Width, r.Height), rad * s, new Paint { Fill = Rgba.White, Shader = light });
@@ -187,6 +186,11 @@ internal sealed partial class App
                 ctx.DrawArc(r.MidX, r.MidY, rad - 6f, 1.5f, Rgba.White.WithAlpha(150), 200f, 120f);
             },
         }.Px(size, size);
+        // The glow under it falls outside the box, which clips what the draw
+        // makes; a style shadow is the decoration's, drawn before the clip.
+        orb.Style.CornerRadius = size / 2f;
+        orb.Style.Shadow = new BoxShadow { OffsetY = 3f, Blur = 12f, Color = UiColor.Accent.WithAlpha(110f / 255f) };
+        return orb;
     }
 
     // ── Shared controls ──────────────────────────────────────────────────────

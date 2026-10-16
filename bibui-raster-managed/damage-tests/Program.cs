@@ -115,7 +115,7 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
         {
             var chart = rt.BoxFromId("chart", InteractionKinds.LeftPress);
             chart.Px(120f, 60f);
-            chart.Draw = ctx =>
+            chart.Draw = (_, ctx) =>
             {
                 var r = ctx.Logical;
                 ctx.DrawRRect(r.Left, r.Top, r.Width, r.Height, 6f, ctx.Resolve(UiColor.Surface), ctx.Resolve(UiColor.Border), 1f);

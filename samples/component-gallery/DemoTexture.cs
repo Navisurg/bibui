@@ -49,7 +49,7 @@ internal static class DemoTexture
     // Nearest sampling: each texel stays a sharp square at 6x.
     private static Box Picture(TextureHandle texture) => new Box
     {
-        Draw = ctx => ctx.DrawTexture(texture, ctx.Rect,
+        Draw = (_, ctx) => ctx.DrawTexture(texture, ctx.Rect,
             new Paint { Fill = Rgba.Black, Filter = FilterQuality.None, Antialias = false }),
     }.Px(Size * 6f, Size * 6f);
 

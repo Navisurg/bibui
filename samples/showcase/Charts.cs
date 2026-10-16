@@ -20,10 +20,12 @@ internal static class Charts
     {
         return new Box
         {
-            Draw = ctx =>
+            Draw = (_, ctx) =>
             {
                 Rgba c = ctx.Resolve(color);
-                var r = ctx.Logical;
+                // The box clips, so the plot stops short of the right edge by
+                // the dot at its newest value.
+                var r = ctx.Logical with { Right = ctx.Logical.Right - 4f };
                 (float min, float max) = Range(values, 0.15f);
                 Span<(float X, float Y)> pts = stackalloc (float, float)[values.Length];
                 for (int i = 0; i < values.Length; i++)
@@ -60,14 +62,16 @@ internal static class Charts
         }
 
         int? h = hover;
-        host.Draw = ctx =>
+        host.Draw = (_, ctx) =>
         {
             bool reduced = ctx.Theme.Motion.Easing == Bibui.Theming.MotionEasing.None;
             Rgba line = ctx.Resolve(color);
             Rgba grid = ctx.Resolve(UiColor.Border);
             Rgba text = ctx.Resolve(UiColor.TextSecondary);
             Rgba surface = ctx.Resolve(UiColor.Surface);
-            var r = ctx.Logical;
+            // The box clips, so the plot is inset by half a grid line top and
+            // bottom, and on the right by the head at the newest reading.
+            var r = ctx.Logical with { Top = ctx.Logical.Top + 1f, Right = ctx.Logical.Right - 6f, Bottom = ctx.Logical.Bottom - 1f };
             for (int t = 0; t <= s.Ticks; t++)
             {
                 float y = r.Top + r.Height * t / s.Ticks;
@@ -118,7 +122,7 @@ internal static class Charts
     {
         return new Box
         {
-            Draw = ctx =>
+            Draw = (_, ctx) =>
             {
                 Rgba c = ctx.Resolve(color), track = ctx.Resolve(UiColor.Border);
                 var r = ctx.Logical;

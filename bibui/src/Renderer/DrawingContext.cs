@@ -45,7 +45,14 @@ internal sealed class DrawingContext
         SurfaceWidth = width;
         SurfaceHeight = height;
         PaintDepth = 0;
+        (StateDepth, StateFloor) = (0, 0);
     }
+
+    // The clip/transform/opacity stack's depth, and the depth a pop may not go
+    // below: the painter raises the floor around a callback, so the callback
+    // cannot pop what the painter pushed, and pops what it left pushed itself.
+    internal int StateDepth;
+    internal int StateFloor;
 
     // The current paint: what a draw without its own is drawn in. A stack reused
     // from frame to frame; the painter restores its depth after every callback,

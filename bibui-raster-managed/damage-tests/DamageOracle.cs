@@ -474,7 +474,7 @@ internal static class DamageOracle
                 var data = Enumerable.Range(0, 12).Select(i => 20f + 15f * MathF.Sin((frame + i * 3) / 5f) + i).ToArray();
                 var chart = new Box
                 {
-                    Draw = ctx =>
+                    Draw = (_, ctx) =>
                     {
                         var r = ctx.Logical;
                         Span<(float X, float Y)> pts = stackalloc (float, float)[data.Length];
@@ -519,7 +519,7 @@ internal static class DamageOracle
             {
                 var canvas = new Box
                 {
-                    Draw = ctx =>
+                    Draw = (_, ctx) =>
                     {
                         // Cached geometry; scratch geometry; and a path the draw builds and drops.
                         float x = 20 + (frame * 9) % 300;
@@ -556,7 +556,7 @@ internal static class DamageOracle
             {
                 var canvas = new Box
                 {
-                    Draw = ctx =>
+                    Draw = (_, ctx) =>
                     {
                         // The scene is at scale 1, so logical and physical px agree.
                         float l = ctx.Rect.Left, t = ctx.Rect.Top;

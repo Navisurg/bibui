@@ -74,14 +74,15 @@ public readonly ref partial struct DrawContext
     /// <summary>The raster backend painting this frame — for the textures a draw makes on it.</summary>
     public IRasterBackend Backend => _ctx.Backend;
 
-    /// <summary>This node's paint rect, in physical pixels.</summary>
+    /// <summary>
+    /// The box's rect in physical pixels, in its own space: (0,0) is its
+    /// top-left, and draws outside it are clipped.
+    /// </summary>
     public RectF Rect { get; }
 
     /// <summary>
-    /// This node's paint rect in logical pixels — the units the composed blocks
-    /// below take. Offered because a client that never touches a primitive still
-    /// needs to know where it may paint, and dividing <see cref="Rect"/> back
-    /// down is the first thing it would otherwise write.
+    /// The box's rect in logical pixels, in its own space — the units
+    /// <see cref="DrawShapes"/> take.
     /// </summary>
     public RectF Logical => new(
         Rect.Left / Scale, Rect.Top / Scale, Rect.Right / Scale, Rect.Bottom / Scale);
@@ -182,27 +183,47 @@ public readonly ref partial struct DrawContext
     }
 
     // ── State ────────────────────────────────────────────────────────────────
-    // Each push is undone by its pop, in order.
+    // Each push is undone by its pop, in order. Clips, transforms and opacity
+    // share one stack, counted so a callback's are its own (see StateFloor).
 
     /// <summary>Clips to <paramref name="rect"/> until the matching <see cref="PopClip"/>.</summary>
-    public void PushClip(RectF rect) => List.Push(DrawOpKind.PushClip).Rect = rect;
+    public void PushClip(RectF rect)
+    {
+        List.Push(DrawOpKind.PushClip).Rect = rect;
+        _ctx.StateDepth++;
+    }
 
-    public void PopClip() => List.Push(DrawOpKind.Pop);
+    public void PopClip() => Pop();
+
+    // Undoes the last clip, transform or opacity; nothing below the floor.
+    internal void Pop()
+    {
+        if (_ctx.StateDepth == _ctx.StateFloor) return;
+        List.Push(DrawOpKind.Pop);
+        _ctx.StateDepth--;
+    }
 
     /// <summary>
     /// Draws through <paramref name="transform"/>, over physical px, applied
     /// before the transform already in force, until <see cref="PopTransform"/>.
     /// A translation and a scale are transforms like any other.
     /// </summary>
-    public void PushTransform(Matrix3x2 transform) => List.Push(DrawOpKind.PushTransform).Matrix = transform;
+    public void PushTransform(Matrix3x2 transform)
+    {
+        List.Push(DrawOpKind.PushTransform).Matrix = transform;
+        _ctx.StateDepth++;
+    }
 
-    public void PopTransform() => List.Push(DrawOpKind.Pop);
+    public void PopTransform() => Pop();
 
     /// <summary>Composites everything until <see cref="PopOpacity"/> at <paramref name="opacity"/> (0..1).</summary>
     public void PushOpacity(float opacity)
-        => List.Push(DrawOpKind.PushOpacity).Alpha = (byte)Math.Clamp((int)MathF.Round(opacity * 255f), 0, 255);
+    {
+        List.Push(DrawOpKind.PushOpacity).Alpha = (byte)Math.Clamp((int)MathF.Round(opacity * 255f), 0, 255);
+        _ctx.StateDepth++;
+    }
 
-    public void PopOpacity() => List.Push(DrawOpKind.Pop);
+    public void PopOpacity() => Pop();
 
     /// <summary>Makes <paramref name="paint"/> the current paint, until <see cref="PopPaint"/>.</summary>
     public void PushPaint(in Paint paint) => _ctx.PushPaint(paint);
@@ -216,7 +237,7 @@ public readonly ref partial struct DrawContext
     /// </summary>
     public VectorPath ScratchPath() => _caches.ScratchPath();
 
-    /// <summary>A logical rect in physical pixels, matching <see cref="Rect"/>.</summary>
+    /// <summary>A logical rect in physical pixels, in the same space as <see cref="Rect"/>.</summary>
     public RectF Physical(float x, float y, float w, float h) => _ctx.ToPhysical(x, y, w, h);
 
     /// <summary>Parses <c>#rrggbb</c>/<c>#rrggbbaa</c> hex, as the theme spells colours.</summary>
@@ -355,5 +376,6 @@ public readonly ref partial struct DrawContext
 
     internal RectF ToPhysical(float x, float y, float w, float h) => _ctx.ToPhysical(x, y, w, h);
 
-    internal DrawContext For(float x, float y, float w, float h) => _ctx.DrawContextFor(x, y, w, h);
+    /// <summary>A box's context: its rect at the origin, <paramref name="w"/>×<paramref name="h"/> logical px.</summary>
+    internal DrawContext For(float w, float h) => _ctx.DrawContextFor(0f, 0f, w, h);
 }
