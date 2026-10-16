@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Bibui.Text.FreeType.Native;
+namespace Bibui.FreeType.Native;
 
 /// <summary>
 /// The slice of libfreetype.so.6 the engine needs. Struct fields are read by

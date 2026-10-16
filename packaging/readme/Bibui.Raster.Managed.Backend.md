@@ -1,8 +1,8 @@
 # Bibui.Raster.Managed.Backend
 
 bibui's raster backend with no SkiaSharp: shapes, clips, layers, images and PNG
-through the managed rasterizer (`Bibui.Raster.Managed`), and text through
-FreeType and HarfBuzz (`Bibui.Text.FreeType`).
+through the managed rasterizer (`Bibui.Raster.Managed`), and text drawn from
+the glyph masks of bibui's own FreeType and HarfBuzz engine.
 
 ```csharp
 var runtime = BibuiRuntime.Create().WithManagedRasterizer();

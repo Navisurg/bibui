@@ -150,11 +150,11 @@ decides which other dependencies it needs. In every case the dependency tree is 
 
 | Package | NuGet dependencies | System libraries |
 |---|---|---|
-| `Bibui` | `System.IO.Hashing` | none |
+| `Bibui` | `System.IO.Hashing` | `libfreetype6`, `libharfbuzz0b` (text) |
 | `Bibui.Raster.Skia` | `SkiaSharp` (with its Linux native assets) | `libfontconfig1` |
 | `Bibui.Platform.Silk` | `Silk.NET` windowing, input and OpenGL (GLFW), `TextCopy`, `Bibui.Raster.Skia` | an OpenGL driver for the GPU path (the CPU fallback works without one); GLFW itself ships with Silk.NET |
 | `Bibui.Platform.Wayland` | none | `libwayland-client`, `libwayland-cursor`, `libxkbcommon` |
-| `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`, `Bibui.Text.FreeType`) | `libfreetype6`, `libharfbuzz0b` |
+| `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`) | none beyond `Bibui`'s |
 
 The Wayland + managed route has no third-party NuGet dependencies at all, and
 it is the route that publishes with Native AOT; Silk.NET keeps the other on the

@@ -27,7 +27,7 @@ public sealed class BibuiRenderer
     {
         ArgumentNullException.ThrowIfNull(raster);
         _caches = new RenderCaches(raster);
-        _fonts = new Fonts(raster);
+        _fonts = new Fonts();
         _painter = new Painter(_caches, _fonts);
         _measure = MeasureLeaf;
     }

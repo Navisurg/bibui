@@ -27,11 +27,10 @@ public sealed class SkiaRasterBackend : IRasterBackend
     // The font each text paint draws a text blob with.
     internal readonly ResourceCache<TextPaintKey, SKFont> TextFonts;
 
-    // Typefaces by instance. SkiaSharp hands back one managed SKTypeface per
-    // native face, and bibui splits text into runs by typeface identity — so
-    // the wrapper has to be one-per-SKTypeface too, or two runs in the same
-    // face would stop merging.
-    private readonly Dictionary<SKTypeface, SkiaTypeface> _typefaces = new(ReferenceEqualityComparer.Instance);
+    // Skia's face for each of bibui's, made from its font file once: the glyph
+    // ids FreeType resolves belong to that file, so Skia draws the same glyphs.
+    // Kept for the backend's life, like the FontFaces they mirror.
+    private readonly Dictionary<int, SKTypeface> _typefaces = [];
 
     // The last surface handed to Wrap, so a host that renders into the same
     // SKSurface every frame does not allocate a wrapper per frame.
@@ -116,35 +115,14 @@ public sealed class SkiaRasterBackend : IRasterBackend
 
     // ── Typefaces ────────────────────────────────────────────────────────────
 
-    public RasterTypeface? LoadTypeface(ReadOnlySpan<byte> data)
+    internal SKTypeface Typeface(FontFace face)
     {
-        using var skData = SKData.CreateCopy(data);
-        return Intern(SKTypeface.FromData(skData));
+        if (_typefaces.TryGetValue(face.Id, out var typeface)) return typeface;
+        using var data = SKData.CreateCopy(face.FontFile);
+        typeface = SKTypeface.FromData(data) ?? throw new InvalidOperationException($"Skia cannot open {face}.");
+        _typefaces[face.Id] = typeface;
+        return typeface;
     }
-
-    public RasterTypeface? MatchFamily(string family, int weight)
-        => Intern(SKTypeface.FromFamilyName(family, Style(weight)));
-
-    public RasterTypeface? MatchCharacter(int codepoint, int weight)
-        => Intern(SKFontManager.Default.MatchCharacter(null, Style(weight), null, codepoint));
-
-    public RasterTypeface DefaultTypeface => Intern(SKTypeface.Default)!;
-
-    private static SKFontStyle Style(int weight)
-        => new(weight, (int)SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
-
-    private SkiaTypeface? Intern(SKTypeface? typeface)
-    {
-        if (typeface is null) return null;
-        if (!_typefaces.TryGetValue(typeface, out var wrapper))
-        {
-            wrapper = new SkiaTypeface(this, typeface);
-            _typefaces[typeface] = wrapper;
-        }
-        return wrapper;
-    }
-
-    internal void Forget(SKTypeface typeface) => _typefaces.Remove(typeface);
 
     // ── Text ─────────────────────────────────────────────────────────────────
 
@@ -154,13 +132,13 @@ public sealed class SkiaRasterBackend : IRasterBackend
     /// </summary>
     internal SKPaint TextPaint(in RasterFont font, SKColor color)
     {
-        var tf = Typeface(font.Typeface);
-        var key = TextPaintKey.For(font.Size, color, font.Typeface.Id);
+        var tf = Typeface(font.Face);
+        var key = TextPaintKey.For(font.Size, color, font.Face.Id);
         return TextPaints.FromKey(key, (font.Size, color, tf),
             static p => new SKPaint
             {
                 TextSize = p.Size,
-                Typeface = p.tf.Native,
+                Typeface = p.tf,
                 Color = p.color,
                 IsAntialias = true,
                 SubpixelText = true,
@@ -175,18 +153,8 @@ public sealed class SkiaRasterBackend : IRasterBackend
     /// chars: what drawing a string does inside Skia, without the string.
     /// </summary>
     internal SKFont TextFont(in RasterFont font, SKColor color, SKPaint paint)
-        => TextFonts.FromKey(TextPaintKey.For(font.Size, color, font.Typeface.Id), paint,
+        => TextFonts.FromKey(TextPaintKey.For(font.Size, color, font.Face.Id), paint,
             static p => p.ToFont());
-
-    public float MeasureText(in RasterFont font, ReadOnlySpan<char> text)
-        => TextPaint(font, SKColors.Black).MeasureText(text);
-
-    public TextMetrics GetMetrics(in RasterFont font)
-    {
-        // Colour cannot move a baseline, the same reason measurement asks in black.
-        TextPaint(font, SKColors.Black).GetFontMetrics(out var m);
-        return m.ToTextMetrics();
-    }
 
     public ShapedRun ShapeText(in RasterFont font, ReadOnlySpan<char> text)
     {
@@ -225,10 +193,6 @@ public sealed class SkiaRasterBackend : IRasterBackend
             static p => SkiaPaintEntry.Build(p)).Paint;
     }
 
-    internal static SkiaTypeface Typeface(RasterTypeface typeface)
-        => typeface as SkiaTypeface ?? throw new ArgumentException(
-            $"A {typeface.GetType().Name} is not a Skia typeface; it came from another raster backend.", nameof(typeface));
-
     // ── Frame clock ──────────────────────────────────────────────────────────
 
     public void EndFrame()
@@ -239,6 +203,8 @@ public sealed class SkiaRasterBackend : IRasterBackend
     public void Dispose()
     {
         foreach (var d in _disposables) d.Dispose();
+        foreach (var typeface in _typefaces.Values) typeface.Dispose();
+        _typefaces.Clear();
         _wrapped?.Dispose();
         _wrapped = null;
     }
@@ -303,10 +269,9 @@ internal sealed class SkiaPaintEntry : IDisposable
 }
 
 /// <summary>
-/// Text paint key: size, colour and the typeface the run actually resolved to.
-/// Keyed by the typeface's instance id rather than the (family, weight) asked
-/// for, because one string can need several typefaces — a font without a
-/// glyph falls back per run.
+/// Text paint key: size, colour and the face the run resolved to. Keyed by the
+/// face's id rather than the (family, weight) asked for, because a run is one
+/// face, whatever was asked for.
 /// </summary>
 internal readonly record struct TextPaintKey(UInt128 Hash)
 {
@@ -319,24 +284,6 @@ internal readonly record struct TextPaintKey(UInt128 Hash)
             typefaceId,
         ];
         return new(XxHash128.HashToUInt128(MemoryMarshal.AsBytes(parts)));
-    }
-}
-
-/// <summary>An SKTypeface as a bibui typeface.</summary>
-internal sealed class SkiaTypeface(SkiaRasterBackend owner, SKTypeface native) : RasterTypeface
-{
-    public SKTypeface Native { get; } = native;
-
-    public override string FamilyName => Native.FamilyName;
-
-    // GetGlyph returns 0 when the face has no glyph for the codepoint.
-    public override bool HasGlyph(int codepoint) => Native.GetGlyph(codepoint) != 0;
-
-    protected override void Dispose(bool disposing)
-    {
-        if (!disposing) return;
-        owner.Forget(Native);
-        Native.Dispose();
     }
 }
 

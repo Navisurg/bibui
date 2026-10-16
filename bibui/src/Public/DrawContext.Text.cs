@@ -27,7 +27,7 @@ public readonly ref partial struct DrawContext
     {
         float cursor = x;
         for (var run = Fonts.SplitRuns(text, family, weight); run is not null; run = run.Next)
-            cursor += Canvas.DrawText(text[run.Start..run.End], cursor, baselineY, _ctx.Font(run.Typeface, size), color);
+            cursor += Canvas.DrawText(text[run.Start..run.End], cursor, baselineY, _ctx.Font(run.Face, size), color);
     }
 
     /// <summary>Ascent and descent of the base font — one baseline for every run.</summary>

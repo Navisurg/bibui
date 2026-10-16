@@ -61,7 +61,6 @@ jobs:
           for proj in \
             bibui/bibui.csproj \
             bibui-testing/bibui-testing.csproj \
-            bibui-text-freetype/Bibui.Text.FreeType.csproj \
             bibui-raster-skia/bibui-raster-skia.csproj \
             bibui-raster-managed/src/Bibui.Raster.Managed.csproj \
             bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj \

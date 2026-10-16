@@ -137,7 +137,7 @@ public sealed class RasterShader
 /// full strength, grayscale antialiasing. Hinting moves the ink, never the
 /// advances — layout depends on that.</para>
 /// </summary>
-public readonly record struct RasterFont(RasterTypeface Typeface, float Size);
+public readonly record struct RasterFont(FontFace Face, float Size);
 
 /// <summary>A shaped run: one glyph id and one advance (physical px) per glyph.</summary>
 public readonly record struct ShapedRun(ushort[] Glyphs, float[] Advances)
@@ -217,33 +217,6 @@ public abstract class RasterPath : IPathBuilder, IDisposable
     public abstract void Rewind();
 
     public abstract bool IsEmpty { get; }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing) { }
-}
-
-/// <summary>
-/// A typeface a backend loaded. Identity matters: bibui compares typefaces by
-/// reference to split text into runs, so a backend hands back the same
-/// instance for the same face.
-/// </summary>
-public abstract class RasterTypeface : IDisposable
-{
-    private static int s_nextId;
-
-    /// <summary>Unique per instance for the life of the process; a cache key.</summary>
-    public int Id { get; } = Interlocked.Increment(ref s_nextId);
-
-    /// <summary>The family name the face reports.</summary>
-    public abstract string FamilyName { get; }
-
-    /// <summary>Whether the face has a glyph for <paramref name="codepoint"/>.</summary>
-    public abstract bool HasGlyph(int codepoint);
 
     public void Dispose()
     {

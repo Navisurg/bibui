@@ -14,6 +14,25 @@ before it was published.
 
 ### Changed
 
+- **Text is measured by bibui's own FreeType and HarfBuzz, never by the raster
+  backend (breaking).** Layout comes out the same whichever backend draws.
+  - `Bibui.Text.FreeType` is folded into `Bibui`, as the namespace
+    `Bibui.FreeType`, and the package is gone. `Bibui` now loads the system
+    FreeType and HarfBuzz (`libfreetype6`, `libharfbuzz0b`) in every
+    configuration.
+  - `FontFace` replaces `RasterTypeface`: `RasterFont` is a `FontFace` and a
+    size. `Fonts.Face(family, weight)` and `DrawContext.Fonts` give a draw that
+    hands a raster canvas text directly its face.
+  - `IRasterBackend` loses `LoadTypeface`, `MatchFamily`, `MatchCharacter`,
+    `DefaultTypeface`, `MeasureText` and `GetMetrics`. A backend makes its own
+    face from `FontFace.FontFile` (Skia) or draws from `FontFace.FreeType`'s
+    glyph masks (the managed rasterizer, which no longer has an engine of its
+    own).
+  - Installed fonts are no longer looked up, and there is no fallback per
+    character yet. A family registered with `FontRegistry` is used, any other
+    gets the built-in Inter, and a character Inter lacks draws as its missing
+    glyph. Text no longer depends on the machine.
+
 - **Runtimes and windows are made with `Create`, and the backend and host are
   always chosen (breaking).**
   `BibuiWindow.Create(BibuiRuntime.Create().WithSkia()).WithSilk().Run(title: "App")`.

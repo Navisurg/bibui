@@ -69,36 +69,16 @@ public interface IRasterBackend : IDisposable
     /// </summary>
     byte[] EncodePng(ReadOnlySpan<byte> bgraPremul, int width, int height);
 
-    // ── Typefaces ────────────────────────────────────────────────────────────
-
-    /// <summary>A typeface from font file bytes (TTF/OTF), or null when they cannot be parsed.</summary>
-    RasterTypeface? LoadTypeface(ReadOnlySpan<byte> data);
-
-    /// <summary>An installed typeface by family name and weight, or null when the system has none.</summary>
-    RasterTypeface? MatchFamily(string family, int weight);
-
-    /// <summary>An installed typeface that has a glyph for <paramref name="codepoint"/>, or null.</summary>
-    RasterTypeface? MatchCharacter(int codepoint, int weight);
-
-    /// <summary>The backend's last-resort typeface. Never null.</summary>
-    RasterTypeface DefaultTypeface { get; }
-
     // ── Text ─────────────────────────────────────────────────────────────────
-    // A run is one typeface: bibui splits a string by glyph coverage before it
-    // gets here (FontProvider), so a backend never does font fallback itself.
-
-    /// <summary>The advance width of <paramref name="text"/> in <paramref name="font"/>, in physical px.</summary>
-    float MeasureText(in RasterFont font, ReadOnlySpan<char> text);
-
-    /// <summary>Ascent, descent and leading of <paramref name="font"/>, in physical px.</summary>
-    TextMetrics GetMetrics(in RasterFont font);
+    // Faces, metrics and measuring are bibui's own (Fonts, on FreeType +
+    // HarfBuzz), never a backend's. A run is one face: bibui splits a string
+    // before it gets here, so a backend never does font fallback itself.
 
     /// <summary>
     /// The glyphs and advances <paramref name="text"/> maps to in
     /// <paramref name="font"/> — a shaped run that
-    /// <see cref="IRasterCanvas.DrawGlyphRun"/> draws. A backend with a shaper
-    /// (HarfBuzz) may substitute and kern here; the advances it returns must be
-    /// the ones <see cref="MeasureText"/> sums.
+    /// <see cref="IRasterCanvas.DrawGlyphRun"/> draws. The advances must be
+    /// the ones bibui measures with.
     /// </summary>
     ShapedRun ShapeText(in RasterFont font, ReadOnlySpan<char> text);
 
@@ -194,9 +174,9 @@ public interface IRasterCanvas
 
     /// <summary>
     /// One run of text in one typeface, its baseline at (<paramref name="x"/>,
-    /// <paramref name="baselineY"/>). Returns its advance — what
-    /// <see cref="IRasterBackend.MeasureText"/> would — so a caller laying runs
-    /// end to end does not ask twice.
+    /// <paramref name="baselineY"/>). Returns its advance — what bibui's
+    /// <see cref="Fonts"/> measures — so a caller laying runs end to end does
+    /// not ask twice.
     /// </summary>
     float DrawText(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color);
 

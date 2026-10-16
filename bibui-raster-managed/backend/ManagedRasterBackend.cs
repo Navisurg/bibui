@@ -1,7 +1,6 @@
-extern alias freetype;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using freetype::Bibui.Text.FreeType;
+using Bibui.FreeType;
 using Bibui.Raster.Managed.Backend.Damage;
 using BPaintStyle = Bibui.PaintStyle;
 using BStrokeCap = Bibui.StrokeCap;
@@ -10,8 +9,8 @@ using MPath = Bibui.Raster.Managed.Path;
 
 namespace Bibui.Raster.Managed.Backend;
 
-// Bibui.Font (a resolved text font) is nearer than the using above; here a font is the engine's.
-using Font = freetype::Bibui.Text.FreeType.Font;
+// Bibui.TextColor (a theme role) is nearer than the using above; here a text colour is the engine's.
+using FtTextColor = Bibui.FreeType.TextColor;
 
 /// <summary>
 /// bibui's raster backend on the managed rasterizer and the
@@ -35,13 +34,10 @@ using Font = freetype::Bibui.Text.FreeType.Font;
 /// </summary>
 public sealed class ManagedRasterBackend : IRasterBackend
 {
-    private readonly Dictionary<Font, ManagedTypeface> _typefaces = new(ReferenceEqualityComparer.Instance);
-
     public ManagedRasterBackend(Antialiasing antialiasing = Antialiasing.BaselineCompatible)
     {
         Antialiasing = antialiasing;
-        Text = new TextEngine();
-        Damage = new DamageTracker(this);
+        Damage = new DamageTracker();
     }
 
     // ── Damage tracking ──────────────────────────────────────────────────────
@@ -99,9 +95,6 @@ public sealed class ManagedRasterBackend : IRasterBackend
         return g;
     }
 
-    /// <summary>The text engine: one per backend, used on the rendering thread.</summary>
-    public TextEngine Text { get; }
-
     internal GlyphRun ScratchRun { get; } = new();
     internal PlacedGlyph[] Placed = new PlacedGlyph[64];
 
@@ -129,44 +122,11 @@ public sealed class ManagedRasterBackend : IRasterBackend
 
     public byte[] EncodePng(ReadOnlySpan<byte> bgraPremul, int width, int height) => Png.EncodeBgraPremul(bgraPremul, width, height);
 
-    // ── Typefaces ────────────────────────────────────────────────────────────
-
-    public RasterTypeface? LoadTypeface(ReadOnlySpan<byte> data) => Intern(Text.Load(data));
-
-    public RasterTypeface? MatchFamily(string family, int weight) => Intern(Text.Resolve(family, weight));
-
-    public RasterTypeface? MatchCharacter(int codepoint, int weight)
-    {
-        // No system font fallback yet: only the built-in faces are asked.
-        var f = Text.Resolve(null, weight);
-        return f.HasGlyph(codepoint) ? Intern(f) : null;
-    }
-
-    public RasterTypeface DefaultTypeface => Intern(Text.DefaultRegular)!;
-
-    private ManagedTypeface? Intern(Font? font)
-    {
-        if (font is null) return null;
-        if (!_typefaces.TryGetValue(font, out var t)) _typefaces[font] = t = new ManagedTypeface(font);
-        return t;
-    }
-
-    internal FontStrike Strike(in RasterFont font, float scale = 1f)
-    {
-        var tf = font.Typeface as ManagedTypeface ?? throw new ArgumentException(
-            $"A {font.Typeface.GetType().Name} is not a managed typeface; it came from another raster backend.", nameof(font));
-        return Text.Strike(tf.Font, font.Size * scale);
-    }
-
     // ── Text ─────────────────────────────────────────────────────────────────
+    // Faces, metrics and measuring are bibui's (Fonts); this draws glyphs from
+    // the face's own engine, on the rendering thread that engine belongs to.
 
-    public float MeasureText(in RasterFont font, ReadOnlySpan<char> text) => Strike(font).Measure(text);
-
-    public TextMetrics GetMetrics(in RasterFont font)
-    {
-        var m = Strike(font).Metrics;
-        return new TextMetrics(m.Ascent, m.Descent, m.Leading);
-    }
+    internal static FontStrike Strike(in RasterFont font, float scale = 1f) => font.Face.Strike(font.Size * scale);
 
     public ShapedRun ShapeText(in RasterFont font, ReadOnlySpan<char> text)
     {
@@ -183,7 +143,7 @@ public sealed class ManagedRasterBackend : IRasterBackend
     /// <summary>The renderer finished a frame: a damage-tracked one is compared with the last and rasterised now.</summary>
     public void EndFrame() => Damage.End();
 
-    public void Dispose() => Text.Dispose();
+    public void Dispose() { }
 }
 
 /// <summary>A managed surface as a bibui render target.</summary>
@@ -280,18 +240,6 @@ public sealed class ManagedPath : RasterPath
 
     public override void Rewind() { Changing(); Native.Rewind(); }
     public override bool IsEmpty => Native.IsEmpty;
-}
-
-/// <summary>A FreeType face as a bibui typeface.</summary>
-public sealed class ManagedTypeface : RasterTypeface
-{
-    internal ManagedTypeface(Font font) => Font = font;
-
-    public Font Font { get; }
-
-    public override string FamilyName => Font.Family.Length > 0 ? Font.Family : Font.Data.Name;
-
-    public override bool HasGlyph(int codepoint) => Font.HasGlyph(codepoint);
 }
 
 /// <summary>An immutable premultiplied bitmap (<c>0xAARRGGBB</c>).</summary>
@@ -565,12 +513,12 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
     private float DrawRun(ReadOnlySpan<char> text, float x, float baselineY, in RasterFont font, Rgba color)
     {
         var run = _backend.ScratchRun;
-        var strike = _backend.Strike(font);
+        var strike = ManagedRasterBackend.Strike(font);
         strike.Shape(text, run);
         float advance = run.Width;
         if (TextScale(out float s, out var origin, x, baselineY))
         {
-            var ds = s == 1f ? strike : _backend.Strike(font, s);
+            var ds = s == 1f ? strike : ManagedRasterBackend.Strike(font, s);
             if (ds != strike) ds.Shape(text, run);
             int n = Place(run.Count);
             n = ds.Place(run, origin.X, origin.Y, _backend.Placed.AsSpan(0, n));
@@ -586,7 +534,7 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
         if (glyphs.Length != positions.Length) throw new ArgumentException("One position per glyph.", nameof(positions));
         if (_rec is { } r) { r.DrawGlyphRun(glyphs, positions, x, baselineY, font, color); if (!r.Tee) return; }
         if (glyphs.IsEmpty || !TextScale(out float s, out var origin, x, baselineY)) return;
-        var strike = _backend.Strike(font, s);
+        var strike = ManagedRasterBackend.Strike(font, s);
         int n = Place(glyphs.Length);
         if (s == 1f) n = strike.Place(glyphs, positions, origin.X, origin.Y, _backend.Placed.AsSpan(0, n));
         else
@@ -619,7 +567,7 @@ public sealed class ManagedRasterCanvas : IRasterCanvas
 
     private void Composite(int n, Rgba color)
     {
-        var tc = new freetype::Bibui.Text.FreeType.TextColor(color.R, color.G, color.B, color.A);
+        var tc = new FtTextColor(color.R, color.G, color.B, color.A);
         var table = MaskGamma.Table(tc);
         var placed = _backend.Placed;
         for (int i = 0; i < n; i++)

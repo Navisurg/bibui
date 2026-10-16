@@ -22,8 +22,6 @@ internal static class SkiaInterop
 
     public static SKPoint ToSk(this Vector2 p) => new(p.X, p.Y);
 
-    public static TextMetrics ToTextMetrics(this in SKFontMetrics m) => new(m.Ascent, m.Descent, m.Leading);
-
     // The bibui enums are declared with Skia's values, so these are casts.
     public static SKPaintStyle ToSk(this PaintStyle s) => (SKPaintStyle)(int)s;
     public static SKStrokeCap ToSk(this StrokeCap c) => (SKStrokeCap)(int)c;

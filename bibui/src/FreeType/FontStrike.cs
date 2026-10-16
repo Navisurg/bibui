@@ -1,7 +1,7 @@
 using System.Numerics;
-using Bibui.Text.FreeType.Native;
+using Bibui.FreeType.Native;
 
-namespace Bibui.Text.FreeType;
+namespace Bibui.FreeType;
 
 /// <summary>
 /// One <see cref="Font"/> at one physical pixel size: advances, metrics, shaping

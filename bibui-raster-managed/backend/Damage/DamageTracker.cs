@@ -15,7 +15,7 @@ namespace Bibui.Raster.Managed.Backend.Damage;
 // hold a frame several frames old. Each frame's damage is kept for a short
 // history and a surface is repainted with the union of the damage since the
 // frame it last held — buffer age, counted here rather than asked of the host.
-internal sealed class DamageTracker(ManagedRasterBackend backend)
+internal sealed class DamageTracker
 {
     private const int History = 8;
 
@@ -36,7 +36,7 @@ internal sealed class DamageTracker(ManagedRasterBackend backend)
         public List<PixelRect>? Tinted;         // debug tint drawn over it, null = none
     }
 
-    private readonly DamageRecorder _recorder = new(backend);
+    private readonly DamageRecorder _recorder = new();
     private readonly ConditionalWeakTable<ManagedRasterCanvas, TargetState> _targets = new();
     private readonly List<PixelRect>?[] _history = new List<PixelRect>?[History];
     private DamageFrame? _prev, _spare;
