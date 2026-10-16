@@ -10,7 +10,7 @@ int count = 0;
 
 while (SilkWindow.BeginFrame(window, runtime))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(window.Events);
     using (runtime.PushParent(runtime.ColumnFit()))
     {
         runtime.Text($"Clicked {count} times");

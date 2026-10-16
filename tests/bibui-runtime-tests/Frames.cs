@@ -3,6 +3,7 @@ using Bibui.Imaging;
 using Bibui.Draw;
 using Bibui.Raster.Skia;
 using Bibui.Runtime;
+using Bibui.Runtime.Platform;
 
 /// <summary>A frame's pixels, as a test reads them: BGRA8888 premultiplied, top row first.</summary>
 public sealed record Pixels(byte[] RawBgraBytes, int Width, int Height)
@@ -82,29 +83,36 @@ public static class TestBuild
         if (tree.Parent is null) UiNode.PushIntoParent(runtime.ParentInScope, tree);
     }
 
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<BibuiRuntime, BibuiTestServer> s_servers = new();
+
+    /// <summary>The server <see cref="RunLoop"/> steps once a frame, as an app's loop steps its own.</summary>
+    public static void Serve(this BibuiRuntime runtime, BibuiTestServer server) => s_servers.AddOrUpdate(runtime, server);
+
     /// <summary>
     /// The app's loop, on a thread of its own: a frame whenever one is owed, as a
-    /// window's loop builds them. A test server's commands wait on it. Background,
+    /// window's loop builds them, stepping the runtime's test server (if
+    /// <see cref="Serve"/> gave it one) and applying its input first. Background,
     /// so it ends with the process; a frame that throws is the test's to notice.
     /// </summary>
     public static void RunLoop(this BibuiRuntime runtime)
     {
         new Thread(() =>
         {
+            var noWindow = new List<WindowEvent>();   // a window's events, of which a test has none
             while (true)
             {
                 if (runtime.FramesRequested == 0) { Thread.Sleep(2); continue; }
                 runtime.ConsumeFrame();
-                try { runtime.Step(); }
+                try { runtime.Step(s_servers.TryGetValue(runtime, out var server) ? server.Step(noWindow) : null); }
                 catch (Exception) { }
             }
         }) { IsBackground = true, Name = "test app loop" }.Start();
     }
 
-    /// <summary>One frame: BeginBuild, the test's build, EndBuild.</summary>
-    public static void Step(this BibuiRuntime runtime)
+    /// <summary>One frame: BeginBuild with the frame's input (none by default), the test's build, EndBuild.</summary>
+    public static void Step(this BibuiRuntime runtime, List<WindowEvent>? events = null)
     {
-        runtime.BeginBuild();
+        runtime.BeginBuild(events);
         runtime.BuildTree();
         runtime.EndBuild();
     }

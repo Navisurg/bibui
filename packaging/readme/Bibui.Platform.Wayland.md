@@ -11,7 +11,7 @@ using var window = WaylandWindow.Open(runtime, new PlatformWindowOptions("My app
 using var managed = new ManagedRenderer(window.Cpu);   // Bibui.Raster.Managed.Backend
 while (WaylandWindow.BeginFrame(window, runtime))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(window.Events);
     /* your frame */
     runtime.EndBuild();
     managed.Draw(runtime.DrawList);

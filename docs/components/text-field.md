@@ -140,11 +140,11 @@ sealed class EmailInput
         if (line.Pressed) _focused = true;
 
         // Escape or Enter ends editing.
-        foreach (var handle in runtime.UnconsumedEvents)
-            if (_focused && handle.Event is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
+        foreach (var ev in runtime.UnconsumedEvents)
+            if (_focused && ev is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
             {
                 _focused = false;
-                handle.Eat();
+                ev.Eat();
             }
         return frame;
     }

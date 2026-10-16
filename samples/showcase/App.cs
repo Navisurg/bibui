@@ -130,10 +130,10 @@ internal sealed partial class App
         UiNode.PushIntoParent(rt.ParentInScope, page);   // built with Arrange: linked under the frame's root
     }
 
-    /// <summary>One whole frame, as the headless tools build it: BeginBuild, the app, EndBuild.</summary>
-    public void Frame(BibuiRuntime rt)
+    /// <summary>One whole frame: BeginBuild with the frame's input (none, headless), the app, EndBuild.</summary>
+    public void Frame(BibuiRuntime rt, List<Bibui.Runtime.Platform.WindowEvent>? events = null)
     {
-        rt.BeginBuild();
+        rt.BeginBuild(events);
         Build(rt);
         rt.EndBuild();
     }
@@ -154,13 +154,12 @@ internal sealed partial class App
     private void Keyboard(BibuiRuntime rt)
     {
         bool focusedNow = false;
-        foreach (var handle in rt.UnconsumedEvents)
+        foreach (var ev in rt.UnconsumedEvents)
         {
-            var ev = handle.Event;
             // The slash that gives the search field the keyboard is not typed into it.
             if (ev is { Kind: BibUiEventKind.Text, Char: '/' } && (focusedNow || !SearchFocused && !NoteFocused))
             {
-                handle.Eat();
+                ev.Eat();
                 continue;
             }
             if (SearchFocused || NoteFocused)
@@ -169,7 +168,7 @@ internal sealed partial class App
                 if (ev is { IsKeyDown: true, Key: Key.Escape } || SearchFocused && ev.Kind == BibUiEventKind.Submit)
                 {
                     SearchFocused = NoteFocused = false;
-                    handle.Eat();
+                    ev.Eat();
                 }
                 continue;
             }
@@ -200,7 +199,7 @@ internal sealed partial class App
                 case Key.Number4: Page = Page.Journal; break;
                 default: used = false; break;
             }
-            if (used) handle.Eat();
+            if (used) ev.Eat();
         }
     }
 

@@ -3,16 +3,19 @@ using System.Diagnostics.CodeAnalysis;
 using Bibui.Theming;
 using Bibui.Draw;
 using Bibui.TextEdit;
+using Bibui.Runtime.Platform;
 
 namespace Bibui.Runtime;
 
 /// <summary>
-/// The core interactive runtime. Owns the app's build function, current state,
-/// theme, render surface, and last rendered output. Event dispatch methods
-/// (DispatchClick, DispatchFill) queue input for the boxes that ask about it.
+/// The core interactive runtime: builds, lays out and records frames, and holds
+/// what lives across them (retained boxes, interaction state, the theme and the
+/// surface). Input is queued for the boxes that ask about it.
 ///
-/// Thread safety: all public members are guarded by an internal lock. Rendering
-/// (CPU-bound Skia) is performed outside the lock to avoid blocking dispatch.
+/// <para>One thread: the app's loop, which applies input, builds and draws. The
+/// only members safe from any other thread are <see cref="RequestFrame"/> and
+/// what it calls (<see cref="WakeUp"/>), and <see cref="FramesRequested"/> and
+/// <see cref="FrameCount"/>, which read counters.</para>
 /// </summary>
 public sealed partial class BibuiRuntime
 {
@@ -37,23 +40,10 @@ public sealed partial class BibuiRuntime
     public static BibuiRuntime Create() => new();
 
     /// <summary>
-    /// The last frame's draws, in paint order: recorded by <see cref="EndBuild"/>.
-    /// Valid until the next frame records; read it under <see cref="FrameLock"/>
-    /// when another thread may build.
+    /// The last frame's draws, in paint order: recorded by <see cref="EndBuild"/>,
+    /// valid until the next frame records.
     /// </summary>
     public DrawList DrawList { get; } = new();
-    private readonly object _syncRoot = new();
-    // Held around a frame: building and recording it, and whatever draws the
-    // list it recorded. Two threads build frames (the window's loop and the
-    // test server); without it one resets the list the other is drawing.
-    private readonly object _renderLock = new();
-
-    /// <summary>
-    /// The frame's lock: <see cref="EndBuild"/> takes it, and so must a caller
-    /// that draws <see cref="DrawList"/> while another thread may build the next
-    /// frame (a window and <see cref="BibuiTestServer"/>). Re-entrant.
-    /// </summary>
-    public object FrameLock => _renderLock;
 
     // ── Core app state ───────────────────────────────────────────────────────
     private ThemeTokens _theme = ThemeLoader.BibuiDark();
@@ -65,11 +55,14 @@ public sealed partial class BibuiRuntime
     private float _mouseX = float.NaN;
     private float _mouseY = float.NaN;
 
-    // ── Per-frame UI event queue ─────────────────────────────────────────────
-    // Pushed by a window's input on every OS key event; iterated by widgets in the
-    // build callback via UnconsumedEvents.
-    // Cleared at the end of each EndBuild().
-    private readonly List<BibUiEventHandle> _frameEvents = new();
+    // ── The frame's events ───────────────────────────────────────────────────
+    // An intrusive list, oldest first, of events taken from a pool that the end
+    // of every frame empties at once: events are born and die with a frame, so
+    // steady input allocates nothing. Queued by BeginBuild (and the dispatches),
+    // read by the boxes that ask during the build, dropped by EndBuild.
+    private readonly List<BibUiEvent> _eventPool = new();
+    private int _eventsUsed;
+    private BibUiEvent? _firstEvent, _lastEvent;
 
     /// <summary>
     /// Frames per second the loop aims for. The animation clock is derived from
@@ -166,29 +159,22 @@ public sealed partial class BibuiRuntime
     /// </summary>
     public SurfaceOptions Surface
     {
-        get { lock (_syncRoot) return _surface; }
+        get => _surface;
         set
         {
-            lock (_syncRoot)
-            {
-                _surface = value;
-                _lastTree = null;
-            }
+            _surface = value;
+            _lastTree = null;
             RequestFrame();
         }
     }
 
     /// <summary>
     /// Replaces the active theme and asks for a frame, which is painted in it.
-    /// Safe from any thread.
     /// </summary>
     public void SetTheme(ThemeTokens theme)
     {
-        lock (_syncRoot)
-        {
-            _theme = theme;
-            _lastTree = null;
-        }
+        _theme = theme;
+        _lastTree = null;
         RequestFrame();
     }
 
@@ -212,23 +198,24 @@ public sealed partial class BibuiRuntime
     /// component built with nothing else pushed lands under it, and a node built
     /// some other way is linked under <see cref="ParentInScope"/>. One node built
     /// at the top is the frame's tree and fills the surface, as a window's
-    /// content does; several are stacked top to bottom. Holds
-    /// <see cref="FrameLock"/> until <see cref="EndBuild"/>.
+    /// content does; several are stacked top to bottom.
+    ///
+    /// <para><paramref name="events"/> is what the keyboard and mouse did since the
+    /// last frame (<c>window.Events</c>, or a test server's): the frame's input,
+    /// which the boxes built from here ask about. It is emptied. None for a frame
+    /// nothing happened to, as a headless one.</para>
     /// </summary>
-    public void BeginBuild()
+    public void BeginBuild(List<WindowEvent>? events = null)
     {
-        Monitor.Enter(_renderLock);
-        lock (_syncRoot)
-        {
-            _frameSurface = _surface;
-            _frameTheme = PaintedTheme(_theme);
-        }
+        if (events is not null) ApplyInput(events);
+        _frameSurface = _surface;
+        _frameTheme = PaintedTheme(_theme);
         _buildStarted = Stopwatch.GetTimestamp();
         BeginDropDowns();
         ResetForBuild(_root);
         _root.SizeX = _root.SizeY = SemanticSize.ParentPct(1f);
         _root.ChildLayoutAxis = LayoutAxis.Y;
-        lock (_syncRoot) _parentStack.Add(_root);
+        _parentStack.Add(_root);
     }
 
     /// <summary>
@@ -239,83 +226,70 @@ public sealed partial class BibuiRuntime
     /// </summary>
     public void EndBuild()
     {
-        try
+        if (_parentStack.Count == 0 || _parentStack[^1] != _root)
+            throw new InvalidOperationException(
+                "EndBuild without its BeginBuild, or with a PushParent scope still open; use scopes with `using`.");
+        _parentStack.RemoveAt(_parentStack.Count - 1);
+        var surface = _frameSurface;
+        var theme = _frameTheme;
+
+        // The frame's tree. One node built at the top is it, and fills the
+        // surface, as a window's content does; several are stacked top to
+        // bottom under the root, which fills it.
+        UiNode tree = _root;
+        if (_root.FirstChild is { } only && only == _root.LastChild)
         {
-            lock (_syncRoot)
-            {
-                if (_parentStack.Count == 0 || _parentStack[^1] != _root)
-                    throw new InvalidOperationException(
-                        "EndBuild without its BeginBuild, or with a PushParent scope still open; use scopes with `using`.");
-                _parentStack.RemoveAt(_parentStack.Count - 1);
-            }
-            var surface = _frameSurface;
-            var theme = _frameTheme;
-
-            // The frame's tree. One node built at the top is it, and fills the
-            // surface, as a window's content does; several are stacked top to
-            // bottom under the root, which fills it.
-            UiNode tree = _root;
-            if (_root.FirstChild is { } only && only == _root.LastChild)
-            {
-                (_root.FirstChild, _root.LastChild) = (null, null);
-                (only.Parent, only.Prev, only.Next) = (null, null, null);
-                tree = only;
-            }
-
-            var t0 = _buildStarted;
-            EndDropDowns(tree);
-            var t1 = Stopwatch.GetTimestamp();
-            var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
-            // Every rect is solved before anything is recorded. A text measures
-            // itself in this runtime's fonts.
-            (_measureTheme, _measureScale) = (theme, surface.ScaleFactor);
-            LayoutSolver.Layout(tree, System.Numerics.Vector2.Zero,
-                new System.Numerics.Vector2(surface.Width, surface.Height), _measure);
-            var pointerTransforms = transformed ? PointerTransforms(tree) : null;
-            var t2 = Stopwatch.GetTimestamp();
-
-            // Captured after the build, so state the app sets while building
-            // lands in this frame.
-            FrameInput input;
-            lock (_syncRoot) input = CaptureFrameInput();
-            _painter.Record(DrawList, tree, surface, theme, input);
-            // What nobody asked for lately is evicted from the caches recording read.
-            _caches.EndFrame();
-            _fonts.EndFrame();
-            var t3 = Stopwatch.GetTimestamp();
-
-            if (_profile)
-            {
-                double freq = Stopwatch.Frequency / 1000.0;
-                Console.WriteLine(
-                    $"[Runtime.EndBuild]  build={(t1 - t0) / freq:F2}ms  " +
-                    $"CollectBoxes+Layout={(t2 - t1) / freq:F2}ms  record={(t3 - t2) / freq:F2}ms");
-            }
-
-            lock (_syncRoot)
-            {
-                _interactiveBoxes = interactiveBoxes;
-                _pointerTransforms = pointerTransforms;
-                _lastTree = tree;
-            }
-
-            // Will the next frame differ from this one? Asked of the painter,
-            // which knows because it stepped the values: a hover fade, an easing
-            // height, a client draw calling ctx.Animate.
-            if (_painter.IsAnimating) RequestFrame();
-
-            // A frame that handled input built from state the input then changed:
-            // what a click did shows in the frame after it, so one more is owed.
-            if (_frameEvents.Count > 0) OweOneFrame();
-
-            SweepFrame();       // sweep whatever nobody asked for this frame
-            ClearFrameEvents(); // per-frame events: drop the leftovers
-            Interlocked.Increment(ref _frames);
+            (_root.FirstChild, _root.LastChild) = (null, null);
+            (only.Parent, only.Prev, only.Next) = (null, null, null);
+            tree = only;
         }
-        finally
+
+        var t0 = _buildStarted;
+        EndDropDowns(tree);
+        var t1 = Stopwatch.GetTimestamp();
+        var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
+        // Every rect is solved before anything is recorded. A text measures
+        // itself in this runtime's fonts.
+        (_measureTheme, _measureScale) = (theme, surface.ScaleFactor);
+        LayoutSolver.Layout(tree, System.Numerics.Vector2.Zero,
+            new System.Numerics.Vector2(surface.Width, surface.Height), _measure);
+        var pointerTransforms = transformed ? PointerTransforms(tree) : null;
+        var t2 = Stopwatch.GetTimestamp();
+
+        // Captured after the build, so state the app sets while building
+        // lands in this frame.
+        FrameInput input;
+        input = CaptureFrameInput();
+        _painter.Record(DrawList, tree, surface, theme, input);
+        // What nobody asked for lately is evicted from the caches recording read.
+        _caches.EndFrame();
+        _fonts.EndFrame();
+        var t3 = Stopwatch.GetTimestamp();
+
+        if (_profile)
         {
-            Monitor.Exit(_renderLock);
+            double freq = Stopwatch.Frequency / 1000.0;
+            Console.WriteLine(
+                $"[Runtime.EndBuild]  build={(t1 - t0) / freq:F2}ms  " +
+                $"CollectBoxes+Layout={(t2 - t1) / freq:F2}ms  record={(t3 - t2) / freq:F2}ms");
         }
+
+        _interactiveBoxes = interactiveBoxes;
+        _pointerTransforms = pointerTransforms;
+        _lastTree = tree;
+
+        // Will the next frame differ from this one? Asked of the painter,
+        // which knows because it stepped the values: a hover fade, an easing
+        // height, a client draw calling ctx.Animate.
+        if (_painter.IsAnimating) RequestFrame();
+
+        // A frame that handled input built from state the input then changed:
+        // what a click did shows in the frame after it, so one more is owed.
+        if (_firstEvent is not null) OweOneFrame();
+
+        SweepFrame();       // sweep whatever nobody asked for this frame
+        ClearFrameEvents(); // per-frame events: drop the leftovers
+        Interlocked.Increment(ref _frames);
     }
 
     private long _frames;
@@ -350,7 +324,7 @@ public sealed partial class BibuiRuntime
     /// Snapshots the transient interaction state into an immutable FrameInput.
     /// THE single place runtime state is captured for a frame — new frame state
     /// gets added here, in FrameInput, and in the painter, and
-    /// nowhere else. Must be called under _syncRoot.
+    /// nowhere else.
     /// </summary>
     private FrameInput CaptureFrameInput() => new()
     {
@@ -363,35 +337,39 @@ public sealed partial class BibuiRuntime
     /// semantic colors (e.g. <c>BackgroundColor = UiColor.Surface</c>) instead
     /// of hardcoded hex values. Swapping the mounted theme will propagate.
     /// </summary>
-    public ThemeTokens Theme { get { lock (_syncRoot) return _theme; } }
+    public ThemeTokens Theme => _theme;
 
 
-    // ── UI event queue ───────────────────────────────────────────────────────
-    // All access is main-thread-only: a window's input enqueues from its
-    // pump, the build callback iterates during RenderLocked, ClearFrameEvents
-    // runs at the end of RenderLocked. No locks needed.
+    // ── The frame's event list ───────────────────────────────────────────────
 
     /// <summary>
-    /// Pushes a UI event onto the per-frame queue. Returns its handle, so the
-    /// caller can eat it once it knows whether anything acted on it.
+    /// A fresh event, linked last in the frame's list: from the pool, which grows
+    /// to the busiest frame's count and then stops growing.
     /// </summary>
-    internal BibUiEventHandle EnqueueEvent(BibUiEvent ev)
+    internal BibUiEvent PushEvent()
     {
-        var handle = new BibUiEventHandle(ev);
-        _frameEvents.Add(handle);
-        return handle;
+        if (_eventsUsed == _eventPool.Count) _eventPool.Add(new BibUiEvent());
+        var ev = _eventPool[_eventsUsed++];
+        ev.Reset();
+        if (_lastEvent is null) _firstEvent = ev; else _lastEvent.Next = ev;
+        _lastEvent = ev;
+        return ev;
     }
 
     /// <summary>
-    /// All events for the current frame that haven't been eaten yet. Use for
-    /// global handlers (Escape closes dialog, Ctrl+S saves, etc.). Iterate and
-    /// call <c>handle.Eat()</c> on events you consume so subsequent iterators
-    /// see them as gone.
+    /// The events of the current frame that nothing has eaten yet, oldest first.
+    /// Use for global handlers (Escape closes a dialog, Ctrl+S saves): call
+    /// <c>ev.Eat()</c> on the ones you act on, so the loops after yours do not see
+    /// them. Allocates nothing.
     /// </summary>
-    public IEnumerable<BibUiEventHandle> UnconsumedEvents
-        => _frameEvents.Where(h => !h.Consumed);
+    public UnconsumedEventList UnconsumedEvents => new(_firstEvent);
 
-    private void ClearFrameEvents() => _frameEvents.Clear();
+    // Every event of the frame back to the pool at once.
+    private void ClearFrameEvents()
+    {
+        _firstEvent = _lastEvent = null;
+        _eventsUsed = 0;
+    }
 
     /// <summary>
     /// Updates the render surface to the given physical pixel dimensions and
@@ -399,17 +377,14 @@ public sealed partial class BibuiRuntime
     /// </summary>
     public void ResizeSurface(int physicalWidth, int physicalHeight, float? scaleOverride = null)
     {
-        lock (_syncRoot)
+        var scale = scaleOverride ?? _surface.ScaleFactor;
+        _surface = new SurfaceOptions
         {
-            var scale = scaleOverride ?? _surface.ScaleFactor;
-            _surface = new SurfaceOptions
-            {
-                Width       = SurfaceOptions.LogicalSize(physicalWidth,  scale),
-                Height      = SurfaceOptions.LogicalSize(physicalHeight, scale),
-                ScaleFactor = scale,
-            };
-            _lastTree = null;
-        }
+            Width       = SurfaceOptions.LogicalSize(physicalWidth,  scale),
+            Height      = SurfaceOptions.LogicalSize(physicalHeight, scale),
+            ScaleFactor = scale,
+        };
+        _lastTree = null;
         RequestFrame();
     }
 
@@ -422,20 +397,21 @@ public sealed partial class BibuiRuntime
     /// <summary>
     /// Clicks the box named <paramref name="id"/>: a press and a release at its
     /// centre, through the same queue a real pointer uses, so focus, hot state
-    /// and the drag anchor land exactly as they would for a person. No-ops if
-    /// no box that claims a press carries the name.
+    /// and the drag anchor land exactly as they would for a person. Queued for
+    /// the next frame. False, and nothing queued, when no box that claims a
+    /// press carries the name.
     /// </summary>
-    public void DispatchClick(string id)
+    public bool DispatchClick(string id)
     {
         Box? box;
-        lock (_syncRoot) _interactiveBoxes.TryGetValue(id, out box);
-        if (box is null || box.Claims == InteractionKinds.None || box.Claims == InteractionKinds.Disabled) return;
+        _interactiveBoxes.TryGetValue(id, out box);
+        if (box is null || box.Claims == InteractionKinds.None || box.Claims == InteractionKinds.Disabled) return false;
 
         // Last frame's geometry, which is the same frame an ask would test
         // against. A box that has never been painted has no centre to aim at.
         var pos = box.Rect;
         var size = box.Extent;
-        if (size.X <= 0f || size.Y <= 0f) return;
+        if (size.X <= 0f || size.Y <= 0f) return false;
 
         float cx = pos.X + size.X / 2f;
         float cy = pos.Y + size.Y / 2f;
@@ -451,54 +427,29 @@ public sealed partial class BibuiRuntime
             new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = cx, Y = cy, TargetId = id },
             new BibUiEvent { Kind = BibUiEventKind.MouseUp,   Button = MouseButton.Left, X = cx, Y = cy, TargetId = id },
         });
+        return true;
     }
 
-    /// <summary>
-    /// Replaces the whole text of the field named <paramref name="id"/> with
-    /// <paramref name="newValue"/>, the way a person would: presses the field —
-    /// which its application focuses — lets <paramref name="frame"/> build a frame,
-    /// then selects all and types the value, or deletes for an empty one. The keys
-    /// are queued; the next frame applies them. No-ops if no box that asks carries
-    /// the name. The runtime does not build frames: <paramref name="frame"/> is
-    /// the caller's, as a test's frame or a wait for the app's loop.
-    /// </summary>
-    public void DispatchFill(string id, string newValue, Action frame)
-    {
-        ArgumentNullException.ThrowIfNull(newValue);
-        bool asks;
-        lock (_syncRoot) asks = _interactiveBoxes.ContainsKey(id);
-        if (!asks) return;
-
-        DispatchClick(id);
-        frame();
-        var keys = new List<BibUiEvent> { BibUiEvent.FromKey(Key.A, ctrl: true, shift: false) };
-        if (newValue.Length == 0)
-            keys.Add(BibUiEvent.FromKey(Key.Backspace, ctrl: false, shift: false));
-        foreach (var rune in newValue.EnumerateRunes())
-            keys.Add(new BibUiEvent { Kind = BibUiEventKind.Text, Char = rune.IsBmp ? (char)rune.Value : '\0', CodePoint = (uint)rune.Value });
-        ProcessEvents(keys);
-    }
-
-    public float ScaleFactor { get { lock (_syncRoot) return _surface.ScaleFactor; } }
-    public int SurfaceWidth  { get { lock (_syncRoot) return _surface.Width;  } }
-    public int SurfaceHeight { get { lock (_syncRoot) return _surface.Height; } }
+    public float ScaleFactor => _surface.ScaleFactor;
+    public int SurfaceWidth  => _surface.Width;
+    public int SurfaceHeight => _surface.Height;
 
     /// <summary>The tree the last frame laid out and painted.</summary>
-    internal UiNode? LastTree { get { lock (_syncRoot) return _lastTree; } }
+    internal UiNode? LastTree => _lastTree;
 
     /// <summary>
     /// The node named <paramref name="id"/> in the tree the last frame laid out
     /// and painted, or null: for tests and the test server, which read its
     /// <see cref="UiNode.Rect"/>, <see cref="UiNode.Extent"/> and content.
     ///
-    /// <para>Taken under the render lock, so never in the middle of a build.
-    /// The next build resets and reuses the nodes it describes again, so read
-    /// what is needed and do not keep the node across a frame.</para>
+    /// <para>Read it between frames, on the loop's thread. The next build
+    /// resets and reuses the nodes it describes, so read what is needed and do
+    /// not keep the node across a frame.</para>
     /// </summary>
     public UiNode? FindById(string id)
     {
         ArgumentNullException.ThrowIfNull(id);
-        lock (_renderLock) return Find(LastTree, id);
+        return Find(LastTree, id);
 
         static UiNode? Find(UiNode? node, string id)
         {

@@ -59,11 +59,11 @@ void Build()
         line = runtime.TextField("typed", typed, typedEdit, typing,
             placeholder: "Type here: dead keys, AltGr, held keys repeat, Ctrl+A, Ctrl+Left");
     if (line.Pressed) typing = true;
-    foreach (var handle in runtime.UnconsumedEvents)
-        if (typing && handle.Event is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
+    foreach (var ev in runtime.UnconsumedEvents)
+        if (typing && ev is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
         {
             typing = false;
-            handle.Eat();
+            ev.Eat();
         }
 
     // The pad takes every button and the wheel, and shows what arrived.
@@ -154,7 +154,7 @@ using var window = WaylandWindow.Open(runtime, new("bibui — wayland-hello", 76
 using var managed = new ManagedRenderer(window.Cpu);
 while (WaylandWindow.BeginFrame(window, runtime))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(window.Events);
     Build();
     runtime.EndBuild();
     managed.Draw(runtime.DrawList);

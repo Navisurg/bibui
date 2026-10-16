@@ -93,11 +93,11 @@ internal static class DemoMarkdown
         }
 
         if (_focused)
-            foreach (var handle in runtime.UnconsumedEvents)
-                if (handle.Event is { IsKeyDown: true, Key: Bibui.Key.Escape })
+            foreach (var ev in runtime.UnconsumedEvents)
+                if (ev is { IsKeyDown: true, Key: Bibui.Key.Escape })
                 {
                     _focused = false;
-                    handle.Eat();
+                    ev.Eat();
                 }
         return page;
     }

@@ -18,7 +18,7 @@ public enum BibUiEventKind
     // the mouse is travelling would otherwise hit-test wherever it finished.
     MouseDown,  // Button and X/Y are set
     MouseUp,    // Button and X/Y are set
-    MouseMove,  // X/Y are set. At most one per frame — see WindowInput
+    MouseMove,  // X/Y are set. At most one per frame — see BibuiRuntime.BeginBuild
     Release,    // key up. Key is set; the only consumer is key repeat
     Scroll,     // X/Y plus ScrollX/ScrollY
 
@@ -41,10 +41,27 @@ public enum BibUiEventKind
 ///
 /// Mutable, so the translation at the WM boundary builds one up in a single
 /// accumulating pass.
+///
+/// <para>An event the runtime queues lives until the frame's <c>EndBuild</c>: the
+/// runtime takes it from a pool that every frame end empties at once, and hands it
+/// out again the next frame. Read what you need while building; do not keep it.</para>
 /// </summary>
 public sealed class BibUiEvent
 {
     public BibUiEventKind Kind { get; set; } = BibUiEventKind.Null;
+
+    // ── The frame's list ─────────────────────────────────────────────────────
+    // rt: the runtime's. Linked as events are queued, unlinked all at once at
+    // the end of the frame.
+
+    /// <summary>The next event this frame, in the order they happened; null after the last.</summary>
+    public BibUiEvent? Next { get; internal set; }
+
+    /// <summary>Whether something has taken it (<see cref="Eat"/>). <c>UnconsumedEvents</c> skips it from then on.</summary>
+    public bool Consumed { get; private set; }
+
+    /// <summary>Takes the event: whoever asks after this does not see it.</summary>
+    public void Eat() => Consumed = true;
 
     // ── Raw OS info ──────────────────────────────────────────────────────────
     public Key Key { get; set; } = Key.Unknown;
@@ -123,7 +140,7 @@ public sealed class BibUiEvent
     /// </summary>
     internal string? TargetId { get; set; }
 
-    // ── Translated text-editing intent (filled by WindowInput) ───────────────
+    // ── Translated text-editing intent (filled by BeginBuild) ───────────────
     public TextActionFlags Flags { get; set; }
     public int Delta { get; set; }
 
@@ -140,6 +157,25 @@ public sealed class BibUiEvent
     /// boundary and stashed here, so TextOp.FromStateAndEvent does no I/O.
     /// </summary>
     public string? PasteData { get; set; }
+
+    /// <summary>Back to what <c>new()</c> gives, for the pool to hand out again.</summary>
+    internal void Reset()
+    {
+        Kind = BibUiEventKind.Null; Next = null; Consumed = false;
+        Key = Key.Unknown; Modifiers = KeyModifiers.None; Char = null;
+        Button = MouseButton.Unknown; X = Y = ScrollX = ScrollY = 0f; ClickCount = 1; TargetId = null;
+        Flags = 0; Delta = DeltaY = 0; CodePoint = 0; PasteData = null;
+    }
+
+    /// <summary>Everything but the list link and the consumed flag, from <paramref name="from"/>.</summary>
+    internal void CopyFrom(BibUiEvent from)
+    {
+        Kind = from.Kind;
+        Key = from.Key; Modifiers = from.Modifiers; Char = from.Char;
+        Button = from.Button; X = from.X; Y = from.Y; ScrollX = from.ScrollX; ScrollY = from.ScrollY;
+        ClickCount = from.ClickCount; TargetId = from.TargetId;
+        Flags = from.Flags; Delta = from.Delta; DeltaY = from.DeltaY; CodePoint = from.CodePoint; PasteData = from.PasteData;
+    }
 
     // ── Actions a keystroke and a menu item both ask for ─────────────────────
     // They accumulate onto the event rather than returning a fresh one, so the
@@ -191,8 +227,14 @@ public sealed class BibUiEvent
     /// </summary>
     public static BibUiEvent FromKey(Key key, bool ctrl, bool shift, Func<string?>? clipboard = null)
     {
-        BibUiEvent ev = new();
+        var ev = new BibUiEvent();
+        FillFromKey(ev, key, ctrl, shift, clipboard);
+        return ev;
+    }
 
+    // FromKey into an event the caller has: the runtime's, from its pool.
+    internal static void FillFromKey(BibUiEvent ev, Key key, bool ctrl, bool shift, Func<string?>? clipboard)
+    {
         ev.Key   = key;
         ev.Ctrl  = ctrl;
         ev.Shift = shift;
@@ -281,7 +323,5 @@ public sealed class BibUiEvent
                 ev.Kind = BibUiEventKind.Press;
                 break;
         }
-
-        return ev;
     }
 }

@@ -72,7 +72,7 @@ public sealed record WaylandHostOptions
 /// using var managed = new ManagedRenderer(window.Cpu);
 /// while (WaylandWindow.BeginFrame(window, runtime))
 /// {
-///     runtime.BeginBuild();
+///     runtime.BeginBuild(window.Events);
 ///     // ... build ...
 ///     runtime.EndBuild();
 ///     managed.Draw(runtime.DrawList);
@@ -98,8 +98,12 @@ public sealed unsafe class WaylandWindow : IDisposable
     // The buffer Cpu points at, between BeginFrame and EndFrame.
     private ShmBuffer? _buffer;
 
-    // What the window's events mean; listeners append to its Events through _queue.
-    internal readonly WindowInput Input = new();
+    /// <summary>
+    /// What the keyboard and mouse did since the last frame, in order, handed over
+    /// from the listeners' queue as <see cref="BeginFrame"/> waits. The loop hands it
+    /// to the runtime (<c>runtime.BeginBuild(window.Events)</c>), which empties it.
+    /// </summary>
+    public readonly List<WindowEvent> Events = [];
 
     // Connection and globals
     private nint _display;
@@ -130,7 +134,7 @@ public sealed unsafe class WaylandWindow : IDisposable
     private Exception? _listenerError;
 
     // Everything that happened, queued by listeners during dispatch and handed
-    // over by WaitEvents to Input. Listeners do nothing else.
+    // over by WaitEvents to Events. Listeners do nothing else.
     private readonly List<WindowEvent> _queue = [];
 
     private readonly WaylandInput _input;
@@ -641,9 +645,9 @@ public sealed unsafe class WaylandWindow : IDisposable
             if (window.IsClosing) return false;
             // A frame owed must not wait on unrelated input.
             if (s_alwaysRender || runtime.FramesRequested > 0) window.Wake();
-            window.WaitEvents(window.Input.Events);
+            window.WaitEvents(window.Events);
             if (window.IsClosing) return false;
-            bool any = window.Input.Apply(runtime, window.HeldModifiers);
+            bool any = window.Events.Count > 0;
             // Awake is not the same as having something to draw: a buffer
             // release, a ping or a wake with nothing owed draws nothing.
             if ((any || s_alwaysRender || runtime.FramesRequested > 0) && window.AcquireBuffer(runtime))

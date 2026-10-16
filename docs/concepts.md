@@ -474,16 +474,15 @@ types it. The key down comes first in the same frame's events:
 
 ```csharp
 bool focusedNow = false;
-foreach (var handle in runtime.UnconsumedEvents)
+foreach (var ev in runtime.UnconsumedEvents)
 {
-    var ev = handle.Event;
-    if (ev is { Kind: BibUiEventKind.Text, Char: '/' } && focusedNow) { handle.Eat(); continue; }
+    if (ev is { Kind: BibUiEventKind.Text, Char: '/' } && focusedNow) { ev.Eat(); continue; }
     if (!ev.IsKeyDown || searchFocused) continue;
     switch (ev.Key)
     {
-        case Key.Slash: searchFocused = focusedNow = true; handle.Eat(); break;
-        case Key.Down:  MoveSelection(+1); handle.Eat(); break;
-        case Key.Enter: Open(); handle.Eat(); break;
+        case Key.Slash: searchFocused = focusedNow = true; ev.Eat(); break;
+        case Key.Down:  MoveSelection(+1); ev.Eat(); break;
+        case Key.Enter: Open(); ev.Eat(); break;
     }
 }
 ```
@@ -740,10 +739,10 @@ owner of the loop chose draws that list. Two pieces connect it to the outside:
 - A **window** (`SilkWindow`, `WaylandWindow`) owns the native window, the
   event pump, the framebuffer, presenting, the clipboard and the cursor. It
   knows nothing of any renderer. The app owns the loop:
-  `while (SilkWindow.BeginFrame(window, runtime)) { build; draw; SilkWindow.EndFrame(window, runtime); }`.
-  `BeginFrame` sleeps while nothing is happening, hands the runtime the input
-  that arrived and returns when there is a frame to draw; `EndFrame` presents
-  it. A window offers two targets (namespace `Bibui.Draw`):
+  `while (SilkWindow.BeginFrame(window, runtime)) { runtime.BeginBuild(window.Events); build; runtime.EndBuild(); draw; SilkWindow.EndFrame(window, runtime); }`.
+  `BeginFrame` sleeps while nothing is happening and returns when there is a
+  frame to draw, with what the keyboard and mouse did in `window.Events`;
+  `BeginBuild` turns that into the frame's events; `EndFrame` presents it. A window offers two targets (namespace `Bibui.Draw`):
   `window.Gl`, a `GlTarget` (the GL framebuffer, Silk only), and `window.Cpu`,
   a `CpuTarget` (memory the window presents: a `wl_shm` buffer, or a CPU
   framebuffer the Silk window uploads). bibui does no discovery and no
@@ -778,7 +777,7 @@ using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("My app", 
 using var skia = SkiaRenderer.ForGl(window.Gl) ?? new SkiaRenderer(window.Cpu);
 while (SilkWindow.BeginFrame(window, runtime))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(window.Events);
     BuildUi(runtime);
     runtime.EndBuild();
     skia.Draw(runtime.DrawList);
@@ -808,7 +807,7 @@ using var window = WaylandWindow.Open(runtime, new PlatformWindowOptions("My app
 using var managed = new ManagedRenderer(window.Cpu);
 while (WaylandWindow.BeginFrame(window, runtime))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(window.Events);
     BuildUi(runtime);
     runtime.EndBuild();
     managed.Draw(runtime.DrawList);

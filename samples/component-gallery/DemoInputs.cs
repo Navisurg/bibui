@@ -328,11 +328,11 @@ internal static class DemoInputs
     private static void EndEditing(BibuiRuntime runtime)
     {
         if (Focused is null) return;
-        foreach (var handle in runtime.UnconsumedEvents)
-            if (handle.Event is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: BibUiEventKind.Submit })
+        foreach (var ev in runtime.UnconsumedEvents)
+            if (ev is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: BibUiEventKind.Submit })
             {
                 Focused = null;
-                handle.Eat();
+                ev.Eat();
             }
     }
 

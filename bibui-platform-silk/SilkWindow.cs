@@ -30,7 +30,7 @@ namespace Bibui.Runtime.Platform;
 /// using var skia = new SkiaRenderer(window.Gl);
 /// while (SilkWindow.BeginFrame(window, runtime))
 /// {
-///     runtime.BeginBuild();
+///     runtime.BeginBuild(window.Events);
 ///     // ... build ...
 ///     runtime.EndBuild();
 ///     skia.Draw(runtime.DrawList);
@@ -44,9 +44,13 @@ public sealed class SilkWindow : IDisposable
     internal readonly BibuiRuntime Runtime;
     internal GL GlApi = null!;
 
-    // What the window's events mean; GLFW's callbacks append to its Events and
-    // do nothing else, so no runtime call runs inside GLFW's own dispatch.
-    internal readonly WindowInput Input = new();
+    /// <summary>
+    /// What the keyboard and mouse did since the last frame, in order: GLFW's
+    /// callbacks append here and do nothing else, so no runtime call runs inside
+    /// GLFW's own dispatch. The loop hands it to the runtime
+    /// (<c>runtime.BeginBuild(window.Events)</c>), which empties it.
+    /// </summary>
+    public readonly List<WindowEvent> Events = [];
 
     internal SilkWindow(IWindow native, BibuiRuntime runtime)
     {
@@ -130,18 +134,18 @@ public sealed class SilkWindow : IDisposable
     internal unsafe void WireInput()
     {
         var input = Native.CreateInput();
-        var events = Input.Events;
+        var events = Events;
         foreach (var mouse in input.Mice)
         {
-            mouse.MouseDown += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseDown, m.Position.X, m.Position.Y, (Bibui.MouseButton)b));
-            mouse.MouseUp   += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseUp,   m.Position.X, m.Position.Y, (Bibui.MouseButton)b));
-            mouse.MouseMove += (_, p) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseMove, p.X, p.Y, Bibui.MouseButton.Unknown));
-            mouse.Scroll    += (m, w) => events.Add(WindowEvent.Wheel(m.Position.X, m.Position.Y, w.X, w.Y));
+            mouse.MouseDown += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseDown, m.Position.X, m.Position.Y, (Bibui.MouseButton)b, HeldModifiers));
+            mouse.MouseUp   += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseUp,   m.Position.X, m.Position.Y, (Bibui.MouseButton)b, HeldModifiers));
+            mouse.MouseMove += (_, p) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseMove, p.X, p.Y, Bibui.MouseButton.Unknown, HeldModifiers));
+            mouse.Scroll    += (m, w) => events.Add(WindowEvent.Wheel(m.Position.X, m.Position.Y, w.X, w.Y, HeldModifiers));
         }
         foreach (var keyboard in input.Keyboards)
         {
-            keyboard.KeyDown += (_, y, _) => events.Add(WindowEvent.KeyPress((Bibui.Key)y));
-            keyboard.KeyUp   += (_, y, _) => events.Add(WindowEvent.KeyRelease((Bibui.Key)y));
+            keyboard.KeyDown += (_, y, _) => events.Add(WindowEvent.KeyPress((Bibui.Key)y, HeldModifiers));
+            keyboard.KeyUp   += (_, y, _) => events.Add(WindowEvent.KeyRelease((Bibui.Key)y, HeldModifiers));
         }
         // Text straight from GLFW, not Silk.NET's KeyChar: that casts GLFW's code
         // point to a char, which turns 😀 (U+1F600) into U+F600. Taking the window's
@@ -157,11 +161,9 @@ public sealed class SilkWindow : IDisposable
         if (_cursor != CursorShape.Default) ApplyCursor();
     }
 
-    /// <summary>
-    /// The modifiers held now, asked of the keyboard rather than accumulated, so
-    /// a key released while another window had focus cannot latch.
-    /// </summary>
-    public KeyModifiers HeldModifiers
+    // The modifiers held now, asked of the keyboard as each event arrives and
+    // stamped on it: GLFW knows them, though Silk.NET's events do not carry them.
+    private KeyModifiers HeldModifiers
     {
         get
         {
@@ -453,7 +455,7 @@ public sealed class SilkWindow : IDisposable
             // app's loop is not running: draw from here. Linux never blocks there.
             if (window.OnRefresh is { } refresh && !OperatingSystem.IsLinux()) refresh();
         };
-        native.FocusChanged += focused => { if (!focused) window.Input.Events.Add(WindowEvent.FocusLost()); };
+        native.FocusChanged += focused => { if (!focused) window.Events.Add(WindowEvent.FocusLost()); };
         native.Initialize();
 
         runtime.WakeUp = window.Wake;
@@ -486,7 +488,7 @@ public sealed class SilkWindow : IDisposable
             if (s_alwaysRender || runtime.FramesRequested > 0) window.Wake();
             window.Native.DoEvents();
             if (window.IsClosing) return false;
-            bool any = window.Input.Apply(runtime, window.HeldModifiers);
+            bool any = window.Events.Count > 0;
             // Awake is not the same as having something to draw: a focus change, a
             // ping or a wake with nothing owed draws nothing, and waits again.
             if (any || s_alwaysRender || runtime.FramesRequested > 0)

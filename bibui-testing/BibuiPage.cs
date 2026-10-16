@@ -3,6 +3,7 @@ using Bibui.Raster.Skia;
 using Bibui.TextEdit;
 using Bibui.Theming;
 using Bibui.Runtime;
+using Bibui.Runtime.Platform;
 
 namespace Bibui.Testing;
 
@@ -107,7 +108,7 @@ public sealed class BibuiPage : IDisposable
     public void Frame()
     {
         if (_disposed) throw new ObjectDisposedException(nameof(BibuiPage));
-        _runtime.BeginBuild();
+        _runtime.BeginBuild(_keys);
         _build();
         _runtime.EndBuild();
     }
@@ -130,7 +131,7 @@ public sealed class BibuiPage : IDisposable
     /// Presses and releases at the middle of an element, which is what a user
     /// does when they click it.
     ///
-    /// Going through ProcessEvents rather than a dispatch method is the whole
+    /// Going through the event queue rather than a dispatch method is the whole
     /// point: a test then exercises the path a real press takes — hit-testing,
     /// focus, the multi-click streak, drag state — instead of a shortcut past
     /// it. The consequence is that a test can now miss: an element covered by
@@ -149,9 +150,21 @@ public sealed class BibuiPage : IDisposable
         });
     }
 
-    /// <summary>One key, as the window would report it.</summary>
+    // The keyboard's events for the next frame, which Frame hands to BeginBuild,
+    // as a window's loop hands it the window's. Reused.
+    private readonly List<WindowEvent> _keys = [];
+
+    /// <summary>One key, as the window would report it: the modifiers down around it, all of them up after it.</summary>
     private void PressKey(Key key, bool ctrl = false, bool shift = false)
-        => _runtime.ProcessEvent(BibUiEvent.FromKey(key, ctrl, shift, _runtime.ClipboardGet));
+    {
+        var held = (ctrl ? KeyModifiers.Ctrl : 0) | (shift ? KeyModifiers.Shift : 0);
+        if (ctrl) _keys.Add(WindowEvent.KeyPress(Key.ControlLeft, KeyModifiers.Ctrl));
+        if (shift) _keys.Add(WindowEvent.KeyPress(Key.ShiftLeft, held));
+        _keys.Add(WindowEvent.KeyPress(key, held));
+        _keys.Add(WindowEvent.KeyRelease(key, held));
+        if (shift) _keys.Add(WindowEvent.KeyRelease(Key.ShiftLeft, held & ~KeyModifiers.Shift));
+        if (ctrl) _keys.Add(WindowEvent.KeyRelease(Key.ControlLeft));
+    }
 
     /// <summary>
     /// Clicks the box with the given Id: a press and a release at its centre.
@@ -201,11 +214,18 @@ public sealed class BibuiPage : IDisposable
 
     /// <summary>
     /// Replaces the whole text of the field with the given Id, the way a
-    /// person would: presses it, then selects all and types the value.
+    /// person would: presses it, which its app focuses; then, a frame later,
+    /// selects all and types the value, or deletes for an empty one. Nothing
+    /// when no box that asks carries the name.
     /// </summary>
     public void Fill(string inputId, string value)
     {
-        _runtime.DispatchFill(inputId, value, Frame);
+        ArgumentNullException.ThrowIfNull(value);
+        if (!_runtime.DispatchClick(inputId)) return;
+        Frame();
+        PressKey(Key.A, ctrl: true);
+        if (value.Length == 0) PressKey(Key.Backspace);
+        foreach (var rune in value.EnumerateRunes()) _keys.Add(WindowEvent.Text(rune));
         Frame();
     }
 
@@ -276,10 +296,7 @@ public sealed class BibuiPage : IDisposable
     /// </summary>
     public void TypeChar(char ch)
     {
-        _runtime.ProcessEvent(new BibUiEvent
-        {
-            Kind = BibUiEventKind.Text, Key = Key.Unknown, Char = ch, CodePoint = ch,
-        });
+        _keys.Add(WindowEvent.Text(new System.Text.Rune(ch)));
         Frame();
     }
 

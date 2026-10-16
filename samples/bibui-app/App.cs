@@ -45,11 +45,11 @@ public static class Demo
         using (runtime.PushParent(nameField)) nameLine = runtime.TextField("name-input", nameText, nameEdit, state.NameFocused,
             placeholder: Labels.NamePlaceholder);
         if (nameLine.Pressed) state.NameFocused = true;
-        foreach (var handle in runtime.UnconsumedEvents)
-            if (state.NameFocused && handle.Event is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: BibUiEventKind.Submit })
+        foreach (var ev in runtime.UnconsumedEvents)
+            if (state.NameFocused && ev is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: BibUiEventKind.Submit })
             {
                 state.NameFocused = false;
-                handle.Eat();
+                ev.Eat();
             }
         var decrement = runtime.Button("decrement-btn", Labels.Minus);
         if (decrement.Clicked) state.Counter--;

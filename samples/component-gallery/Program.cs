@@ -83,8 +83,9 @@ if (options.FirstFrame)
     return;
 }
 
-// Off unless asked for: BIBUI_TEST_SERVER=1 (test_all_pages.sh says how). Its
-// screenshots draw with a renderer of their own: the window's is the loop's.
+// Off unless asked for: BIBUI_TEST_SERVER=1 (test_all_pages.sh says how); the
+// loop steps it. Its screenshots draw with a CPU renderer of their own: the
+// window's draws on the GPU, or keeps damage state for the window's buffers.
 using var testServer = BibuiTestServer.StartIfEnabled(runtime, options.Port,
     options.Raster == GalleryRaster.Managed ? new ManagedRenderer().Draw : new SkiaRenderer().Draw);
 
@@ -103,7 +104,8 @@ if (options.Host == GalleryHost.Wayland)
     (DemoTexture.Skia, DemoTexture.Managed) = (skia, managed);
     while (WaylandWindow.BeginFrame(window, runtime))
     {
-        runtime.BeginBuild();
+        // While a test-server command runs, the server is the keyboard and mouse.
+        runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
         BuildGallery(runtime, gallery);
         runtime.EndBuild();
         if (skia is not null) skia.Draw(runtime.DrawList);
@@ -123,7 +125,8 @@ else
 
     void Frame()
     {
-        runtime.BeginBuild();
+        // While a test-server command runs, the server is the keyboard and mouse.
+        runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
         BuildGallery(runtime, gallery);
         runtime.EndBuild();
         skia.Draw(runtime.DrawList);

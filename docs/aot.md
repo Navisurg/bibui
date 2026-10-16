@@ -91,7 +91,7 @@ using var window = WaylandWindow.Open(runtime, new PlatformWindowOptions("Counte
 using var managed = new ManagedRenderer(window.Cpu);
 while (WaylandWindow.BeginFrame(window, runtime))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(window.Events);
     Build();
     runtime.EndBuild();
     managed.Draw(runtime.DrawList);

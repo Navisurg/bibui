@@ -12,7 +12,7 @@ using var skia = SkiaRenderer.ForGl(window.Gl)        // Bibui.Raster.Skia
     ?? new SkiaRenderer(window.Cpu);                  // no usable GL: draw on the CPU
 while (SilkWindow.BeginFrame(window, runtime))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(window.Events);
     /* your frame */
     runtime.EndBuild();
     skia.Draw(runtime.DrawList);
