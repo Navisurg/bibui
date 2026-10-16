@@ -6,9 +6,9 @@ namespace Bibui.Renderer;
 
 internal sealed class DrawingContext
 {
-    private readonly IRasterCanvas _canvas;
+    private DrawList _list = null!;
     private readonly IRasterBackend _backend;
-    private readonly float _scale;
+    private float _scale;
     private readonly Fonts _fonts;
     private readonly bool _backdrop;
 
@@ -19,22 +19,54 @@ internal sealed class DrawingContext
     internal float SurfaceHeight { get; set; }
 
     /// <summary>The theme this frame is painted in — the one the painter resolves every token against.</summary>
-    internal ThemeTokens Theme { get; }
+    internal ThemeTokens Theme { get; private set; } = null!;
 
     /// <param name="backdrop">
     /// Whether <see cref="DrawContext.BlurBackdrop"/> may read back what the canvas
     /// has painted. Without it the blur is a no-op.
     /// </param>
-    internal DrawingContext(IRasterCanvas canvas, float scale, Fonts fonts, RenderCaches caches, FrameInput input, ThemeTokens theme, bool backdrop = false)
+    // Made once per painter; Begin sets what changes from frame to frame, so a
+    // frame allocates no context.
+    internal DrawingContext(Fonts fonts, RenderCaches caches, bool backdrop = false)
     {
-        _canvas = canvas;
-        Theme = theme;
         _backend = caches.Backend;
-        _scale = scale;
         _fonts = fonts;
         _backdrop = backdrop;
         _caches = caches;
+    }
+
+    /// <summary>Starts a frame's recording into <paramref name="list"/>.</summary>
+    internal void Begin(DrawList list, float scale, FrameInput input, ThemeTokens theme, float width, float height)
+    {
+        _list = list;
+        _scale = scale;
         _input = input;
+        Theme = theme;
+        SurfaceWidth = width;
+        SurfaceHeight = height;
+        PaintDepth = 0;
+    }
+
+    // The current paint: what a draw without its own is drawn in. A stack reused
+    // from frame to frame; the painter restores its depth after every callback,
+    // so one that forgets a pop does not leak its paint into the next.
+    private Paint[] _paints = new Paint[8];
+
+    internal int PaintDepth { get; set; }
+
+    internal Paint CurrentPaint => PaintDepth > 0 ? _paints[PaintDepth - 1] : DefaultPaint;
+
+    private static readonly Paint DefaultPaint = Paint.Filled(Rgba.Black);
+
+    internal void PushPaint(in Paint paint)
+    {
+        if (PaintDepth == _paints.Length) Array.Resize(ref _paints, PaintDepth * 2);
+        _paints[PaintDepth++] = paint;
+    }
+
+    internal void PopPaint()
+    {
+        if (PaintDepth > 0) PaintDepth--;
     }
 
     // Owned by the renderer, shared across frames.
@@ -42,7 +74,7 @@ internal sealed class DrawingContext
 
     // This frame's input record. Held, not unpacked: Dt reads through it so the
     // value exists once on the render path rather than in a field here too.
-    private readonly FrameInput _input;
+    private FrameInput _input = FrameInput.None;
 
     /// <inheritdoc cref="FrameInput.Dt"/>
     public float Dt => _input.Dt;
@@ -58,7 +90,7 @@ internal sealed class DrawingContext
     internal float MeasureRuns(ReadOnlySpan<char> text, float logicalFontSize, string? family, int weight)
         => _fonts.MeasureRuns(text, logicalFontSize, family, weight, _scale);
 
-    internal IRasterCanvas Canvas => _canvas;
+    internal DrawList List => _list;
 
     internal IRasterBackend Backend => _backend;
     internal float Scale => _scale;

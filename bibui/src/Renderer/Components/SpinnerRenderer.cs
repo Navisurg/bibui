@@ -60,11 +60,11 @@ internal static class SpinnerRenderer
         float rotationDeg = ctx.Sawtooth(AnimKey.For(comp.Id, "spin")) * 360f;
 
         // Track ring (muted full circle)
-        ctx.DrawArc(cx, cy, radius, strokeW, comp.TrackColor?.Resolve(theme.Colors) ?? theme.Colors.Border,
+        ctx.DrawArc(cx, cy, radius, strokeW, DrawContext.Color(comp.TrackColor?.Resolve(theme.Colors) ?? theme.Colors.Border),
             startAngle: 0f, sweepAngle: 360f);
 
         // Active arc (270° sweep, rotating)
-        ctx.DrawArc(cx, cy, radius, strokeW, comp.Color?.Resolve(theme.Colors) ?? theme.Colors.TextPrimary,
+        ctx.DrawArc(cx, cy, radius, strokeW, DrawContext.Color(comp.Color?.Resolve(theme.Colors) ?? theme.Colors.TextPrimary),
             startAngle: rotationDeg - 90f, sweepAngle: 270f);
     }
 }

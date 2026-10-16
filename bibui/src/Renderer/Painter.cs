@@ -1,3 +1,4 @@
+using System.Numerics;
 using Bibui;
 using Bibui.Theming;
 using Bibui.Renderer.Components;
@@ -9,9 +10,9 @@ namespace Bibui.Renderer;
 /// Draws a laid-out tree. Every node's <see cref="UiNode.Rect"/>,
 /// <see cref="UiNode.Extent"/> and <see cref="UiNode.ContentSize"/> are final
 /// before it is called: it lays nothing out, measures nothing, and writes
-/// nothing back to a node. It walks the tree in order and issues raster calls
-/// through <see cref="DrawingContext"/> onto the renderer's
-/// <see cref="IRasterBackend"/>; the dropdown and tooltip roots are linked last, so they land on top.
+/// nothing back to a node. It walks the tree in order and records the frame's
+/// draws through <see cref="DrawingContext"/> into a <see cref="DrawList"/>; the
+/// dropdown and tooltip roots are linked last, so they land on top.
 /// </summary>
 internal sealed class Painter
 {
@@ -22,7 +23,11 @@ internal sealed class Painter
     {
         _caches = caches;
         _fonts = fonts;
+        _drawing = new DrawingContext(fonts, caches, backdrop: true);
     }
+
+    // The one recording context, begun again for every frame.
+    private readonly DrawingContext _drawing;
 
     /// <summary>
     /// Whether the frame just painted left anything mid-transition. Reported,
@@ -30,19 +35,17 @@ internal sealed class Painter
     /// </summary>
     internal bool IsAnimating { get; private set; }
 
-    /// <summary>Paints <paramref name="root"/> onto <paramref name="surface"/>.</summary>
-    internal void Paint(IRasterSurface surface, UiNode root, SurfaceOptions options, ThemeTokens theme, FrameInput input)
-        => Paint(surface.Canvas, root, options, theme, input);
-
-    private void Paint(IRasterCanvas canvas, UiNode root, SurfaceOptions options, ThemeTokens theme, FrameInput input)
+    /// <summary>
+    /// Records <paramref name="root"/>'s frame into <paramref name="list"/>, from a
+    /// <see cref="DrawOpKind.Clear"/> in the theme's background on. Draws nothing:
+    /// the renderer executes the list, and ends the frame's caches after.
+    /// </summary>
+    internal void Record(DrawList list, UiNode root, SurfaceOptions options, ThemeTokens theme, FrameInput input)
     {
-        canvas.Clear(DrawingContext.ParseColor(theme.Colors.Background));
-        var ctx = new DrawingContext(canvas, options.ScaleFactor, _fonts, _caches, input, theme, backdrop: true)
-        {
-            SurfaceWidth = options.Width,
-            SurfaceHeight = options.Height,
-        };
-        Node(root, theme, ctx.Root);
+        list.Reset();
+        list.Push(DrawOpKind.Clear).Color = DrawingContext.ParseColor(theme.Colors.Background);
+        _drawing.Begin(list, options.ScaleFactor, input, theme, options.Width, options.Height);
+        Node(root, theme, _drawing.Root);
 
         // Commit this frame's animations and ask whether any of them are still
         // going. Before EndFrame, which advances the touch clock this reads.
@@ -65,10 +68,6 @@ internal sealed class Painter
             cell.Current = cell.Next;
         }
         IsAnimating = animating;
-
-        // Advance the render-resource caches' frame clock (touch-based eviction).
-        _caches.EndFrame();
-        _fonts.EndFrame();
     }
 
     private void Node(UiNode node, ThemeTokens theme, DrawContext ctx)
@@ -79,11 +78,17 @@ internal sealed class Painter
         // pushed around the node and its subtree, outside the fade, so a
         // transparency layer is composited where the node is drawn.
         bool moved = node.Style.HasTransform;
-        if (moved) ctx.PushTransform(node.Style.TransformFor(node.Rect, node.Extent));
+        if (moved)
+        {
+            // The style's transform is over logical px; the same map over physical
+            // px is down to logical, through it, and back up.
+            float s = ctx.Scale;
+            ctx.PushTransform(Matrix3x2.CreateScale(1f / s) * node.Style.TransformFor(node.Rect, node.Extent) * Matrix3x2.CreateScale(s));
+        }
 
         // Style.Opacity fades this node and its whole subtree via a transparency layer.
         bool fade = node.Style.Opacity < 1f;
-        if (fade) ctx.PushOpacityLayer(node.Style.Opacity);
+        if (fade) ctx.PushOpacity(node.Style.Opacity);
 
         // BackdropBlur must run before the decoration paints this node's own fill/border, so it
         // blurs only what's already behind it — never this node's own content.
@@ -112,16 +117,21 @@ internal sealed class Painter
             // cuts their presses (InteractionsFor), so what is drawn and what
             // is pressed agree. Nothing else clips.
             bool clips = node is Box { Claims: var claims } && (claims & InteractionKinds.Clip) != 0;
-            if (clips) ctx.PushClip(frame.X, frame.Y, frame.Width, frame.Height);
+            if (clips) ctx.PushClip(ctx.Physical(frame.X, frame.Y, frame.Width, frame.Height));
             for (var child = node.FirstChild; child is not null; child = child.Next == child ? null : child.Next)
                 Node(child, theme, ctx);
             if (clips) ctx.PopClip();
         }
 
         if (node is Box { Draw: { } draw })
+        {
+            // A callback's paints are its own: whatever it leaves pushed is dropped.
+            int paints = _drawing.PaintDepth;
             draw(ctx.For(frame.X, frame.Y, frame.Width, frame.Height));
+            _drawing.PaintDepth = paints;
+        }
 
-        if (fade) ctx.PopOpacityLayer();
+        if (fade) ctx.PopOpacity();
         if (moved) ctx.PopTransform();
     }
 
@@ -138,7 +148,7 @@ internal sealed class Painter
         float size = icon.Size.In(theme);
         float w = MathF.Min(frame.Width, size), h = MathF.Min(frame.Height, size);
         ctx.DrawIcon(icon.Name, frame.X + w / 2f, frame.Y + h / 2f, MathF.Min(w, h),
-            (icon.Color ?? UiColor.TextPrimary).Resolve(theme.Colors));
+            DrawContext.Color((icon.Color ?? UiColor.TextPrimary).Resolve(theme.Colors)));
     }
 
     /// <summary>

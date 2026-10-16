@@ -50,7 +50,7 @@ internal static class DemoTexture
     private static Box Picture(TextureHandle texture) => new Box
     {
         Draw = ctx => ctx.DrawTexture(texture, ctx.Rect,
-            new PaintSpec { Color = Rgba.Black, FilterQuality = FilterQuality.None }),
+            new Paint { Fill = Rgba.Black, Filter = FilterQuality.None, Antialias = false }),
     }.Px(Size * 6f, Size * 6f);
 
     // The gallery chose its backend, so it knows where its textures live.

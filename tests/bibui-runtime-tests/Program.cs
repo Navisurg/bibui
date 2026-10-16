@@ -2888,6 +2888,58 @@ void TextureContract(string name, Bibui.Raster.IRasterBackend backend,
     release(second);
 }
 
+Run("DrawList: recording a frame after the first allocates nothing", () =>
+{
+    // A page of what most frames are made of: text, icons, decorated and
+    // clipped boxes, an opacity layer, a cached path. Laid out once by a real
+    // runtime, then recorded again and again into one list.
+    var runtime = BibuiRuntime.Create().WithSkia();
+    UiNode? tree = null;
+    runtime.Mount(() =>
+    {
+        var page = runtime.ColumnFit();
+        using (runtime.PushParent(page))
+        {
+            runtime.Text("Recording allocates nothing");
+            runtime.Icon("check", size: 18f);
+            var card = runtime.Box();
+            card.Px(160f, 48f).Clipped();
+            card.Style.BackgroundColor = UiColor.SurfaceRaised;
+            card.Style.BorderColor = UiColor.Border;
+            card.Style.BorderWidth = 1f;
+            card.Style.CornerRadius = 8f;
+            card.Style.Opacity = 0.5f;
+            using (runtime.PushParent(card)) runtime.Text("inside a clipped, faded card");
+            var drawn = runtime.Box();
+            drawn.Px(80f, 40f);
+            drawn.Draw = ctx => ctx.DrawCheckMark(0f, 0f, 20f, 20f, new Rgba(34, 197, 94), 2f);
+        }
+        return tree = page;
+    }, new SurfaceOptions { Width = 400, Height = 300 });
+    runtime.Render();
+
+    var caches = new Bibui.Renderer.RenderCaches(new SkiaRasterBackend());
+    using var fonts = new Fonts();
+    var painter = new Bibui.Renderer.Painter(caches, fonts);
+    var list = new Bibui.Raster.DrawList();
+    var surface = new SurfaceOptions { Width = 400, Height = 300 };
+    var theme = runtime.Theme;
+    for (int i = 0; i < 3; i++)
+    {
+        painter.Record(list, tree!, surface, theme, FrameInput.None);
+        caches.EndFrame();
+        fonts.EndFrame();
+    }
+
+    long before = GC.GetAllocatedBytesForCurrentThread();
+    painter.Record(list, tree!, surface, theme, FrameInput.None);
+    long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+    IsTrue(list.Ops.Length > 8, $"the page recorded its draws ({list.Ops.Length} ops)");
+    Eq(0L, allocated, $"a warmed-up recording allocates nothing (it allocated {allocated} bytes)");
+    caches.Dispose();
+});
+
 Run("Textures: drawn, updated and released on Skia", () =>
 {
     using var skia = new SkiaRasterBackend();
@@ -2910,9 +2962,9 @@ Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and 
             Draw = ctx =>
             {
                 var r = ctx.Rect;
-                var shader = ctx.LinearGradient(new System.Numerics.Vector2(r.Left, r.Top),
+                var shader = Bibui.Raster.RasterShader.Linear(new System.Numerics.Vector2(r.Left, r.Top),
                     new System.Numerics.Vector2(r.Right, r.Top), [new Rgba(255, 0, 0), new Rgba(0, 0, 255)], []);
-                ctx.DrawRoundRect(r, 8f, fill: ctx.Paint(PaintSpec.Fill(Rgba.Black), shader: shader));
+                ctx.DrawRect(r, 8f, new Paint { Shader = shader });
                 var tri = ctx.Path(CacheKey.Of([42]), r, static (rect, p) =>
                 {
                     p.MoveTo(rect.Left + 10, rect.Bottom - 10);
@@ -2920,8 +2972,7 @@ Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and 
                     p.LineTo(rect.Right - 10, rect.Bottom - 10);
                     p.Close();
                 });
-                ctx.DrawPath(tri, ctx.Paint(PaintSpec.Stroke(Rgba.White, 2f),
-                    dash: new Bibui.Raster.DashPattern(4f, 2f)));
+                ctx.DrawPath(tri, new Paint { Stroke = Rgba.White, StrokeWidth = 2f, Dash = new Bibui.Raster.DashPattern(4f, 2f) });
             },
     }.Px(120f, 60f);
     var surface = new SurfaceOptions { Width = 120, Height = 60, ScaleFactor = 1f };
@@ -2990,7 +3041,7 @@ Run("DrawContext.Resolve: follows a theme changed between the build and the pain
             accent = ctx.Resolve(UiColor.Accent);
             surface = ctx.Resolve(UiColor.Surface);
             faded = ctx.Resolve(UiColor.Accent.WithAlpha(0.5f));
-            ctx.DrawRoundRect(ctx.Rect, 0f, fill: ctx.Paint(PaintSpec.Fill(surface)));
+            ctx.DrawRect(ctx.Rect, 0f, Paint.Filled(surface));
         },
     }.Px(40f, 40f);
     var renderer = new BibuiRenderer(new SkiaRasterBackend());

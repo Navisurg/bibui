@@ -18,6 +18,7 @@ public sealed class BibuiRenderer
     private readonly RenderCaches _caches;
     private readonly Fonts _fonts;
     private readonly Painter _painter;
+    private readonly DrawListReplay _replay;
 
     /// <summary>
     /// A renderer on <paramref name="raster"/>, which it now owns. Chosen
@@ -29,6 +30,7 @@ public sealed class BibuiRenderer
         _caches = new RenderCaches(raster);
         _fonts = new Fonts();
         _painter = new Painter(_caches, _fonts);
+        _replay = new DrawListReplay(raster);
         _measure = MeasureLeaf;
     }
 
@@ -102,7 +104,25 @@ public sealed class BibuiRenderer
     /// memory a host owns). No pixel readback and no PNG factory.
     /// </summary>
     public void RenderTo(IRasterSurface target, UiNode root, SurfaceOptions surface, ThemeTokens theme, FrameInput? input = null)
-        => _painter.Paint(target, root, surface, theme, input ?? FrameInput.None);
+        => Draw(target, root, surface, theme, input ?? FrameInput.None);
+
+    /// <summary>
+    /// The last frame's draws: recorded after layout, then executed onto the
+    /// surface. Valid until the next frame records.
+    /// </summary>
+    public DrawList DrawList { get; } = new();
+
+    // Records the frame, executes it, then ends the frame for every cache: the
+    // backend's EndFrame among them, which a damage-tracking backend rasterises
+    // in, so it comes after the list is drawn.
+    private void Draw(IRasterSurface target, UiNode root, SurfaceOptions surface, ThemeTokens theme, FrameInput input)
+    {
+        _painter.Record(DrawList, root, surface, theme, input);
+        _replay.Execute(DrawList, target.Canvas);
+        _caches.EndFrame();
+        _fonts.EndFrame();
+        _replay.EndFrame();
+    }
 
     /// <summary>
     /// Paints the laid-out <paramref name="root"/> on the CPU and reads the
@@ -130,7 +150,7 @@ public sealed class BibuiRenderer
 
         var t1 = Stopwatch.GetTimestamp(); // after surface alloc
 
-        _painter.Paint(target, root, surface, theme, input ?? FrameInput.None);
+        Draw(target, root, surface, theme, input ?? FrameInput.None);
 
         var t2 = Stopwatch.GetTimestamp(); // after the paint
         long a2 = _profile ? GC.GetAllocatedBytesForCurrentThread() : 0;

@@ -151,12 +151,11 @@ public sealed class Box : UiNode
     public InteractionKinds Claims { get; set; }
 
     /// <summary>
-    /// The same hook, handed a <see cref="DrawContext"/> instead of a bare canvas.
-    /// Prefer it: every path it hands out comes from the renderer's caches, and
-    /// every paint resolves against the backend's,
-    /// so a custom component costs what a built-in one costs rather than
-    /// constructing and destroying native objects on every frame.
-    /// Raw SkiaSharp drawing (the old CustomDraw) is <c>SkiaCustomDraw.Of(...)</c> in Bibui.Raster.Skia.
+    /// The box's own drawing, handed a <see cref="DrawContext"/>: what it draws is
+    /// recorded into the frame's draw list in tree order, and drawn by whichever
+    /// renderer executes the list. Every path it hands out comes from the
+    /// renderer's caches, and every paint resolves against the backend's, so a
+    /// custom component costs what a built-in one costs.
     ///
     /// <para>Build state like the rest: set it on the box a build acquired —
     /// a retained one from <c>BibuiRuntime.BoxFromId</c> as readily as a keyless
