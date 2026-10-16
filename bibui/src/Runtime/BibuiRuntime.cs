@@ -77,6 +77,12 @@ public sealed partial class BibuiRuntime
 
     /// <summary>The raster backend frames are painted with.</summary>
     public IRasterBackend Raster => Renderer.Raster;
+
+    /// <summary>
+    /// The last frame's draws, in paint order: recorded after layout, then drawn.
+    /// Valid until the next frame records.
+    /// </summary>
+    public DrawList DrawList => Renderer.DrawList;
     private readonly object _syncRoot = new();
     // Held around the build+Skia portion of Render(). Without this, two threads
     // (the window's render loop and the test server) can race and corrupt Skia
