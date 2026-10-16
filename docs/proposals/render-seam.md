@@ -145,8 +145,8 @@ SkiaDraw.Execute(DrawList list, SKCanvas canvas);
 ManagedDraw.Execute(DrawList list, RasterPixels target);
 ```
 
-- **The hosts own their renderer.** Silk draws with Skia: on its GPU surface, or on a CPU surface it then uploads. Wayland draws into its shm buffers with the managed rasterizer, or with Skia on the CPU. `IPlatformHost.Present` calls the runtime to build, lay out and record, then executes the list itself. Choosing the renderer moves from the runtime (`BibuiRuntime.Create().WithSkia()`) to the window and host (`BibuiWindow.Create(runtime).WithSilk()` picks Skia).
-- **Headless rendering and tests** call a renderer directly. `Bibui.Testing` (screenshots, PNG frames) renders with Skia on the CPU, so `RenderOutput` and frame PNGs move out of the core to where a renderer is.
+- **The hosts own their renderer.** Silk draws with Skia: on its GPU surface, or on a CPU surface it then uploads. Wayland draws into its shm buffers with the managed rasterizer, or with Skia on the CPU. `IPlatformHost.Present` calls `runtime.EndBuild()`, then executes the list itself. Choosing the renderer moves from the runtime (`BibuiRuntime.Create().WithSkia()`) to the window and host (`BibuiWindow.Create(runtime).WithSilk()` picks Skia).
+- **Headless rendering and tests** call a renderer directly: render the `DrawList` into pixels, and encode them as a PNG if wanted. `Bibui.Testing` does this with the renderer it is given to keep `Screenshot()`.
 - **Damage tracking stays in the managed rasterizer only.** Before rasterizing, it compares this frame's `DrawList` with the last one, as `DamageFrame` does today with the calls it recorded. The hashes, bounds and replay logic stay; only their input changes. Cached paths hash once, by table id and version. A texture hashes by its handle plus a content version the renderer bumps when the texture is updated. Skia doesn't track damage: drawing is likely cheaper than working out what changed.
 
 ## Getting there without changing a pixel
@@ -167,12 +167,20 @@ Each step's gate is the same: the runtime tests (with the byte-exact `RenderTo`/
 
 - **Callbacks** are `DrawCallback(Box box, DrawContext ctx)`.
 - **`DrawList` access** is read-only spans; only the core writes the list.
+- **`runtime.EndBuild()` ends a frame's building:** it runs the build function given to `Mount`, lays out, and issues the draw calls, recording the `DrawList`. `Mount` stays how an app hands the runtime its UI. When it returns, the frame's input has been consumed, the tree is laid out, and `runtime.DrawList` describes the frame; nothing has been drawn. Drawing is the caller's next step, with its renderer:
+
+  ```csharp
+  runtime.EndBuild();
+  SkiaDraw.Execute(runtime.DrawList, canvas);
+  ```
+
+  This replaces `runtime.Render()` and `runtime.RenderTo(surface)`, which today build, lay out, paint and (for `Render()`) read the pixels back in one call. The runtime's internal `BeginBuild`/`EndBuild` frame markers (tooltip and dropdown bookkeeping, sweeping unused retained boxes) are renamed to make room. The `DrawList` is valid until the next frame starts building.
+- **Pixels and PNGs come from rendering the `DrawList`,** like any other frame: a renderer draws it into pixels in memory, and whoever wants a PNG encodes those (the codec stays in the core). There is no frame-output path in the core: `RenderOutput` and `PngFactory` go. `Bibui.Testing` renders with a renderer it is given (Skia on the CPU by default) to keep `Screenshot()`.
+
+## Later
+
+- **A rad-style frame bracket:** `runtime.BeginBuild(); BuildUi(runtime); runtime.EndBuild();`, with the app running its own build code between the two calls instead of handing the runtime a callback with `Mount`, as the RAD debugger's `ui_begin_build`/`ui_end_build` do. It changes every app's entry point, so it is not part of this rebuild.
 
 ## Open questions
 
 1. **Owner ids:** ops carry no reference to the box that recorded them. One could be added (an `int` per op) if a draw-list dump or the damage-debug overlay needs to name boxes; nothing needs it yet.
-2. **Frames and pixels:** `runtime.Render()` both runs a frame and turns it into pixels. The proposed split:
-   - `runtime.Frame()` builds, lays out and records the `DrawList`;
-   - pixels come from a renderer (`SkiaDraw.Render(list, size)` returns a `RenderOutput`, and likewise for `ManagedDraw`);
-   - `RenderOutput` stays a plain data type in the core, with PNG through the core codec;
-   - `Bibui.Testing`'s `BibuiPage` takes a renderer when it is created (Skia on the CPU by default) and keeps `Screenshot()`.
