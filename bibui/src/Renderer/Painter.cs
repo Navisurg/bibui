@@ -123,12 +123,24 @@ internal sealed class Painter
             if (clips) ctx.PopClip();
         }
 
-        if (node is Box { Draw: { } draw })
+        if (node is Box { Draw: { } draw } box)
         {
-            // A callback's paints are its own: whatever it leaves pushed is dropped.
-            int paints = _drawing.PaintDepth;
-            draw(ctx.For(frame.X, frame.Y, frame.Width, frame.Height));
-            _drawing.PaintDepth = paints;
+            // A callback draws in its box's space, clipped to it: the painter's
+            // translation and clip are pushed around it, and its own pushes sit
+            // above them. Whatever it leaves pushed is popped, and a pop past
+            // its own does nothing, so it can neither leak state into the next
+            // draw nor undo the painter's.
+            float s = ctx.Scale;
+            ctx.PushTransform(Matrix3x2.CreateTranslation(frame.X * s, frame.Y * s));
+            var local = ctx.For(frame.Width, frame.Height);
+            ctx.PushClip(local.Rect);
+            int paints = _drawing.PaintDepth, floor = _drawing.StateFloor;
+            _drawing.StateFloor = _drawing.StateDepth;
+            draw(box, local);
+            while (_drawing.StateDepth > _drawing.StateFloor) local.Pop();
+            (_drawing.StateFloor, _drawing.PaintDepth) = (floor, paints);
+            ctx.PopClip();
+            ctx.PopTransform();
         }
 
         if (fade) ctx.PopOpacity();

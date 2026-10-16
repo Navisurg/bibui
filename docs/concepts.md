@@ -686,8 +686,10 @@ frame is the same image, byte for byte, every time.
 ### Custom drawing
 
 A box can paint itself: set `Box.Draw` to a callback, and the painter calls it
-with a `DrawContext` after the box's decoration and children, inside the box's
-rect. `Draw` is build state like any other. Set it on the box the build
+with the box and a `DrawContext` after the box's decoration and children. The
+callback draws in the box's own space: (0,0) is the box's top-left, and
+anything drawn outside the box is clipped. A clip, transform or opacity the
+callback leaves pushed is popped after it, and so is a paint. `Draw` is build state like any other. Set it on the box the build
 acquired, retained or pooled. The next `BoxFromId` or `Box()` clears it, so a
 box draws only for as long as its build keeps setting the callback. A chart
 that must know when it is hovered draws on its own retained box:
@@ -696,12 +698,13 @@ that must know when it is hovered draws on its own retained box:
 Box chart = runtime.BoxFromId("chart", InteractionKinds.LeftPress);
 Interaction i = runtime.InteractionsFor(chart);
 chart.FillX().FillY();
-chart.Draw = ctx =>
+chart.Draw = (box, ctx) =>
 {
-    var r = ctx.Logical;                          // the box's rect, logical px
+    var r = ctx.Logical;                          // the box's rect, logical px, at (0,0)
     Rgba line = ctx.Resolve(UiColor.Accent);      // a token, resolved at paint
     ctx.DrawPolyline(Points(r), line, 2f);
-    if (i.Hovering) ctx.DrawEdge(i.X, r.Top, i.X, r.Bottom, 1f, ctx.Resolve(UiColor.Border), dashed: true);
+    float x = i.X - box.Rect.X;                   // the pointer is in surface px
+    if (i.Hovering) ctx.DrawEdge(x, r.Top, x, r.Bottom, 1f, ctx.Resolve(UiColor.Border), dashed: true);
 };
 ```
 

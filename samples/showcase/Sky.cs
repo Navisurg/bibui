@@ -41,7 +41,7 @@ internal static class Sky
     /// state when it is acquired again next frame.
     /// </summary>
     public static void PaintOn(Box box, Dome dome, double lst, Mark[] marks, (float X, float Y)? slewFrom, Palette pal, bool grid, float radius, bool reduced)
-        => box.Draw = ctx => Paint(ctx, dome, lst, marks, slewFrom, pal, grid, radius, reduced);
+        => box.Draw = (_, ctx) => Paint(ctx, dome, lst, marks, slewFrom, pal, grid, radius, reduced);
 
     private static void Paint(DrawContext ctx, Dome d, double lst, Mark[] marks, (float X, float Y)? slewFrom, Palette palette,
         bool grid, float radius, bool reduced)

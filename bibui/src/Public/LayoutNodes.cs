@@ -151,9 +151,10 @@ public sealed class Box : UiNode
     public InteractionKinds Claims { get; set; }
 
     /// <summary>
-    /// The box's own drawing, handed a <see cref="DrawContext"/>: what it draws is
-    /// recorded into the frame's draw list in tree order, and drawn by whichever
-    /// renderer executes the list. Every path it hands out comes from the
+    /// The box's own drawing, handed the box and a <see cref="DrawContext"/>: what
+    /// it draws is recorded into the frame's draw list in tree order, and drawn by
+    /// whichever renderer executes the list. It draws in the box's own space:
+    /// (0,0) is the box's top-left, and nothing drawn leaves the box. Every path it hands out comes from the
     /// renderer's caches, and every paint resolves against the backend's, so a
     /// custom component costs what a built-in one costs.
     ///
@@ -179,8 +180,12 @@ public sealed class Box : UiNode
     public float ActiveT { get; internal set; }
 }
 
-/// <summary>Paints custom content for a Box. See <see cref="DrawContext"/>.</summary>
-public delegate void DrawCallback(DrawContext ctx);
+/// <summary>
+/// Paints custom content for <paramref name="box"/>, which is handed in for what
+/// the drawing may read of it (<see cref="Box.HotT"/>, <see cref="Box.ActiveT"/>,
+/// its key). See <see cref="DrawContext"/>.
+/// </summary>
+public delegate void DrawCallback(Box box, DrawContext ctx);
 
 public sealed class Style
 {

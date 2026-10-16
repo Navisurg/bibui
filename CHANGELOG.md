@@ -14,6 +14,16 @@ before it was published.
 
 ### Changed
 
+- **A `Box.Draw` callback is handed its box, and draws in the box's space,
+  clipped to it (breaking).** `DrawCallback` is `(Box box, DrawContext ctx)`:
+  the box is there for its `HotT`, `ActiveT` and key. (0,0) is the box's
+  top-left, `ctx.Rect` and `ctx.Logical` start at (0,0), and nothing a callback
+  draws leaves its box. A clip, transform or opacity it leaves pushed is popped
+  after it, and a pop past its own does nothing. Code that offset its draws by
+  `ctx.Rect`/`ctx.Logical` is unchanged; a callback that drew at surface
+  coordinates subtracts the box's position, and one that drew across its own
+  edges (a stroke centred on the edge, a ring around an end point) insets.
+
 - **Text is measured and shaped by bibui's own FreeType and HarfBuzz; a raster
   backend only draws glyphs (breaking).** Layout comes out the same whichever
   backend draws, and what is drawn is what was measured.

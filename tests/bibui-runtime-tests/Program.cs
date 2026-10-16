@@ -568,7 +568,7 @@ Run("Animate: travels to a moved target, then settles and stops asking", () =>
         () => new Box
         {
             Id = "anim",
-            Draw = ctx => observed = ctx.Animate(key, target, speed: 12f, epsilon: 0.01f),
+            Draw = (_, ctx) => observed = ctx.Animate(key, target, speed: 12f, epsilon: 0.01f),
         }.Px(100f, 100f),
         surface: new SurfaceOptions { Width = 100, Height = 100 });
 
@@ -2912,7 +2912,7 @@ Run("DrawList: recording a frame after the first allocates nothing", () =>
             using (runtime.PushParent(card)) runtime.Text("inside a clipped, faded card");
             var drawn = runtime.Box();
             drawn.Px(80f, 40f);
-            drawn.Draw = ctx => ctx.DrawCheckMark(0f, 0f, 20f, 20f, new Rgba(34, 197, 94), 2f);
+            drawn.Draw = (_, ctx) => ctx.DrawCheckMark(0f, 0f, 20f, 20f, new Rgba(34, 197, 94), 2f);
         }
         return tree = page;
     }, new SurfaceOptions { Width = 400, Height = 300 });
@@ -2952,6 +2952,40 @@ Run("Textures: drawn, updated and released on the managed rasterizer", () =>
     TextureContract("managed", managed, (px, w, h) => managed.CreateTexture(px, w, h), (t, px, w, h) => managed.UpdateTexture(t, px, w, h), managed.ReleaseTexture);
 });
 
+Run("Box.Draw: a callback draws in its box's space, clipped to the box, and its state is its own", () =>
+{
+    // A 40×40 box at (30,20). The callback draws a rect from its own origin
+    // well past its bottom-right, pushes a clip it never pops, and pops twice
+    // more than it pushed. A sibling after it must still draw unclipped.
+    Box? handed = null;
+    var red = new Rgba(255, 0, 0);
+    var green = new Rgba(0, 255, 0);
+    var drawn = new Box
+    {
+        Draw = (box, ctx) =>
+        {
+            handed = box;
+            ctx.DrawRect(new RectF(0f, 0f, 200f, 200f), 0f, Paint.Filled(red));
+            ctx.PushClip(new RectF(0f, 0f, 1f, 1f));
+            ctx.PopTransform();
+            ctx.PopTransform();
+        },
+    }.Px(40f, 40f);
+    var after = new Box { Draw = (_, ctx) => ctx.DrawRect(ctx.Rect, 0f, Paint.Filled(green)) }.Px(40f, 40f);
+    var root = Arrange.Row(drawn, after).Padded(new EdgeInsets(20f, 0f, 0f, 30f));
+    var renderer = new BibuiRenderer(new SkiaRasterBackend());
+    var surface = new SurfaceOptions { Width = 160, Height = 100, ScaleFactor = 1f };
+    renderer.Layout(root, surface, ThemeLoader.NeutralDark());
+    var px = renderer.Render(root, surface, ThemeLoader.NeutralDark()).RawBgraBytes;
+    bool Is(int x, int y, Rgba c) { int i = (y * 160 + x) * 4; return px[i] == c.B && px[i + 1] == c.G && px[i + 2] == c.R; }
+
+    IsTrue(ReferenceEquals(drawn, handed), "the callback is handed its box");
+    IsTrue(Is(30, 20, red) && Is(69, 59, red), "(0,0) is the box's top-left, and the box is drawn edge to edge");
+    IsTrue(!Is(29, 20, red) && !Is(30, 19, red), "nothing is drawn above or left of the box");
+    IsTrue(!Is(30, 60, red) && !Is(110, 40, red), "nor below or right of it: the rect is clipped to the box");
+    IsTrue(Is(70, 20, green) && Is(109, 59, green), "the next box draws whole: the clip left pushed was popped, and the extra pops undid nothing of the painter's");
+});
+
 Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and gradients", () =>
 {
     // The former Skia escape hatch: paints are values, paths and
@@ -2959,7 +2993,7 @@ Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and 
     var renderer = new BibuiRenderer(new SkiaRasterBackend());
     var root = new Box
     {
-            Draw = ctx =>
+            Draw = (_, ctx) =>
             {
                 var r = ctx.Rect;
                 var shader = Bibui.Raster.RasterShader.Linear(new System.Numerics.Vector2(r.Left, r.Top),
@@ -2999,11 +3033,11 @@ Run("Box.Draw: a retained box draws while its build says so, and acquiring it ag
     {
         var box = runtime.BoxFromId("drawn", InteractionKinds.LeftPress);
         box.Px(60f, 60f);
-        if (draw) box.Draw = _ => retainedCalls++;
+        if (draw) box.Draw = (_, _) => retainedCalls++;
         using (runtime.PushParent(box))
         {
             var inner = runtime.Box().Px(20f, 20f);
-            if (draw) inner.Draw = _ => pooledCalls++;
+            if (draw) inner.Draw = (_, _) => pooledCalls++;
             pooled = inner;
         }
         retained = box;
@@ -3035,7 +3069,7 @@ Run("DrawContext.Resolve: follows a theme changed between the build and the pain
     ThemeTokens? seen = null;
     var root = new Box
     {
-        Draw = ctx =>
+        Draw = (_, ctx) =>
         {
             seen = ctx.Theme;
             accent = ctx.Resolve(UiColor.Accent);
