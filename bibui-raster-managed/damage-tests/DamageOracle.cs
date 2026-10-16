@@ -530,9 +530,9 @@ internal static class DamageOracle
                         if (frame % 10 >= 5)
                         {
                             var own = new VectorPath();
-                            own.MoveTo(ctx.Rect.Left + 400, ctx.Rect.Top + 10);
-                            own.LineTo(ctx.Rect.Left + 460, ctx.Rect.Top + 100);
-                            own.LineTo(ctx.Rect.Left + 380, ctx.Rect.Top + 100);
+                            own.MoveTo(400, 10);
+                            own.LineTo(460, 100);
+                            own.LineTo(380, 100);
                             own.Close();
                             ctx.DrawPath(own, Paint.Filled(new Rgba(234, 179, 8)));
                         }
@@ -559,14 +559,13 @@ internal static class DamageOracle
                     Draw = (_, ctx) =>
                     {
                         // The scene is at scale 1, so logical and physical px agree.
-                        float l = ctx.Rect.Left, t = ctx.Rect.Top;
                         var white = Paint.Filled(new Rgba(255, 255, 255));
                         var backend = (ManagedRasterBackend)ctx.Backend;
                         if (image.IsNone) image = backend.CreateTexture(Checkerboard(16), 16, 16);
 
-                        ctx.DrawTexture(image, new RectF(l + 20, t + 20, l + 84, t + 84), white);
-                        float x = l + 120 + frame / 4 % 10 * 8;
-                        ctx.DrawTexture(image, new RectF(x, t + 20, x + 48, t + 68), white);
+                        ctx.DrawTexture(image, new RectF(20, 20, 84, 84), white);
+                        float x = 120 + frame / 4 % 10 * 8;
+                        ctx.DrawTexture(image, new RectF(x, 20, x + 48, 68), white);
 
                         // The same array, rewritten in place: its content is what is drawn.
                         for (int i = 0; i < 32 * 32; i++)
@@ -579,22 +578,22 @@ internal static class DamageOracle
                         // One handle, its pixels updated every frame: damage must see the change.
                         if (video.IsNone) video = backend.CreateTexture(pixels, 32, 32);
                         else backend.UpdateTexture(video, pixels, 32, 32);
-                        ctx.DrawTexture(video, new RectF(l + 260, t + 20, l + 324, t + 84), white);
+                        ctx.DrawTexture(video, new RectF(260, 20, 324, 84), white);
 
                         Span<Vector2> pts = stackalloc Vector2[8];
-                        for (int i = 0; i < 8; i++) pts[i] = new(l + 30 + i * 20, t + 120 + (i == frame % 8 ? 6 : 0));
+                        for (int i = 0; i < 8; i++) pts[i] = new(30 + i * 20, 120 + (i == frame % 8 ? 6 : 0));
                         ctx.DrawPoints(PointMode.Points, pts, Paint.Stroked(new Rgba(234, 179, 8), 4f));
 
                         var font = new Font(14f, null, 400, 1f);
-                        ctx.DrawText($"frame {frame / 6}", l + 30, t + 156, font, new Rgba(255, 255, 255));
-                        ctx.DrawText("glyphs", l + 200, t + 156, font, new Rgba(56, 189, 248));
+                        ctx.DrawText($"frame {frame / 6}", 30, 156, font, new Rgba(255, 255, 255));
+                        ctx.DrawText("glyphs", 200, 156, font, new Rgba(56, 189, 248));
 
-                        ctx.PushTransform(Matrix3x2.CreateScale(1f + frame / 10 % 3 * 0.25f, 1f) * Matrix3x2.CreateTranslation(l + 400, t + 120));
+                        ctx.PushTransform(Matrix3x2.CreateScale(1f + frame / 10 % 3 * 0.25f, 1f) * Matrix3x2.CreateTranslation(400, 120));
                         ctx.DrawRect(new RectF(0, 0, 40, 30), 6, Paint.Filled(new Rgba(34, 197, 94)));
                         ctx.PopTransform();
                         // The same paint for what follows, pushed once.
                         ctx.PushPaint(Paint.Filled(new Rgba(239, 68, 68)));
-                        ctx.PushTransform(Matrix3x2.CreateTranslation(l + 400, t + 180 + frame % 5));
+                        ctx.PushTransform(Matrix3x2.CreateTranslation(400, 180 + frame % 5));
                         ctx.DrawRect(new RectF(0, 0, 40, 30), 6);
                         ctx.PopTransform();
                         ctx.PopPaint();
