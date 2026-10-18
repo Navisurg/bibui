@@ -1,8 +1,10 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using Bibui.Gl;
+using CoreAnimation;
+using CoreFoundation;
+using Foundation;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.SDL;
@@ -104,7 +106,13 @@ public sealed class SilkIosWindow : IDisposable
     public void Close() => Native.Close();
 
     /// <summary>Makes a waiting <see cref="BeginFrame"/> return. Safe from any thread.</summary>
-    public void Wake() => Native.ContinueEvents();
+    public void Wake()
+    {
+        Volatile.Write(ref _woken, 1);
+        // Something for the main run loop to handle, so a wait in it returns;
+        // posted before the wait begins, it is handled as the wait begins.
+        DispatchQueue.MainQueue.DispatchAsync(static () => { });
+    }
 
     /// <summary>
     /// Brings up the on-screen keyboard and starts the text it types arriving as
@@ -210,11 +218,61 @@ public sealed class SilkIosWindow : IDisposable
     }
 
     // ── Pacing ───────────────────────────────────────────────────────────────
-    // EndFrame sleeps out what is left of the frame at the runtime's TargetHz,
-    // which also sets what a second means to an animation.
+    // Frames are paced by the display: a CADisplayLink at the screen's own
+    // rate (up to 120 Hz on ProMotion, varying as iOS throttles it). A frame
+    // begins on the link's tick; while nothing is owed the link is paused and
+    // the loop waits on input, so an idle app runs no frames.
+    //
+    // Each tick says how long the frame being drawn lasts on screen, nominally
+    // (TargetTimestamp - Timestamp), and that sets the runtime's TargetHz, so
+    // its Dt is one refresh at the rate the screen is running: nominal, as
+    // Dt always is, never the time that passed (a frame after an idle wait is
+    // one ordinary refresh).
 
-    internal readonly Stopwatch Clock = Stopwatch.StartNew();
-    internal double NextFrameMs;
+    private CADisplayLink? _link;
+    private bool _ticked;
+
+    /// <summary>The rate the screen refreshes at now, from the display link's last tick: 60, or up to 120 on ProMotion.</summary>
+    public float RefreshHz { get; private set; } = 60f;
+
+    private void StartDisplayLink()
+    {
+        _link = CADisplayLink.Create(() =>
+        {
+            var link = _link!;
+            double frame = link.TargetTimestamp - link.Timestamp;
+            if (frame > 0) RefreshHz = (float)Math.Round(1.0 / frame);
+            _ticked = true;
+        });
+        // As fast as the screen goes. Above 60 Hz an iPhone also needs
+        // CADisableMinimumFrameDurationOnPhone in the app's Info.plist.
+        int max = (int)UIScreen.MainScreen.MaximumFramesPerSecond;
+        _link.PreferredFrameRateRange = new CAFrameRateRange { Minimum = Math.Min(60, max), Maximum = max, Preferred = max };
+        _link.Paused = true;
+        _link.AddToRunLoop(NSRunLoop.Main, NSRunLoopMode.Common);
+    }
+
+    // Runs UIKit's run loop until the display link ticks: touches that arrive
+    // meanwhile reach SDL's view, which queues them for the poll that follows.
+    private void WaitForRefresh()
+    {
+        _ticked = false;
+        _link!.Paused = false;
+        while (!_ticked && !_inBackground && !IsClosing)
+            CFRunLoop.Current.RunInMode(CFRunLoop.ModeDefault, 0.1, true);
+    }
+
+    // Waits for input: runs UIKit's run loop, asleep in the kernel, until SDL
+    // has queued an event (a touch, a key, the app moving to the background)
+    // or something woke the loop. Not Silk's event-driven DoEvents: on SDL it
+    // polls until an event comes, a core spinning the whole time the app idles.
+    private int _woken;
+
+    private void WaitForInput()
+    {
+        while (!IsClosing && Sdl.HasEvents(0, 0xFFFF) == SdlBool.False && Interlocked.Exchange(ref _woken, 0) == 0)
+            CFRunLoop.Current.RunInMode(CFRunLoop.ModeDefault, 1.0, true);
+    }
 
     /// <summary>
     /// Closes the window and destroys it with its GL context. Dispose a renderer
@@ -223,6 +281,7 @@ public sealed class SilkIosWindow : IDisposable
     public unsafe void Dispose()
     {
         if (Runtime.WakeUp == Wake) Runtime.WakeUp = null;
+        _link?.Invalidate();
         if (s_current == this)
         {
             Sdl.DelEventWatch(new PfnEventFilter(&OnSdlEvent), null);
@@ -271,10 +330,10 @@ public sealed class SilkIosWindow : IDisposable
             PreferredBitDepth = new Vector4D<int>(8, 8, 8, 8),
             // A renderer may clip with the stencil (Skia's GL backend does).
             PreferredStencilBufferBits = 8,
-            VSync = true,
-            // DoEvents waits on the event queue instead of polling it, so an idle
-            // app runs no frames; ContinueEvents wakes it from any thread.
-            IsEventDriven = true,
+            // Paced by the display link, not the swap, and waiting on input
+            // by itself (see Pacing): DoEvents only takes what is queued.
+            VSync = false,
+            IsEventDriven = false,
             FramesPerSecond = 0.0,
             UpdatesPerSecond = 0.0,
         };
@@ -291,6 +350,7 @@ public sealed class SilkIosWindow : IDisposable
         native.FocusChanged += focused => { if (!focused) window.Events.Add(WindowEvent.FocusLost()); };
         native.Initialize();
         window.WireInput();
+        window.StartDisplayLink();
 
         s_current = window;
         Sdl.AddEventWatch(new PfnEventFilter(&OnSdlEvent), null);
@@ -325,28 +385,34 @@ public sealed class SilkIosWindow : IDisposable
     /// <summary>
     /// Waits until there is a frame to draw — input arrived, or the runtime owes
     /// frames (<see cref="BibuiRuntime.RequestFrame"/>: an animation, a hot
-    /// reload, a worker) — and hands what happened to the runtime. Waits through
-    /// any time the app spends in the background, where it may not draw. False
-    /// once the window is closing: the loop ends.
+    /// reload, a worker) — then for the screen's next refresh, and hands what
+    /// happened to the runtime, with its <see cref="BibuiRuntime.TargetHz"/> set
+    /// to the rate the screen refreshes at. Waits through any time the app
+    /// spends in the background, where it may not draw. False once the window
+    /// is closing: the loop ends.
     /// </summary>
     public static bool BeginFrame(SilkIosWindow window, BibuiRuntime runtime)
     {
         while (true)
         {
             if (window.IsClosing) return false;
-            // A frame owed must not wait on unrelated input.
-            if (runtime.FramesRequested > 0 && !window._inBackground) window.Wake();
+            bool owed = window.Events.Count > 0 || runtime.FramesRequested > 0;
+            if (window._inBackground || !owed)
+            {
+                // Nothing to draw, or nowhere to draw it: no refreshes, wait on input.
+                window._link!.Paused = true;
+                window.WaitForInput();
+                window.Native.DoEvents();
+                continue;
+            }
+            window.WaitForRefresh();
             window.Native.DoEvents();
             if (window.IsClosing) return false;
             if (window._inBackground) continue;
-            // Awake is not the same as having something to draw: a focus change
-            // or a wake with nothing owed draws nothing, and waits again.
-            if (window.Events.Count > 0 || runtime.FramesRequested > 0)
-            {
-                // Taken before the frame is built, so what the build asks for is still owed after it.
-                runtime.ConsumeFrame();
-                return true;
-            }
+            runtime.TargetHz = window.RefreshHz;
+            // Taken before the frame is built, so what the build asks for is still owed after it.
+            runtime.ConsumeFrame();
+            return true;
         }
     }
 
@@ -356,14 +422,10 @@ public sealed class SilkIosWindow : IDisposable
     /// <summary>Shows what was drawn into the framebuffer: presents the view's renderbuffer.</summary>
     public static void EndDraw(SilkIosWindow window) => window.Native.GLContext!.SwapBuffers();
 
-    /// <summary>Paces the loop to the runtime's <see cref="BibuiRuntime.TargetHz"/>: sleeps until the next frame is due.</summary>
-    public static void EndFrame(SilkIosWindow window, BibuiRuntime runtime)
-    {
-        double targetMs = 1000.0 / runtime.TargetHz;
-        window.NextFrameMs += targetMs;
-        double remaining = window.NextFrameMs - window.Clock.Elapsed.TotalMilliseconds;
-        if (remaining > 1) System.Threading.Thread.Sleep((int)remaining);
-        // Fell more than a frame behind (a stall, or an idle wait): start again from now.
-        else if (remaining < -targetMs) window.NextFrameMs = window.Clock.Elapsed.TotalMilliseconds;
-    }
+    /// <summary>
+    /// Ends the frame. Pacing is <see cref="BeginFrame"/>'s, which starts each
+    /// frame on the display's refresh; here so a loop written for
+    /// <c>SilkWindow</c> runs unchanged.
+    /// </summary>
+    public static void EndFrame(SilkIosWindow window, BibuiRuntime runtime) { }
 }

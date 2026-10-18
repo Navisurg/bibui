@@ -13,6 +13,9 @@
 	<!-- A trackpad or mouse (an iPad's) reaches SDL as a pointer, not as touches. -->
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Lets the display link run above 60 Hz on a ProMotion iPhone (iPads need no key). -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>UIRequiresFullScreen</key>
 	<true/>
 	<key>UISupportedInterfaceOrientations</key>
