@@ -2845,6 +2845,19 @@ void LookupAllocatesNothing(string name, Bibui.Draw.DrawToPixels draw, CreateTex
     Eq(0L, allocated, $"{name}: a lookup drawn again allocates nothing (it allocated {allocated} bytes)");
 }
 
+Run("Texture lookups: LookupAt is total: an index that names no lookup reads None", () =>
+{
+    var list = new Bibui.Draw.DrawList();
+    ref var plain = ref list.Push(Bibui.Draw.DrawOpKind.Texture);
+    IsTrue(list.LookupAt(plain.Resource).IsNone, $"a texture op pushed without a table reads None (Resource {plain.Resource})");
+    var table = new Bibui.Draw.TextureHandle(7, 1);
+    int at = list.AddLookup(new(table, Bibui.Draw.TextureChannel.R));
+    Eq(table, list.LookupAt(at).Table, "an added lookup reads back");
+    IsTrue(list.LookupAt(-1).IsNone && list.LookupAt(at + 1).IsNone && list.LookupAt(int.MinValue).IsNone, "-1, past the end and int.MinValue read None");
+    list.Reset();
+    IsTrue(list.LookupAt(at).IsNone, "after Reset the frame's lookups are gone");
+});
+
 Run("Texture lookups: drawn again, a lookup allocates nothing, on Skia and the managed rasterizer", () =>
 {
     using var skia = new SkiaCpuRenderer();

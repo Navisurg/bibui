@@ -112,9 +112,10 @@ internal sealed class SkiaOps : IDisposable
     // drawn in white, its default look, whatever colour the paint has.
     private void Texture(SKCanvas canvas, SkiaTexture texture, in DrawOp op, DrawList list)
     {
-        if (op.Resource >= 0)
+        var lookup = list.LookupAt(op.Resource);
+        if (!lookup.IsNone)
         {
-            Lookup(canvas, texture, list.LookupAt(op.Resource), op);
+            Lookup(canvas, texture, lookup, op);
             return;
         }
         var paint = texture.Format == TextureFormat.A8

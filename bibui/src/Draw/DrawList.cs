@@ -41,7 +41,7 @@ public enum DrawOpKind : byte
     /// <summary>
     /// <see cref="DrawOp.Texture"/> scaled into <see cref="DrawOp.Rect"/>: with its
     /// format's default look, or through <see cref="DrawList.LookupAt"/>(Resource)
-    /// when Resource is not -1.
+    /// when that is not <see cref="TextureLookup.None"/>.
     /// </summary>
     Texture,
     /// <summary>Blurs what is painted in <see cref="DrawOp.Region"/> by A and draws it back clipped to <see cref="DrawOp.Rect"/>.</summary>
@@ -186,8 +186,13 @@ public sealed class DrawList
     /// <summary>The face a glyph op draws.</summary>
     public FontFace FaceAt(int index) => _faces[index];
 
-    /// <summary>The table a texture op draws through, when its <see cref="DrawOp.Resource"/> is not -1.</summary>
-    public TextureLookup LookupAt(int index) => _lookups[index];
+    /// <summary>
+    /// The table a texture op draws through: <see cref="TextureLookup.None"/> for
+    /// any index that names none (-1 included), so a renderer asks with the op's
+    /// <see cref="DrawOp.Resource"/> as it is.
+    /// </summary>
+    public TextureLookup LookupAt(int index) =>
+        index >= 0 && index < _lookupCount ? _lookups[index] : TextureLookup.None;
 
     // ── Recording, the core's side ───────────────────────────────────────────
 

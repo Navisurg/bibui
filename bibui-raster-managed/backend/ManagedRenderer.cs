@@ -316,7 +316,7 @@ public sealed class ManagedRenderer : IDisposable
             case DrawOpKind.Points: Points(c, op.Mode, list.Points.Slice(op.Start, op.Count), Convert(op, list, c)); break;
             case DrawOpKind.Texture:
                 if (_textures.Get(op.Texture) is not { } img) break;
-                Bitmap(c, img, op.Resource >= 0 ? list.LookupAt(op.Resource) : TextureLookup.None, op);
+                Bitmap(c, img, list.LookupAt(op.Resource), op);
                 break;
             case DrawOpKind.BackdropBlur: BackdropBlur(c, op.Region, op.Rect, op.A); break;
             case DrawOpKind.Glyphs:
