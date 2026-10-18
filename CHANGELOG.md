@@ -377,6 +377,29 @@ before it was published.
 
 ### Added
 
+- **Groups: blend modes and colour matrices.** `ctx.PushBlendMode(mode)`
+  draws until `PopBlendMode` into a layer and composites it onto what is
+  under it with the mode: `SrcOver`, `Multiply`, `Plus`, `Screen`, `Overlay`
+  or `Src`, Skia's formulas on premultiplied colour. `ctx.PushColorMatrix(m)`
+  composites its layer through a 4×5 matrix, row by row, on straight colour
+  in 0..1 with the fifth column a translation in 0..1. `PushOpacity` is
+  shorthand for a matrix that only scales alpha. A renderer makes no layer
+  for `SrcOver` or the identity, and draws an alpha-only matrix as the
+  opacity layer it drew before, so existing pixels do not move.
+  - On the list, `DrawOpKind.PushOpacity` and `DrawOp.Alpha` are gone (breaking
+    for a renderer of your own): the ops are `PushBlendMode` (`DrawOp.Blend`)
+    and `PushColorMatrix` (20 floats in the payload). `ColorMatrices.IsIdentity`
+    and `IsOpacity` say when a matrix needs no layer, or only an alpha.
+  - With damage tracking, a `Src` layer, or a matrix that adds alpha, writes
+    all of its clip: a partial repaint holds it to the repainted rect.
+- **A texture can be drawn through a lookup table.**
+  `ctx.DrawTexture(texture, dest, paint, new TextureLookup(table, TextureChannel.R))`:
+  each pixel's raw channel (as stored: R8's R, A8's A, RG8's R and G,
+  RGBA8's straight channels) picks the table's entry, a 1-D colormap from one
+  channel or a 2-D table from two. A channel the format lacks reads 0. The
+  source is filtered by the paint; the table is read exactly. A lookup drawn
+  again allocates nothing, on every renderer.
+
 - `runtime.Column()` and `runtime.Row()`: a pooled box along Y or X, linked
   under the parent in scope; push it to build into it:
   `var column = runtime.ColumnFit(); using (runtime.PushParent(column)) { ... }`.

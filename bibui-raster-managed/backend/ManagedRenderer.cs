@@ -307,7 +307,19 @@ public sealed class ManagedRenderer : IDisposable
             case DrawOpKind.Clear: c.Clear(op.Color.Argb); break;
             case DrawOpKind.PushClip: c.Save(); c.ClipRect(ToRect(op.Rect)); break;
             case DrawOpKind.PushTransform: c.Save(); Transform(c, op.Matrix); break;
-            case DrawOpKind.PushOpacity: c.SaveLayer(op.Alpha); break;
+            case DrawOpKind.PushBlendMode:
+                // SrcOver composites as if there were no layer: none is made.
+                if (op.Blend == BlendMode.SrcOver) c.Save();
+                else c.SaveLayer((LayerMode)op.Blend);
+                break;
+            case DrawOpKind.PushColorMatrix:
+            {
+                var m = list.Floats.Slice(op.Start, op.Count);
+                if (ColorMatrices.IsIdentity(m)) c.Save();
+                else if (ColorMatrices.IsOpacity(m, out byte alpha)) c.SaveLayer(alpha);
+                else c.SaveLayer(m);
+                break;
+            }
             case DrawOpKind.Pop: c.Restore(); break;
             case DrawOpKind.Rect:
                 c.DrawRoundRect(ToRect(op.Rect).Sorted(), op.A, op.B, Convert(op, list, c));

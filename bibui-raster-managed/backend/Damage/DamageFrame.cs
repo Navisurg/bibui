@@ -7,8 +7,10 @@ namespace Bibui.Raster.Managed.Backend.Damage;
 internal struct DamageOp
 {
     public bool Draws;          // touches pixels (and is subject to the damage clip)
-    public int Match;           // PushOpacity: the index of its Pop
-    public PixelRect Bounds;    // device px every pixel it may touch lies in (PushOpacity: its contents')
+    public bool Layer;          // a group the renderer composites as a layer
+    public bool ClearCounts;    // Layer: a transparent pixel of it composites to something (Src, a matrix adding alpha)
+    public int Match;           // Layer: the index of its Pop
+    public PixelRect Bounds;    // device px every pixel it may touch lies in (Layer: its contents', or its clip's when ClearCounts)
     public ulong Hash;          // a draw: its content under the state it ran in
     public PixelRect Covered;   // device px it writes whatever lay under them (an opaque fill's interior, the clear); empty for none
 }
@@ -17,7 +19,7 @@ internal struct DamageOp
 /// One frame's signature: for every op of its <see cref="DrawList"/>, whether it
 /// draws, a hash of everything that decides its pixels — its arguments, paint,
 /// text, path content, and the state it runs under (transform, clip, enclosing
-/// opacity layers) — and the device bounds it can touch. Two frames say where
+/// layers) — and the device bounds it can touch. Two frames say where
 /// their pixels can differ (<see cref="DamageSince"/>) without either being
 /// drawn, and a frame redraws its list onto a surface that still holds an
 /// earlier one, only inside the rects it is given (<see cref="Replay"/>).
@@ -52,7 +54,7 @@ internal sealed class DamageFrame
         public Matrix3x2 M;
         public float CL, CT, CR, CB;   // device clip, conservative (rounded out)
         public ulong Layers;
-        public int LayerOp;            // the PushOpacity this level opened, or -1
+        public int LayerOp;            // the layer group this level opened, or -1
     }
 
     private State _s;
@@ -61,9 +63,13 @@ internal sealed class DamageFrame
     private ulong _stateHash;
     private bool _stateDirty;
 
-    // Draw bounds still open per layer level, to give a PushOpacity the bounds
+    // Draw bounds still open per layer level, to give a layer the bounds
     // of what it holds when it is popped.
     private PixelRect[] _layerBounds = new PixelRect[32];
+
+    // Replay: the Pops after which a held-to-the-rect layer's extra save is undone, innermost last.
+    private int[] _replayClose = new int[8];
+    private int _replayCloseCount;
 
     // A run of text's metrics, per face and size, for the frame's life and after.
     private readonly Dictionary<(int, float), TextMetrics> _metrics = [];
@@ -119,12 +125,28 @@ internal sealed class DamageFrame
                     _s.M = op.Matrix * _s.M;
                     _stateDirty = true;
                     break;
-                case DrawOpKind.PushOpacity:
+                case DrawOpKind.PushBlendMode:
+                    // SrcOver is no layer: the renderers only save.
+                    if (op.Blend == BlendMode.SrcOver) { Push(-1); break; }
+                    d.Layer = true;
+                    d.ClearCounts = op.Blend == BlendMode.Src;
                     d.Match = -1;
                     Push(k);
-                    _s.Layers = Hash64.Mix(Hash64.Mix(_s.Layers, (ulong)op.Alpha), (ulong)_depth);
+                    _s.Layers = Hash64.Mix(Hash64.Mix(Hash64.Mix(_s.Layers, 0xB1E2UL), (ulong)op.Blend), (ulong)_depth);
                     _stateDirty = true;
                     break;
+                case DrawOpKind.PushColorMatrix:
+                {
+                    var m = list.Floats.Slice(op.Start, op.Count);
+                    if (ColorMatrices.IsIdentity(m)) { Push(-1); break; }
+                    d.Layer = true;
+                    d.ClearCounts = m[19] > 0f;
+                    d.Match = -1;
+                    Push(k);
+                    _s.Layers = Hash64.Mix(Hash64.Mix(Hash64.Mix(_s.Layers, 0xC0105UL), m), (ulong)_depth);
+                    _stateDirty = true;
+                    break;
+                }
                 case DrawOpKind.Pop:
                     Pop(k);
                     break;
@@ -248,6 +270,9 @@ internal sealed class DamageFrame
         {
             ref var lop = ref Ops[layerOp];
             lop.Match = k;
+            // A layer whose clear pixels count writes all of the clip it was pushed under.
+            if (lop.ClearCounts)
+                inner = Clamp(new PixelRect((int)MathF.Floor(_s.CL), (int)MathF.Floor(_s.CT), (int)MathF.Ceiling(_s.CR), (int)MathF.Ceiling(_s.CB)));
             lop.Bounds = inner;
         }
         // What was drawn inside counts toward the level that holds it.
@@ -613,11 +638,33 @@ internal sealed class DamageFrame
                 {
                     case DrawOpKind.Clear:
                         continue;
-                    case DrawOpKind.PushOpacity when k < from || !Intersects(op.Bounds, r):
+                    case DrawOpKind.PushBlendMode or DrawOpKind.PushColorMatrix when op.Layer && (k < from || !Intersects(op.Bounds, r)):
                         k = op.Match;   // the whole layer is covered or lands outside: skip to its Pop, and past it
                         continue;
                 }
-                if (!op.Draws) { renderer.Exec(list, k, c); continue; }
+                if (!op.Draws)
+                {
+                    // A layer whose clear pixels count would write all of its
+                    // clip on the way back: held to the rect, its extra save
+                    // undone after its Pop.
+                    if (op.ClearCounts)
+                    {
+                        var cm = c.Matrix;
+                        c.Save();
+                        c.SetMatrix(Matrix3x2.Identity);
+                        c.ClipRect(rect);
+                        c.SetMatrix(cm);
+                        if (_replayCloseCount == _replayClose.Length) Array.Resize(ref _replayClose, _replayClose.Length * 2);
+                        _replayClose[_replayCloseCount++] = op.Match;
+                    }
+                    renderer.Exec(list, k, c);
+                    if (_replayCloseCount > 0 && _replayClose[_replayCloseCount - 1] == k)
+                    {
+                        _replayCloseCount--;
+                        c.Restore();
+                    }
+                    continue;
+                }
                 if (k < from || !Intersects(op.Bounds, r)) continue;
                 // The rect clips each draw, not the frame, so an opacity layer is
                 // allocated over the clip it had in the whole paint. Content the

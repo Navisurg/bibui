@@ -54,7 +54,19 @@ internal sealed class SkiaOps : IDisposable
                 case DrawOpKind.Clear: canvas.Clear(op.Color.ToSk()); break;
                 case DrawOpKind.PushClip: canvas.Save(); canvas.ClipRect(op.Rect.ToSk()); break;
                 case DrawOpKind.PushTransform: canvas.Save(); Transform(canvas, op.Matrix); break;
-                case DrawOpKind.PushOpacity: canvas.SaveLayer(Paint(new PaintSpec { Color = new Rgba(0, 0, 0, op.Alpha) })); break;
+                case DrawOpKind.PushBlendMode:
+                    // SrcOver composites as if there were no layer: none is made.
+                    if (op.Blend == BlendMode.SrcOver) canvas.Save();
+                    else canvas.SaveLayer(BlendPaint(op.Blend));
+                    break;
+                case DrawOpKind.PushColorMatrix:
+                {
+                    var m = list.Floats.Slice(op.Start, op.Count);
+                    if (ColorMatrices.IsIdentity(m)) canvas.Save();
+                    else if (ColorMatrices.IsOpacity(m, out byte alpha)) canvas.SaveLayer(Paint(new PaintSpec { Color = new Rgba(0, 0, 0, alpha) }));
+                    else canvas.SaveLayer(MatrixPaint(m));
+                    break;
+                }
                 case DrawOpKind.Pop: canvas.Restore(); break;
                 case DrawOpKind.Rect: canvas.DrawRoundRect(op.Rect.ToSk(), op.A, op.B, Paint(op, list)); break;
                 case DrawOpKind.Line: canvas.DrawLine(op.A, op.B, op.C, op.D, Paint(op, list)); break;
@@ -79,6 +91,7 @@ internal sealed class SkiaOps : IDisposable
         _paths.EndFrame();
         _payloadPaths.EndFrame();
         _lookupShaders.EndFrame();
+        _matrixPaints.EndFrame();
     }
 
     // A translation as a translation, a uniform scale after it as a scale, and
@@ -108,6 +121,35 @@ internal sealed class SkiaOps : IDisposable
             ? Paint(op.Paint with { Color = new Rgba(255, 255, 255, op.Paint.Color.A) }, op.MaskBlurSigma, op.ImageBlurSigma)
             : Paint(op, list);
         canvas.DrawImage(texture.Image, op.Rect.ToSk(), op.Paint.FilterQuality.ToSk(), paint);
+    }
+
+    // ── Groups ───────────────────────────────────────────────────────────────
+    // A layer's paint per blend mode, and per colour matrix by content: made
+    // once, so pushing a group allocates nothing frame to frame.
+
+    private readonly SKPaint?[] _blendPaints = new SKPaint?[6];
+    private readonly ResourceCache<UInt128, SKPaint> _matrixPaints = new();
+
+    private SKPaint BlendPaint(BlendMode mode) => _blendPaints[(int)mode] ??= new SKPaint
+    {
+        BlendMode = mode switch
+        {
+            BlendMode.Multiply => SKBlendMode.Multiply,
+            BlendMode.Plus => SKBlendMode.Plus,
+            BlendMode.Screen => SKBlendMode.Screen,
+            BlendMode.Overlay => SKBlendMode.Overlay,
+            BlendMode.Src => SKBlendMode.Src,
+            _ => SKBlendMode.SrcOver,
+        },
+    };
+
+    private SKPaint MatrixPaint(ReadOnlySpan<float> m)
+    {
+        var key = System.IO.Hashing.XxHash128.HashToUInt128(MemoryMarshal.AsBytes(m));
+        if (_matrixPaints.TryGet(key, out var hit)) return hit;
+        // The paint holds its own reference to the filter.
+        using var filter = SKColorFilter.CreateColorMatrix(m.ToArray());
+        return _matrixPaints.Add(key, new SKPaint { ColorFilter = filter });
     }
 
     // ── Lookups ──────────────────────────────────────────────────────────────
@@ -392,6 +434,8 @@ internal sealed class SkiaOps : IDisposable
         _builder.Dispose();
         _blobBuilder.Dispose();
         _lookupShaders.Dispose();
+        _matrixPaints.Dispose();
+        foreach (var paint in _blendPaints) paint?.Dispose();
         _lookupPaint.Dispose();
         _lookupUniforms?.Dispose();
         _lookupChildren?.Dispose();

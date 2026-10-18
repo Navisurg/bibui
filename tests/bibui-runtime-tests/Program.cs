@@ -2865,6 +2865,129 @@ Run("Texture lookups: a texture's raw channels pick a table's entries, on the ma
     LookupContract("managed", managed.Draw, managed.CreateTexture, managed.ReleaseTexture);
 });
 
+// Groups: a layer composited by a blend mode or through a colour matrix. The
+// same cases on every renderer, against the formulas on premultiplied values:
+// a backdrop of two colours under a group that covers the left half only, so
+// the right half shows what each mode does with the layer's transparent pixels.
+void GroupContract(string name, Bibui.Draw.DrawToPixels draw)
+{
+    var back = new Rgba(200, 100, 50, 255);
+    byte[] Draw(Action<Bibui.Draw.DrawList> group, Rgba fill)
+    {
+        var list = new Bibui.Draw.DrawList();
+        list.Push(Bibui.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
+        ref var bg = ref list.Push(Bibui.Draw.DrawOpKind.Rect);
+        (bg.Rect, bg.Paint) = (new RectF(0, 0, 4, 1), new PaintSpec { Color = back });
+        group(list);
+        ref var op = ref list.Push(Bibui.Draw.DrawOpKind.Rect);
+        (op.Rect, op.Paint) = (new RectF(0, 0, 2, 1), new PaintSpec { Color = fill });
+        list.Push(Bibui.Draw.DrawOpKind.Pop);
+        var bgra = Pixels.Of(list, 4, 1, draw).RawBgraBytes;
+        for (int i = 0; i < bgra.Length; i += 4) (bgra[i], bgra[i + 2]) = (bgra[i + 2], bgra[i]);
+        return bgra;
+    }
+    Action<Bibui.Draw.DrawList> Mode(Bibui.Draw.BlendMode m) => l => l.Push(Bibui.Draw.DrawOpKind.PushBlendMode).Blend = m;
+    Action<Bibui.Draw.DrawList> Matrix(float[] m) => l => { ref var op = ref l.Push(Bibui.Draw.DrawOpKind.PushColorMatrix); (op.Start, op.Count) = (l.AddFloats(m), 20); };
+    static bool Near(byte[] got, byte[] want, int tolerance) =>
+        got.Length == want.Length && got.Zip(want).All(p => Math.Abs(p.First - p.Second) <= tolerance);
+    string Show(byte[] px) => string.Join(" ", px.Chunk(4).Select(c => $"({string.Join(",", c)})"));
+
+    // The formulas, on premultiplied 0..1, as the modes are documented; the
+    // surface holds premultiplied pixels too.
+    static float[] Pm(Rgba c) { float a = c.A / 255f; return [c.R / 255f * a, c.G / 255f * a, c.B / 255f * a, a]; }
+    byte[] Expect(Func<float, float, float, float, float> channel, Func<float, float, float> alpha, Rgba fill, bool srcClearsRight = false)
+    {
+        var s = Pm(fill); var d = Pm(back);
+        float oa = alpha(s[3], d[3]);
+        var left = new byte[4];
+        for (int i = 0; i < 3; i++) left[i] = (byte)MathF.Round(Math.Clamp(channel(s[i], d[i], s[3], d[3]), 0f, 1f) * 255f);
+        left[3] = (byte)MathF.Round(oa * 255f);
+        byte[] right = srcClearsRight ? [0, 0, 0, 0] : [back.R, back.G, back.B, back.A];
+        return [.. left, .. left, .. right, .. right];
+    }
+    static float Over(float sa, float da) => sa + da - sa * da;
+
+    foreach (var fill in new[] { new Rgba(100, 150, 220, 255), new Rgba(100, 150, 220, 128) })
+    {
+        string f = fill.A == 255 ? "opaque" : "translucent";
+        (string Mode, Bibui.Draw.BlendMode M, Func<float, float, float, float, float> C, Func<float, float, float> A, bool Clears)[] cases =
+        [
+            ("SrcOver", Bibui.Draw.BlendMode.SrcOver, (s, d, sa, da) => s + d * (1 - sa), Over, false),
+            ("Multiply", Bibui.Draw.BlendMode.Multiply, (s, d, sa, da) => s * d + s * (1 - da) + d * (1 - sa), Over, false),
+            ("Screen", Bibui.Draw.BlendMode.Screen, (s, d, sa, da) => s + d - s * d, Over, false),
+            ("Plus", Bibui.Draw.BlendMode.Plus, (s, d, sa, da) => MathF.Min(1, s + d), (sa, da) => MathF.Min(1, sa + da), false),
+            ("Overlay", Bibui.Draw.BlendMode.Overlay, (s, d, sa, da) =>
+                (2 * d <= da ? 2 * s * d : sa * da - 2 * (da - d) * (sa - s)) + s * (1 - da) + d * (1 - sa), Over, false),
+            ("Src", Bibui.Draw.BlendMode.Src, (s, d, sa, da) => s, (sa, da) => sa, true),
+        ];
+        foreach (var c in cases)
+        {
+            var got = Draw(Mode(c.M), fill);
+            var want = Expect(c.C, c.A, fill, c.Clears);
+            IsTrue(Near(got, want, 3), $"{name}: {c.Mode} of an {f} layer: got {Show(got)}, want {Show(want)}");
+        }
+    }
+
+    // Matrices act on the straight colour; the translation is in 0..1.
+    var red = new Rgba(220, 40, 40, 255);
+    float l = (0.2126f * 220 + 0.7152f * 40 + 0.0722f * 40) / 255f;
+    var gray = Draw(Matrix([0.2126f, 0.7152f, 0.0722f, 0, 0, 0.2126f, 0.7152f, 0.0722f, 0, 0, 0.2126f, 0.7152f, 0.0722f, 0, 0, 0, 0, 0, 1, 0]), red);
+    byte g = (byte)MathF.Round(l * 255f);
+    IsTrue(Near(gray, [g, g, g, 255, g, g, g, 255, back.R, back.G, back.B, 255, back.R, back.G, back.B, 255], 2), $"{name}: a luminance matrix greys the layer only: {Show(gray)}");
+
+    var shifted = Draw(Matrix([1, 0, 0, 0, 0, 0, 1, 0, 0, 0.5f, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]), red);
+    IsTrue(Near(shifted, [220, 168, 40, 255, 220, 168, 40, 255, back.R, back.G, back.B, 255, back.R, back.G, back.B, 255], 2), $"{name}: a translation of 0.5 adds half of full scale: {Show(shifted)}");
+
+    // A translucent layer's straight colour is what the matrix sees: halving
+    // alpha in the matrix gives the colour at half alpha, over the backdrop.
+    var halved = Draw(Matrix([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0.5f, 0]), red);
+    var opacity = Draw(l2 => { ref var op = ref l2.Push(Bibui.Draw.DrawOpKind.PushColorMatrix); (op.Start, op.Count) = (l2.AddFloats([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 128 / 255f, 0]), 20); }, red);
+    IsTrue(Near(halved, opacity, 2), $"{name}: an alpha-only matrix is an opacity layer: {Show(halved)} vs {Show(opacity)}");
+
+    // A matrix that adds alpha lights up the layer's transparent pixels too:
+    // they are black at alpha 0, so the whole width darkens to half.
+    var lit = Draw(Matrix([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0.5f]), new Rgba(0, 0, 0, 0));
+    IsTrue(Near(lit, [100, 50, 25, 255, 100, 50, 25, 255, 100, 50, 25, 255, 100, 50, 25, 255], 3), $"{name}: alpha added by a matrix covers the whole layer: {Show(lit)}");
+
+}
+
+void GroupsAllocateNothing(string name, Bibui.Draw.DrawToPixels draw)
+{
+    var list = new Bibui.Draw.DrawList();
+    list.Push(Bibui.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
+    foreach (var m in new[] { Bibui.Draw.BlendMode.Multiply, Bibui.Draw.BlendMode.Src, Bibui.Draw.BlendMode.Overlay })
+    {
+        list.Push(Bibui.Draw.DrawOpKind.PushBlendMode).Blend = m;
+        ref var mop = ref list.Push(Bibui.Draw.DrawOpKind.PushColorMatrix);
+        (mop.Start, mop.Count) = (list.AddFloats([0.3f, 0.6f, 0.1f, 0, 0, 0.3f, 0.6f, 0.1f, 0, 0, 0.3f, 0.6f, 0.1f, 0, 0.2f, 0, 0, 0, 1, 0]), 20);
+        ref var op = ref list.Push(Bibui.Draw.DrawOpKind.Rect);
+        (op.Rect, op.Paint) = (new RectF(10, 10, 100, 100), new PaintSpec { Color = new Rgba(200, 80, 40, 255) });
+        list.Push(Bibui.Draw.DrawOpKind.Pop);
+        list.Push(Bibui.Draw.DrawOpKind.Pop);
+    }
+    var bgra = GC.AllocateArray<byte>(128 * 128 * 4, pinned: true);
+    var pixels = new Bibui.Draw.RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), 128, 128, 128 * 4);
+    for (int i = 0; i < 3; i++) draw(list, pixels);
+    long before = GC.GetAllocatedBytesForCurrentThread();
+    draw(list, pixels);
+    long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+    Eq(0L, allocated, $"{name}: groups drawn again allocate nothing (they allocated {allocated} bytes)");
+}
+
+Run("Groups: blend modes and colour matrices composite by their formulas, on Skia", () =>
+{
+    using var skia = new SkiaCpuRenderer();
+    GroupContract("skia", skia.Draw);
+    GroupsAllocateNothing("skia", skia.Draw);
+});
+
+Run("Groups: blend modes and colour matrices composite by their formulas, on the managed rasterizer", () =>
+{
+    using var managed = new ManagedRenderer();
+    GroupContract("managed", managed.Draw);
+    GroupsAllocateNothing("managed", managed.Draw);
+});
+
 Run("Textures: drawn, updated and released on Skia", () =>
 {
     using var skia = new SkiaCpuRenderer();

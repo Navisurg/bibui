@@ -15,8 +15,20 @@ public enum DrawOpKind : byte
     /// renderer may take the cheaper path for them.
     /// </summary>
     PushTransform,
-    /// <summary>Draws what follows into a layer composited at <see cref="DrawOp.Alpha"/>.</summary>
-    PushOpacity,
+    /// <summary>
+    /// Draws what follows, to its Pop, into a layer composited with
+    /// <see cref="DrawOp.Blend"/>. SrcOver composites as if there were no layer,
+    /// and a renderer may draw it without one.
+    /// </summary>
+    PushBlendMode,
+    /// <summary>
+    /// Draws what follows, to its Pop, into a layer composited through a 4×5
+    /// colour matrix: 20 floats in <see cref="DrawList.Floats"/> from Start, row
+    /// by row, (r, g, b, a, translate) on straight colour in 0..1. Opacity is a
+    /// matrix that only scales alpha. The identity changes nothing, and a renderer
+    /// may draw it without a layer.
+    /// </summary>
+    PushColorMatrix,
     Pop,
     /// <summary><see cref="DrawOp.Rect"/> with corner radii (A, B), in the op's paint: a plain rect at 0.</summary>
     Rect,
@@ -36,6 +48,58 @@ public enum DrawOpKind : byte
     BackdropBlur,
     /// <summary>Glyphs of <see cref="DrawList.FaceAt"/>(Resource) at size C, at their positions from origin (A, B), in <see cref="DrawOp.Color"/>.</summary>
     Glyphs,
+}
+
+/// <summary>
+/// How a layer's pixels are combined with what is under them, Skia's modes on
+/// premultiplied colour. SrcOver is ordinary alpha blending and the default;
+/// nothing about it is special.
+/// </summary>
+public enum BlendMode : byte
+{
+    /// <summary>Over what is under it: s + d·(1 − sa).</summary>
+    SrcOver,
+    /// <summary>Multiplied into what is under it, darkening: s·d + s·(1 − da) + d·(1 − sa).</summary>
+    Multiply,
+    /// <summary>Added to what is under it, clamped: min(1, s + d).</summary>
+    Plus,
+    /// <summary>The inverse of multiplying the inverses, lightening: s + d − s·d.</summary>
+    Screen,
+    /// <summary>Multiply where what is under it is dark, Screen where it is light.</summary>
+    Overlay,
+    /// <summary>Replaces what is under it, over the whole layer, transparent included.</summary>
+    Src,
+}
+
+/// <summary>
+/// What a colour matrix (<see cref="DrawOpKind.PushColorMatrix"/>) amounts to, so
+/// a renderer takes the cheapest way that draws it: none for the identity, an
+/// opacity layer for one that only scales alpha.
+/// </summary>
+public static class ColorMatrices
+{
+    /// <summary>Changes nothing: the identity, translation zero.</summary>
+    public static bool IsIdentity(ReadOnlySpan<float> m)
+    {
+        for (int i = 0; i < 20; i++)
+            if (m[i] != (i is 0 or 6 or 12 or 18 ? 1f : 0f)) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Only scales alpha, by a whole 1/255 step: what an opacity layer does.
+    /// <paramref name="alpha"/> is that step.
+    /// </summary>
+    public static bool IsOpacity(ReadOnlySpan<float> m, out byte alpha)
+    {
+        alpha = 0;
+        for (int i = 0; i < 20; i++)
+            if (i != 18 && m[i] != (i is 0 or 6 or 12 ? 1f : 0f)) return false;
+        float a = m[18] * 255f;
+        if (a < 0f || a > 255f || MathF.Abs(a - MathF.Round(a)) > 1e-3f) return false;
+        alpha = (byte)MathF.Round(a);
+        return true;
+    }
 }
 
 /// <summary>A paint's gradient, as values: the colours and stops are ranges of <see cref="DrawList.Colors"/> and <see cref="DrawList.Floats"/>.</summary>
@@ -61,7 +125,7 @@ public struct DrawOp
 {
     public DrawOpKind Kind;
     public PointMode Mode;          // Points
-    public byte Alpha;              // PushOpacity
+    public BlendMode Blend;         // PushBlendMode
     public Rgba Color;              // Clear, Glyphs
     public RectF Rect;              // Rect, PushClip, Texture, BackdropBlur's clip
     public float A, B, C, D;        // see DrawOpKind
