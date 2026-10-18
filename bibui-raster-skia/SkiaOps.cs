@@ -269,6 +269,7 @@ internal sealed class SkiaOps : IDisposable
         TextureFormat.R8 => new(width, height, SKColorType.Gray8, SKAlphaType.Opaque),
         TextureFormat.RG8 => new(width, height, SKColorType.Rg88, SKAlphaType.Opaque),
         TextureFormat.A8 => new(width, height, SKColorType.Alpha8, SKAlphaType.Premul),
+        TextureFormat.BGRA8 => new(width, height, SKColorType.Bgra8888, SKAlphaType.Unpremul),
         _ => new(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul),
     };
 

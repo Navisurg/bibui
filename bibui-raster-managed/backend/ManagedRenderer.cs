@@ -516,7 +516,7 @@ internal sealed class ManagedTexture(TextureFormat format, TextureKind kind, int
             pixels.Slice(y * rowBytes, row).CopyTo(Raw.AsSpan(y * row, row));
 
         // The default looks: R8 grey (r, r, r, 1), A8 white coverage (1, 1, 1, a),
-        // RG8 (r, g, 0, 1), RGBA8 as it is — premultiplied, as the canvas draws.
+        // RG8 (r, g, 0, 1), RGBA8 and BGRA8 as they are — premultiplied, as the canvas draws.
         var raw = Raw;
         var argb = Argb;
         switch (Format)
@@ -529,6 +529,13 @@ internal sealed class ManagedTexture(TextureFormat format, TextureKind kind, int
                 break;
             case TextureFormat.RG8:
                 for (int i = 0; i < argb.Length; i++) argb[i] = 0xFF000000u | (uint)raw[2 * i] << 16 | (uint)raw[2 * i + 1] << 8;
+                break;
+            case TextureFormat.BGRA8:
+                for (int i = 0; i < argb.Length; i++)
+                {
+                    uint straight = (uint)raw[4 * i + 3] << 24 | (uint)raw[4 * i + 2] << 16 | (uint)raw[4 * i + 1] << 8 | raw[4 * i];
+                    argb[i] = PixelMath.Premul(straight);
+                }
                 break;
             default:
                 for (int i = 0; i < argb.Length; i++)

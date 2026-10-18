@@ -57,7 +57,7 @@ public static class GlTextures
     {
         TextureFormat.R8 or TextureFormat.A8 => Silk.NET.OpenGL.InternalFormat.R8,
         TextureFormat.RG8 => Silk.NET.OpenGL.InternalFormat.RG8,
-        _ => Silk.NET.OpenGL.InternalFormat.Rgba8,
+        _ => Silk.NET.OpenGL.InternalFormat.Rgba8,   // RGBA8 and BGRA8: the driver swizzles BGRA on upload
     };
 
     // The layout a format's bytes are handed over in.
@@ -65,6 +65,7 @@ public static class GlTextures
     {
         TextureFormat.R8 or TextureFormat.A8 => Silk.NET.OpenGL.PixelFormat.Red,
         TextureFormat.RG8 => Silk.NET.OpenGL.PixelFormat.RG,
+        TextureFormat.BGRA8 => Silk.NET.OpenGL.PixelFormat.Bgra,
         _ => Silk.NET.OpenGL.PixelFormat.Rgba,
     };
 }

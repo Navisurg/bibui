@@ -21,7 +21,7 @@ public readonly record struct TextureHandle(ulong Id, ulong Generation)
 /// <summary>
 /// What a texture's pixels are, rad's names. Each draws with a default look the
 /// renderer gives it, so any texture drawn plainly shows: R8 grey (r, r, r, 1),
-/// A8 white coverage (1, 1, 1, a), RG8 (r, g, 0, 1), RGBA8 as it is. What reads
+/// A8 white coverage (1, 1, 1, a), RG8 (r, g, 0, 1), RGBA8 and BGRA8 as they are. What reads
 /// a texture's own channels (a lookup) reads them raw, before that look.
 /// </summary>
 public enum TextureFormat : byte
@@ -34,6 +34,8 @@ public enum TextureFormat : byte
     RG8,
     /// <summary>Coverage, 1 byte a pixel: a mask.</summary>
     A8,
+    /// <summary>Blue, green, red, alpha; 4 bytes a pixel, straight alpha: what many decoders and CPU framebuffers hold.</summary>
+    BGRA8,
 }
 
 /// <summary>How often a texture's pixels change, which says how a renderer keeps it (rad's resource kinds).</summary>
@@ -55,7 +57,7 @@ public static class TexturePixels
     /// <summary>Bytes a pixel of <paramref name="format"/>.</summary>
     public static int BytesPerPixel(this TextureFormat format) => format switch
     {
-        TextureFormat.RGBA8 => 4,
+        TextureFormat.RGBA8 or TextureFormat.BGRA8 => 4,
         TextureFormat.RG8 => 2,
         _ => 1,
     };

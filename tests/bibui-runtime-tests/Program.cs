@@ -2661,7 +2661,12 @@ void TextureContract(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn 
         $"{name}: RG8 draws (r, g, 0, 1)");
     update(r8, one.Reverse().ToArray(), 0);
     IsTrue(Draw(r8).SequenceEqual(one.Reverse().SelectMany(v => new[] { v, v, v, (byte)255 })), $"{name}: an R8 Stream updates in place");
-    release(r8); release(a8); release(rg8);
+    // BGRA8 is RGBA8 in another byte order: the same picture.
+    var bgra = new byte[a.Length];
+    for (int i = 0; i < 8; i++) (bgra[4 * i], bgra[4 * i + 1], bgra[4 * i + 2], bgra[4 * i + 3]) = (a[4 * i + 2], a[4 * i + 1], a[4 * i], a[4 * i + 3]);
+    var bgra8 = create(Bibui.Draw.TextureFormat.BGRA8, stream, 4, 2, bgra, 0);
+    IsTrue(Draw(bgra8).SequenceEqual(a), $"{name}: BGRA8 draws as the RGBA8 it reorders");
+    release(r8); release(a8); release(rg8); release(bgra8);
 
     var empty = new byte[4 * 2 * 4];
     IsTrue(Draw(Bibui.Draw.TextureHandle.None).SequenceEqual(empty), $"{name}: None draws nothing");

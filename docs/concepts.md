@@ -730,10 +730,11 @@ uses a `TextureHandle` made on the renderer the app chose
 `ManagedRenderer`); the app keeps a reference to that renderer, and the
 callback draws the handle with `ctx.DrawTexture`.
 
-- **The format** says what the pixels are: `RGBA8` (straight alpha), `R8` (one
-  grey channel, as a camera's NIR frame), `RG8` (two channels) or `A8`
-  (coverage). Each draws with a default look, so any texture drawn plainly
-  shows: R8 grey, A8 white coverage, RG8 as red and green, RGBA8 as it is.
+- **The format** says what the pixels are: `RGBA8` or `BGRA8` (straight
+  alpha), `R8` (one grey channel, as a camera's NIR frame), `RG8` (two
+  channels) or `A8` (coverage). Each draws with a default look, so any texture
+  drawn plainly shows: R8 grey, A8 white coverage, RG8 as red and green, RGBA8
+  and BGRA8 as they are.
 - **The kind** says how often the pixels change. A `Static` texture is made
   once, and an update to it is ignored. A `Stream` texture keeps its size and
   format, and `UpdateTexture` overwrites its pixels in place: on the GPU, one

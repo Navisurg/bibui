@@ -23,6 +23,8 @@ before it was published.
     Silk.NET.OpenGL. `Bibui.Platform.Silk` makes the `GlTarget`;
     `SkiaGlRenderer` makes its textures with `GlTextures` and wraps each once
     for Skia. Neither references the other.
+  - A Silk window shows `window.Cpu` by uploading it into a BGRA8 texture made
+    with `GlTextures` and blitting it onto the framebuffer: no shaders.
   - Every renderer has the same `CreateTexture`, `UpdateTexture`,
     `ReleaseTexture` and `Draw(DrawList)`, so an app can name its renderer in
     one place (`global using Renderer = ...`) and swap it there.
@@ -32,9 +34,9 @@ before it was published.
   `CreateTexture(rgba, width, height)`, and `UpdateTexture(texture, pixels,
   rowBytes = 0)` takes the whole texture at the size and format it was made
   with.
-  - Formats, rad's names: `RGBA8` (straight alpha), `R8`, `RG8` and `A8`. Each
-    draws with a default look: R8 grey, A8 white coverage, RG8 as red and
-    green.
+  - Formats, rad's names: `RGBA8` and `BGRA8` (straight alpha), `R8`, `RG8`
+    and `A8`. Each draws with a default look: R8 grey, A8 white coverage, RG8
+    as red and green.
   - Kinds: a `Static` texture is made once; an update to it is ignored. A
     `Stream` texture is overwritten in place: on `SkiaGlRenderer` it is one GL
     texture each update is uploaded into, wrapped by one `SKImage` for its

@@ -214,45 +214,37 @@ public sealed class SilkWindow : IDisposable
     internal double NextFrameMs;
 
     // ── Presenting the CPU memory ────────────────────────────────────────────
-    // A texture the memory is uploaded to, drawn over the framebuffer as one
-    // quad. Plain GL, made when the CPU memory is first shown.
+    // A BGRA8 texture the memory is uploaded to (GlTextures), copied onto the
+    // framebuffer with one blit through a read framebuffer it is attached to,
+    // flipped: memory rows run top-down, GL's bottom-up. Made when the memory is
+    // first shown, the texture remade when the size changes.
 
-    private uint _program, _vao, _texture;
+    private uint _texture, _readFramebuffer;
     private int _texWidth, _texHeight;
 
-    internal void PresentCpu()
+    internal unsafe void PresentCpu()
     {
-        if (_cpu is null || _cpuBuffer is null) return;
+        if (_cpu is null) return;
         var gl = GlApi;
-        if (_program == 0)
+        var px = _cpu.Pixels;
+        int w = px.Width, h = px.Height;
+        if (w <= 0 || h <= 0) return;   // minimised: nothing to show
+        if (w != _texWidth || h != _texHeight)
         {
-            _program = CreateShaderProgram();
-            _vao = gl.GenVertexArray();
-            _texture = gl.GenTexture();
-            gl.BindTexture(TextureTarget.Texture2D, _texture);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-        }
-        int w = _cpu.Pixels.Width, h = _cpu.Pixels.Height;
-        gl.Viewport(0, 0, (uint)w, (uint)h);
-        // Raw BGRA, swizzled by the driver on upload; in place when the size is unchanged.
-        gl.BindTexture(TextureTarget.Texture2D, _texture);
-        if (w == _texWidth && h == _texHeight)
-            gl.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, (uint)w, (uint)h, PixelFormat.Bgra, PixelType.UnsignedByte, in _cpuBuffer[0]);
-        else
-        {
-            gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba, (uint)w, (uint)h, 0, PixelFormat.Bgra, PixelType.UnsignedByte, in _cpuBuffer[0]);
+            if (_texture != 0) GlTextures.Delete(gl, _texture);
+            _texture = GlTextures.Create(gl, TextureFormat.BGRA8, w, h);
+            if (_readFramebuffer == 0) _readFramebuffer = gl.GenFramebuffer();
+            gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _readFramebuffer);
+            gl.FramebufferTexture2D(FramebufferTarget.ReadFramebuffer, FramebufferAttachment.ColorAttachment0,
+                TextureTarget.Texture2D, _texture, 0);
             (_texWidth, _texHeight) = (w, h);
         }
-        gl.UseProgram(_program);
-        gl.ActiveTexture(TextureUnit.Texture0);
-        gl.Uniform1(gl.GetUniformLocation(_program, "uTexture"), 0);
-        gl.BindVertexArray(_vao);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 6); // a fullscreen quad: two triangles
-        gl.BindVertexArray(0);
-        gl.BindTexture(TextureTarget.Texture2D, 0);
+        GlTextures.Upload(gl, _texture, TextureFormat.BGRA8, w, h,
+            new ReadOnlySpan<byte>((void*)px.Address, px.RowBytes * h), px.RowBytes);
+        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _readFramebuffer);
+        gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, Gl.Framebuffer);
+        gl.BlitFramebuffer(0, 0, w, h, 0, h, w, 0, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, Gl.Framebuffer);
     }
 
     /// <summary>
@@ -262,92 +254,10 @@ public sealed class SilkWindow : IDisposable
     public void Dispose()
     {
         if (Runtime.WakeUp == Wake) Runtime.WakeUp = null;
-        if (_program != 0) GlApi.DeleteProgram(_program);
-        if (_vao != 0) GlApi.DeleteVertexArray(_vao);
-        if (_texture != 0) GlApi.DeleteTexture(_texture);
+        if (_readFramebuffer != 0) GlApi.DeleteFramebuffer(_readFramebuffer);
+        if (_texture != 0) GlTextures.Delete(GlApi, _texture);
         Native.Reset();
         Native.Dispose();
-    }
-
-    private uint CreateShaderProgram()
-    {
-        // Fullscreen quad via gl_VertexID — no VBO required.
-        //
-        // NDC positions for 6 vertices (two triangles covering [-1,1] x [-1,1]):
-        //   tri 0: (-1,-1)  (1,-1)  (-1,1)
-        //   tri 1: (-1, 1)  (1,-1)  ( 1,1)
-        //
-        // UV y-flip: Skia places row 0 at the image top; GL places TexImage2D row 0
-        // at the texture bottom. We correct with: v = 1.0 - ((ndc_y + 1.0) * 0.5)
-        const string vertSrc = """
-            #version 330 core
-            out vec2 v_uv;
-            void main()
-            {
-                // 6-vertex fullscreen quad positions
-                vec2 pos[6] = vec2[6](
-                    vec2(-1.0, -1.0),
-                    vec2( 1.0, -1.0),
-                    vec2(-1.0,  1.0),
-                    vec2(-1.0,  1.0),
-                    vec2( 1.0, -1.0),
-                    vec2( 1.0,  1.0)
-                );
-                vec2 p = pos[gl_VertexID];
-                gl_Position = vec4(p, 0.0, 1.0);
-                // UV: x = (ndc_x + 1) / 2 , y flipped
-                float u = (p.x + 1.0) * 0.5;
-                float v = 1.0 - (p.y + 1.0) * 0.5;
-                v_uv = vec2(u, v);
-            }
-            """;
-
-        const string fragSrc = """
-            #version 330 core
-            in vec2 v_uv;
-            uniform sampler2D uTexture;
-            out vec4 frag_color;
-            void main()
-            {
-                frag_color = texture(uTexture, v_uv);
-            }
-            """;
-
-        var vs = CompileShader(ShaderType.VertexShader, vertSrc);
-        var fs = CompileShader(ShaderType.FragmentShader, fragSrc);
-
-        var program = GlApi.CreateProgram();
-        GlApi.AttachShader(program, vs);
-        GlApi.AttachShader(program, fs);
-        GlApi.LinkProgram(program);
-
-        GlApi.GetProgram(program, ProgramPropertyARB.LinkStatus, out int linked);
-        if (linked == 0)
-        {
-            var log = GlApi.GetProgramInfoLog(program);
-            throw new InvalidOperationException($"Shader link failed: {log}");
-        }
-
-        GlApi.DeleteShader(vs);
-        GlApi.DeleteShader(fs);
-
-        return program;
-    }
-
-    private uint CompileShader(ShaderType type, string src)
-    {
-        var shader = GlApi.CreateShader(type);
-        GlApi.ShaderSource(shader, src);
-        GlApi.CompileShader(shader);
-
-        GlApi.GetShader(shader, ShaderParameterName.CompileStatus, out int compiled);
-        if (compiled == 0)
-        {
-            var log = GlApi.GetShaderInfoLog(shader);
-            throw new InvalidOperationException($"Shader compile failed ({type}): {log}");
-        }
-
-        return shader;
     }
 
     // ── The module: open, then bracket every frame ──────────────────────────
