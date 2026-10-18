@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The iOS window: SDL2 through Silk.NET (UIKit underneath), presenting with
+       OpenGL ES 3 (whatever draws a frame draws it into the GL framebuffer; it
+       makes no GL calls of its own), clipboard through UIPasteboard. It
+       references no renderer: an app starts with SilkIosWindow.RunApp, opens a
+       window with SilkIosWindow.Open(runtime, options) inside it and runs the
+       loop, as on the desktop.
+
+       It also ships the native text libraries bibui's text engine calls, which
+       iOS does not have: FreeType and HarfBuzz, built for the device and the
+       simulator by native/build-text-natives.sh. An app imports
+       build/Bibui.Platform.Silk.iOS.targets to embed them (a package would
+       bring it as buildTransitive). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-ios</TargetFramework>
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+    <AssemblyName>Bibui.Platform.Silk.iOS</AssemblyName>
+    <RootNamespace>Bibui.Runtime.Platform</RootNamespace>
+    <Nullable>enable</Nullable>
+    <!-- SDL's event watch is a native callback taking pointers. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../bibui/bibui.csproj" />
+    <!-- GlTarget: what the window's GL framebuffer is, for a renderer on it. -->
+    <ProjectReference Include="../bibui-gl/bibui-gl.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Silk.NET.Windowing.Sdl has an iOS build (SilkMobile.RunApp); its SDL2
+         comes as a static library for the device and the simulator
+         (Ultz.Native.SDL), linked into the app. -->
+    <PackageReference Include="Silk.NET.Windowing.Sdl" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Input.Sdl" Version="2.23.0" />
+  </ItemGroup>
+
+</Project>

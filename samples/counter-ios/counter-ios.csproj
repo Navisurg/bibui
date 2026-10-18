@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The counter as an iOS app: the same loop on SilkIosWindow (SDL2 through
+       Silk.NET, GL ES 3), drawn with Skia on the GPU.
+       Run in the simulator: dotnet build -t:Run samples/counter-ios -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-ios</TargetFramework>
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+    <!-- The simulator on Apple silicon, unless a build asks for a device (ios-arm64). -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">iossimulator-arm64</RuntimeIdentifier>
+    <AssemblyName>counter-ios</AssemblyName>
+    <ApplicationId>com.navisurg.bibui.counter</ApplicationId>
+    <ApplicationTitle>Counter</ApplicationTitle>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Each .NET for iOS release names one Xcode (27.0 for the 27.0 pack) and
+         refuses any other, a newer minor release included. Builds with the
+         Xcode that is installed; remove once the workload catches up. -->
+    <ValidateXcodeVersion>false</ValidateXcodeVersion>
+    <!-- An iOS app is always trimmed. Silk.NET's windowing and input are not
+         annotated for it (IL2104: "produced trim warnings") and find their
+         platforms and native loaders by reflection, so they are kept whole
+         below rather than trimmed, and their warning is expected. -->
+    <NoWarn>$(NoWarn);IL2104</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <TrimmerRootAssembly Include="Silk.NET.Core" />
+    <TrimmerRootAssembly Include="Silk.NET.Windowing.Common" />
+    <TrimmerRootAssembly Include="Silk.NET.Windowing.Sdl" />
+    <TrimmerRootAssembly Include="Silk.NET.Input.Common" />
+    <TrimmerRootAssembly Include="Silk.NET.Input.Sdl" />
+    <TrimmerRootAssembly Include="Silk.NET.SDL" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-platform-silk-ios/bibui-platform-silk-ios.csproj" />
+    <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
+  </ItemGroup>
+  <!-- The FreeType and HarfBuzz the platform ships, embedded in the app; what a
+       package reference to Bibui.Platform.Silk.iOS would bring by itself. -->
+  <Import Project="../../bibui-platform-silk-ios/build/Bibui.Platform.Silk.iOS.targets" />
+</Project>
