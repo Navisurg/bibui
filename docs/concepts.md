@@ -55,7 +55,7 @@ UiNode.PushIntoParent(runtime.ParentInScope,
     .Padded(EdgeInsets.All(24f)));
 runtime.EndBuild();
 
-using var skia = new SkiaRenderer();
+using var skia = new SkiaCpuRenderer();
 File.WriteAllBytes("hello.png", FramePixels.Png(runtime, skia.Draw));
 ```
 
@@ -726,9 +726,21 @@ paint.
 
 The draw context knows textures, not renderers. A callback that draws an image
 uses a `TextureHandle` made on the renderer the app chose
-(`skia.CreateTexture(rgba, width, height)`, or the same call on
+(`skia.CreateTexture(format, kind, width, height, pixels)`, or the same call on
 `ManagedRenderer`); the app keeps a reference to that renderer, and the
 callback draws the handle with `ctx.DrawTexture`.
+
+- **The format** says what the pixels are: `RGBA8` (straight alpha), `R8` (one
+  grey channel, as a camera's NIR frame), `RG8` (two channels) or `A8`
+  (coverage). Each draws with a default look, so any texture drawn plainly
+  shows: R8 grey, A8 white coverage, RG8 as red and green, RGBA8 as it is.
+- **The kind** says how often the pixels change. A `Static` texture is made
+  once, and an update to it is ignored. A `Stream` texture keeps its size and
+  format, and `UpdateTexture` overwrites its pixels in place: on the GPU, one
+  texture that each video frame is uploaded into, with no new image per frame.
+- Pixel rows may be padded, as a video decoder's are: pass their stride as
+  `rowBytes`.
+- Textures are made, updated and released on the thread that draws.
 
 ## Hosts and renderers
 
@@ -742,15 +754,15 @@ owner of the loop chose draws that list. Two pieces connect it to the outside:
   `while (SilkWindow.BeginFrame(window, runtime)) { runtime.BeginBuild(window.Events); build; runtime.EndBuild(); draw; SilkWindow.EndFrame(window, runtime); }`.
   `BeginFrame` sleeps while nothing is happening and returns when there is a
   frame to draw, with what the keyboard and mouse did in `window.Events`;
-  `BeginBuild` turns that into the frame's events; `EndFrame` presents it. A window offers two targets (namespace `Bibui.Draw`):
-  `window.Gl`, a `GlTarget` (the GL framebuffer, Silk only), and `window.Cpu`,
+  `BeginBuild` turns that into the frame's events; `EndFrame` presents it. A window offers two targets:
+  `window.Gl`, a `GlTarget` (the GL framebuffer, Silk only; `Bibui.Gl`), and `window.Cpu`,
   a `CpuTarget` (memory the window presents: a `wl_shm` buffer, or a CPU
   framebuffer the Silk window uploads). bibui does no discovery and no
   reflection.
 - A **renderer** draws a `DrawList`: clipping, transforms, shapes, paths,
   textures and glyphs. Bound to a window's target, `renderer.Draw(runtime.DrawList)`
-  draws there: `new SkiaRenderer(window.Gl)`, `new SkiaRenderer(window.Cpu)`
-  or `new ManagedRenderer(window.Cpu)`. Unbound, `SkiaRenderer` draws into an
+  draws there: `new SkiaGlRenderer(window.Gl)`, `new SkiaCpuRenderer(window.Cpu)`
+  or `new ManagedRenderer(window.Cpu)`. Unbound, `SkiaCpuRenderer` draws into an
   `SKSurface` or into `RasterPixels` (BGRA8888 premultiplied memory the caller
   owns), and `ManagedRenderer` into `RasterPixels`. Each also makes the
   textures its lists draw. There is no default: you construct the one you
@@ -766,7 +778,7 @@ There are two complete combinations.
 **Cross-platform: Silk window and Skia raster.** `SilkWindow` (package
 `Bibui.Platform.Silk`) opens a window through GLFW and presents with OpenGL. It
 references no renderer; the app adds `Bibui.Raster.Skia` and binds a
-`SkiaRenderer` to the window's GL framebuffer:
+`SkiaGlRenderer` to the window's GL framebuffer:
 
 ```csharp
 using Bibui.Raster.Skia;
@@ -774,7 +786,7 @@ using Bibui.Runtime.Platform;
 
 var runtime = BibuiRuntime.Create();
 using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("My app", 960, 640));
-using var skia = SkiaRenderer.ForGl(window.Gl) ?? new SkiaRenderer(window.Cpu);
+using var skia = SkiaGlRenderer.ForGl(window.Gl) ?? new SkiaCpuRenderer(window.Cpu);
 while (SilkWindow.BeginFrame(window, runtime))
 {
     runtime.BeginBuild(window.Events);
@@ -785,8 +797,20 @@ while (SilkWindow.BeginFrame(window, runtime))
 }
 ```
 
-`SkiaRenderer.ForGl` answers null where Skia cannot drive the GL context;
+`SkiaGlRenderer.ForGl` answers null where Skia cannot drive the GL context;
 falling back to the CPU is the app's choice, as above.
+
+Every renderer has the same texture and draw calls (`CreateTexture`,
+`UpdateTexture`, `ReleaseTexture`, `Draw`), and build code never sees the
+renderer, so an app names its renderer in one place and swapping it is that
+line and the setup:
+
+```csharp
+global using Renderer = Bibui.Raster.Skia.SkiaGlRenderer;   // or Bibui.Raster.Managed.Backend.ManagedRenderer
+```
+
+Textures belong to the renderer that made them: a renderer swapped while the
+app runs makes its textures again.
 
 **Linux, pure managed: Wayland window and managed raster.** `WaylandWindow`
 (package `Bibui.Platform.Wayland`) talks to the compositor directly through
@@ -826,7 +850,7 @@ byte-identical to a full repaint, and past half the surface the whole frame is
 drawn. Skia always draws whole frames. See [Performance](performance.md) for
 measurements.
 
-A Wayland window can also draw with Skia (`new SkiaRenderer(window.Cpu)`), and
+A Wayland window can also draw with Skia (`new SkiaCpuRenderer(window.Cpu)`), and
 a headless program (tests, a command-line tool that writes PNGs) needs no window
 at all. It builds between `runtime.BeginBuild()` and `runtime.EndBuild()` and
 draws `runtime.DrawList` into its own buffer, as in [The frame](#the-frame-build-layout-paint).

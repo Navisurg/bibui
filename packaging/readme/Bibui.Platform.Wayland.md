@@ -20,7 +20,7 @@ while (WaylandWindow.BeginFrame(window, runtime))
 ```
 
 `window.Cpu` is this frame's `wl_shm` buffer; a renderer bound to it draws
-there, so `new SkiaRenderer(window.Cpu)` works too. `WaylandWindow.IsSupported`
+there, so `new SkiaCpuRenderer(window.Cpu)` works too. `WaylandWindow.IsSupported`
 says whether this session can open a window. With
 `Bibui.Raster.Managed.Backend` this is bibui's Native AOT route. It needs
 `libwayland-client` and `libxkbcommon` at run time.

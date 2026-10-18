@@ -25,7 +25,7 @@ public sealed record Pixels(byte[] RawBgraBytes, int Width, int Height)
 /// </summary>
 public static class Frames
 {
-    public static readonly SkiaRenderer Skia = new();
+    public static readonly SkiaCpuRenderer Skia = new();
 
     /// <summary>Builds the runtime's next frame and draws it with <paramref name="draw"/>, Skia by default.</summary>
     public static Pixels Frame(this BibuiRuntime runtime, DrawToPixels? draw = null)
@@ -117,3 +117,8 @@ public static class TestBuild
         runtime.EndBuild();
     }
 }
+
+// A renderer's texture calls, as the texture contract drives them.
+public delegate TextureHandle CreateTextureFn(TextureFormat format, TextureKind kind,
+    int width, int height, ReadOnlySpan<byte> pixels, int rowBytes);
+public delegate void UpdateTextureFn(TextureHandle texture, ReadOnlySpan<byte> pixels, int rowBytes);

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+  <!-- The GL layer: a GL framebuffer a platform presents (GlTarget) and the GL
+       texture calls a renderer on it makes its textures with. Through the
+       Silk.NET.OpenGL binding, which is a GL binding and nothing else: no
+       window, no renderer. A platform makes a GlTarget; a renderer uses it. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Gl</AssemblyName>
+    <RootNamespace>Bibui.Gl</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- Pins caller spans (pixels in) with `fixed` for the upload. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PackageId>Bibui.Gl</PackageId>
+    <Description>Bibui's GL layer: the GL framebuffer a platform presents (GlTarget) and the GL textures a renderer on it makes, through Silk.NET.OpenGL. Used by Bibui.Platform.Silk and Bibui.Raster.Skia's SkiaGlRenderer.</Description>
+    <PackageTags>$(PackageTags);opengl;gl</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../bibui/bibui.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+</Project>

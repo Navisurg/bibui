@@ -24,6 +24,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../bibui/bibui.csproj" />
+    <!-- GlTarget: what the window's GL framebuffer is, for a renderer on it. -->
+    <ProjectReference Include="../bibui-gl/bibui-gl.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Silk.NET.Input.Glfw" Version="2.23.0" />

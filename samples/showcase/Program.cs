@@ -70,7 +70,7 @@ DrawToPixels NewDraw() => raster switch
 {
     "managed" => new ManagedRenderer().Draw,
 #if !WAYLAND_ONLY
-    "skia" => new Bibui.Raster.Skia.SkiaRenderer().Draw,
+    "skia" => new Bibui.Raster.Skia.SkiaCpuRenderer().Draw,
 #endif
     _ => throw new ArgumentException($"--raster {raster}: expected skia or managed"),
 };
@@ -81,7 +81,7 @@ DrawToPixels NewDraw() => raster switch
 {
     if (raster == "managed") { var managed = new ManagedRenderer(target); return (managed, managed.Draw); }
 #if !WAYLAND_ONLY
-    var skia = new Bibui.Raster.Skia.SkiaRenderer(target);
+    var skia = new Bibui.Raster.Skia.SkiaCpuRenderer(target);
     return (skia, skia.Draw);
 #else
     throw new ArgumentException($"--raster {raster}: this build carries only the managed raster");
@@ -170,7 +170,7 @@ return 2;
     using var window = SilkWindow.Open(runtime, options);
     // Skia on the window's GL; --raster managed draws on the CPU, into memory the window shows.
     var (renderer, draw) = raster == "skia"
-        ? new Bibui.Raster.Skia.SkiaRenderer(window.Gl) is var skia ? ((IDisposable)skia, (Action<DrawList>)skia.Draw) : default
+        ? new Bibui.Raster.Skia.SkiaGlRenderer(window.Gl) is var skia ? ((IDisposable)skia, (Action<DrawList>)skia.Draw) : default
         : RendererFor(window.Cpu);
     using (renderer)
     {

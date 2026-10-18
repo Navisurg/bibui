@@ -100,7 +100,7 @@ The runtime records each frame into a draw list; a renderer draws that list,
 into a window a platform provides. You pick both explicitly, and nothing is
 discovered at run time.
 
-- **Silk + Skia.** `SilkWindow` opens the window with GLFW, and `SkiaRenderer`
+- **Silk + Skia.** `SilkWindow` opens the window with GLFW, and `SkiaGlRenderer`
   draws into its OpenGL framebuffer. This route runs on the JIT only for now:
   Silk.NET itself is not trim-safe, so it does not publish with Native AOT.
 - **Wayland + managed raster.** `WaylandWindow` talks to the compositor through
@@ -125,8 +125,9 @@ decides which other dependencies it needs. In every case the dependency tree is 
 | Package | NuGet dependencies | System libraries |
 |---|---|---|
 | `Bibui` | `System.IO.Hashing` | `libfreetype6`, `libharfbuzz0b` (text) |
-| `Bibui.Raster.Skia` | `SkiaSharp` (with its Linux native assets) | `libfontconfig1` |
-| `Bibui.Platform.Silk` | `Silk.NET` windowing, input and OpenGL (GLFW), `TextCopy` | an OpenGL driver; GLFW itself ships with Silk.NET |
+| `Bibui.Raster.Skia` | `SkiaSharp` (with its Linux native assets), `Bibui.Gl` | `libfontconfig1` |
+| `Bibui.Gl` | `Silk.NET.OpenGL` (the GL binding only) | an OpenGL driver |
+| `Bibui.Platform.Silk` | `Silk.NET` windowing, input and OpenGL (GLFW), `Bibui.Gl`, `TextCopy` | an OpenGL driver; GLFW itself ships with Silk.NET |
 | `Bibui.Platform.Wayland` | none | `libwayland-client`, `libwayland-cursor`, `libxkbcommon` |
 | `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`) | none beyond `Bibui`'s |
 

@@ -74,8 +74,8 @@ var gallery = new Gallery { State = InitialState() };
 // CI's start-up check: one frame headless, then exit; a throw fails it.
 if (options.FirstFrame)
 {
-    using var cpu = new SkiaRenderer();
-    DemoTexture.Skia = cpu;
+    using var cpu = new SkiaCpuRenderer();
+    DemoTexture.SkiaCpu = cpu;
     runtime.BeginBuild();
     BuildGallery(runtime, gallery);
     runtime.EndBuild();
@@ -87,7 +87,7 @@ if (options.FirstFrame)
 // loop steps it. Its screenshots draw with a CPU renderer of their own: the
 // window's draws on the GPU, or keeps damage state for the window's buffers.
 using var testServer = BibuiTestServer.StartIfEnabled(runtime, options.Port,
-    options.Raster == GalleryRaster.Managed ? new ManagedRenderer().Draw : new SkiaRenderer().Draw);
+    options.Raster == GalleryRaster.Managed ? new ManagedRenderer().Draw : new SkiaCpuRenderer().Draw);
 
 var size = new PlatformWindowOptions("Component Gallery", Surface().Width, Surface().Height);
 if (options.Host == GalleryHost.Wayland)
@@ -99,9 +99,9 @@ if (options.Host == GalleryHost.Wayland)
         MinHeight = ShellLayout.MinHeight,
     });
     // The renderer --raster names, bound to the window's memory; the texture page makes its textures on it.
-    SkiaRenderer? skia = options.Raster == GalleryRaster.Skia ? new SkiaRenderer(window.Cpu) : null;
+    SkiaCpuRenderer? skia = options.Raster == GalleryRaster.Skia ? new SkiaCpuRenderer(window.Cpu) : null;
     ManagedRenderer? managed = skia is null ? new ManagedRenderer(window.Cpu) : null;
-    (DemoTexture.Skia, DemoTexture.Managed) = (skia, managed);
+    (DemoTexture.SkiaCpu, DemoTexture.Managed) = (skia, managed);
     while (WaylandWindow.BeginFrame(window, runtime))
     {
         // While a test-server command runs, the server is the keyboard and mouse.
@@ -118,8 +118,8 @@ if (options.Host == GalleryHost.Wayland)
 else
 {
     using var window = SilkWindow.Open(runtime, size);
-    using var skia = new SkiaRenderer(window.Gl);
-    DemoTexture.Skia = skia;   // the texture page's textures, on the renderer that draws them
+    using var skia = new SkiaGlRenderer(window.Gl);
+    DemoTexture.SkiaGl = skia;   // the texture page's textures, on the renderer that draws them
     window.OnRefresh = Frame;  // keeps drawing during a resize on Windows and macOS
     while (SilkWindow.BeginFrame(window, runtime)) Frame();
 
@@ -368,8 +368,8 @@ static void WriteReferences(GalleryOptions options)
         options.Accent is null ? "reference" : "reference-seed"));
     var theme = options.Theme();
     var sizes = options.Sizes.Count > 0 ? options.Sizes : [(Surface().Width, Surface().Height)];
-    using var skia = new SkiaRenderer();
-    DemoTexture.Skia = skia;   // the texture page's textures, on the renderer that draws it
+    using var skia = new SkiaCpuRenderer();
+    DemoTexture.SkiaCpu = skia;   // the texture page's textures, on the renderer that draws it
     foreach (var (width, height) in sizes)
     {
         // One size writes straight into the directory; several, a folder each.
@@ -398,7 +398,7 @@ static IEnumerable<(string Name, GalleryState State, string? DropDown)> Pages()
 // A page that cannot be rendered — a layout ring, say — leaves what it threw
 // instead of a picture, and the rest go on.
 static void WriteReference(string outDir, string name, GalleryState state, string? dropDown,
-    Bibui.Theming.ThemeTokens theme, SurfaceOptions surface, SkiaRenderer skia)
+    Bibui.Theming.ThemeTokens theme, SurfaceOptions surface, SkiaCpuRenderer skia)
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetTheme(theme);
@@ -417,7 +417,7 @@ static void WriteReference(string outDir, string name, GalleryState state, strin
 }
 
 // Three frames: laid out, and wrapped at that width; the last drawn with Skia.
-static byte[] RenderSettled(BibuiRuntime runtime, Gallery gallery, SkiaRenderer skia)
+static byte[] RenderSettled(BibuiRuntime runtime, Gallery gallery, SkiaCpuRenderer skia)
 {
     for (int i = 0; i < 3; i++)
     {
@@ -439,8 +439,8 @@ static int CheckLayouts(GalleryOptions options)
         ? options.Sizes
         : [(ShellLayout.MinWidth, ShellLayout.MinHeight), (840, 600), (900, 700), (1100, 820), (1600, 1000)];
     int pages = 0, faulty = 0;
-    using var skia = new SkiaRenderer();
-    DemoTexture.Skia = skia;   // the texture page's textures, on the renderer that draws it
+    using var skia = new SkiaCpuRenderer();
+    DemoTexture.SkiaCpu = skia;   // the texture page's textures, on the renderer that draws it
     foreach (var (width, height) in sizes)
     {
         string? dir = options.OutDir is { } o ? Path.Combine(Path.GetFullPath(o), $"{width}x{height}") : null;

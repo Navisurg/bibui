@@ -18,7 +18,7 @@ var state = new DemoState();
 // CI's check that the app starts: one frame built and drawn headless, then exit.
 if (args.Contains("--first-frame"))
 {
-    using var cpu = new SkiaRenderer();
+    using var cpu = new SkiaCpuRenderer();
     runtime.BeginBuild();
     Demo.Build(runtime, state);
     runtime.EndBuild();
@@ -27,11 +27,11 @@ if (args.Contains("--first-frame"))
 }
 
 using var window = SilkWindow.Open(runtime, new("bibui — interactive demo", 720, 1200));
-using var skia = new SkiaRenderer(window.Gl);
+using var skia = new SkiaGlRenderer(window.Gl);
 
 // Off unless asked for (BIBUI_TEST_SERVER=1); the loop steps it. Its screenshots
 // draw on the CPU, with a renderer of their own beside the window's GPU one.
-using var testServer = BibuiTestServer.StartIfEnabled(runtime, draw: new SkiaRenderer().Draw);
+using var testServer = BibuiTestServer.StartIfEnabled(runtime, draw: new SkiaCpuRenderer().Draw);
 
 window.OnRefresh = Frame;   // keeps drawing during a resize on Windows and macOS
 while (SilkWindow.BeginFrame(window, runtime)) Frame();

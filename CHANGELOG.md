@@ -14,6 +14,34 @@ before it was published.
 
 ### Changed
 
+- **Skia is two renderers, and GL is a layer of its own (breaking).**
+  `SkiaRenderer` is `SkiaGlRenderer` (a window's GL context: `new
+  SkiaGlRenderer(window.Gl)`, `SkiaGlRenderer.ForGl`) and `SkiaCpuRenderer`
+  (memory: `new SkiaCpuRenderer()`, `new SkiaCpuRenderer(window.Cpu)`).
+  - The new package `Bibui.Gl` holds `GlTarget` (moved from `Bibui.Draw` to
+    `Bibui.Gl`) and `GlTextures`, the GL texture calls, through
+    Silk.NET.OpenGL. `Bibui.Platform.Silk` makes the `GlTarget`;
+    `SkiaGlRenderer` makes its textures with `GlTextures` and wraps each once
+    for Skia. Neither references the other.
+  - Every renderer has the same `CreateTexture`, `UpdateTexture`,
+    `ReleaseTexture` and `Draw(DrawList)`, so an app can name its renderer in
+    one place (`global using Renderer = ...`) and swap it there.
+
+- **Textures have a format and a kind (breaking).**
+  `CreateTexture(format, kind, width, height, pixels, rowBytes = 0)` replaces
+  `CreateTexture(rgba, width, height)`, and `UpdateTexture(texture, pixels,
+  rowBytes = 0)` takes the whole texture at the size and format it was made
+  with.
+  - Formats, rad's names: `RGBA8` (straight alpha), `R8`, `RG8` and `A8`. Each
+    draws with a default look: R8 grey, A8 white coverage, RG8 as red and
+    green.
+  - Kinds: a `Static` texture is made once; an update to it is ignored. A
+    `Stream` texture is overwritten in place: on `SkiaGlRenderer` it is one GL
+    texture each update is uploaded into, wrapped by one `SKImage` for its
+    life, where an update used to make a new image and a new GPU texture.
+  - `rowBytes` takes padded rows, as a video decoder's are.
+  - A texture no longer changes size: release it and make another.
+
 - **One thread owns frames and input: the app's loop (breaking).**
   - A frame's input goes in with the frame: `runtime.BeginBuild(window.Events)`
     turns what the keyboard and mouse did into the frame's events, and empties
@@ -46,7 +74,7 @@ before it was published.
   whole of it:
   ```csharp
   using var window = SilkWindow.Open(runtime, new("App", 800, 600));
-  using var skia = new SkiaRenderer(window.Gl);
+  using var skia = new SkiaGlRenderer(window.Gl);
   while (SilkWindow.BeginFrame(window, runtime))
   {
       runtime.BeginBuild(window.Events); Build(); runtime.EndBuild();
@@ -62,9 +90,9 @@ before it was published.
     `window.Events`) and `EndFrame` (presents). The loop hands the events to
     `runtime.BeginBuild`.
   - Renderers are bound to a window's target when they are made:
-    `new SkiaRenderer(window.Gl)` draws onto its GL framebuffer, and
-    `new SkiaRenderer(window.Cpu)` or `new ManagedRenderer(window.Cpu)` into
-    its CPU pixels, which the window presents. `SkiaRenderer.ForGl` gives null
+    `new SkiaGlRenderer(window.Gl)` draws onto its GL framebuffer, and
+    `new SkiaCpuRenderer(window.Cpu)` or `new ManagedRenderer(window.Cpu)` into
+    its CPU pixels, which the window presents. `SkiaGlRenderer.ForGl` gives null
     where GL is unusable, so an app can fall back to the CPU target; nothing
     falls back for it. Bibui.Platform.Silk no longer references SkiaSharp.
   - `runtime.Mount`, `MountStateful` and `SetState<T>` are gone. The runtime
@@ -83,7 +111,7 @@ before it was published.
 - **Renderers draw the `DrawList`; the runtime holds no backend (breaking).**
   `runtime.EndBuild()` builds, lays out and records a frame into
   `runtime.DrawList`, and the loop owner draws it with the renderer it chose:
-  `SkiaRenderer` (Bibui.Raster.Skia) onto an `SKSurface` or into CPU memory,
+  `SkiaGlRenderer` or `SkiaCpuRenderer` (Bibui.Raster.Skia) on the GPU, onto an `SKSurface` or into CPU memory,
   or `ManagedRenderer` (Bibui.Raster.Managed.Backend) into CPU memory.
   `RasterPixels` describes memory the caller owns, and `DrawToPixels` is a
   renderer's `Draw` handed to code that only has pixels to fill.
@@ -186,9 +214,9 @@ before it was published.
 - **The draw layer knows textures, never images (breaking).** An app gets an
   image's pixels into memory its own way (`Bibui.Imaging.Png`, a video
   decoder, its own code) and makes a texture on the renderer it chose.
-  - `SkiaRenderer` and `ManagedRenderer` have `CreateTexture(rgba, width,
-    height)`, `UpdateTexture` and `ReleaseTexture`, which return and take a
-    `TextureHandle`. The app owns the texture. A released handle, or
+  - The renderers have `CreateTexture(format, kind,
+    width, height, pixels, rowBytes)`, `UpdateTexture` and `ReleaseTexture`,
+    which return and take a `TextureHandle`. The app owns the texture. A released handle, or
     `TextureHandle.None`, draws nothing.
   - `DrawContext.DrawTexture` replaces `DrawImage` and `DrawPixels`.
     `RasterImage` and `DrawContext.DrawBitmap` are gone: for a video frame,

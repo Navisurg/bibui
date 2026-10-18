@@ -102,7 +102,7 @@ return 0;
 
 There is no default renderer: the runtime only records each frame into a
 `DrawList`, and the renderer that draws it is one you construct
-(`new ManagedRenderer(window.Cpu)` or `new SkiaRenderer(window.Cpu)`), so the
+(`new ManagedRenderer(window.Cpu)` or `new SkiaCpuRenderer(window.Cpu)`), so the
 trimmer sees the type you name and keeps it.
 
 The window is chosen the same way: the app opens the one it names. bibui looks
@@ -160,7 +160,7 @@ dotnet run                                                          # JIT, Silk 
 dotnet publish -c Release -r linux-x64 -p:PublishAot=true -p:AppRoute=wayland -o out
 ```
 
-Code that names `SilkWindow` or `SkiaRenderer` goes inside
+Code that names `SilkWindow` or `SkiaGlRenderer` goes inside
 `#if !WAYLAND_ONLY`.
 
 ## Trimming rules for your code

@@ -242,7 +242,7 @@ internal static unsafe class ScaleTests
             Assert.Eq((253, 126), (physW, physH), "physical size");
 
             var runtime = BibuiRuntime.Create();
-            using var skia = new SkiaRenderer();
+            using var skia = new SkiaCpuRenderer();
             runtime.SetBuild(() =>
             {
                 var box = Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box())).Styled(new Bibui.Style

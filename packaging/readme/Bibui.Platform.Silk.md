@@ -8,8 +8,8 @@ CPU. The clipboard goes through TextCopy.
 ```csharp
 var runtime = BibuiRuntime.Create();
 using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("My app", 960, 640));
-using var skia = SkiaRenderer.ForGl(window.Gl)        // Bibui.Raster.Skia
-    ?? new SkiaRenderer(window.Cpu);                  // no usable GL: draw on the CPU
+using var skia = SkiaGlRenderer.ForGl(window.Gl)        // Bibui.Raster.Skia
+    ?? new SkiaCpuRenderer(window.Cpu);                  // no usable GL: draw on the CPU
 while (SilkWindow.BeginFrame(window, runtime))
 {
     runtime.BeginBuild(window.Events);

@@ -452,7 +452,7 @@ UiNode.PushIntoParent(runtime.ParentInScope,
     .Padded(EdgeInsets.All(24f)));
 runtime.EndBuild();
 
-using var skia = new SkiaRenderer();
+using var skia = new SkiaCpuRenderer();
 File.WriteAllBytes("ocean.png", FramePixels.Png(runtime, skia.Draw));
 ```
 

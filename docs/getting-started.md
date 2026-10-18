@@ -55,7 +55,7 @@ var runtime = BibuiRuntime.Create();
 var hello = "Hello, bibui";
 
 using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Stepper", 800, 600));
-using var skia = new SkiaRenderer(window.Gl);
+using var skia = new SkiaGlRenderer(window.Gl);
 while (SilkWindow.BeginFrame(window, runtime))
 {
     runtime.BeginBuild(window.Events);
@@ -76,10 +76,10 @@ while (SilkWindow.BeginFrame(window, runtime))
   frame's root: what you build with nothing pushed lands under it, and a tree
   made with `Arrange` (`Column(...)`) is linked there with `PushIntoParent`.
   `EndBuild` lays the tree out and records it into `runtime.DrawList`.
-- `new SkiaRenderer(window.Gl)` is the renderer, drawing into the window's GL
+- `new SkiaGlRenderer(window.Gl)` is the renderer, drawing into the window's GL
   framebuffer; `skia.Draw(runtime.DrawList)` draws the frame. bibui never looks
-  one up at run time; you make it. `SkiaRenderer.ForGl(window.Gl)` answers null
-  where Skia cannot use the GL context, and `new SkiaRenderer(window.Cpu)` then
+  one up at run time; you make it. `SkiaGlRenderer.ForGl(window.Gl)` answers null
+  where Skia cannot use the GL context, and `new SkiaCpuRenderer(window.Cpu)` then
   draws on the CPU instead.
 - `Column(...)` stacks its items vertically and is as large as they are.
   `FillX()` and `FillY()` make it fill its parent, the window.
@@ -188,7 +188,7 @@ var runtime = BibuiRuntime.Create();
 var app = new App();
 
 using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Stepper", 480, 320));
-using var skia = new SkiaRenderer(window.Gl);
+using var skia = new SkiaGlRenderer(window.Gl);
 while (SilkWindow.BeginFrame(window, runtime))
 {
     runtime.BeginBuild(window.Events);

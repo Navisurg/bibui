@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Bibui.Draw;
+using Bibui.Gl;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
@@ -17,7 +18,7 @@ namespace Bibui.Runtime.Platform;
 /// and nothing of any renderer:
 /// <list type="bullet">
 /// <item><see cref="Gl"/> is its framebuffer, for a renderer that draws with GL
-/// (<c>new SkiaRenderer(window.Gl)</c>).</item>
+/// (<c>new SkiaGlRenderer(window.Gl)</c>).</item>
 /// <item><see cref="Cpu"/> is memory the size of the framebuffer, made when
 /// first asked for, for a renderer that draws on the CPU; once asked for,
 /// <see cref="EndFrame"/> uploads and shows it.</item>
@@ -27,7 +28,7 @@ namespace Bibui.Runtime.Platform;
 /// <para>One thread: the one that opened it runs every frame.</para>
 /// <code>
 /// using var window = SilkWindow.Open(runtime, new("My app", 960, 640));
-/// using var skia = new SkiaRenderer(window.Gl);
+/// using var skia = new SkiaGlRenderer(window.Gl);
 /// while (SilkWindow.BeginFrame(window, runtime))
 /// {
 ///     runtime.BeginBuild(window.Events);
