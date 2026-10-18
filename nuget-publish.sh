@@ -28,6 +28,7 @@ fi
 
 PROJECTS=(
   "bibui/bibui.csproj"
+  "bibui-gl/bibui-gl.csproj"
   "bibui-raster-skia/bibui-raster-skia.csproj"
   "bibui-platform-silk/bibui-platform-silk.csproj"
   "bibui-testing/bibui-testing.csproj"
@@ -63,6 +64,6 @@ echo "Packages published to: $FEED"
 echo ""
 echo "To use in another project, add:"
 echo '  <PackageReference Include="Bibui" Version="0.9.0" />'
-echo "  plus Bibui.Platform.Silk for a cross-platform window: new BibuiWindow(runtime, new SilkPlatformHost())"
-echo "  (it brings Bibui.Raster.Skia, which new BibuiRuntime() then draws with)"
-echo "  (or Bibui.Platform.Wayland for the raw Wayland host; Bibui.Testing for headless tests)"
+echo "  plus a window and a renderer: Bibui.Platform.Silk + Bibui.Raster.Skia (SkiaGlRenderer),"
+echo "  or Bibui.Platform.Wayland + Bibui.Raster.Managed.Backend; Bibui.Testing for headless tests."
+echo "  samples/counter is the whole loop."

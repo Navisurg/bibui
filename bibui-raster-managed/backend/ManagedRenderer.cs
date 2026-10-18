@@ -98,29 +98,35 @@ public sealed class ManagedRenderer : IDisposable
     // ── Textures ─────────────────────────────────────────────────────────────
     // Made by usage code, which owns them: a draw list only names a handle.
 
-    private readonly TextureTable<ManagedImage> _textures = new();
+    private readonly TextureTable<ManagedTexture> _textures = new();
 
     /// <summary>
-    /// A texture copied from straight-alpha RGBA8888 pixels (<c>width * 4</c>
-    /// bytes a row), premultiplied once here. The caller owns it:
+    /// A <paramref name="width"/> × <paramref name="height"/> texture of
+    /// <paramref name="format"/>, from <paramref name="pixels"/> (rows
+    /// <paramref name="rowBytes"/> apart, or packed tight when 0; RGBA8 is straight
+    /// alpha). Empty pixels make a Stream texture of zeros. The kind is a hint
+    /// here: a Stream texture is overwritten in place. The caller owns it:
     /// <see cref="ReleaseTexture"/> frees it.
     /// </summary>
-    public TextureHandle CreateTexture(ReadOnlySpan<byte> rgba, int width, int height)
-        => _textures.Add(ManagedImage.FromRgba(rgba, width, height));
+    public TextureHandle CreateTexture(TextureFormat format, TextureKind kind, int width, int height,
+        ReadOnlySpan<byte> pixels, int rowBytes = 0)
+    {
+        var texture = new ManagedTexture(format, kind, width, height);
+        if (!(pixels.IsEmpty && kind == TextureKind.Stream))
+            texture.Write(pixels, TexturePixels.RowBytes(format, width, height, pixels, rowBytes));
+        return _textures.Add(texture);
+    }
 
     /// <summary>
-    /// Replaces the pixels behind <paramref name="texture"/>, at any size, reusing
-    /// its storage when the size is unchanged. A released handle is left alone.
+    /// Overwrites a Stream texture's pixels, the whole texture, in place, at the
+    /// size and format it was made with. A Static texture does not change: its
+    /// update is ignored. So is a released handle.
     /// </summary>
-    public void UpdateTexture(TextureHandle texture, ReadOnlySpan<byte> rgba, int width, int height)
+    public void UpdateTexture(TextureHandle texture, ReadOnlySpan<byte> pixels, int rowBytes = 0)
     {
-        if (_textures.Get(texture) is not { } image) return;
-        if (image.Width == width && image.Height == height)
-        {
-            ManagedImage.Premultiply(rgba, width, height, image.Pixels);
-            _textures.Replace(texture, image);
-        }
-        else _textures.Replace(texture, ManagedImage.FromRgba(rgba, width, height));
+        if (_textures.Get(texture) is not { Kind: TextureKind.Stream } t) return;
+        t.Write(pixels, TexturePixels.RowBytes(t.Format, t.Width, t.Height, pixels, rowBytes));
+        _textures.Touch(texture);
     }
 
     /// <summary>Frees <paramref name="texture"/>; drawing it afterwards draws nothing.</summary>
@@ -297,7 +303,7 @@ public sealed class ManagedRenderer : IDisposable
             case DrawOpKind.Path: c.DrawPath(_opPaths[k]!, Convert(op, list, c)); break;
             case DrawOpKind.Points: Points(c, op.Mode, list.Points.Slice(op.Start, op.Count), Convert(op, list, c)); break;
             case DrawOpKind.Texture:
-                if (_textures.Get(op.Texture) is { } img) Bitmap(c, img.Pixels, img.Width, img.Height, op.Rect, op);
+                if (_textures.Get(op.Texture) is { } img) Bitmap(c, img.Argb, img.Width, img.Height, op.Rect, op);
                 break;
             case DrawOpKind.BackdropBlur: BackdropBlur(c, op.Region, op.Rect, op.A); break;
             case DrawOpKind.Glyphs:
@@ -487,35 +493,57 @@ public sealed class ManagedRenderer : IDisposable
     public void Dispose() => _paths.Dispose();
 }
 
-/// <summary>A texture's premultiplied pixels (<c>0xAARRGGBB</c>), rewritten in place by an update of the same size.</summary>
-internal sealed class ManagedImage
+/// <summary>
+/// One texture, as this renderer keeps it: the pixels as given (<see cref="Raw"/>,
+/// rows packed tight: what reads a texture's own channels reads) and the same
+/// premultiplied ARGB with the format's default look (<see cref="Argb"/>: what
+/// drawing, blurring and damage read). Both are made once and written in place.
+/// Draw thread only.
+/// </summary>
+internal sealed class ManagedTexture(TextureFormat format, TextureKind kind, int width, int height)
 {
-    private ManagedImage(uint[] pixels, int width, int height)
-    {
-        Pixels = pixels;
-        Width = width;
-        Height = height;
-    }
+    public readonly TextureFormat Format = format;
+    public readonly TextureKind Kind = kind;
+    public readonly int Width = width, Height = height;
+    public readonly byte[] Raw = new byte[width * height * format.BytesPerPixel()];
+    public readonly uint[] Argb = new uint[width * height];
 
-    internal uint[] Pixels { get; }
-    public int Width { get; }
-    public int Height { get; }
-
-    /// <summary>From straight-alpha RGBA8888 bytes.</summary>
-    public static ManagedImage FromRgba(ReadOnlySpan<byte> rgba, int width, int height)
+    /// <summary>Takes <paramref name="pixels"/>, rows <paramref name="rowBytes"/> apart, into both arrays.</summary>
+    public void Write(ReadOnlySpan<byte> pixels, int rowBytes)
     {
-        var px = new uint[width * height];
-        Premultiply(rgba, width, height, px);
-        return new ManagedImage(px, width, height);
-    }
+        int bpp = Format.BytesPerPixel(), row = Width * bpp;
+        for (int y = 0; y < Height; y++)
+            pixels.Slice(y * rowBytes, row).CopyTo(Raw.AsSpan(y * row, row));
 
-    internal static void Premultiply(ReadOnlySpan<byte> rgba, int width, int height, Span<uint> into)
-    {
-        if (rgba.Length < width * height * 4) throw new ArgumentException("Too few pixel bytes.", nameof(rgba));
-        for (int i = 0; i < width * height; i++)
+        // The default looks: R8 grey (r, r, r, 1), A8 white coverage (1, 1, 1, a),
+        // RG8 (r, g, 0, 1), RGBA8 and BGRA8 as they are — premultiplied, as the canvas draws.
+        var raw = Raw;
+        var argb = Argb;
+        switch (Format)
         {
-            uint argb = ((uint)rgba[4 * i + 3] << 24) | ((uint)rgba[4 * i] << 16) | ((uint)rgba[4 * i + 1] << 8) | rgba[4 * i + 2];
-            into[i] = PixelMath.Premul(argb);
+            case TextureFormat.R8:
+                for (int i = 0; i < argb.Length; i++) { uint v = raw[i]; argb[i] = 0xFF000000u | v << 16 | v << 8 | v; }
+                break;
+            case TextureFormat.A8:
+                for (int i = 0; i < argb.Length; i++) { uint a = raw[i]; argb[i] = a << 24 | a << 16 | a << 8 | a; }
+                break;
+            case TextureFormat.RG8:
+                for (int i = 0; i < argb.Length; i++) argb[i] = 0xFF000000u | (uint)raw[2 * i] << 16 | (uint)raw[2 * i + 1] << 8;
+                break;
+            case TextureFormat.BGRA8:
+                for (int i = 0; i < argb.Length; i++)
+                {
+                    uint straight = (uint)raw[4 * i + 3] << 24 | (uint)raw[4 * i + 2] << 16 | (uint)raw[4 * i + 1] << 8 | raw[4 * i];
+                    argb[i] = PixelMath.Premul(straight);
+                }
+                break;
+            default:
+                for (int i = 0; i < argb.Length; i++)
+                {
+                    uint straight = (uint)raw[4 * i + 3] << 24 | (uint)raw[4 * i] << 16 | (uint)raw[4 * i + 1] << 8 | raw[4 * i + 2];
+                    argb[i] = PixelMath.Premul(straight);
+                }
+                break;
         }
     }
 }

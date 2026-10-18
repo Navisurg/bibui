@@ -6,129 +6,17 @@ using SkiaSharp;
 namespace Bibui.Raster.Skia;
 
 /// <summary>
-/// Draws a <see cref="DrawList"/> with Skia. Bound to the target a platform
-/// presents — a window's GL framebuffer (<see cref="GlTarget"/>, on the GPU) or
-/// memory it shows (<see cref="CpuTarget"/>) — it draws a frame with
-/// <see cref="Draw(DrawList)"/>. Unbound, or besides, it draws onto an
-/// <see cref="SKSurface"/> the caller made, or into CPU memory the caller owns.
-///
-/// <para>Holds what Skia draws with, built once from what the ops describe and
-/// reused while frames keep asking for it: paints by content, text paints and
-/// fonts per face and size, a typeface per bibui face, and a native path per kept
-/// <see cref="VectorPath"/>. Each is touch-evicted when frames stop drawing it;
-/// <see cref="Draw(DrawList, SKSurface)"/> ages them once per frame. Textures are
-/// the caller's: made here, drawn by handle, released by the caller.</para>
-///
-/// <para>Not thread-safe: one thread draws at a time.</para>
+/// What both Skia renderers draw with: a <see cref="DrawList"/> onto an
+/// <see cref="SKSurface"/>, op by op, and what that keeps — paints by content,
+/// text paints and fonts per face and size, a typeface per bibui face, a native
+/// path per kept <see cref="VectorPath"/>, each touch-evicted when frames stop
+/// drawing it — and the renderer's textures by handle, which the renderer that
+/// owns this makes. Not thread-safe: one thread draws at a time.
 /// </summary>
-public sealed class SkiaRenderer : IDisposable
+internal sealed class SkiaOps : IDisposable
 {
-    /// <summary>A renderer bound to nothing: it draws into the memory or the surface each call names.</summary>
-    public SkiaRenderer() { }
-
-    /// <summary>
-    /// A renderer bound to <paramref name="target"/>, memory a platform presents:
-    /// <see cref="Draw(DrawList)"/> draws into whatever memory it holds then.
-    /// </summary>
-    public SkiaRenderer(CpuTarget target)
-    {
-        ArgumentNullException.ThrowIfNull(target);
-        _pixelTarget = target;
-    }
-
-    /// <summary>
-    /// A renderer bound to <paramref name="target"/>, a window's GL framebuffer:
-    /// Skia's GPU context is made on that GL context, which must be current on
-    /// this thread. Throws when Skia cannot drive it; <see cref="ForGl"/> answers
-    /// null instead.
-    /// </summary>
-    public SkiaRenderer(GlTarget target)
-    {
-        ArgumentNullException.ThrowIfNull(target);
-        _gpu = GpuContext(target) ?? throw new InvalidOperationException("Skia cannot draw with this GL context.");
-        _glTarget = target;
-    }
-
-    /// <summary>
-    /// A renderer bound to <paramref name="target"/>, or null when Skia cannot
-    /// drive its GL context (too old, software GL without what Skia needs). The
-    /// caller falls back, e.g. to <c>new SkiaRenderer(window.Cpu)</c>.
-    /// </summary>
-    public static SkiaRenderer? ForGl(GlTarget target)
-    {
-        ArgumentNullException.ThrowIfNull(target);
-        return GpuContext(target) is { } gpu ? new SkiaRenderer(target, gpu) : null;
-    }
-
-    private SkiaRenderer(GlTarget target, GRContext gpu) => (_glTarget, _gpu) = (target, gpu);
-
-    // ── The bound target ─────────────────────────────────────────────────────
-    // One of the two, or neither; fixed for the renderer's life.
-
-    private readonly CpuTarget? _pixelTarget;
-    private readonly GlTarget? _glTarget;
-
-    // Skia's GPU context on the GL target's context, and the surface over its
-    // framebuffer, remade when the size changes.
-    private readonly GRContext? _gpu;
-    private GRBackendRenderTarget? _gpuTarget;
-    private SKSurface? _gpuSurface;
-    private int _gpuWidth, _gpuHeight;
-
-    /// <summary>
-    /// Byte budget for Skia's GPU resource cache (glyph atlases, uploaded
-    /// textures, gradient ramps), on a GL-bound renderer; ignored otherwise.
-    /// </summary>
-    public long GpuResourceCacheLimit
-    {
-        get => _gpu?.GetResourceCacheLimit() ?? 0;
-        set => _gpu?.SetResourceCacheLimit(value);
-    }
-
-    private static GRContext? GpuContext(GlTarget target)
-    {
-        var get = target.GetProcAddress;
-        using var gl = GRGlInterface.Create(name => get(name));
-        if (gl is null) return null;
-        var context = GRContext.CreateGl(gl);
-        // Bounded: a long-running window would otherwise grow toward Skia's
-        // much larger default budget.
-        context?.SetResourceCacheLimit(96 * 1024 * 1024);
-        return context;
-    }
-
-    /// <summary>
-    /// Draws <paramref name="list"/> into the target this renderer is bound to:
-    /// the GL framebuffer at its current size, then flushed for the swap that
-    /// follows; or the memory the pixel target holds now.
-    /// </summary>
-    public void Draw(DrawList list)
-    {
-        if (_gpu is not null)
-        {
-            var t = _glTarget!;
-            // Skia caches GL state between draws, and anything else touching
-            // the context invalidates that cache. Cheap when nothing changed.
-            _gpu.ResetContext();
-            if (_gpuSurface is null || _gpuWidth != t.Width || _gpuHeight != t.Height)
-            {
-                _gpuSurface?.Dispose();
-                _gpuTarget?.Dispose();
-                const uint GlRgba8 = 0x8058;
-                _gpuTarget = new GRBackendRenderTarget(t.Width, t.Height, sampleCount: 0, t.StencilBits,
-                    new GRGlFramebufferInfo(t.Framebuffer, GlRgba8));
-                _gpuSurface = SKSurface.Create(_gpu, _gpuTarget, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888)
-                    ?? throw new InvalidOperationException("Skia made no surface over the GL framebuffer.");
-                (_gpuWidth, _gpuHeight) = (t.Width, t.Height);
-            }
-            Draw(list, _gpuSurface);
-            _gpuSurface.Canvas.Flush();
-            _gpu.Flush();
-            return;
-        }
-        if (_pixelTarget is null) throw new InvalidOperationException("This renderer is bound to no target: draw with Draw(list, pixels).");
-        Draw(list, _pixelTarget.Pixels);
-    }
+    /// <summary>The owning renderer's textures: it makes and frees them; a texture op draws one by handle.</summary>
+    public readonly TextureTable<SkiaTexture> Textures = new();
 
     // A paint owns the Skia children it was built with (shader, filters, dash),
     // so a child can never be evicted from under a live paint: they go together.
@@ -145,64 +33,6 @@ public sealed class SkiaRenderer : IDisposable
     // ids FreeType resolves belong to that file, so Skia draws the same glyphs.
     // Kept for the renderer's life, like the FontFaces they mirror.
     private readonly Dictionary<int, SKTypeface> _typefaces = [];
-
-    // The surface over the memory Draw(list, pixels) was last handed, so a host
-    // that draws into the same few buffers makes no surface per frame.
-    private SKSurface? _wrapped;
-    private RasterPixels _wrappedPixels;
-
-    // ── Textures ─────────────────────────────────────────────────────────────
-    // Made by usage code, which owns them: a draw list only names a handle.
-
-    private readonly TextureTable<SKImage> _textures = new();
-
-    /// <summary>
-    /// A texture copied from straight-alpha RGBA8888 pixels (<c>width * 4</c>
-    /// bytes a row). The caller owns it: <see cref="ReleaseTexture"/> frees it.
-    /// </summary>
-    public TextureHandle CreateTexture(ReadOnlySpan<byte> rgba, int width, int height)
-        => _textures.Add(Image(rgba, width, height));
-
-    /// <summary>
-    /// Replaces the pixels behind <paramref name="texture"/>, at any size. A
-    /// released handle is left alone.
-    /// </summary>
-    public void UpdateTexture(TextureHandle texture, ReadOnlySpan<byte> rgba, int width, int height)
-    {
-        if (_textures.Get(texture) is null) return;
-        _textures.Replace(texture, Image(rgba, width, height))?.Dispose();
-    }
-
-    /// <summary>Frees <paramref name="texture"/>; drawing it afterwards draws nothing.</summary>
-    public void ReleaseTexture(TextureHandle texture) => _textures.Remove(texture)?.Dispose();
-
-    private static SKImage Image(ReadOnlySpan<byte> rgba, int width, int height)
-    {
-        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-        return SKImage.FromPixelCopy(info, rgba, width * 4)
-            ?? throw new ArgumentException($"Pixels do not describe a {width}x{height} RGBA image.", nameof(rgba));
-    }
-
-    // ── Drawing ──────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Draws <paramref name="target"/>'s pixels from <paramref name="list"/>:
-    /// BGRA8888 premultiplied memory the caller owns, a <c>wl_shm</c> buffer or a
-    /// test's array, on the CPU.
-    /// </summary>
-    public void Draw(DrawList list, RasterPixels target)
-    {
-        if (_wrapped is null || _wrappedPixels != target)
-        {
-            _wrapped?.Dispose();
-            var info = new SKImageInfo(target.Width, target.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
-            _wrapped = SKSurface.Create(info, target.Address, target.RowBytes)
-                ?? throw new InvalidOperationException(
-                    $"SKSurface.Create returned null over {target.Width}x{target.Height} (row {target.RowBytes} bytes).");
-            _wrappedPixels = target;
-        }
-        Draw(list, _wrapped);
-    }
 
     /// <summary>
     /// Draws <paramref name="list"/> onto <paramref name="surface"/>, then ages
@@ -228,7 +58,7 @@ public sealed class SkiaRenderer : IDisposable
                     canvas.DrawPoints(op.Mode.ToSk(), list.Points.Slice(op.Start, op.Count).AsSk().ToArray(), Paint(op, list));
                     break;
                 case DrawOpKind.Texture:
-                    if (_textures.Get(op.Texture) is { } image) canvas.DrawImage(image, op.Rect.ToSk(), Paint(op, list));
+                    if (Textures.Get(op.Texture) is { } texture) Texture(canvas, texture, op, list);
                     break;
                 case DrawOpKind.BackdropBlur: BackdropBlur(surface, op.Region, op.Rect, op.A); break;
                 case DrawOpKind.Glyphs:
@@ -256,6 +86,16 @@ public sealed class SkiaRenderer : IDisposable
             canvas.Translate(m.M31, m.M32);
             if (m.M11 != 1f) canvas.Scale(m.M11, m.M11);
         }
+    }
+
+    // A texture into its rect. The paint's alpha modulates it; an A8 one is
+    // drawn in white, its default look, whatever colour the paint has.
+    private void Texture(SKCanvas canvas, SkiaTexture texture, in DrawOp op, DrawList list)
+    {
+        var paint = texture.Format == TextureFormat.A8
+            ? Paint(op.Paint with { Color = new Rgba(255, 255, 255, op.Paint.Color.A) }, op.MaskBlurSigma, op.ImageBlurSigma)
+            : Paint(op, list);
+        canvas.DrawImage(texture.Image, op.Rect.ToSk(), paint);
     }
 
     // Snapshots region of what the surface holds, blurs it and draws it back
@@ -419,13 +259,23 @@ public sealed class SkiaRenderer : IDisposable
             : SKShader.CreateLinearGradient(s.Start.ToSk(), s.End.ToSk(), sk, stops.IsEmpty ? null : stops.ToArray(), SKShaderTileMode.Clamp);
     }
 
+    /// <summary>
+    /// How Skia reads a texture format. Gray8 and Rg88 sample as (g, g, g, 1) and
+    /// (r, g, 0, 1) already: the formats' default looks. Alpha8 takes its colour
+    /// from the paint, which a texture op makes white.
+    /// </summary>
+    public static SKImageInfo Info(TextureFormat format, int width, int height) => format switch
+    {
+        TextureFormat.R8 => new(width, height, SKColorType.Gray8, SKAlphaType.Opaque),
+        TextureFormat.RG8 => new(width, height, SKColorType.Rg88, SKAlphaType.Opaque),
+        TextureFormat.A8 => new(width, height, SKColorType.Alpha8, SKAlphaType.Premul),
+        TextureFormat.BGRA8 => new(width, height, SKColorType.Bgra8888, SKAlphaType.Unpremul),
+        _ => new(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul),
+    };
+
+    /// <summary>The caches and faces. The textures are the owning renderer's to free.</summary>
     public void Dispose()
     {
-        // The GPU context goes before the window's GL context does: dispose
-        // the renderer first.
-        _gpuSurface?.Dispose();
-        _gpuTarget?.Dispose();
-        _gpu?.Dispose();
         _paints.Dispose();
         _textPaints.Dispose();
         _textFonts.Dispose();
@@ -433,10 +283,25 @@ public sealed class SkiaRenderer : IDisposable
         _scratch.Dispose();
         foreach (var typeface in _typefaces.Values) typeface.Dispose();
         _typefaces.Clear();
-        for (var node = _textures.FirstLive; node is not null; node = node.Next) node.Item!.Dispose();
-        _wrapped?.Dispose();
-        _wrapped = null;
     }
+}
+
+/// <summary>
+/// One texture, as a Skia renderer keeps it: the image a texture op draws, and
+/// what is behind it. On GL (<see cref="SkiaGlRenderer"/>): a GL texture the
+/// renderer made, which the image wraps for its life. On the CPU
+/// (<see cref="SkiaCpuRenderer"/>): an image over a copy of the pixels (Static),
+/// or over a pinned buffer the renderer writes into and wraps again (Stream).
+/// Draw thread only.
+/// </summary>
+internal sealed class SkiaTexture
+{
+    public TextureFormat Format;
+    public TextureKind Kind;
+    public int Width, Height;
+    public SKImage? Image;
+    public uint GlTexture;
+    public byte[]? Pixels;
 }
 
 /// <summary>A paint and the Skia children it carries, disposed together.</summary>

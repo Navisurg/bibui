@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using Bibui.Draw;
+using Bibui.Gl;
 using Silk.NET.Input;
 using Silk.NET.Maths;
-using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 // Silk's key enum, for asking its keyboard what is held. What reaches the
 // runtime is Bibui.Key / Bibui.MouseButton: the same values, by a cast.
@@ -13,27 +13,27 @@ namespace Bibui.Runtime.Platform;
 /// <summary>
 /// A window on GLFW through Silk.NET, presenting with OpenGL: what
 /// <see cref="Open"/> makes, and <see cref="BeginFrame"/> and
-/// <see cref="EndFrame"/> bracket every frame of. It knows GL and memory,
-/// and nothing of any renderer:
-/// <list type="bullet">
-/// <item><see cref="Gl"/> is its framebuffer, for a renderer that draws with GL
-/// (<c>new SkiaRenderer(window.Gl)</c>).</item>
-/// <item><see cref="Cpu"/> is memory the size of the framebuffer, made when
-/// first asked for, for a renderer that draws on the CPU; once asked for,
-/// <see cref="EndFrame"/> uploads and shows it.</item>
-/// </list>
+/// <see cref="EndFrame"/> bracket every frame of. It knows nothing of any
+/// renderer. Its one target is <see cref="Gl"/>, its GL framebuffer: whatever
+/// draws a frame draws it there with GL, between <see cref="BeginDraw"/> and
+/// <see cref="EndDraw"/>, which swaps. A
+/// renderer on the GPU draws into it (<c>new SkiaGlRenderer(window.Gl)</c>); a
+/// renderer on the CPU draws into memory that <c>Bibui.Gl</c>'s
+/// <c>GlCpuFramebuffer</c> shows on it.
 /// The clipboard goes through TextCopy (wl-clipboard on Wayland).
 ///
 /// <para>One thread: the one that opened it runs every frame.</para>
 /// <code>
 /// using var window = SilkWindow.Open(runtime, new("My app", 960, 640));
-/// using var skia = new SkiaRenderer(window.Gl);
+/// using var skia = new SkiaGlRenderer(window.Gl);
 /// while (SilkWindow.BeginFrame(window, runtime))
 /// {
 ///     runtime.BeginBuild(window.Events);
 ///     // ... build ...
 ///     runtime.EndBuild();
+///     SilkWindow.BeginDraw(window);
 ///     skia.Draw(runtime.DrawList);
+///     SilkWindow.EndDraw(window);
 ///     SilkWindow.EndFrame(window, runtime);
 /// }
 /// </code>
@@ -42,7 +42,6 @@ public sealed class SilkWindow : IDisposable
 {
     internal readonly IWindow Native;
     internal readonly BibuiRuntime Runtime;
-    internal GL GlApi = null!;
 
     /// <summary>
     /// What the keyboard and mouse did since the last frame, in order: GLFW's
@@ -67,38 +66,6 @@ public sealed class SilkWindow : IDisposable
 
     /// <summary>The window's GL framebuffer: FBO 0 at the current size, 8 stencil bits.</summary>
     public GlTarget Gl { get; } = new() { Framebuffer = 0, StencilBits = 8 };
-
-    /// <summary>
-    /// Memory the size of the framebuffer that <see cref="EndFrame"/> uploads
-    /// and shows: for a renderer drawing on the CPU. Made when first asked for,
-    /// and from then on every frame is presented from it.
-    /// </summary>
-    public CpuTarget Cpu
-    {
-        get
-        {
-            if (_cpu is null)
-            {
-                _cpu = new CpuTarget();
-                SizeCpu();
-            }
-            return _cpu;
-        }
-    }
-
-    private CpuTarget? _cpu;
-    private byte[]? _cpuBuffer;
-
-    // Keeps the CPU memory the framebuffer's size; pinned, so a renderer draws
-    // into it where it lies.
-    internal void SizeCpu()
-    {
-        if (_cpu is null) return;
-        int w = FramebufferWidth, h = FramebufferHeight;
-        if (_cpuBuffer is null || _cpuBuffer.Length != w * h * 4)
-            _cpuBuffer = GC.AllocateArray<byte>(Math.Max(1, w * h * 4), pinned: true);
-        _cpu.Pixels = new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(_cpuBuffer, 0), w, h, w * 4);
-    }
 
     /// <summary>Framebuffer size in physical px.</summary>
     public int FramebufferWidth => Gl.Width;
@@ -212,48 +179,6 @@ public sealed class SilkWindow : IDisposable
     internal readonly Stopwatch Clock = Stopwatch.StartNew();
     internal double NextFrameMs;
 
-    // ── Presenting the CPU memory ────────────────────────────────────────────
-    // A texture the memory is uploaded to, drawn over the framebuffer as one
-    // quad. Plain GL, made when the CPU memory is first shown.
-
-    private uint _program, _vao, _texture;
-    private int _texWidth, _texHeight;
-
-    internal void PresentCpu()
-    {
-        if (_cpu is null || _cpuBuffer is null) return;
-        var gl = GlApi;
-        if (_program == 0)
-        {
-            _program = CreateShaderProgram();
-            _vao = gl.GenVertexArray();
-            _texture = gl.GenTexture();
-            gl.BindTexture(TextureTarget.Texture2D, _texture);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-        }
-        int w = _cpu.Pixels.Width, h = _cpu.Pixels.Height;
-        gl.Viewport(0, 0, (uint)w, (uint)h);
-        // Raw BGRA, swizzled by the driver on upload; in place when the size is unchanged.
-        gl.BindTexture(TextureTarget.Texture2D, _texture);
-        if (w == _texWidth && h == _texHeight)
-            gl.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, (uint)w, (uint)h, PixelFormat.Bgra, PixelType.UnsignedByte, in _cpuBuffer[0]);
-        else
-        {
-            gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba, (uint)w, (uint)h, 0, PixelFormat.Bgra, PixelType.UnsignedByte, in _cpuBuffer[0]);
-            (_texWidth, _texHeight) = (w, h);
-        }
-        gl.UseProgram(_program);
-        gl.ActiveTexture(TextureUnit.Texture0);
-        gl.Uniform1(gl.GetUniformLocation(_program, "uTexture"), 0);
-        gl.BindVertexArray(_vao);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 6); // a fullscreen quad: two triangles
-        gl.BindVertexArray(0);
-        gl.BindTexture(TextureTarget.Texture2D, 0);
-    }
-
     /// <summary>
     /// Closes the window and destroys it with its GL context. Dispose a renderer
     /// bound to <see cref="Gl"/> first: its GPU context goes before the GL one.
@@ -261,92 +186,8 @@ public sealed class SilkWindow : IDisposable
     public void Dispose()
     {
         if (Runtime.WakeUp == Wake) Runtime.WakeUp = null;
-        if (_program != 0) GlApi.DeleteProgram(_program);
-        if (_vao != 0) GlApi.DeleteVertexArray(_vao);
-        if (_texture != 0) GlApi.DeleteTexture(_texture);
         Native.Reset();
         Native.Dispose();
-    }
-
-    private uint CreateShaderProgram()
-    {
-        // Fullscreen quad via gl_VertexID — no VBO required.
-        //
-        // NDC positions for 6 vertices (two triangles covering [-1,1] x [-1,1]):
-        //   tri 0: (-1,-1)  (1,-1)  (-1,1)
-        //   tri 1: (-1, 1)  (1,-1)  ( 1,1)
-        //
-        // UV y-flip: Skia places row 0 at the image top; GL places TexImage2D row 0
-        // at the texture bottom. We correct with: v = 1.0 - ((ndc_y + 1.0) * 0.5)
-        const string vertSrc = """
-            #version 330 core
-            out vec2 v_uv;
-            void main()
-            {
-                // 6-vertex fullscreen quad positions
-                vec2 pos[6] = vec2[6](
-                    vec2(-1.0, -1.0),
-                    vec2( 1.0, -1.0),
-                    vec2(-1.0,  1.0),
-                    vec2(-1.0,  1.0),
-                    vec2( 1.0, -1.0),
-                    vec2( 1.0,  1.0)
-                );
-                vec2 p = pos[gl_VertexID];
-                gl_Position = vec4(p, 0.0, 1.0);
-                // UV: x = (ndc_x + 1) / 2 , y flipped
-                float u = (p.x + 1.0) * 0.5;
-                float v = 1.0 - (p.y + 1.0) * 0.5;
-                v_uv = vec2(u, v);
-            }
-            """;
-
-        const string fragSrc = """
-            #version 330 core
-            in vec2 v_uv;
-            uniform sampler2D uTexture;
-            out vec4 frag_color;
-            void main()
-            {
-                frag_color = texture(uTexture, v_uv);
-            }
-            """;
-
-        var vs = CompileShader(ShaderType.VertexShader, vertSrc);
-        var fs = CompileShader(ShaderType.FragmentShader, fragSrc);
-
-        var program = GlApi.CreateProgram();
-        GlApi.AttachShader(program, vs);
-        GlApi.AttachShader(program, fs);
-        GlApi.LinkProgram(program);
-
-        GlApi.GetProgram(program, ProgramPropertyARB.LinkStatus, out int linked);
-        if (linked == 0)
-        {
-            var log = GlApi.GetProgramInfoLog(program);
-            throw new InvalidOperationException($"Shader link failed: {log}");
-        }
-
-        GlApi.DeleteShader(vs);
-        GlApi.DeleteShader(fs);
-
-        return program;
-    }
-
-    private uint CompileShader(ShaderType type, string src)
-    {
-        var shader = GlApi.CreateShader(type);
-        GlApi.ShaderSource(shader, src);
-        GlApi.CompileShader(shader);
-
-        GlApi.GetShader(shader, ShaderParameterName.CompileStatus, out int compiled);
-        if (compiled == 0)
-        {
-            var log = GlApi.GetShaderInfoLog(shader);
-            throw new InvalidOperationException($"Shader compile failed ({type}): {log}");
-        }
-
-        return shader;
     }
 
     // ── The module: open, then bracket every frame ──────────────────────────
@@ -443,7 +284,6 @@ public sealed class SilkWindow : IDisposable
         var window = new SilkWindow(native, runtime);
         native.Load += () =>
         {
-            window.GlApi = GL.GetApi(native);
             var context = native.GLContext!;
             window.Gl.GetProcAddress = name => context.TryGetProcAddress(name, out var at) ? at : 0;
             Resize(window, native.FramebufferSize);
@@ -469,7 +309,6 @@ public sealed class SilkWindow : IDisposable
         window.Gl.Width = framebuffer.X;
         window.Gl.Height = framebuffer.Y;
         window.Scale = size.X > 0 ? (float)framebuffer.X / size.X : 1f;
-        window.SizeCpu();
         window.Runtime.ResizeSurface(framebuffer.X, framebuffer.Y, window.Scale);
     }
 
@@ -501,14 +340,22 @@ public sealed class SilkWindow : IDisposable
     }
 
     /// <summary>
-    /// Puts the frame on screen: uploads the CPU memory if a renderer draws there,
-    /// swaps, and paces the loop to the runtime's <see cref="BibuiRuntime.TargetHz"/>.
+    /// Makes the window's GL context current, to draw this frame into its
+    /// framebuffer: after the build, before the renderer draws. With one window
+    /// it already is; with several, each draws in its own.
     /// </summary>
-    public static void EndFrame(SilkWindow window, BibuiRuntime runtime)
+    public static void BeginDraw(SilkWindow window) => window.Native.GLContext!.MakeCurrent();
+
+    /// <summary>Shows what was drawn into the framebuffer: swaps.</summary>
+    public static void EndDraw(SilkWindow window)
     {
-        window.PresentCpu();
         window.Native.GLContext!.SwapBuffers();
         if (++window.Frames == 1) window.WireInput();
+    }
+
+    /// <summary>Paces the loop to the runtime's <see cref="BibuiRuntime.TargetHz"/>: sleeps until the next frame is due.</summary>
+    public static void EndFrame(SilkWindow window, BibuiRuntime runtime)
+    {
 
         double targetMs = 1000.0 / runtime.TargetHz;
         window.NextFrameMs += targetMs;

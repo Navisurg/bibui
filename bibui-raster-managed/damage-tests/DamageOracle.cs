@@ -554,7 +554,7 @@ internal static class DamageOracle
                     {
                         // The scene is at scale 1, so logical and physical px agree.
                         var white = Paint.Filled(new Rgba(255, 255, 255));
-                        if (image.IsNone) image = renderer.CreateTexture(Checkerboard(16), 16, 16);
+                        if (image.IsNone) image = renderer.CreateTexture(TextureFormat.RGBA8, TextureKind.Static, 16, 16, Checkerboard(16));
 
                         ctx.DrawTexture(image, new RectF(20, 20, 84, 84), white);
                         float x = 120 + frame / 4 % 10 * 8;
@@ -569,8 +569,8 @@ internal static class DamageOracle
                             pixels[i * 4 + 3] = 255;
                         }
                         // One handle, its pixels updated every frame: damage must see the change.
-                        if (video.IsNone) video = renderer.CreateTexture(pixels, 32, 32);
-                        else renderer.UpdateTexture(video, pixels, 32, 32);
+                        if (video.IsNone) video = renderer.CreateTexture(TextureFormat.RGBA8, TextureKind.Stream, 32, 32, pixels);
+                        else renderer.UpdateTexture(video, pixels);
                         ctx.DrawTexture(video, new RectF(260, 20, 324, 84), white);
 
                         Span<Vector2> pts = stackalloc Vector2[8];

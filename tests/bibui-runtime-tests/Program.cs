@@ -2599,11 +2599,11 @@ Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string
 
 // Textures: one checked against each renderer, through the renderer's own
 // texture functions.
-void TextureContract(string name, Bibui.Draw.DrawToPixels draw,
-    Func<byte[], int, int, Bibui.Draw.TextureHandle> create,
-    Action<Bibui.Draw.TextureHandle, byte[], int, int> update,
+void TextureContract(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn create, UpdateTextureFn update,
     Action<Bibui.Draw.TextureHandle> release)
 {
+    var rgba8 = Bibui.Draw.TextureFormat.RGBA8;
+    var stream = Bibui.Draw.TextureKind.Stream;
     // 4x2 opaque pixels, RGBA, each one different.
     static byte[] Rgba8(byte seed)
     {
@@ -2624,23 +2624,59 @@ void TextureContract(string name, Bibui.Draw.DrawToPixels draw,
     }
 
     var a = Rgba8(10);
-    var first = create(a, 4, 2);
+    var first = create(rgba8, stream, 4, 2, a, 0);
     IsTrue(!first.IsNone, $"{name}: a created texture is a handle");
     IsTrue(Draw(first).SequenceEqual(a), $"{name}: drawn 1:1, a texture is its pixels");
 
     var b = Rgba8(90);
-    update(first, b, 4, 2);
-    IsTrue(Draw(first).SequenceEqual(b), $"{name}: an update changes what the same handle draws");
+    update(first, b, 0);
+    IsTrue(Draw(first).SequenceEqual(b), $"{name}: an update changes what the same Stream handle draws");
+
+    var still = create(rgba8, Bibui.Draw.TextureKind.Static, 4, 2, a, 0);
+    update(still, b, 0);
+    IsTrue(Draw(still).SequenceEqual(a), $"{name}: a Static texture ignores an update");
+    release(still);
+
+    // Rows 20 bytes apart, the last 4 of each padding, as a video decoder's rows are.
+    var padded = new byte[20 * 2];
+    for (int y = 0; y < 2; y++) Array.Copy(b, y * 16, padded, y * 20, 16);
+    update(first, padded, 20);
+    IsTrue(Draw(first).SequenceEqual(b), $"{name}: padded rows read as the pixels they hold");
+
+    var blank = create(rgba8, stream, 4, 2, ReadOnlySpan<byte>.Empty, 0);
+    IsTrue(Draw(blank).SequenceEqual(new byte[4 * 2 * 4]), $"{name}: a Stream made with no pixels is zeros");
+    release(blank);
+
+    // Each format's default look, drawn plainly: R8 grey, A8 white coverage
+    // (premultiplied, so (a, a, a, a)), RG8 (r, g, 0, 1).
+    byte[] one = [0, 40, 80, 120, 160, 200, 240, 255];
+    var r8 = create(Bibui.Draw.TextureFormat.R8, stream, 4, 2, one, 0);
+    IsTrue(Draw(r8).SequenceEqual(one.SelectMany(v => new[] { v, v, v, (byte)255 })), $"{name}: R8 draws grey");
+    var a8 = create(Bibui.Draw.TextureFormat.A8, stream, 4, 2, one, 0);
+    IsTrue(Draw(a8).SequenceEqual(one.SelectMany(v => new[] { v, v, v, v })), $"{name}: A8 draws white coverage");
+    var two = new byte[16];
+    for (int i = 0; i < 8; i++) (two[2 * i], two[2 * i + 1]) = ((byte)(i * 30), (byte)(255 - i * 30));
+    var rg8 = create(Bibui.Draw.TextureFormat.RG8, stream, 4, 2, two, 0);
+    IsTrue(Draw(rg8).SequenceEqual(Enumerable.Range(0, 8).SelectMany(i => new[] { two[2 * i], two[2 * i + 1], (byte)0, (byte)255 })),
+        $"{name}: RG8 draws (r, g, 0, 1)");
+    update(r8, one.Reverse().ToArray(), 0);
+    IsTrue(Draw(r8).SequenceEqual(one.Reverse().SelectMany(v => new[] { v, v, v, (byte)255 })), $"{name}: an R8 Stream updates in place");
+    // BGRA8 is RGBA8 in another byte order: the same picture.
+    var bgra = new byte[a.Length];
+    for (int i = 0; i < 8; i++) (bgra[4 * i], bgra[4 * i + 1], bgra[4 * i + 2], bgra[4 * i + 3]) = (a[4 * i + 2], a[4 * i + 1], a[4 * i], a[4 * i + 3]);
+    var bgra8 = create(Bibui.Draw.TextureFormat.BGRA8, stream, 4, 2, bgra, 0);
+    IsTrue(Draw(bgra8).SequenceEqual(a), $"{name}: BGRA8 draws as the RGBA8 it reorders");
+    release(r8); release(a8); release(rg8); release(bgra8);
 
     var empty = new byte[4 * 2 * 4];
     IsTrue(Draw(Bibui.Draw.TextureHandle.None).SequenceEqual(empty), $"{name}: None draws nothing");
     release(first);
     IsTrue(Draw(first).SequenceEqual(empty), $"{name}: a released handle draws nothing");
-    var second = create(a, 4, 2);
+    var second = create(rgba8, stream, 4, 2, a, 0);
     IsTrue(second != first, $"{name}: a new texture in the reused slot has a new handle");
     IsTrue(Draw(first).SequenceEqual(empty), $"{name}: the old handle still draws nothing");
     IsTrue(Draw(second).SequenceEqual(a), $"{name}: the new handle draws its own pixels");
-    update(first, b, 4, 2);
+    update(first, b, 0);
     IsTrue(Draw(second).SequenceEqual(a), $"{name}: updating the old handle leaves the new texture alone");
     release(second);
 }
@@ -2697,16 +2733,35 @@ Run("DrawList: recording a frame after the first allocates nothing", () =>
     caches.Dispose();
 });
 
+// An app names its renderer once (global using Renderer = ...) and calls it
+// directly, so swapping renderers is that line and the setup. That holds only
+// while every renderer's texture and draw calls are the same: this keeps them so.
+Run("Renderers: SkiaGlRenderer, SkiaCpuRenderer and ManagedRenderer share their texture and draw calls", () =>
+{
+    static string Shape(System.Reflection.MethodInfo m) =>
+        $"{m.ReturnType.Name} {m.Name}({string.Join(", ", m.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}{(p.HasDefaultValue ? $" = {p.DefaultValue}" : "")}"))})";
+    string[] calls = ["CreateTexture", "UpdateTexture", "ReleaseTexture"];
+    string[] Shapes(Type t) =>
+    [
+        .. t.GetMethods().Where(m => calls.Contains(m.Name)).Select(Shape).Order(),
+        .. t.GetMethods().Where(m => m.Name == "Draw" && m.GetParameters() is [{ ParameterType.Name: "DrawList" }]).Select(Shape),
+    ];
+    var gl = Shapes(typeof(SkiaGlRenderer));
+    Eq(4, gl.Length, $"SkiaGlRenderer has the four calls: {string.Join("; ", gl)}");
+    foreach (var t in new[] { typeof(SkiaCpuRenderer), typeof(ManagedRenderer) })
+        Eq(string.Join("; ", gl), string.Join("; ", Shapes(t)), $"{t.Name} matches SkiaGlRenderer");
+});
+
 Run("Textures: drawn, updated and released on Skia", () =>
 {
-    using var skia = new SkiaRenderer();
-    TextureContract("skia", skia.Draw, (px, w, h) => skia.CreateTexture(px, w, h), (t, px, w, h) => skia.UpdateTexture(t, px, w, h), skia.ReleaseTexture);
+    using var skia = new SkiaCpuRenderer();
+    TextureContract("skia", skia.Draw, skia.CreateTexture, skia.UpdateTexture, skia.ReleaseTexture);
 });
 
 Run("Textures: drawn, updated and released on the managed rasterizer", () =>
 {
     using var managed = new ManagedRenderer();
-    TextureContract("managed", managed.Draw, (px, w, h) => managed.CreateTexture(px, w, h), (t, px, w, h) => managed.UpdateTexture(t, px, w, h), managed.ReleaseTexture);
+    TextureContract("managed", managed.Draw, managed.CreateTexture, managed.UpdateTexture, managed.ReleaseTexture);
 });
 
 Run("Box.Draw: a callback draws in its box's space, clipped to the box, and its state is its own", () =>
@@ -2930,7 +2985,7 @@ static string TestServerOut() =>
 // A server on runtime, and the app's loop it waits on.
 BibuiTestServer NewTestServer(BibuiRuntime runtime, int port, string? output = null)
 {
-    var server = new BibuiTestServer(runtime, output ?? TestServerOut(), port, TestServerToken, writeTokenFile: false, draw: new SkiaRenderer().Draw);
+    var server = new BibuiTestServer(runtime, output ?? TestServerOut(), port, TestServerToken, writeTokenFile: false, draw: new SkiaCpuRenderer().Draw);
     runtime.Serve(server);
     runtime.RunLoop();
     return server;
@@ -3247,7 +3302,7 @@ Run("TestServer is off without BIBUI_TEST_SERVER=1", () =>
             Environment.SetEnvironmentVariable(BibuiTestServer.EnableVariable, value);
             var port = nextTestPort++;
             IsTrue(!BibuiTestServer.IsEnabled, $"'{value}' does not turn it on");
-            using var server = BibuiTestServer.StartIfEnabled(SecurityRuntime(), port, new SkiaRenderer().Draw);
+            using var server = BibuiTestServer.StartIfEnabled(SecurityRuntime(), port, new SkiaCpuRenderer().Draw);
             IsTrue(server is null, $"with BIBUI_TEST_SERVER='{value}' no server starts");
             var refused = false;
             try { using var c = new System.Net.Sockets.TcpClient("127.0.0.1", port); }
@@ -3273,7 +3328,7 @@ Run("TestServer with BIBUI_TEST_SERVER=1 starts, and writes its token for the us
         var port = nextTestPort++;
         string tokenFile;
         var securityRuntime = SecurityRuntime();
-        using (var server = BibuiTestServer.StartIfEnabled(securityRuntime, port, new SkiaRenderer().Draw))
+        using (var server = BibuiTestServer.StartIfEnabled(securityRuntime, port, new SkiaCpuRenderer().Draw))
         {
             IsTrue(server is not null, "the opt-in starts a server");
             securityRuntime.Serve(server!);

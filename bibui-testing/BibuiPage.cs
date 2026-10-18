@@ -25,7 +25,7 @@ public sealed class BibuiPage : IDisposable
 {
     private readonly BibuiRuntime _runtime;
     private readonly DrawToPixels _draw;
-    private readonly SkiaRenderer? _ownRenderer;
+    private readonly SkiaCpuRenderer? _ownRenderer;
     private bool _disposed;
 
     private BibuiPage(BibuiRuntime runtime, Action build, DrawToPixels? draw)
@@ -34,7 +34,7 @@ public sealed class BibuiPage : IDisposable
         _build = build;
         if (draw is null)
         {
-            _ownRenderer = new SkiaRenderer();
+            _ownRenderer = new SkiaCpuRenderer();
             draw = _ownRenderer.Draw;
         }
         _draw = draw;

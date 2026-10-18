@@ -3,7 +3,8 @@
   <Import Project="../packaging/PublicPackage.props" />
 
   <!-- The cross-platform window: GLFW through Silk.NET, presenting with
-       OpenGL (a renderer draws into its framebuffer, or into memory it uploads),
+       OpenGL (whatever draws a frame draws it into the GL framebuffer; it makes
+       no GL calls of its own),
        clipboard through TextCopy and wl-clipboard. It references no renderer:
        an app opens one with SilkWindow.Open(runtime, options) and runs the loop. -->
   <PropertyGroup>
@@ -24,10 +25,11 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../bibui/bibui.csproj" />
+    <!-- GlTarget: what the window's GL framebuffer is, for a renderer on it. -->
+    <ProjectReference Include="../bibui-gl/bibui-gl.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Silk.NET.Input.Glfw" Version="2.23.0" />
-    <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />
     <PackageReference Include="TextCopy" Version="6.2.1" />
   </ItemGroup>

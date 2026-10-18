@@ -31,7 +31,7 @@ var runtime = BibuiRuntime.Create();
 int clicks = 0;
 
 using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Hello", 480, 240));
-using var skia = new SkiaRenderer(window.Gl);   // Bibui.Raster.Skia
+using var skia = new SkiaGlRenderer(window.Gl);   // Bibui.Raster.Skia
 while (SilkWindow.BeginFrame(window, runtime))
 {
     runtime.BeginBuild(window.Events);
@@ -45,7 +45,9 @@ while (SilkWindow.BeginFrame(window, runtime))
         .FillX().FillY()
         .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(24f) }));
     runtime.EndBuild();
+    SilkWindow.BeginDraw(window);
     skia.Draw(runtime.DrawList);
+    SilkWindow.EndDraw(window);
     SilkWindow.EndFrame(window, runtime);
 }
 ```

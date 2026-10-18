@@ -41,9 +41,9 @@ public sealed record WaylandHostOptions
 ///
 /// <list type="bullet">
 /// <item><b>Drawing</b>: <see cref="Cpu"/> holds a free shm buffer from
-/// <see cref="BeginFrame"/> to <c>EndFrame</c>; a renderer bound to it
+/// <see cref="BeginDraw"/> to <see cref="EndDraw"/>; a renderer bound to it
 /// (<c>new ManagedRenderer(window.Cpu)</c>) draws there, with no copy.
-/// <c>EndFrame</c> attaches it, damages it whole, and commits it with a frame
+/// <c>EndDraw</c> attaches it, damages it whole, and commits it with a frame
 /// callback, whether or not the renderer repainted all of it.</item>
 /// <item><b>Pacing</b>: <c>BeginFrame</c> waits for the previous frame's
 /// callback, so the compositor sets the frame rate and an idle window draws
@@ -75,7 +75,9 @@ public sealed record WaylandHostOptions
 ///     runtime.BeginBuild(window.Events);
 ///     // ... build ...
 ///     runtime.EndBuild();
+///     WaylandWindow.BeginDraw(window);
 ///     managed.Draw(runtime.DrawList);
+///     WaylandWindow.EndDraw(window);
 ///     WaylandWindow.EndFrame(window, runtime);
 /// }
 /// </code>
@@ -89,13 +91,13 @@ public sealed unsafe class WaylandWindow : IDisposable
     private readonly WaylandHostOptions _options;
 
     /// <summary>
-    /// The shm buffer this frame is drawn into, from <see cref="BeginFrame"/>
-    /// to <see cref="EndFrame"/>: for a renderer bound to it. Buffers are
+    /// The shm buffer this frame is drawn into, from <see cref="BeginDraw"/>
+    /// to <see cref="EndDraw"/>: for a renderer bound to it. Buffers are
     /// in rotation, so it holds a different one from frame to frame.
     /// </summary>
     public Bibui.Draw.CpuTarget Cpu { get; } = new();
 
-    // The buffer Cpu points at, between BeginFrame and EndFrame.
+    // The buffer Cpu points at, between BeginDraw and EndDraw.
     private ShmBuffer? _buffer;
 
     /// <summary>
@@ -338,11 +340,11 @@ public sealed unsafe class WaylandWindow : IDisposable
     // ── A frame's buffer ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// Waits until the compositor wants a frame, then takes a free buffer and
-    /// points <see cref="Cpu"/> at it. False when there is none to take (closing,
-    /// or every buffer is still the compositor's: a frame is asked for again).
+    /// Waits until the compositor wants a frame, and takes a configure that came
+    /// meanwhile, so the frame is built at the size it will be shown at. False
+    /// when there is nothing to draw into (closing, not configured yet).
     /// </summary>
-    internal bool AcquireBuffer(BibuiRuntime runtime)
+    internal bool WaitForCompositor()
     {
         if (_display == 0 || _closing || _pool is null || !_configure.EverConfigured) return false;
 
@@ -360,28 +362,46 @@ public sealed unsafe class WaylandWindow : IDisposable
                 _frameCallback = default;
             }
         }
-        if (_closing) return false;
+        return !_closing;
+    }
 
-        var buffer = _pool.TryAcquire(_fbW, _fbH);
-        if (buffer is null)
+    /// <summary>
+    /// Takes a free buffer and points <see cref="Cpu"/> at it. When every buffer
+    /// is still the compositor's (or the window is closing), <see cref="Cpu"/> is
+    /// memory of the window's own that nothing shows, the commit is skipped, and
+    /// a frame is asked for again: the frame is drawn, never dropped half-way.
+    /// </summary>
+    internal void AcquireBuffer()
+    {
+        var buffer = _pool is null || _closing ? null : _pool.TryAcquire(_fbW, _fbH);
+        if (buffer is null && _pool is not null && !_closing)
         {
             WaitFor(() => _pool.BusyCount < _pool.Count || _closing);
             buffer = _pool.TryAcquire(_fbW, _fbH, allowExtra: true);
         }
         if (buffer is null || _closing)
         {
-            // Every buffer is still the compositor's. Ask again rather than drop the frame.
-            runtime.RequestFrame();
-            return false;
+            _buffer = null;
+            Cpu.Pixels = Unshown(_fbW, _fbH);
+            _runtime?.RequestFrame();
+            return;
         }
-
         _buffer = buffer;
         Cpu.Pixels = buffer.Pixels;
-        return true;
+    }
+
+    // Memory the size of a frame that is drawn into and not shown: what a renderer
+    // gets when no buffer is free. Made the first time it is needed.
+    private byte[] _unshown = [];
+    private Bibui.Draw.RasterPixels Unshown(int w, int h)
+    {
+        w = Math.Max(1, w); h = Math.Max(1, h);
+        if (_unshown.Length != w * h * 4) _unshown = GC.AllocateArray<byte>(w * h * 4, pinned: true);
+        return new Bibui.Draw.RasterPixels(Marshal.UnsafeAddrOfPinnedArrayElement(_unshown, 0), w, h, w * 4);
     }
 
 
-    /// <summary>Shows the buffer <see cref="AcquireBuffer"/> took: acks a configure, attaches, damages and commits.</summary>
+    /// <summary>Shows the buffer <see cref="AcquireBuffer"/> took: acks a configure, attaches, damages and commits. Nothing when it took none.</summary>
     internal void Commit()
     {
         if (_buffer is not { } buffer || _display == 0 || _pool is null) return;
@@ -634,9 +654,8 @@ public sealed unsafe class WaylandWindow : IDisposable
 
     /// <summary>
     /// Waits until there is a frame to draw — input arrived, or the runtime owes
-    /// frames — and the compositor wants one, hands what happened to the runtime,
-    /// and points <see cref="WaylandWindow.Cpu"/> at a free buffer. False once the
-    /// window is closing: the loop ends.
+    /// frames — and the compositor wants one, with what the keyboard and mouse did
+    /// in <see cref="Events"/>. False once the window is closing: the loop ends.
     /// </summary>
     public static bool BeginFrame(WaylandWindow window, BibuiRuntime runtime)
     {
@@ -650,7 +669,7 @@ public sealed unsafe class WaylandWindow : IDisposable
             bool any = window.Events.Count > 0;
             // Awake is not the same as having something to draw: a buffer
             // release, a ping or a wake with nothing owed draws nothing.
-            if ((any || s_alwaysRender || runtime.FramesRequested > 0) && window.AcquireBuffer(runtime))
+            if ((any || s_alwaysRender || runtime.FramesRequested > 0) && window.WaitForCompositor())
             {
                 // Taken before the frame is built, so what the build asks for is still owed after it.
                 runtime.ConsumeFrame();
@@ -659,6 +678,18 @@ public sealed unsafe class WaylandWindow : IDisposable
         }
     }
 
-    /// <summary>Commits the frame drawn into <see cref="Cpu"/>.</summary>
-    public static void EndFrame(WaylandWindow window, BibuiRuntime runtime) => window.Commit();
+    /// <summary>
+    /// Points <see cref="Cpu"/> at a free <c>wl_shm</c> buffer, to draw this
+    /// frame into: after the build, before the renderer draws.
+    /// </summary>
+    public static void BeginDraw(WaylandWindow window) => window.AcquireBuffer();
+
+    /// <summary>Shows what was drawn into <see cref="Cpu"/>: attaches, damages and commits the buffer.</summary>
+    public static void EndDraw(WaylandWindow window) => window.Commit();
+
+    /// <summary>
+    /// Ends the frame. Nothing to do: the next frame is paced by the compositor's
+    /// frame callback, which <see cref="BeginFrame"/> waits for.
+    /// </summary>
+    public static void EndFrame(WaylandWindow window, BibuiRuntime runtime) { }
 }

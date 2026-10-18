@@ -55,14 +55,16 @@ var runtime = BibuiRuntime.Create();
 var hello = "Hello, bibui";
 
 using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Stepper", 800, 600));
-using var skia = new SkiaRenderer(window.Gl);
+using var skia = new SkiaGlRenderer(window.Gl);
 while (SilkWindow.BeginFrame(window, runtime))
 {
     runtime.BeginBuild(window.Events);
     UiNode.PushIntoParent(runtime.ParentInScope,
         Column(runtime.Text(hello)).FillX().FillY().Padded(EdgeInsets.All(24f)));
     runtime.EndBuild();
+    SilkWindow.BeginDraw(window);
     skia.Draw(runtime.DrawList);
+    SilkWindow.EndDraw(window);
     SilkWindow.EndFrame(window, runtime);
 }
 ```
@@ -71,16 +73,17 @@ while (SilkWindow.BeginFrame(window, runtime))
 
 - The app owns the loop. `BeginFrame` waits until there is a frame to draw
   (input, or a frame the runtime asked for) and returns false once the window
-  closes. `EndFrame` puts the frame on screen.
+  closes. `BeginDraw` and `EndDraw` go around the renderer's draw: `EndDraw`
+  puts the frame on screen (a swap). `EndFrame` paces the loop.
 - Between `BeginBuild` and `EndBuild` you build one frame. The runtime owns the
   frame's root: what you build with nothing pushed lands under it, and a tree
   made with `Arrange` (`Column(...)`) is linked there with `PushIntoParent`.
   `EndBuild` lays the tree out and records it into `runtime.DrawList`.
-- `new SkiaRenderer(window.Gl)` is the renderer, drawing into the window's GL
+- `new SkiaGlRenderer(window.Gl)` is the renderer, drawing into the window's GL
   framebuffer; `skia.Draw(runtime.DrawList)` draws the frame. bibui never looks
-  one up at run time; you make it. `SkiaRenderer.ForGl(window.Gl)` answers null
-  where Skia cannot use the GL context, and `new SkiaRenderer(window.Cpu)` then
-  draws on the CPU instead.
+  one up at run time; you make it. `SkiaGlRenderer.ForGl(window.Gl)` answers null
+  where Skia cannot use the GL context; a CPU renderer drawing into a
+  `GlCpuFramebuffer` (`Bibui.Gl`) can draw instead.
 - `Column(...)` stacks its items vertically and is as large as they are.
   `FillX()` and `FillY()` make it fill its parent, the window.
 - Every node has a size on each axis: in pixels (`.Px(...)`), a share of its
@@ -188,13 +191,15 @@ var runtime = BibuiRuntime.Create();
 var app = new App();
 
 using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Stepper", 480, 320));
-using var skia = new SkiaRenderer(window.Gl);
+using var skia = new SkiaGlRenderer(window.Gl);
 while (SilkWindow.BeginFrame(window, runtime))
 {
     runtime.BeginBuild(window.Events);
     app.Build(runtime);
     runtime.EndBuild();
+    SilkWindow.BeginDraw(window);
     skia.Draw(runtime.DrawList);
+    SilkWindow.EndDraw(window);
     SilkWindow.EndFrame(window, runtime);
 }
 ```
@@ -333,7 +338,9 @@ while (WaylandWindow.BeginFrame(window, runtime))
     runtime.BeginBuild(window.Events);
     app.Build(runtime);
     runtime.EndBuild();
+    WaylandWindow.BeginDraw(window);
     managed.Draw(runtime.DrawList);
+    WaylandWindow.EndDraw(window);
     WaylandWindow.EndFrame(window, runtime);
 }
 ```

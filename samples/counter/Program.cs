@@ -5,7 +5,7 @@ using Bibui.Runtime.Platform;
 
 var runtime = BibuiRuntime.Create();
 using var window = SilkWindow.Open(runtime, new("Counter", 360, 160));
-using var skia = new SkiaRenderer(window.Gl);
+using var skia = new SkiaGlRenderer(window.Gl);
 int count = 0;
 
 while (SilkWindow.BeginFrame(window, runtime))
@@ -17,6 +17,8 @@ while (SilkWindow.BeginFrame(window, runtime))
         if (runtime.Button("add", "Add one").Clicked) count++;
     }
     runtime.EndBuild();
+    SilkWindow.BeginDraw(window);
     skia.Draw(runtime.DrawList);
+    SilkWindow.EndDraw(window);
     SilkWindow.EndFrame(window, runtime);
 }

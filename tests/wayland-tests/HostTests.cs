@@ -270,7 +270,7 @@ internal static unsafe class HostTests
             // A real buffer — memfd, mmap, fd passed in create_pool — drawn
             // into by a renderer, and compared with the same frame drawn packed.
             var runtime = BibuiRuntime.Create();
-            using var skia = new SkiaRenderer();
+            using var skia = new SkiaCpuRenderer();
             runtime.SetBuild(() => Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box()))
                     .Styled(new Bibui.Style { BackgroundColor = Bibui.UiColor.Accent, CornerRadius = 8f }),
                 new Bibui.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });

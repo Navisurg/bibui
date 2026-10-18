@@ -79,6 +79,7 @@ jobs:
           set -euo pipefail
           projects=(
             bibui/bibui.csproj
+            bibui-gl/bibui-gl.csproj
             bibui-testing/bibui-testing.csproj
             bibui-raster-skia/bibui-raster-skia.csproj
             bibui-raster-managed/src/Bibui.Raster.Managed.csproj

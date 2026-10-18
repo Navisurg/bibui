@@ -70,7 +70,7 @@ DrawToPixels NewDraw() => raster switch
 {
     "managed" => new ManagedRenderer().Draw,
 #if !WAYLAND_ONLY
-    "skia" => new Bibui.Raster.Skia.SkiaRenderer().Draw,
+    "skia" => new Bibui.Raster.Skia.SkiaCpuRenderer().Draw,
 #endif
     _ => throw new ArgumentException($"--raster {raster}: expected skia or managed"),
 };
@@ -81,7 +81,7 @@ DrawToPixels NewDraw() => raster switch
 {
     if (raster == "managed") { var managed = new ManagedRenderer(target); return (managed, managed.Draw); }
 #if !WAYLAND_ONLY
-    var skia = new Bibui.Raster.Skia.SkiaRenderer(target);
+    var skia = new Bibui.Raster.Skia.SkiaCpuRenderer(target);
     return (skia, skia.Draw);
 #else
     throw new ArgumentException($"--raster {raster}: this build carries only the managed raster");
@@ -156,7 +156,9 @@ if (host == "wayland")
         while (WaylandWindow.BeginFrame(window, runtime))
         {
             live.Frame(runtime, window.Events);
+            WaylandWindow.BeginDraw(window);
             draw(runtime.DrawList);
+            WaylandWindow.EndDraw(window);
             WaylandWindow.EndFrame(window, runtime);
         }
     }
@@ -168,10 +170,12 @@ return 2;
 #else
 {
     using var window = SilkWindow.Open(runtime, options);
-    // Skia on the window's GL; --raster managed draws on the CPU, into memory the window shows.
-    var (renderer, draw) = raster == "skia"
-        ? new Bibui.Raster.Skia.SkiaRenderer(window.Gl) is var skia ? ((IDisposable)skia, (Action<DrawList>)skia.Draw) : default
-        : RendererFor(window.Cpu);
+    // Skia on the window's GL; --raster managed draws on the CPU, into memory
+    // shown on the window's GL framebuffer (Bibui.Gl).
+    using var shown = raster == "skia" ? null : new Bibui.Gl.GlCpuFramebuffer(window.Gl);
+    var (renderer, draw) = shown is null
+        ? new Bibui.Raster.Skia.SkiaGlRenderer(window.Gl) is var skia ? ((IDisposable)skia, (Action<DrawList>)skia.Draw) : default
+        : RendererFor(shown.Cpu);
     using (renderer)
     {
         window.OnRefresh = Frame;   // keeps drawing during a resize on Windows and macOS
@@ -182,7 +186,11 @@ return 2;
     void Frame()
     {
         live.Frame(runtime, window.Events);
+        SilkWindow.BeginDraw(window);
+        shown?.BeginDraw();
         draw(runtime.DrawList);
+        shown?.EndDraw();
+        SilkWindow.EndDraw(window);
         SilkWindow.EndFrame(window, runtime);
     }
 }
