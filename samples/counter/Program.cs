@@ -17,6 +17,8 @@ while (SilkWindow.BeginFrame(window, runtime))
         if (runtime.Button("add", "Add one").Clicked) count++;
     }
     runtime.EndBuild();
+    SilkWindow.BeginDraw(window);
     skia.Draw(runtime.DrawList);
+    SilkWindow.EndDraw(window);
     SilkWindow.EndFrame(window, runtime);
 }

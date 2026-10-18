@@ -42,6 +42,8 @@ void Frame()
     runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
     Demo.Build(runtime, state);
     runtime.EndBuild();
+    SilkWindow.BeginDraw(window);
     skia.Draw(runtime.DrawList);
+    SilkWindow.EndDraw(window);
     SilkWindow.EndFrame(window, runtime);
 }

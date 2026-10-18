@@ -23,8 +23,18 @@ before it was published.
     Silk.NET.OpenGL. `Bibui.Platform.Silk` makes the `GlTarget`;
     `SkiaGlRenderer` makes its textures with `GlTextures` and wraps each once
     for Skia. Neither references the other.
-  - A Silk window shows `window.Cpu` by uploading it into a BGRA8 texture made
-    with `GlTextures` and blitting it onto the framebuffer: no shaders.
+  - Drawing into a window is bracketed: `BeginDraw(window)` readies it (a
+    Silk window's GL context current; a Wayland window's free `wl_shm` buffer
+    in `window.Cpu`), the renderer draws, `EndDraw(window)` puts it on screen
+    (a swap; a commit). `EndFrame` only paces the loop. `GlCpuFramebuffer`
+    has the same pair, inside the Silk window's.
+  - A Silk window has no `window.Cpu`: it shows only what is drawn into its GL
+    framebuffer (`window.Gl`). A CPU renderer on a
+    Silk window draws into `GlCpuFramebuffer(window.Gl).Cpu` (`Bibui.Gl`),
+    whose `BeginDraw()` sizes the memory and `EndDraw()` uploads it into a BGRA8
+    texture and blits it onto the framebuffer: no shaders. Reading
+    `window.Cpu` used to switch on an upload every frame, over whatever a GPU
+    renderer had drawn.
   - Every renderer has the same `CreateTexture`, `UpdateTexture`,
     `ReleaseTexture` and `Draw(DrawList)`, so an app can name its renderer in
     one place (`global using Renderer = ...`) and swap it there.
@@ -80,7 +90,9 @@ before it was published.
   while (SilkWindow.BeginFrame(window, runtime))
   {
       runtime.BeginBuild(window.Events); Build(); runtime.EndBuild();
+      SilkWindow.BeginDraw(window);
       skia.Draw(runtime.DrawList);
+      SilkWindow.EndDraw(window);
       SilkWindow.EndFrame(window, runtime);
   }
   ```

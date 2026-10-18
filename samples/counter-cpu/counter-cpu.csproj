@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The counter drawn on the CPU: Skia into memory, shown on a Silk window's GL framebuffer. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>counter-cpu</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+    <ProjectReference Include="../../bibui-gl/bibui-gl.csproj" />
+    <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
+  </ItemGroup>
+</Project>

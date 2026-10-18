@@ -108,8 +108,10 @@ if (options.Host == GalleryHost.Wayland)
         runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
         BuildGallery(runtime, gallery);
         runtime.EndBuild();
+        WaylandWindow.BeginDraw(window);
         if (skia is not null) skia.Draw(runtime.DrawList);
         else managed!.Draw(runtime.DrawList);
+        WaylandWindow.EndDraw(window);
         WaylandWindow.EndFrame(window, runtime);
     }
     skia?.Dispose();
@@ -129,7 +131,9 @@ else
         runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
         BuildGallery(runtime, gallery);
         runtime.EndBuild();
+        SilkWindow.BeginDraw(window);
         skia.Draw(runtime.DrawList);
+        SilkWindow.EndDraw(window);
         SilkWindow.EndFrame(window, runtime);
     }
 }

@@ -28,7 +28,8 @@ public sealed class SkiaGlRenderer : IDisposable
     /// <summary>
     /// A renderer on <paramref name="target"/>, or null when Skia cannot drive its
     /// GL context (too old, software GL without what Skia needs). The caller falls
-    /// back, e.g. to <c>new SkiaCpuRenderer(window.Cpu)</c>.
+    /// back, e.g. to a <c>SkiaCpuRenderer</c> drawing into a
+    /// <c>GlCpuFramebuffer</c>'s memory.
     /// </summary>
     public static SkiaGlRenderer? ForGl(GlTarget target)
     {

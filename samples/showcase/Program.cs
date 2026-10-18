@@ -156,7 +156,9 @@ if (host == "wayland")
         while (WaylandWindow.BeginFrame(window, runtime))
         {
             live.Frame(runtime, window.Events);
+            WaylandWindow.BeginDraw(window);
             draw(runtime.DrawList);
+            WaylandWindow.EndDraw(window);
             WaylandWindow.EndFrame(window, runtime);
         }
     }
@@ -168,10 +170,12 @@ return 2;
 #else
 {
     using var window = SilkWindow.Open(runtime, options);
-    // Skia on the window's GL; --raster managed draws on the CPU, into memory the window shows.
-    var (renderer, draw) = raster == "skia"
+    // Skia on the window's GL; --raster managed draws on the CPU, into memory
+    // shown on the window's GL framebuffer (Bibui.Gl).
+    using var shown = raster == "skia" ? null : new Bibui.Gl.GlCpuFramebuffer(window.Gl);
+    var (renderer, draw) = shown is null
         ? new Bibui.Raster.Skia.SkiaGlRenderer(window.Gl) is var skia ? ((IDisposable)skia, (Action<DrawList>)skia.Draw) : default
-        : RendererFor(window.Cpu);
+        : RendererFor(shown.Cpu);
     using (renderer)
     {
         window.OnRefresh = Frame;   // keeps drawing during a resize on Windows and macOS
@@ -182,7 +186,11 @@ return 2;
     void Frame()
     {
         live.Frame(runtime, window.Events);
+        SilkWindow.BeginDraw(window);
+        shown?.BeginDraw();
         draw(runtime.DrawList);
+        shown?.EndDraw();
+        SilkWindow.EndDraw(window);
         SilkWindow.EndFrame(window, runtime);
     }
 }

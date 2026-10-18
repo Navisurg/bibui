@@ -752,13 +752,16 @@ owner of the loop chose draws that list. Two pieces connect it to the outside:
 - A **window** (`SilkWindow`, `WaylandWindow`) owns the native window, the
   event pump, the framebuffer, presenting, the clipboard and the cursor. It
   knows nothing of any renderer. The app owns the loop:
-  `while (SilkWindow.BeginFrame(window, runtime)) { runtime.BeginBuild(window.Events); build; runtime.EndBuild(); draw; SilkWindow.EndFrame(window, runtime); }`.
+  `while (SilkWindow.BeginFrame(window, runtime)) { runtime.BeginBuild(window.Events); build; runtime.EndBuild(); SilkWindow.BeginDraw(window); draw; SilkWindow.EndDraw(window); SilkWindow.EndFrame(window, runtime); }`.
   `BeginFrame` sleeps while nothing is happening and returns when there is a
   frame to draw, with what the keyboard and mouse did in `window.Events`;
-  `BeginBuild` turns that into the frame's events; `EndFrame` presents it. A window offers two targets:
+  `BeginBuild` turns that into the frame's events. `BeginDraw` readies the
+  window to be drawn into (its GL context current; on Wayland, a free buffer
+  in `window.Cpu`), `EndDraw` puts what was drawn on screen (a swap; a
+  commit), and `EndFrame` paces the loop. A window offers two targets:
   `window.Gl`, a `GlTarget` (the GL framebuffer, Silk only; `Bibui.Gl`), and `window.Cpu`,
-  a `CpuTarget` (memory the window presents: a `wl_shm` buffer, or a CPU
-  framebuffer the Silk window uploads). bibui does no discovery and no
+  a `CpuTarget` (memory the window presents: a `wl_shm` buffer, Wayland only).
+  CPU memory on a Silk window is `GlCpuFramebuffer`'s, below. bibui does no discovery and no
   reflection.
 - A **renderer** draws a `DrawList`: clipping, transforms, shapes, paths,
   textures and glyphs. Bound to a window's target, `renderer.Draw(runtime.DrawList)`
@@ -787,19 +790,46 @@ using Bibui.Runtime.Platform;
 
 var runtime = BibuiRuntime.Create();
 using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("My app", 960, 640));
-using var skia = SkiaGlRenderer.ForGl(window.Gl) ?? new SkiaCpuRenderer(window.Cpu);
+using var skia = new SkiaGlRenderer(window.Gl);
 while (SilkWindow.BeginFrame(window, runtime))
 {
     runtime.BeginBuild(window.Events);
     BuildUi(runtime);
     runtime.EndBuild();
+    SilkWindow.BeginDraw(window);
     skia.Draw(runtime.DrawList);
+    SilkWindow.EndDraw(window);
     SilkWindow.EndFrame(window, runtime);
 }
 ```
 
+A Silk window only ever shows what is drawn into its GL framebuffer. A renderer
+that draws on the CPU draws into memory that `GlCpuFramebuffer` (package
+`Bibui.Gl`) shows there: each frame it uploads the memory into a texture and
+blits it onto the framebuffer. It takes a GPU renderer's place in the loop: a
+frame is drawn into the framebuffer by one or the other, never both.
+[`samples/counter-cpu`](../samples/counter-cpu/Program.cs) is the counter drawn
+this way, with `SkiaCpuRenderer`.
+
+```csharp
+using var shown = new GlCpuFramebuffer(window.Gl);       // Bibui.Gl: memory shown on the GL framebuffer
+using var managed = new ManagedRenderer(shown.Cpu);       // or new SkiaCpuRenderer(shown.Cpu)
+while (SilkWindow.BeginFrame(window, runtime))
+{
+    runtime.BeginBuild(window.Events);
+    BuildUi(runtime);
+    runtime.EndBuild();
+    SilkWindow.BeginDraw(window);                         // the window's GL context current
+    shown.BeginDraw();                                    // the memory at the framebuffer's size now
+    managed.Draw(runtime.DrawList);
+    shown.EndDraw();                                      // upload, blit onto the framebuffer
+    SilkWindow.EndDraw(window);                           // swap
+    SilkWindow.EndFrame(window, runtime);                 // pace
+}
+```
+
 `SkiaGlRenderer.ForGl` answers null where Skia cannot drive the GL context;
-falling back to the CPU is the app's choice, as above.
+falling back to the CPU, as above, is the app's choice.
 
 Every renderer has the same texture and draw calls (`CreateTexture`,
 `UpdateTexture`, `ReleaseTexture`, `Draw`), and build code never sees the
@@ -835,7 +865,9 @@ while (WaylandWindow.BeginFrame(window, runtime))
     runtime.BeginBuild(window.Events);
     BuildUi(runtime);
     runtime.EndBuild();
+    WaylandWindow.BeginDraw(window);
     managed.Draw(runtime.DrawList);
+    WaylandWindow.EndDraw(window);
     WaylandWindow.EndFrame(window, runtime);
 }
 ```

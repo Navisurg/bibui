@@ -1,21 +1,22 @@
 # Bibui.Platform.Silk
 
 A window for bibui through GLFW and OpenGL (Silk.NET). It references no
-renderer: `window.Gl` is its GL framebuffer, for a renderer that draws with GL,
-and `window.Cpu` is CPU memory it uploads and shows, for one that draws on the
-CPU. The clipboard goes through TextCopy.
+renderer: `window.Gl` is its GL framebuffer, and whatever draws a frame draws it
+there, between `SilkWindow.BeginDraw` and `EndDraw` (the swap). A renderer on the CPU draws into memory that
+`Bibui.Gl`'s `GlCpuFramebuffer` shows on it. The clipboard goes through TextCopy.
 
 ```csharp
 var runtime = BibuiRuntime.Create();
 using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("My app", 960, 640));
-using var skia = SkiaGlRenderer.ForGl(window.Gl)        // Bibui.Raster.Skia
-    ?? new SkiaCpuRenderer(window.Cpu);                  // no usable GL: draw on the CPU
+using var skia = new SkiaGlRenderer(window.Gl);          // Bibui.Raster.Skia
 while (SilkWindow.BeginFrame(window, runtime))
 {
     runtime.BeginBuild(window.Events);
     /* your frame */
     runtime.EndBuild();
+    SilkWindow.BeginDraw(window);
     skia.Draw(runtime.DrawList);
+    SilkWindow.EndDraw(window);
     SilkWindow.EndFrame(window, runtime);
 }
 ```

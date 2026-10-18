@@ -77,7 +77,8 @@ jobs:
             tests/wayland-hello/wayland-hello.csproj \
             samples/component-gallery/component-gallery.csproj \
             samples/bibui-app/bibui-app.csproj \
-            samples/counter/counter.csproj
+            samples/counter/counter.csproj \
+            samples/counter-cpu/counter-cpu.csproj
           do
             echo "==> build $proj"
             dotnet build "$proj" --configuration Release -p:TreatWarningsAsErrors=true

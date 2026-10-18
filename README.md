@@ -40,11 +40,12 @@ dotnet add package Bibui.Raster.Skia
 [`samples/counter`](samples/counter/Program.cs) is a simple bibui app: a label
 and a button that counts its clicks. The app owns its loop:
 
-- the window waits for input and puts frames on screen (`SilkWindow.BeginFrame`
-  / `EndFrame`);
+- the window waits for input and paces the loop (`SilkWindow.BeginFrame` /
+  `EndFrame`);
 - the runtime builds each frame and records it (`runtime.BeginBuild` /
   `EndBuild`);
-- a renderer draws what was recorded (`skia.Draw`).
+- a renderer draws what was recorded into the window (`skia.Draw`, between
+  `SilkWindow.BeginDraw` and `EndDraw`, which swaps).
 
 The build is ordinary code inside that loop, and the app's state is its own
 variables. Run it:

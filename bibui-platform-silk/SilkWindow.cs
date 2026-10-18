@@ -3,7 +3,6 @@ using Bibui.Draw;
 using Bibui.Gl;
 using Silk.NET.Input;
 using Silk.NET.Maths;
-using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 // Silk's key enum, for asking its keyboard what is held. What reaches the
 // runtime is Bibui.Key / Bibui.MouseButton: the same values, by a cast.
@@ -14,15 +13,13 @@ namespace Bibui.Runtime.Platform;
 /// <summary>
 /// A window on GLFW through Silk.NET, presenting with OpenGL: what
 /// <see cref="Open"/> makes, and <see cref="BeginFrame"/> and
-/// <see cref="EndFrame"/> bracket every frame of. It knows GL and memory,
-/// and nothing of any renderer:
-/// <list type="bullet">
-/// <item><see cref="Gl"/> is its framebuffer, for a renderer that draws with GL
-/// (<c>new SkiaGlRenderer(window.Gl)</c>).</item>
-/// <item><see cref="Cpu"/> is memory the size of the framebuffer, made when
-/// first asked for, for a renderer that draws on the CPU; once asked for,
-/// <see cref="EndFrame"/> uploads and shows it.</item>
-/// </list>
+/// <see cref="EndFrame"/> bracket every frame of. It knows nothing of any
+/// renderer. Its one target is <see cref="Gl"/>, its GL framebuffer: whatever
+/// draws a frame draws it there with GL, between <see cref="BeginDraw"/> and
+/// <see cref="EndDraw"/>, which swaps. A
+/// renderer on the GPU draws into it (<c>new SkiaGlRenderer(window.Gl)</c>); a
+/// renderer on the CPU draws into memory that <c>Bibui.Gl</c>'s
+/// <c>GlCpuFramebuffer</c> shows on it.
 /// The clipboard goes through TextCopy (wl-clipboard on Wayland).
 ///
 /// <para>One thread: the one that opened it runs every frame.</para>
@@ -34,7 +31,9 @@ namespace Bibui.Runtime.Platform;
 ///     runtime.BeginBuild(window.Events);
 ///     // ... build ...
 ///     runtime.EndBuild();
+///     SilkWindow.BeginDraw(window);
 ///     skia.Draw(runtime.DrawList);
+///     SilkWindow.EndDraw(window);
 ///     SilkWindow.EndFrame(window, runtime);
 /// }
 /// </code>
@@ -43,7 +42,6 @@ public sealed class SilkWindow : IDisposable
 {
     internal readonly IWindow Native;
     internal readonly BibuiRuntime Runtime;
-    internal GL GlApi = null!;
 
     /// <summary>
     /// What the keyboard and mouse did since the last frame, in order: GLFW's
@@ -68,38 +66,6 @@ public sealed class SilkWindow : IDisposable
 
     /// <summary>The window's GL framebuffer: FBO 0 at the current size, 8 stencil bits.</summary>
     public GlTarget Gl { get; } = new() { Framebuffer = 0, StencilBits = 8 };
-
-    /// <summary>
-    /// Memory the size of the framebuffer that <see cref="EndFrame"/> uploads
-    /// and shows: for a renderer drawing on the CPU. Made when first asked for,
-    /// and from then on every frame is presented from it.
-    /// </summary>
-    public CpuTarget Cpu
-    {
-        get
-        {
-            if (_cpu is null)
-            {
-                _cpu = new CpuTarget();
-                SizeCpu();
-            }
-            return _cpu;
-        }
-    }
-
-    private CpuTarget? _cpu;
-    private byte[]? _cpuBuffer;
-
-    // Keeps the CPU memory the framebuffer's size; pinned, so a renderer draws
-    // into it where it lies.
-    internal void SizeCpu()
-    {
-        if (_cpu is null) return;
-        int w = FramebufferWidth, h = FramebufferHeight;
-        if (_cpuBuffer is null || _cpuBuffer.Length != w * h * 4)
-            _cpuBuffer = GC.AllocateArray<byte>(Math.Max(1, w * h * 4), pinned: true);
-        _cpu.Pixels = new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(_cpuBuffer, 0), w, h, w * 4);
-    }
 
     /// <summary>Framebuffer size in physical px.</summary>
     public int FramebufferWidth => Gl.Width;
@@ -213,40 +179,6 @@ public sealed class SilkWindow : IDisposable
     internal readonly Stopwatch Clock = Stopwatch.StartNew();
     internal double NextFrameMs;
 
-    // ── Presenting the CPU memory ────────────────────────────────────────────
-    // A BGRA8 texture the memory is uploaded to (GlTextures), copied onto the
-    // framebuffer with one blit through a read framebuffer it is attached to,
-    // flipped: memory rows run top-down, GL's bottom-up. Made when the memory is
-    // first shown, the texture remade when the size changes.
-
-    private uint _texture, _readFramebuffer;
-    private int _texWidth, _texHeight;
-
-    internal unsafe void PresentCpu()
-    {
-        if (_cpu is null) return;
-        var gl = GlApi;
-        var px = _cpu.Pixels;
-        int w = px.Width, h = px.Height;
-        if (w <= 0 || h <= 0) return;   // minimised: nothing to show
-        if (w != _texWidth || h != _texHeight)
-        {
-            if (_texture != 0) GlTextures.Delete(gl, _texture);
-            _texture = GlTextures.Create(gl, TextureFormat.BGRA8, w, h);
-            if (_readFramebuffer == 0) _readFramebuffer = gl.GenFramebuffer();
-            gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _readFramebuffer);
-            gl.FramebufferTexture2D(FramebufferTarget.ReadFramebuffer, FramebufferAttachment.ColorAttachment0,
-                TextureTarget.Texture2D, _texture, 0);
-            (_texWidth, _texHeight) = (w, h);
-        }
-        GlTextures.Upload(gl, _texture, TextureFormat.BGRA8, w, h,
-            new ReadOnlySpan<byte>((void*)px.Address, px.RowBytes * h), px.RowBytes);
-        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _readFramebuffer);
-        gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, Gl.Framebuffer);
-        gl.BlitFramebuffer(0, 0, w, h, 0, h, w, 0, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, Gl.Framebuffer);
-    }
-
     /// <summary>
     /// Closes the window and destroys it with its GL context. Dispose a renderer
     /// bound to <see cref="Gl"/> first: its GPU context goes before the GL one.
@@ -254,8 +186,6 @@ public sealed class SilkWindow : IDisposable
     public void Dispose()
     {
         if (Runtime.WakeUp == Wake) Runtime.WakeUp = null;
-        if (_readFramebuffer != 0) GlApi.DeleteFramebuffer(_readFramebuffer);
-        if (_texture != 0) GlTextures.Delete(GlApi, _texture);
         Native.Reset();
         Native.Dispose();
     }
@@ -354,7 +284,6 @@ public sealed class SilkWindow : IDisposable
         var window = new SilkWindow(native, runtime);
         native.Load += () =>
         {
-            window.GlApi = GL.GetApi(native);
             var context = native.GLContext!;
             window.Gl.GetProcAddress = name => context.TryGetProcAddress(name, out var at) ? at : 0;
             Resize(window, native.FramebufferSize);
@@ -380,7 +309,6 @@ public sealed class SilkWindow : IDisposable
         window.Gl.Width = framebuffer.X;
         window.Gl.Height = framebuffer.Y;
         window.Scale = size.X > 0 ? (float)framebuffer.X / size.X : 1f;
-        window.SizeCpu();
         window.Runtime.ResizeSurface(framebuffer.X, framebuffer.Y, window.Scale);
     }
 
@@ -412,14 +340,22 @@ public sealed class SilkWindow : IDisposable
     }
 
     /// <summary>
-    /// Puts the frame on screen: uploads the CPU memory if a renderer draws there,
-    /// swaps, and paces the loop to the runtime's <see cref="BibuiRuntime.TargetHz"/>.
+    /// Makes the window's GL context current, to draw this frame into its
+    /// framebuffer: after the build, before the renderer draws. With one window
+    /// it already is; with several, each draws in its own.
     /// </summary>
-    public static void EndFrame(SilkWindow window, BibuiRuntime runtime)
+    public static void BeginDraw(SilkWindow window) => window.Native.GLContext!.MakeCurrent();
+
+    /// <summary>Shows what was drawn into the framebuffer: swaps.</summary>
+    public static void EndDraw(SilkWindow window)
     {
-        window.PresentCpu();
         window.Native.GLContext!.SwapBuffers();
         if (++window.Frames == 1) window.WireInput();
+    }
+
+    /// <summary>Paces the loop to the runtime's <see cref="BibuiRuntime.TargetHz"/>: sleeps until the next frame is due.</summary>
+    public static void EndFrame(SilkWindow window, BibuiRuntime runtime)
+    {
 
         double targetMs = 1000.0 / runtime.TargetHz;
         window.NextFrameMs += targetMs;

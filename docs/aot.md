@@ -94,7 +94,9 @@ while (WaylandWindow.BeginFrame(window, runtime))
     runtime.BeginBuild(window.Events);
     Build();
     runtime.EndBuild();
+    WaylandWindow.BeginDraw(window);
     managed.Draw(runtime.DrawList);
+    WaylandWindow.EndDraw(window);
     WaylandWindow.EndFrame(window, runtime);
 }
 return 0;
