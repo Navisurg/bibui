@@ -14,6 +14,23 @@ before it was published.
 
 ### Changed
 
+- **SkiaSharp 4.153.1** (from 2.88.8) for `Bibui.Raster.Skia`.
+  - Images are drawn with Skia's sampling options; `FilterQuality` maps to
+    them as Skia mapped its old filter qualities (None nearest, Low linear,
+    Medium linear with mipmaps, High Mitchell cubic).
+  - Text is drawn with an `SKFont` (subpixel, grayscale, full hinting), and
+    native paths are made with `SKPathBuilder`. A path a frame carries in its
+    payload is cached by its content, so one drawn the same way every frame is
+    built once.
+  - The fixture suites' pixels are unchanged. 2.88's CPU runtime effects
+    crashed on recent CPUs; 4.x runs them.
+  - **Slower gradients on the CPU (`SkiaCpuRenderer`).** Skia dropped the
+    code generator (SkVM) its CPU gradients ran on: a full-window 1440×900
+    linear gradient takes about 35 ms a frame instead of 1.2 ms, a radial one
+    about 27 ms instead of 14 ms (measured on a Ryzen AI 9 365). On the GPU
+    (`SkiaGlRenderer`) and with `ManagedRenderer` nothing changes: on the
+    CPU, prefer `ManagedRenderer` for gradient-heavy screens.
+
 - **Skia is two renderers, and GL is a layer of its own (breaking).**
   `SkiaRenderer` is `SkiaGlRenderer` (a window's GL context: `new
   SkiaGlRenderer(window.Gl)`, `SkiaGlRenderer.ForGl`) and `SkiaCpuRenderer`
