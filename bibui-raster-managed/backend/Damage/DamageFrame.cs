@@ -171,6 +171,13 @@ internal sealed class DamageFrame
                     // stays the same when its pixels are updated.
                     ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(0x27UL, op.Texture.Id), op.Texture.Generation), renderer.TextureVersion(op.Texture));
                     h = Hash64.Mix(Hash64.Mix(h, op.Rect), PaintHash(op, list));
+                    if (op.Resource >= 0)
+                    {
+                        // Through a table: its content and the channels read are the picture too.
+                        var lookup = list.LookupAt(op.Resource);
+                        h = Hash64.Mix(Hash64.Mix(Hash64.Mix(h, lookup.Table.Id), lookup.Table.Generation), renderer.TextureVersion(lookup.Table));
+                        h = Hash64.Mix(h, (ulong)lookup.X << 8 | (ulong)lookup.Y);
+                    }
                     Draw(ref d, h, Bounds(Inflate(op.Rect, 1f), op));
                     break;
                 }

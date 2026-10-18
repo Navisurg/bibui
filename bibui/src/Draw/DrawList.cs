@@ -26,7 +26,11 @@ public enum DrawOpKind : byte
     Path,
     /// <summary><see cref="DrawOp.Count"/> points from <see cref="DrawList.Points"/>, as <see cref="DrawOp.Mode"/> says.</summary>
     Points,
-    /// <summary><see cref="DrawOp.Texture"/> scaled into <see cref="DrawOp.Rect"/>.</summary>
+    /// <summary>
+    /// <see cref="DrawOp.Texture"/> scaled into <see cref="DrawOp.Rect"/>: with its
+    /// format's default look, or through <see cref="DrawList.LookupAt"/>(Resource)
+    /// when Resource is not -1.
+    /// </summary>
     Texture,
     /// <summary>Blurs what is painted in <see cref="DrawOp.Region"/> by A and draws it back clipped to <see cref="DrawOp.Rect"/>.</summary>
     BackdropBlur,
@@ -64,7 +68,7 @@ public struct DrawOp
     public Matrix3x2 Matrix;        // PushTransform
     public int Start, Count;        // payload: points, glyphs, path verbs
     public int Start2, Count2;      // payload: glyph positions, path args
-    public int Resource;            // DrawList.PathAt or FaceAt; -1 for none
+    public int Resource;            // DrawList.PathAt, FaceAt or LookupAt (Texture); -1 for none
     public TextureHandle Texture;   // Texture
     public PixelRect Region;        // BackdropBlur's read region
 
@@ -101,6 +105,9 @@ public sealed class DrawList
     private readonly List<VectorPath> _paths = [];
     private readonly List<FontFace> _faces = [];
     private readonly Dictionary<int, int> _faceIndex = [];
+    // Empty until a frame draws through a table: most frames never do.
+    private TextureLookup[] _lookups = [];
+    private int _lookupCount;
 
     public ReadOnlySpan<DrawOp> Ops => _ops.AsSpan(0, _opCount);
     public ReadOnlySpan<Vector2> Points => _points.AsSpan(0, _pointCount);
@@ -115,11 +122,14 @@ public sealed class DrawList
     /// <summary>The face a glyph op draws.</summary>
     public FontFace FaceAt(int index) => _faces[index];
 
+    /// <summary>The table a texture op draws through, when its <see cref="DrawOp.Resource"/> is not -1.</summary>
+    public TextureLookup LookupAt(int index) => _lookups[index];
+
     // ── Recording, the core's side ───────────────────────────────────────────
 
     internal void Reset()
     {
-        _opCount = _pointCount = _verbCount = _floatCount = _colorCount = _glyphCount = 0;
+        _opCount = _pointCount = _verbCount = _floatCount = _colorCount = _glyphCount = _lookupCount = 0;
         _paths.Clear();
         _faces.Clear();
         _faceIndex.Clear();
@@ -140,6 +150,8 @@ public sealed class DrawList
     internal int AddVerbs(ReadOnlySpan<PathVerb> verbs) => Append(ref _verbs, ref _verbCount, verbs);
     internal int AddFloats(ReadOnlySpan<float> floats) => Append(ref _floats, ref _floatCount, floats);
     internal int AddColors(ReadOnlySpan<Rgba> colors) => Append(ref _colors, ref _colorCount, colors);
+
+    internal int AddLookup(TextureLookup lookup) => Append(ref _lookups, ref _lookupCount, [lookup]);
 
     internal int AddPath(VectorPath path)
     {

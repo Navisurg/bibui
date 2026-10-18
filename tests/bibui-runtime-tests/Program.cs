@@ -2755,6 +2755,116 @@ Run("Renderers: SkiaGlRenderer, SkiaCpuRenderer and ManagedRenderer share their 
         Eq(string.Join("; ", gl), string.Join("; ", Shapes(t)), $"{t.Name} matches SkiaGlRenderer");
 });
 
+// A texture through a table (TextureLookup): each pixel's raw channel picks the
+// entry drawn. The same cases on every renderer, drawn 1:1 so filtering lands on
+// texel centres and the entry read is exact.
+void LookupContract(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn create, Action<Bibui.Draw.TextureHandle> release)
+{
+    var stat = Bibui.Draw.TextureKind.Static;
+    byte[] Draw(Bibui.Draw.TextureHandle texture, Bibui.Draw.TextureLookup lookup)
+    {
+        var list = new Bibui.Draw.DrawList();
+        list.Push(Bibui.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
+        ref var op = ref list.Push(Bibui.Draw.DrawOpKind.Texture);
+        (op.Texture, op.Rect, op.Paint) = (texture, new RectF(0, 0, 4, 2), new PaintSpec { Color = Rgba.Black, FilterQuality = FilterQuality.Low });
+        op.Resource = list.AddLookup(lookup);
+        var bgra = Pixels.Of(list, 4, 2, draw).RawBgraBytes;
+        for (int i = 0; i < bgra.Length; i += 4) (bgra[i], bgra[i + 2]) = (bgra[i + 2], bgra[i]);
+        return bgra;
+    }
+    static bool Near(byte[] got, byte[] want, int tolerance = 0) =>
+        got.Length == want.Length && got.Zip(want).All(p => Math.Abs(p.First - p.Second) <= tolerance);
+
+    // A 1-D table whose every entry differs: entry i = (i, 255 - i, i * 7, 255).
+    var line = new byte[256 * 4];
+    for (int i = 0; i < 256; i++) (line[4 * i], line[4 * i + 1], line[4 * i + 2], line[4 * i + 3]) = ((byte)i, (byte)(255 - i), (byte)(i * 7), 255);
+    var table = create(Bibui.Draw.TextureFormat.RGBA8, stat, 256, 1, line, 0);
+    byte[] Entry(int i) => [line[4 * i], line[4 * i + 1], line[4 * i + 2], line[4 * i + 3]];
+
+    byte[] one = [0, 40, 80, 120, 160, 200, 240, 255];
+    var r8 = create(Bibui.Draw.TextureFormat.R8, stat, 4, 2, one, 0);
+    IsTrue(Near(Draw(r8, new(table, Bibui.Draw.TextureChannel.R)), one.SelectMany(v => Entry(v)).ToArray()),
+        $"{name}: an R8 value picks its entry of a 1-D table");
+
+    var a8 = create(Bibui.Draw.TextureFormat.A8, stat, 4, 2, one, 0);
+    IsTrue(Near(Draw(a8, new(table, Bibui.Draw.TextureChannel.A)), one.SelectMany(v => Entry(v)).ToArray()),
+        $"{name}: A8's coverage is its raw A");
+    IsTrue(Near(Draw(a8, new(table, Bibui.Draw.TextureChannel.R)), Enumerable.Range(0, 8).SelectMany(_ => Entry(0)).ToArray()),
+        $"{name}: a channel the format lacks reads 0");
+
+    // A 2-D table: entry (x, y) = (x, y, 77, 255); RG8's two channels pick column and row.
+    var plane = new byte[256 * 256 * 4];
+    for (int y = 0; y < 256; y++) for (int x = 0; x < 256; x++)
+        { int o = (y * 256 + x) * 4; (plane[o], plane[o + 1], plane[o + 2], plane[o + 3]) = ((byte)x, (byte)y, 77, 255); }
+    var grid = create(Bibui.Draw.TextureFormat.RGBA8, stat, 256, 256, plane, 0);
+    var two = new byte[16];
+    for (int i = 0; i < 8; i++) (two[2 * i], two[2 * i + 1]) = ((byte)(i * 30), (byte)(255 - i * 30));
+    var rg8 = create(Bibui.Draw.TextureFormat.RG8, stat, 4, 2, two, 0);
+    IsTrue(Near(Draw(rg8, new(grid, Bibui.Draw.TextureChannel.R, Bibui.Draw.TextureChannel.G)),
+        Enumerable.Range(0, 8).SelectMany(i => new[] { two[2 * i], two[2 * i + 1], (byte)77, (byte)255 }).ToArray()),
+        $"{name}: RG8's two channels pick an entry of a 2-D table");
+
+    // RGBA8 is read straight, not premultiplied: R at half alpha still picks entry R.
+    var rgba = new byte[32];
+    for (int i = 0; i < 8; i++) (rgba[4 * i], rgba[4 * i + 1], rgba[4 * i + 2], rgba[4 * i + 3]) = ((byte)(i * 30), 0, 0, 128);
+    var half = create(Bibui.Draw.TextureFormat.RGBA8, stat, 4, 2, rgba, 0);
+    IsTrue(Near(Draw(half, new(table, Bibui.Draw.TextureChannel.R)), Enumerable.Range(0, 8).SelectMany(i => Entry(i * 30)).ToArray(), tolerance: 7),
+        $"{name}: RGBA8's R is read straight, whatever its alpha");
+
+    // A transparent entry draws nothing; a released table draws nothing.
+    var clear = (byte[])line.Clone();
+    for (int i = 0; i < 128; i++) clear[4 * i + 3] = 0;
+    var halfClear = create(Bibui.Draw.TextureFormat.RGBA8, stat, 256, 1, clear, 0);
+    var drawn = Draw(r8, new(halfClear, Bibui.Draw.TextureChannel.R));
+    IsTrue(drawn[3] == 0 && drawn[4 * 7 + 3] == 255, $"{name}: an entry's alpha is drawn: transparent below 128, opaque at 255");
+    release(halfClear);
+    IsTrue(Draw(r8, new(halfClear, Bibui.Draw.TextureChannel.R)).All(b => b == 0), $"{name}: a released table draws nothing");
+    release(table); release(grid); release(r8); release(a8); release(rg8); release(half);
+}
+
+// A frame that draws through a table, drawn again: what was made for the first
+// (the effect, the shader, the managed shader's state) is reused, and the managed
+// heap does not grow.
+void LookupAllocatesNothing(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn create)
+{
+    var line = new byte[256 * 4];
+    for (int i = 0; i < 256; i++) (line[4 * i], line[4 * i + 1], line[4 * i + 2], line[4 * i + 3]) = ((byte)i, (byte)(255 - i), 7, 255);
+    var table = create(Bibui.Draw.TextureFormat.RGBA8, Bibui.Draw.TextureKind.Static, 256, 1, line, 0);
+    var source = create(Bibui.Draw.TextureFormat.R8, Bibui.Draw.TextureKind.Static, 64, 64, new byte[64 * 64], 0);
+    var list = new Bibui.Draw.DrawList();
+    list.Push(Bibui.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
+    ref var op = ref list.Push(Bibui.Draw.DrawOpKind.Texture);
+    (op.Texture, op.Rect, op.Paint) = (source, new RectF(0, 0, 128, 128), new PaintSpec { Color = Rgba.Black, FilterQuality = FilterQuality.Low });
+    op.Resource = list.AddLookup(new(table, Bibui.Draw.TextureChannel.R));
+    var bgra = GC.AllocateArray<byte>(128 * 128 * 4, pinned: true);
+    var pixels = new Bibui.Draw.RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), 128, 128, 128 * 4);
+    for (int i = 0; i < 3; i++) draw(list, pixels);
+    long before = GC.GetAllocatedBytesForCurrentThread();
+    draw(list, pixels);
+    long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+    Eq(0L, allocated, $"{name}: a lookup drawn again allocates nothing (it allocated {allocated} bytes)");
+}
+
+Run("Texture lookups: drawn again, a lookup allocates nothing, on Skia and the managed rasterizer", () =>
+{
+    using var skia = new SkiaCpuRenderer();
+    LookupAllocatesNothing("skia", skia.Draw, skia.CreateTexture);
+    using var managed = new ManagedRenderer();
+    LookupAllocatesNothing("managed", managed.Draw, managed.CreateTexture);
+});
+
+Run("Texture lookups: a texture's raw channels pick a table's entries, on Skia", () =>
+{
+    using var skia = new SkiaCpuRenderer();
+    LookupContract("skia", skia.Draw, skia.CreateTexture, skia.ReleaseTexture);
+});
+
+Run("Texture lookups: a texture's raw channels pick a table's entries, on the managed rasterizer", () =>
+{
+    using var managed = new ManagedRenderer();
+    LookupContract("managed", managed.Draw, managed.CreateTexture, managed.ReleaseTexture);
+});
+
 Run("Textures: drawn, updated and released on Skia", () =>
 {
     using var skia = new SkiaCpuRenderer();

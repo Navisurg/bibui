@@ -179,6 +179,21 @@ public readonly ref partial struct DrawContext
         List.SetPaint(ref op, paint.FillPaint());
     }
 
+    /// <summary>
+    /// <paramref name="texture"/> scaled into <paramref name="dest"/> through
+    /// <paramref name="lookup"/>: each pixel's raw channel (or two) picks the colour
+    /// drawn from the lookup's table (<see cref="TextureLookup"/>). The fill
+    /// colour's alpha modulates it, as for any texture. A released table draws
+    /// nothing; <see cref="TextureLookup.None"/> draws the texture plainly.
+    /// </summary>
+    public void DrawTexture(TextureHandle texture, RectF dest, in Paint paint, TextureLookup lookup)
+    {
+        ref var op = ref List.Push(DrawOpKind.Texture);
+        (op.Texture, op.Rect) = (texture, dest);
+        if (!lookup.IsNone) op.Resource = List.AddLookup(lookup);
+        List.SetPaint(ref op, paint.FillPaint());
+    }
+
     // ── State ────────────────────────────────────────────────────────────────
     // Each push is undone by its pop, in order. Clips, transforms and opacity
     // share one stack, counted so a callback's are its own (see StateFloor).

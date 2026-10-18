@@ -280,6 +280,19 @@ public sealed class ManagedRenderer : IDisposable
     // ── Ops ──────────────────────────────────────────────────────────────────
 
     private readonly ImageShader _imageShader = new();
+    private readonly LookupShader _lookupShader = new();
+
+    // A texture drawn through a table (TextureLookup): the source's raw channel(s),
+    // filtered as the paint says, pick the table's entry. A released table draws nothing.
+    private void Lookup(Canvas c, ManagedTexture source, TextureLookup lookup, in DrawOp op)
+    {
+        if (_textures.Get(lookup.Table) is not { } table) return;
+        var d = ToRect(op.Rect);
+        if (d.IsEmpty) return;
+        _lookupShader.Set(source, lookup, table, d, op.Paint.FilterQuality != FilterQuality.None);
+        // The paint's alpha modulates it, as for any texture.
+        c.DrawRect(d, new Paint { Color = op.Paint.Color.Argb | 0x00FFFFFFu, Shader = _lookupShader });
+    }
     private PlacedGlyph[] _placed = new PlacedGlyph[64];
 
     // Gradient shaders by content, so a gradient drawn every frame is built once.
@@ -303,7 +316,9 @@ public sealed class ManagedRenderer : IDisposable
             case DrawOpKind.Path: c.DrawPath(_opPaths[k]!, Convert(op, list, c)); break;
             case DrawOpKind.Points: Points(c, op.Mode, list.Points.Slice(op.Start, op.Count), Convert(op, list, c)); break;
             case DrawOpKind.Texture:
-                if (_textures.Get(op.Texture) is { } img) Bitmap(c, img.Argb, img.Width, img.Height, op.Rect, op);
+                if (_textures.Get(op.Texture) is not { } img) break;
+                if (op.Resource >= 0) Lookup(c, img, list.LookupAt(op.Resource), op);
+                else Bitmap(c, img.Argb, img.Width, img.Height, op.Rect, op);
                 break;
             case DrawOpKind.BackdropBlur: BackdropBlur(c, op.Region, op.Rect, op.A); break;
             case DrawOpKind.Glyphs:
@@ -545,6 +560,91 @@ internal sealed class ManagedTexture(TextureFormat format, TextureKind kind, int
                 }
                 break;
         }
+    }
+}
+
+/// <summary>
+/// A texture drawn through a table: each pixel's raw channel value (or two),
+/// nearest or bilinear between texels, rounded to an entry of the table, whose
+/// premultiplied colour is the pixel's. Reads the texture's raw bytes, so a
+/// format's default look never reaches the lookup.
+/// </summary>
+internal sealed class LookupShader : Shader
+{
+    private byte[] _raw = [];
+    private int _w, _h, _bpp, _x, _y;     // _x, _y: byte offset of the channel in a pixel; -1 reads 0, -2 reads 255
+    private uint[] _table = [];
+    private int _tw, _th;
+    private Rect _dest;
+    private bool _bilinear;
+    private Matrix3x2 _deviceToImage;
+
+    public void Set(ManagedTexture source, TextureLookup lookup, ManagedTexture table, Rect dest, bool bilinear)
+    {
+        (_raw, _w, _h, _bpp) = (source.Raw, source.Width, source.Height, source.Format.BytesPerPixel());
+        (_x, _y) = (Offset(source.Format, lookup.X), Offset(source.Format, lookup.Y));
+        (_table, _tw, _th) = (table.Argb, table.Width, table.Height);
+        (_dest, _bilinear) = (dest, bilinear);
+    }
+
+    // Where a channel lives in a pixel of the format, as it is stored.
+    private static int Offset(TextureFormat format, TextureChannel channel) => (format, channel) switch
+    {
+        (_, TextureChannel.None) => -1,
+        (TextureFormat.R8, TextureChannel.R) or (TextureFormat.A8, TextureChannel.A) => 0,
+        (TextureFormat.RG8, TextureChannel.R) => 0,
+        (TextureFormat.RG8, TextureChannel.G) => 1,
+        (TextureFormat.RGBA8, _) => (int)channel,
+        (TextureFormat.BGRA8, TextureChannel.B) => 0,
+        (TextureFormat.BGRA8, TextureChannel.G) => 1,
+        (TextureFormat.BGRA8, TextureChannel.R) => 2,
+        (TextureFormat.BGRA8, TextureChannel.A) => 3,
+        (_, TextureChannel.A) => -2,
+        _ => -1,
+    };
+
+    public override void Begin(in Matrix3x2 localToDevice)
+    {
+        Matrix3x2.Invert(localToDevice, out var deviceToLocal);
+        var localToImage = Matrix3x2.CreateTranslation(-_dest.Left, -_dest.Top)
+                           * Matrix3x2.CreateScale(_w / _dest.Width, _h / _dest.Height);
+        _deviceToImage = deviceToLocal * localToImage;
+    }
+
+    public override void ShadeSpan(int x, int y, Span<uint> dst)
+    {
+        var m = _deviceToImage;
+        for (int i = 0; i < dst.Length; i++)
+        {
+            var p = Vector2.Transform(new Vector2(x + i + 0.5f, y + 0.5f), m);
+            float u, v;
+            if (_bilinear) (u, v) = (Bilinear(_x, p.X - 0.5f, p.Y - 0.5f), Bilinear(_y, p.X - 0.5f, p.Y - 0.5f));
+            else
+            {
+                int tx = (int)MathF.Floor(p.X), ty = (int)MathF.Floor(p.Y);
+                (u, v) = (At(_x, tx, ty), At(_y, tx, ty));
+            }
+            int col = Math.Min((int)(u + 0.5f), _tw - 1), row = Math.Min((int)(v + 0.5f), _th - 1);
+            dst[i] = _table[row * _tw + col];
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private float At(int offset, int x, int y) => offset switch
+    {
+        -1 => 0f,
+        -2 => 255f,
+        _ => _raw[(Math.Clamp(y, 0, _h - 1) * _w + Math.Clamp(x, 0, _w - 1)) * _bpp + offset],
+    };
+
+    private float Bilinear(int offset, float u, float v)
+    {
+        if (offset < 0) return At(offset, 0, 0);
+        int x0 = (int)MathF.Floor(u), y0 = (int)MathF.Floor(v);
+        float fx = u - x0, fy = v - y0;
+        float top = At(offset, x0, y0) + (At(offset, x0 + 1, y0) - At(offset, x0, y0)) * fx;
+        float bot = At(offset, x0, y0 + 1) + (At(offset, x0 + 1, y0 + 1) - At(offset, x0, y0 + 1)) * fx;
+        return top + (bot - top) * fy;
     }
 }
 
