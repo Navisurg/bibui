@@ -2,8 +2,8 @@
 // under a title, with a switch between a black and a white screen.
 // samples/counter is the counter on the desktop; here UIKit owns the main
 // thread, so the loop runs inside SilkIosWindow.RunApp. The window is the
-// whole screen; everything sits centred in it, clear of the notch and the
-// home indicator.
+// whole screen; the title sits at the top of its safe area, the rest centred
+// below it.
 using Bibui;
 using Bibui.Raster.Skia;
 using Bibui.Runtime;
@@ -22,19 +22,20 @@ SilkIosWindow.RunApp(() =>
     {
         runtime.BeginBuild(window.Events);
         bool flip = false;
-        // The screen, black or white, its rows centred down it; each row
-        // centres what it holds across the screen.
+        // The screen, black or white: the title at the top of its safe area,
+        // below the Dynamic Island, and the rest centred down what is left.
+        // Each row centres what it holds across the screen.
         var screen = runtime.ColumnFill();
         screen.Style.BackgroundColor = white ? "#FFFFFF" : "#000000";
+        screen.Style.Padding = window.SafeArea with { Top = window.SafeArea.Top + 16f };
         using (runtime.PushParent(screen))
-        using (runtime.Centred())
         {
             using (runtime.PushParent(runtime.RowFillX()))
             using (runtime.Centred())
             using (runtime.PushFontSize(ComponentSize.Xxl))
             using (runtime.PushFontFace(FontSlot.Heading, FontWeight.Bold))
                 runtime.Text("Hello iOS, from Bibui!");
-            runtime.Gap(32f);
+            using var centred = runtime.Centred();
             using (runtime.PushParent(runtime.RowFillX()))
             using (runtime.Centred())
                 flip = runtime.Switch("white", white, "White background").Clicked;
