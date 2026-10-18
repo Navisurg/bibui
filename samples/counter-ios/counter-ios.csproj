@@ -39,6 +39,9 @@
     <ProjectReference Include="../../bibui-platform-silk-ios/bibui-platform-silk-ios.csproj" />
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
   </ItemGroup>
+  <!-- How a device build is signed: your bundle ID, certificate and profile,
+       in a file of your own that git ignores, so none of it is committed. -->
+  <Import Project="Signing.local.props" Condition="Exists('Signing.local.props')" />
   <!-- The FreeType and HarfBuzz the platform ships, embedded in the app; what a
        package reference to Bibui.Platform.Silk.iOS would bring by itself. -->
   <Import Project="../../bibui-platform-silk-ios/build/Bibui.Platform.Silk.iOS.targets" />

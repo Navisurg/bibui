@@ -1,0 +1,15 @@
+<Project>
+  <!-- How the counter is signed for an iPhone. Copy this file to
+       Signing.local.props (which git ignores) and fill in your own values.
+
+       Your team's bundle ID: one your Apple developer team can register (a
+       free Personal Team cannot use com.navisurg.*). The certificate and the
+       profile are what Xcode made for that ID; list the certificates with
+       `security find-identity -v -p codesigning`. Only a device build uses
+       these: the simulator needs no signing. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'ios-arm64'">
+    <ApplicationId>com.example.bibui.counter</ApplicationId>
+    <CodesignKey>Apple Development: you@example.com (XXXXXXXXXX)</CodesignKey>
+    <CodesignProvision>iOS Team Provisioning Profile: com.example.bibui.counter</CodesignProvision>
+  </PropertyGroup>
+</Project>
