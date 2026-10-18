@@ -26,8 +26,13 @@ internal sealed class SkiaOps : IDisposable
     private readonly ResourceCache<TextPaintKey, SKFont> _textFonts = new();
     // The native path each kept VectorPath was built into, by its Id.
     private readonly ResourceCache<int, SKPath> _paths = new();
-    // A path the list carries in its payload, rebuilt into this per draw.
-    private readonly SKPath _scratch = new();
+    // A path the list carries in its payload, by its content: a callback that
+    // draws the same path every frame builds it once, as a kept path is.
+    private readonly ResourceCache<UInt128, SKPath> _payloadPaths = new();
+    // What every native path is built with; Skia's paths are made, not edited.
+    private readonly SKPathBuilder _builder = new();
+    // What every glyph run's blob is built with: Build() leaves it empty again.
+    private readonly SKTextBlobBuilder _blobBuilder = new();
 
     // Skia's face for each of bibui's, made from its font file once: the glyph
     // ids FreeType resolves belong to that file, so Skia draws the same glyphs.
@@ -72,6 +77,7 @@ internal sealed class SkiaOps : IDisposable
         _textPaints.EndFrame();
         _textFonts.EndFrame();
         _paths.EndFrame();
+        _payloadPaths.EndFrame();
     }
 
     // A translation as a translation, a uniform scale after it as a scale, and
@@ -95,7 +101,7 @@ internal sealed class SkiaOps : IDisposable
         var paint = texture.Format == TextureFormat.A8
             ? Paint(op.Paint with { Color = new Rgba(255, 255, 255, op.Paint.Color.A) }, op.MaskBlurSigma, op.ImageBlurSigma)
             : Paint(op, list);
-        canvas.DrawImage(texture.Image, op.Rect.ToSk(), paint);
+        canvas.DrawImage(texture.Image, op.Rect.ToSk(), op.Paint.FilterQuality.ToSk(), paint);
     }
 
     // Snapshots region of what the surface holds, blurs it and draws it back
@@ -112,7 +118,7 @@ internal sealed class SkiaOps : IDisposable
         var canvas = surface.Canvas;
         canvas.Save();
         canvas.ClipRect(clip.ToSk());
-        canvas.DrawImage(snapshot, new SKRect(region.Left, region.Top, region.Right, region.Bottom), paint);
+        canvas.DrawImage(snapshot, new SKRect(region.Left, region.Top, region.Right, region.Bottom), FilterQuality.None.ToSk(), paint);
         canvas.Restore();
     }
 
@@ -125,22 +131,16 @@ internal sealed class SkiaOps : IDisposable
         var sk = color.ToSk();
         var tf = Typeface(face);
         var key = TextPaintKey.For(sizePx, sk, face.Id);
-        var paint = _textPaints.FromKey(key, (Size: sizePx, sk, tf),
-            static p => new SKPaint
-            {
-                TextSize = p.Size,
-                Typeface = p.tf,
-                Color = p.sk,
-                IsAntialias = true,
-                SubpixelText = true,
-                LcdRenderText = false,
-                IsAutohinted = true,
-                HintingLevel = SKPaintHinting.Full,
-            });
-        var font = _textFonts.FromKey(key, paint, static p => p.ToFont());
-        using var builder = new SKTextBlobBuilder();
-        builder.AddPositionedRun(glyphs, font, positions.AsSk());
-        using var blob = builder.Build();
+        var paint = _textPaints.FromKey(key, sk, static c => new SKPaint { Color = c, IsAntialias = true });
+        var font = _textFonts.FromKey(key, (Size: sizePx, tf), static p => new SKFont(p.tf, p.Size)
+        {
+            Subpixel = true,
+            Edging = SKFontEdging.Antialias,   // grayscale, never LCD
+            ForceAutoHinting = true,
+            Hinting = SKFontHinting.Full,
+        });
+        _blobBuilder.AddPositionedRun(glyphs, font, positions.AsSk());
+        using var blob = _blobBuilder.Build();
         if (blob is not null) canvas.DrawText(blob, x, baselineY, paint);
     }
 
@@ -155,62 +155,67 @@ internal sealed class SkiaOps : IDisposable
 
     // ── Paths ────────────────────────────────────────────────────────────────
 
-    // A kept path is built once and found by its Id; any other is rebuilt from
-    // the payload into the scratch path.
+    // A kept path is built once and found by its Id; a payload path once per
+    // content. Steady frames build none.
     private SKPath Path(in DrawOp op, DrawList list)
     {
         if (op.Resource >= 0)
         {
             var path = list.PathAt(op.Resource);
-            return _paths.FromKey(path.Id, path, static p =>
-            {
-                var native = new SKPath();
-                Build(p.Verbs, p.Args, native, p);
-                return native;
-            });
+            return _paths.FromKey(path.Id, (path, _builder), static p => Build(p._builder, p.path.Verbs, p.path.Args, p.path));
         }
-        _scratch.Rewind();
-        Build(list.Verbs.Slice(op.Start, op.Count), list.Floats.Slice(op.Start2, op.Count2), _scratch, null);
-        return _scratch;
+        var verbs = list.Verbs.Slice(op.Start, op.Count);
+        var args = list.Floats.Slice(op.Start2, op.Count2);
+        var hash = new System.IO.Hashing.XxHash128();
+        hash.Append(MemoryMarshal.AsBytes(verbs));
+        hash.Append(MemoryMarshal.AsBytes(args));
+        var key = hash.GetCurrentHashAsUInt128();
+        if (_payloadPaths.TryGet(key, out var hit)) return hit;
+        return _payloadPaths.Add(key, Build(_builder, verbs, args, null));
     }
 
-    // Verb for verb into a native path. An added path is built into its own
-    // native path first, then mapped through its transform.
-    private static void Build(ReadOnlySpan<PathVerb> verbs, ReadOnlySpan<float> a, SKPath into, VectorPath? owner)
+    // Verb for verb into a native path, through a builder left empty for the
+    // next. An added path is built with its own builder first, then mapped through
+    // its transform.
+    private static SKPath Build(SKPathBuilder b, ReadOnlySpan<PathVerb> verbs, ReadOnlySpan<float> a, VectorPath? owner)
     {
+        b.Reset();
+        bool empty = true;
         int at = 0, added = 0;
         foreach (var verb in verbs)
         {
             switch (verb)
             {
-                case PathVerb.Move: into.MoveTo(a[at], a[at + 1]); break;
-                case PathVerb.Line: into.LineTo(a[at], a[at + 1]); break;
-                case PathVerb.Quad: into.QuadTo(a[at], a[at + 1], a[at + 2], a[at + 3]); break;
-                case PathVerb.Cubic: into.CubicTo(a[at], a[at + 1], a[at + 2], a[at + 3], a[at + 4], a[at + 5]); break;
+                case PathVerb.Move: b.MoveTo(a[at], a[at + 1]); break;
+                case PathVerb.Line: b.LineTo(a[at], a[at + 1]); break;
+                case PathVerb.Quad: b.QuadTo(a[at], a[at + 1], a[at + 2], a[at + 3]); break;
+                case PathVerb.Cubic: b.CubicTo(a[at], a[at + 1], a[at + 2], a[at + 3], a[at + 4], a[at + 5]); break;
                 case PathVerb.Arc:
-                    into.ArcTo(a[at], a[at + 1], a[at + 2],
+                    b.ArcTo(a[at], a[at + 1], a[at + 2],
                         a[at + 3] != 0f ? SKPathArcSize.Large : SKPathArcSize.Small,
                         a[at + 4] != 0f ? SKPathDirection.Clockwise : SKPathDirection.CounterClockwise,
                         a[at + 5], a[at + 6]);
                     break;
-                case PathVerb.AddArc: into.AddArc(new SKRect(a[at], a[at + 1], a[at + 2], a[at + 3]), a[at + 4], a[at + 5]); break;
-                case PathVerb.Close: into.Close(); break;
+                case PathVerb.AddArc: b.AddArc(new SKRect(a[at], a[at + 1], a[at + 2], a[at + 3]), a[at + 4], a[at + 5]); break;
+                case PathVerb.Close: b.Close(); break;
                 case PathVerb.AddPath:
                 {
                     var (source, transform) = owner!.Added(added++);
-                    using var built = new SKPath();
-                    Build(source.Verbs, source.Args, built, source);
+                    using var inner = new SKPathBuilder();
+                    using var built = Build(inner, source.Verbs, source.Args, source);
                     var m = transform.ToSk();
-                    // Into an empty path, Transform writes the mapped copy outright:
-                    // the operation icons were scaled with when their pixels were
+                    // Into an empty path, the mapped copy is written outright: the
+                    // operation icons were scaled with when their pixels were
                     // blessed, so their geometry stays bit-identical.
-                    if (into.IsEmpty) built.Transform(m, into);
-                    else into.AddPath(built, ref m);
+                    if (empty) { built.Transform(in m); b.AddPath(built); }
+                    else b.AddPath(built, in m);
                     break;
                 }
             }
+            empty = false;
             at += VectorPath.ArgCount(verb);
         }
+        return b.Detach();
     }
 
     // ── Paints ───────────────────────────────────────────────────────────────
@@ -280,7 +285,9 @@ internal sealed class SkiaOps : IDisposable
         _textPaints.Dispose();
         _textFonts.Dispose();
         _paths.Dispose();
-        _scratch.Dispose();
+        _payloadPaths.Dispose();
+        _builder.Dispose();
+        _blobBuilder.Dispose();
         foreach (var typeface in _typefaces.Values) typeface.Dispose();
         _typefaces.Clear();
     }
@@ -328,7 +335,6 @@ internal sealed class SkiaPaintEntry : IDisposable
                 StrokeCap = spec.StrokeCap.ToSk(),
                 StrokeJoin = spec.StrokeJoin.ToSk(),
                 IsAntialias = spec.IsAntialias,
-                FilterQuality = spec.FilterQuality.ToSk(),
                 Shader = shader,
                 MaskFilter = mask,
                 ImageFilter = image,

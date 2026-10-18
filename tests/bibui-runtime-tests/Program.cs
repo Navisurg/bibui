@@ -2572,17 +2572,20 @@ Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string
     using (var surface = SkiaSharp.SKSurface.Create(info))
     using (var data = SkiaSharp.SKData.CreateCopy(face.FontFile))
     using (var typeface = SkiaSharp.SKTypeface.FromData(data))
-    using (var paint = new SkiaSharp.SKPaint
+    using (var font = new SkiaSharp.SKFont(typeface, size)
     {
-        TextSize = size, Typeface = typeface, Color = SkiaSharp.SKColors.Black,
-        IsAntialias = true, SubpixelText = true, LcdRenderText = false,
-        IsAutohinted = true, HintingLevel = SkiaSharp.SKPaintHinting.Full,
+        Subpixel = true, Edging = SkiaSharp.SKFontEdging.Antialias,
+        ForceAutoHinting = true, Hinting = SkiaSharp.SKFontHinting.Full,
+        // Unrounded advances, as FreeType's: Skia 4 rounds them under full hinting
+        // where 2.88 did not. The renderer never uses Skia's advances; this string does.
+        LinearMetrics = true,
     })
+    using (var paint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.Black, IsAntialias = true })
     {
         surface.Canvas.Clear(SkiaSharp.SKColors.White);
-        surface.Canvas.DrawText(text, 6.25f, 32f, paint);
+        surface.Canvas.DrawText(text, 6.25f, 32f, font, paint);
         fromString = Read(surface);
-        Eq(paint.MeasureText(text), shaped.Width, "Skia measures the string as FreeType does");
+        Eq(font.MeasureText(text), shaped.Width, $"Skia measures the string as FreeType does (Skia {font.MeasureText(text)}, FreeType {shaped.Width})");
     }
 
     var list = new Bibui.Draw.DrawList();
@@ -5986,10 +5989,7 @@ Run("Rgba/PaintSpec enums: the same bits and values Skia uses", () =>
     Eq((int)SkiaSharp.SKStrokeJoin.Miter, (int)StrokeJoin.Miter, "StrokeJoin.Miter");
     Eq((int)SkiaSharp.SKStrokeJoin.Round, (int)StrokeJoin.Round, "StrokeJoin.Round");
     Eq((int)SkiaSharp.SKStrokeJoin.Bevel, (int)StrokeJoin.Bevel, "StrokeJoin.Bevel");
-    Eq((int)SkiaSharp.SKFilterQuality.None, (int)FilterQuality.None, "FilterQuality.None");
-    Eq((int)SkiaSharp.SKFilterQuality.Low, (int)FilterQuality.Low, "FilterQuality.Low");
-    Eq((int)SkiaSharp.SKFilterQuality.Medium, (int)FilterQuality.Medium, "FilterQuality.Medium");
-    Eq((int)SkiaSharp.SKFilterQuality.High, (int)FilterQuality.High, "FilterQuality.High");
+    // FilterQuality maps to Skia's sampling options in the renderer (SkiaInterop): Skia has no such enum now.
 
     var r = RectF.FromXywh(10f, 20f, 30f, 40f);
     Eq(new RectF(10f, 20f, 40f, 60f), r, "FromXywh is edges");
