@@ -54,7 +54,19 @@ internal sealed class SkiaOps : IDisposable
                 case DrawOpKind.Clear: canvas.Clear(op.Color.ToSk()); break;
                 case DrawOpKind.PushClip: canvas.Save(); canvas.ClipRect(op.Rect.ToSk()); break;
                 case DrawOpKind.PushTransform: canvas.Save(); Transform(canvas, op.Matrix); break;
-                case DrawOpKind.PushOpacity: canvas.SaveLayer(Paint(new PaintSpec { Color = new Rgba(0, 0, 0, op.Alpha) })); break;
+                case DrawOpKind.PushBlendMode:
+                    // SrcOver composites as if there were no layer: none is made.
+                    if (op.Blend == BlendMode.SrcOver) canvas.Save();
+                    else canvas.SaveLayer(BlendPaint(op.Blend));
+                    break;
+                case DrawOpKind.PushColorMatrix:
+                {
+                    var m = list.Floats.Slice(op.Start, op.Count);
+                    if (ColorMatrices.IsIdentity(m)) canvas.Save();
+                    else if (ColorMatrices.IsOpacity(m, out byte alpha)) canvas.SaveLayer(Paint(new PaintSpec { Color = new Rgba(0, 0, 0, alpha) }));
+                    else canvas.SaveLayer(MatrixPaint(m));
+                    break;
+                }
                 case DrawOpKind.Pop: canvas.Restore(); break;
                 case DrawOpKind.Rect: canvas.DrawRoundRect(op.Rect.ToSk(), op.A, op.B, Paint(op, list)); break;
                 case DrawOpKind.Line: canvas.DrawLine(op.A, op.B, op.C, op.D, Paint(op, list)); break;
@@ -78,6 +90,8 @@ internal sealed class SkiaOps : IDisposable
         _textFonts.EndFrame();
         _paths.EndFrame();
         _payloadPaths.EndFrame();
+        _lookupShaders.EndFrame();
+        _matrixPaints.EndFrame();
     }
 
     // A translation as a translation, a uniform scale after it as a scale, and
@@ -98,11 +112,143 @@ internal sealed class SkiaOps : IDisposable
     // drawn in white, its default look, whatever colour the paint has.
     private void Texture(SKCanvas canvas, SkiaTexture texture, in DrawOp op, DrawList list)
     {
+        var lookup = list.LookupAt(op.Resource);
+        if (!lookup.IsNone)
+        {
+            Lookup(canvas, texture, lookup, op);
+            return;
+        }
         var paint = texture.Format == TextureFormat.A8
             ? Paint(op.Paint with { Color = new Rgba(255, 255, 255, op.Paint.Color.A) }, op.MaskBlurSigma, op.ImageBlurSigma)
             : Paint(op, list);
         canvas.DrawImage(texture.Image, op.Rect.ToSk(), op.Paint.FilterQuality.ToSk(), paint);
     }
+
+    // ── Groups ───────────────────────────────────────────────────────────────
+    // A layer's paint per blend mode, and per colour matrix by content: made
+    // once, so pushing a group allocates nothing frame to frame.
+
+    private readonly SKPaint?[] _blendPaints = new SKPaint?[6];
+    private readonly ResourceCache<UInt128, SKPaint> _matrixPaints = new();
+
+    private SKPaint BlendPaint(BlendMode mode) => _blendPaints[(int)mode] ??= new SKPaint
+    {
+        BlendMode = mode switch
+        {
+            BlendMode.Multiply => SKBlendMode.Multiply,
+            BlendMode.Plus => SKBlendMode.Plus,
+            BlendMode.Screen => SKBlendMode.Screen,
+            BlendMode.Overlay => SKBlendMode.Overlay,
+            BlendMode.Src => SKBlendMode.Src,
+            _ => SKBlendMode.SrcOver,
+        },
+    };
+
+    private SKPaint MatrixPaint(ReadOnlySpan<float> m)
+    {
+        var key = System.IO.Hashing.XxHash128.HashToUInt128(MemoryMarshal.AsBytes(m));
+        if (_matrixPaints.TryGet(key, out var hit)) return hit;
+        // The paint holds its own reference to the filter.
+        using var filter = SKColorFilter.CreateColorMatrix(m.ToArray());
+        return _matrixPaints.Add(key, new SKPaint { ColorFilter = filter });
+    }
+
+    // ── Lookups ──────────────────────────────────────────────────────────────
+    // A texture drawn through a table: one runtime effect samples the source
+    // with the op's filter, takes its raw channel(s) and reads that entry of the
+    // table exactly (floor to an entry, sampled at its centre). The same SkSL
+    // runs on the GPU and on the CPU.
+    //
+    // Nothing is made per draw once a picture holds still: the effect, its
+    // uniforms and children blocks and the paint are this renderer's for life,
+    // and the shader is kept by what it draws (source and table images, rect,
+    // filter, channels). A Stream on the GPU keeps its image, so its shader is
+    // kept across frames too; a CPU Stream's image is made again per update.
+
+    private const string LookupSksl = """
+        uniform shader src;
+        uniform shader lut;
+        uniform float4 rawMask;   // what the format's sample holds raw: Gray8 samples (g, g, g, 1), R8's G and B are 0
+        uniform float straight;   // RGBA8/BGRA8: Skia samples them premultiplied; raw is straight
+        uniform float4 pickX;     // the channel that picks the column, one-hot
+        uniform float4 pickY;     // the channel that picks the row, one-hot; zero for a 1-D table
+        half4 main(float2 p) {
+            float4 s = src.eval(p);
+            if (straight > 0.5 && s.a > 0.0) { s.rgb = s.rgb / s.a; }
+            s = s * rawMask;
+            float x = floor(dot(s, pickX) * 255.0 + 0.5) + 0.5;
+            float y = floor(dot(s, pickY) * 255.0 + 0.5) + 0.5;
+            return lut.eval(float2(x, y));
+        }
+        """;
+
+    private SKRuntimeEffect? _lookupEffect;
+    private SKRuntimeEffectUniforms? _lookupUniforms;
+    private SKRuntimeEffectChildren? _lookupChildren;
+    private readonly SKPaint _lookupPaint = new() { Color = SKColors.White };
+    private readonly ResourceCache<UInt128, SKShader> _lookupShaders = new();
+
+    private static readonly float[] AllRaw = [1f, 1f, 1f, 1f], R8Raw = [1f, 0f, 0f, 1f];
+    private static readonly float[] PickR = [1f, 0f, 0f, 0f], PickG = [0f, 1f, 0f, 0f],
+        PickB = [0f, 0f, 1f, 0f], PickA = [0f, 0f, 0f, 1f], PickNone = [0f, 0f, 0f, 0f];
+
+    private void Lookup(SKCanvas canvas, SkiaTexture texture, TextureLookup lookup, in DrawOp op)
+    {
+        // A released table draws nothing, as a released texture does.
+        if (Textures.Get(lookup.Table) is not { } table) return;
+        var rect = op.Rect;
+        var filter = op.Paint.FilterQuality;
+
+        Span<long> parts =
+        [
+            texture.Image!.Handle, table.Image!.Handle,
+            BitConverter.SingleToInt32Bits(rect.Left), BitConverter.SingleToInt32Bits(rect.Top),
+            BitConverter.SingleToInt32Bits(rect.Right), BitConverter.SingleToInt32Bits(rect.Bottom),
+            (long)filter, (long)lookup.X << 8 | (long)lookup.Y,
+        ];
+        var key = System.IO.Hashing.XxHash128.HashToUInt128(MemoryMarshal.AsBytes(parts));
+        if (!_lookupShaders.TryGet(key, out var shader))
+            shader = _lookupShaders.Add(key, LookupShader(texture, table, lookup, rect, filter));
+
+        _lookupPaint.Shader = shader;
+        _lookupPaint.Color = new SKColor(255, 255, 255, op.Paint.Color.A);   // the paint's alpha modulates, as for any texture
+        _lookupPaint.IsAntialias = op.Paint.IsAntialias;
+        canvas.DrawRect(rect.ToSk(), _lookupPaint);
+    }
+
+    private SKShader LookupShader(SkiaTexture texture, SkiaTexture table, TextureLookup lookup, RectF rect, FilterQuality filter)
+    {
+        _lookupEffect ??= SKRuntimeEffect.CreateShader(LookupSksl, out var errors)
+            ?? throw new InvalidOperationException($"Skia did not compile the lookup shader: {errors}");
+        _lookupUniforms ??= new SKRuntimeEffectUniforms(_lookupEffect);
+        _lookupChildren ??= new SKRuntimeEffectChildren(_lookupEffect);
+
+        var toRect = SKMatrix.CreateScale(rect.Width / texture.Width, rect.Height / texture.Height)
+            .PostConcat(SKMatrix.CreateTranslation(rect.Left, rect.Top));
+        // The children are only lent: the effect's shader holds its own references.
+        using var src = texture.Image!.ToShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, filter.ToSk(), toRect);
+        using var lut = table.Image!.ToShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, FilterQuality.None.ToSk());
+        _lookupUniforms["rawMask"] = texture.Format == TextureFormat.R8 ? R8Raw : AllRaw;
+        _lookupUniforms["straight"] = texture.Format is TextureFormat.RGBA8 or TextureFormat.BGRA8 ? 1f : 0f;
+        _lookupUniforms["pickX"] = Pick(lookup.X);
+        _lookupUniforms["pickY"] = Pick(lookup.Y);
+        _lookupChildren["src"] = src;
+        _lookupChildren["lut"] = lut;
+        var shader = _lookupEffect.ToShader(_lookupUniforms, _lookupChildren);
+        _lookupChildren["src"] = null;
+        _lookupChildren["lut"] = null;
+        return shader;
+    }
+
+    // One-hot over (r, g, b, a); None is all zero, so a 1-D table reads row 0.
+    private static float[] Pick(TextureChannel channel) => channel switch
+    {
+        TextureChannel.R => PickR,
+        TextureChannel.G => PickG,
+        TextureChannel.B => PickB,
+        TextureChannel.A => PickA,
+        _ => PickNone,
+    };
 
     // Snapshots region of what the surface holds, blurs it and draws it back
     // clipped: frosted glass. Device pixels; the transform is not applied to
@@ -288,6 +434,13 @@ internal sealed class SkiaOps : IDisposable
         _payloadPaths.Dispose();
         _builder.Dispose();
         _blobBuilder.Dispose();
+        _lookupShaders.Dispose();
+        _matrixPaints.Dispose();
+        foreach (var paint in _blendPaints) paint?.Dispose();
+        _lookupPaint.Dispose();
+        _lookupUniforms?.Dispose();
+        _lookupChildren?.Dispose();
+        _lookupEffect?.Dispose();
         foreach (var typeface in _typefaces.Values) typeface.Dispose();
         _typefaces.Clear();
     }

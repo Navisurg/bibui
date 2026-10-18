@@ -44,6 +44,10 @@ public sealed unsafe partial class Canvas // strokes and dashes in Stroke/Canvas
         public IRect Bounds;
         public IRect Dirty;
         public byte Alpha;
+        public LayerMode Mode;
+        // A matrix layer's 4×5, copied in at save; the array lives with the pooled layer.
+        public bool HasMatrix;
+        public float[] Matrix = new float[20];
 
         public uint* Origin => Ptr - (long)Bounds.Top * Bounds.Width - Bounds.Left;
 
@@ -164,9 +168,34 @@ public sealed unsafe partial class Canvas // strokes and dashes in Stroke/Canvas
         Layer layer = RentLayer();
         layer.Reset(lb.IsEmpty ? new IRect(0, 0, 1, 1) : lb);
         layer.Alpha = alpha;
+        layer.Mode = LayerMode.SrcOver;
+        layer.HasMatrix = false;
         _s.Layer = layer;
         _s.OwnsLayer = true;
         _s.Clip = lb;
+    }
+
+    /// <summary>
+    /// <see cref="SaveLayer(byte, Rect?)"/> composited with <paramref name="mode"/>
+    /// instead of src-over.
+    /// </summary>
+    public void SaveLayer(LayerMode mode, Rect? bounds = null)
+    {
+        SaveLayer((byte)255, bounds);
+        _s.Layer!.Mode = mode;
+    }
+
+    /// <summary>
+    /// <see cref="SaveLayer(byte, Rect?)"/> whose pixels go through the
+    /// row-major 4×5 colour matrix <paramref name="matrix"/> on the way back:
+    /// on straight RGBA in 0..1, the fifth column a translation in 0..1.
+    /// </summary>
+    public void SaveLayer(ReadOnlySpan<float> matrix, Rect? bounds = null)
+    {
+        SaveLayer((byte)255, bounds);
+        var layer = _s.Layer!;
+        layer.HasMatrix = true;
+        matrix[..20].CopyTo(layer.Matrix);
     }
 
     public void SaveLayer(float opacity, Rect? bounds = null)
@@ -1150,18 +1179,25 @@ public sealed unsafe partial class Canvas // strokes and dashes in Stroke/Canvas
     }
 
     /// <summary>
-    /// A finished layer back onto what is below it, at its alpha, through the
-    /// clip in force after the restore, so an antialiased clip edge is applied
-    /// again.
+    /// A finished layer back onto what is below it, at its alpha, matrix and
+    /// mode, through the clip in force after the restore, so an antialiased
+    /// clip edge is applied again.
     /// </summary>
     private void Composite(Layer layer)
     {
-        // Only what was drawn into the layer; the rest is still transparent.
-        var b = layer.Dirty.Intersect(_s.Clip);
+        // Only what was drawn into the layer, unless a transparent pixel
+        // composites to something: Src clears, and a matrix may add alpha.
+        bool clearCounts = layer.Mode == LayerMode.Src || (layer.HasMatrix && layer.Matrix[19] > 0f);
+        var b = (clearCounts ? layer.Bounds : layer.Dirty).Intersect(_s.Clip);
         if (b.IsEmpty || layer.Alpha == 0) return;
         _s.Layer?.Touch(b);
         var t = Target();
         var mask = _s.Mask;
+        if (layer.Mode != LayerMode.SrcOver || layer.HasMatrix)
+        {
+            CompositeGeneral(layer, b, t, mask);
+            return;
+        }
         uint alpha = layer.Alpha;
         uint* src = layer.Origin;
         int ss = layer.Bounds.Width;
@@ -1186,4 +1222,111 @@ public sealed unsafe partial class Canvas // strokes and dashes in Stroke/Canvas
             }
         }
     }
+
+    // A layer with a mode or a matrix: per pixel, the matrix, then the mode's
+    // formula on premultiplied values, then the clip's coverage as a lerp
+    // from what was there.
+    private void CompositeGeneral(Layer layer, IRect b, DrawTarget t, CoverageMask? mask)
+    {
+        var dirty = layer.Dirty;
+        var mode = layer.Mode;
+        uint* src = layer.Origin;
+        int ss = layer.Bounds.Width;
+        for (int y = b.Top; y < b.Bottom; y++)
+        {
+            uint* s = src + (long)y * ss;
+            uint* d = t.Origin + (long)y * t.Stride;
+            byte* m = mask is null ? null : mask.Origin + (long)y * mask.Stride;
+            bool rowDirty = y >= dirty.Top && y < dirty.Bottom;
+            for (int x = b.Left; x < b.Right; x++)
+            {
+                uint cov = m == null ? 255u : m[x];
+                if (cov == 0) continue;
+                // Outside what was drawn the layer is transparent, uncleared.
+                uint p = rowDirty && x >= dirty.Left && x < dirty.Right ? s[x] : 0;
+                if (layer.HasMatrix) p = ApplyColorMatrix(layer.Matrix, p);
+                uint r = BlendPixel(mode, p, d[x]);
+                d[x] = cov == 255 ? r : Lerp(d[x], r, cov);
+            }
+        }
+    }
+
+    /// <summary>A premultiplied pixel through a 4×5 matrix on its straight values.</summary>
+    private static uint ApplyColorMatrix(float[] mx, uint p)
+    {
+        float a = (p >> 24) / 255f;
+        float r = 0, g = 0, bl = 0;
+        if (a > 0)
+        {
+            float inv = 1f / (a * 255f);
+            r = ((p >> 16) & 0xFF) * inv;
+            g = ((p >> 8) & 0xFF) * inv;
+            bl = (p & 0xFF) * inv;
+        }
+        float or = Math.Clamp(mx[0] * r + mx[1] * g + mx[2] * bl + mx[3] * a + mx[4], 0f, 1f);
+        float og = Math.Clamp(mx[5] * r + mx[6] * g + mx[7] * bl + mx[8] * a + mx[9], 0f, 1f);
+        float ob = Math.Clamp(mx[10] * r + mx[11] * g + mx[12] * bl + mx[13] * a + mx[14], 0f, 1f);
+        float oa = Math.Clamp(mx[15] * r + mx[16] * g + mx[17] * bl + mx[18] * a + mx[19], 0f, 1f);
+        float k = oa * 255f;
+        return ((uint)(k + 0.5f) << 24) | ((uint)(or * k + 0.5f) << 16) | ((uint)(og * k + 0.5f) << 8) | (uint)(ob * k + 0.5f);
+    }
+
+    /// <summary>Premultiplied <paramref name="s"/> onto <paramref name="d"/> by the mode's formula, as Skia's.</summary>
+    private static uint BlendPixel(LayerMode mode, uint s, uint d)
+    {
+        switch (mode)
+        {
+            case LayerMode.Src: return s;
+            case LayerMode.SrcOver: return PixelMath.SrcOverColor(s, d);
+        }
+        uint sa = s >> 24, da = d >> 24;
+        uint outA = mode == LayerMode.Plus ? Math.Min(255, sa + da) : sa + da - PixelMath.MulDiv255Round(sa, da);
+        uint o = outA << 24;
+        for (int sh = 0; sh <= 16; sh += 8)
+        {
+            uint sc = (s >> sh) & 0xFF, dc = (d >> sh) & 0xFF;
+            uint c;
+            switch (mode)
+            {
+                case LayerMode.Plus:
+                    c = Math.Min(255, sc + dc);
+                    break;
+                case LayerMode.Screen:
+                    c = sc + dc - PixelMath.MulDiv255Round(sc, dc);
+                    break;
+                case LayerMode.Multiply:
+                    // s·d + s·(1−da) + d·(1−sa), in 255ths.
+                    c = Math.Min(255, (sc * dc + sc * (255 - da) + dc * (255 - sa) + 127) / 255);
+                    break;
+                default: // Overlay
+                {
+                    int isc = (int)sc, idc = (int)dc, isa = (int)sa, ida = (int)da;
+                    int core = 2 * idc <= ida
+                        ? 2 * isc * idc
+                        : isa * ida - 2 * (ida - idc) * (isa - isc);
+                    int v = (core + isc * (255 - ida) + idc * (255 - isa) + 127) / 255;
+                    c = (uint)Math.Clamp(v, 0, 255);
+                    break;
+                }
+            }
+            o |= Math.Min(c, outA) << sh;
+        }
+        return o;
+    }
+
+    /// <summary>Each channel from <paramref name="a"/> towards <paramref name="b"/> by t/255.</summary>
+    private static uint Lerp(uint a, uint b, uint t)
+    {
+        uint o = 0;
+        for (int sh = 0; sh <= 24; sh += 8)
+        {
+            int ac = (int)((a >> sh) & 0xFF), bc = (int)((b >> sh) & 0xFF);
+            int v = ac + ((bc - ac) * (int)t + (bc >= ac ? 127 : -127)) / 255;
+            o |= (uint)v << sh;
+        }
+        return o;
+    }
 }
+
+/// <summary>How a layer composites back: Skia's modes of the same names, premultiplied.</summary>
+public enum LayerMode : byte { SrcOver, Multiply, Plus, Screen, Overlay, Src }

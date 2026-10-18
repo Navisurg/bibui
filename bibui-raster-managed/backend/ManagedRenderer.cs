@@ -294,7 +294,19 @@ public sealed class ManagedRenderer : IDisposable
             case DrawOpKind.Clear: c.Clear(op.Color.Argb); break;
             case DrawOpKind.PushClip: c.Save(); c.ClipRect(ToRect(op.Rect)); break;
             case DrawOpKind.PushTransform: c.Save(); Transform(c, op.Matrix); break;
-            case DrawOpKind.PushOpacity: c.SaveLayer(op.Alpha); break;
+            case DrawOpKind.PushBlendMode:
+                // SrcOver composites as if there were no layer: none is made.
+                if (op.Blend == BlendMode.SrcOver) c.Save();
+                else c.SaveLayer((LayerMode)op.Blend);
+                break;
+            case DrawOpKind.PushColorMatrix:
+            {
+                var m = list.Floats.Slice(op.Start, op.Count);
+                if (ColorMatrices.IsIdentity(m)) c.Save();
+                else if (ColorMatrices.IsOpacity(m, out byte alpha)) c.SaveLayer(alpha);
+                else c.SaveLayer(m);
+                break;
+            }
             case DrawOpKind.Pop: c.Restore(); break;
             case DrawOpKind.Rect:
                 c.DrawRoundRect(ToRect(op.Rect).Sorted(), op.A, op.B, Convert(op, list, c));
@@ -303,7 +315,8 @@ public sealed class ManagedRenderer : IDisposable
             case DrawOpKind.Path: c.DrawPath(_opPaths[k]!, Convert(op, list, c)); break;
             case DrawOpKind.Points: Points(c, op.Mode, list.Points.Slice(op.Start, op.Count), Convert(op, list, c)); break;
             case DrawOpKind.Texture:
-                if (_textures.Get(op.Texture) is { } img) Bitmap(c, img.Argb, img.Width, img.Height, op.Rect, op);
+                if (_textures.Get(op.Texture) is not { } img) break;
+                Bitmap(c, img, list.LookupAt(op.Resource), op);
                 break;
             case DrawOpKind.BackdropBlur: BackdropBlur(c, op.Region, op.Rect, op.A); break;
             case DrawOpKind.Glyphs:
@@ -356,12 +369,17 @@ public sealed class ManagedRenderer : IDisposable
         }
     }
 
-    private void Bitmap(Canvas c, uint[] pixels, int width, int height, RectF dest, in DrawOp op)
+    // A texture, plainly or through a table (TextureLookup); a released table draws nothing.
+    private void Bitmap(Canvas c, ManagedTexture texture, TextureLookup lookup, in DrawOp op)
     {
-        var d = ToRect(dest);
+        var table = lookup.IsNone ? null : _textures.Get(lookup.Table);
+        if (!lookup.IsNone && table is null) return;
+        var d = ToRect(op.Rect);
         if (d.IsEmpty) return;
+        var (pixels, width, height) = (texture.Argb, texture.Width, texture.Height);
         if (op.ImageBlurSigma > 0) (pixels, width, height, d) = BlurBitmap(c, pixels, width, height, d, op.ImageBlurSigma);
         _imageShader.Set(pixels, width, height, d, op.Paint.FilterQuality != FilterQuality.None);
+        if (table is not null) _imageShader.SetLookup(texture.Format, lookup, table);
         // The paint's alpha modulates the image, as an SKPaint's does.
         var p = new Paint { Color = op.Paint.Color.Argb | 0x00FFFFFFu, Shader = _imageShader };
         c.DrawRect(d, p);
@@ -494,63 +512,56 @@ public sealed class ManagedRenderer : IDisposable
 }
 
 /// <summary>
-/// One texture, as this renderer keeps it: the pixels as given (<see cref="Raw"/>,
-/// rows packed tight: what reads a texture's own channels reads) and the same
-/// premultiplied ARGB with the format's default look (<see cref="Argb"/>: what
-/// drawing, blurring and damage read). Both are made once and written in place.
-/// Draw thread only.
+/// One texture, as this renderer keeps it: premultiplied ARGB with the format's
+/// default look (<see cref="Argb"/>: what drawing, lookups, blurring and damage
+/// read), made once and written in place. Draw thread only.
 /// </summary>
 internal sealed class ManagedTexture(TextureFormat format, TextureKind kind, int width, int height)
 {
     public readonly TextureFormat Format = format;
     public readonly TextureKind Kind = kind;
     public readonly int Width = width, Height = height;
-    public readonly byte[] Raw = new byte[width * height * format.BytesPerPixel()];
     public readonly uint[] Argb = new uint[width * height];
 
-    /// <summary>Takes <paramref name="pixels"/>, rows <paramref name="rowBytes"/> apart, into both arrays.</summary>
+    /// <summary>Takes <paramref name="pixels"/>, rows <paramref name="rowBytes"/> apart, into <see cref="Argb"/>.</summary>
     public void Write(ReadOnlySpan<byte> pixels, int rowBytes)
     {
-        int bpp = Format.BytesPerPixel(), row = Width * bpp;
-        for (int y = 0; y < Height; y++)
-            pixels.Slice(y * rowBytes, row).CopyTo(Raw.AsSpan(y * row, row));
-
         // The default looks: R8 grey (r, r, r, 1), A8 white coverage (1, 1, 1, a),
         // RG8 (r, g, 0, 1), RGBA8 and BGRA8 as they are — premultiplied, as the canvas draws.
-        var raw = Raw;
-        var argb = Argb;
-        switch (Format)
+        for (int y = 0; y < Height; y++)
         {
-            case TextureFormat.R8:
-                for (int i = 0; i < argb.Length; i++) { uint v = raw[i]; argb[i] = 0xFF000000u | v << 16 | v << 8 | v; }
-                break;
-            case TextureFormat.A8:
-                for (int i = 0; i < argb.Length; i++) { uint a = raw[i]; argb[i] = a << 24 | a << 16 | a << 8 | a; }
-                break;
-            case TextureFormat.RG8:
-                for (int i = 0; i < argb.Length; i++) argb[i] = 0xFF000000u | (uint)raw[2 * i] << 16 | (uint)raw[2 * i + 1] << 8;
-                break;
-            case TextureFormat.BGRA8:
-                for (int i = 0; i < argb.Length; i++)
-                {
-                    uint straight = (uint)raw[4 * i + 3] << 24 | (uint)raw[4 * i + 2] << 16 | (uint)raw[4 * i + 1] << 8 | raw[4 * i];
-                    argb[i] = PixelMath.Premul(straight);
-                }
-                break;
-            default:
-                for (int i = 0; i < argb.Length; i++)
-                {
-                    uint straight = (uint)raw[4 * i + 3] << 24 | (uint)raw[4 * i] << 16 | (uint)raw[4 * i + 1] << 8 | raw[4 * i + 2];
-                    argb[i] = PixelMath.Premul(straight);
-                }
-                break;
+            var raw = pixels.Slice(y * rowBytes);
+            var argb = Argb.AsSpan(y * Width, Width);
+            switch (Format)
+            {
+                case TextureFormat.R8:
+                    for (int i = 0; i < argb.Length; i++) { uint v = raw[i]; argb[i] = 0xFF000000u | v << 16 | v << 8 | v; }
+                    break;
+                case TextureFormat.A8:
+                    for (int i = 0; i < argb.Length; i++) { uint a = raw[i]; argb[i] = a << 24 | a << 16 | a << 8 | a; }
+                    break;
+                case TextureFormat.RG8:
+                    for (int i = 0; i < argb.Length; i++) argb[i] = 0xFF000000u | (uint)raw[2 * i] << 16 | (uint)raw[2 * i + 1] << 8;
+                    break;
+                case TextureFormat.BGRA8:
+                    for (int i = 0; i < argb.Length; i++)
+                        argb[i] = PixelMath.Premul((uint)raw[4 * i + 3] << 24 | (uint)raw[4 * i + 2] << 16 | (uint)raw[4 * i + 1] << 8 | raw[4 * i]);
+                    break;
+                default:
+                    for (int i = 0; i < argb.Length; i++)
+                        argb[i] = PixelMath.Premul((uint)raw[4 * i + 3] << 24 | (uint)raw[4 * i] << 16 | (uint)raw[4 * i + 1] << 8 | raw[4 * i + 2]);
+                    break;
+            }
         }
     }
 }
 
 /// <summary>
 /// A bitmap drawn into a destination rect: nearest or bilinear sampling,
-/// clamped at the edges; not yet checked against Skia's low-quality sampling.
+/// clamped at the edges (not yet checked against Skia's low-quality sampling),
+/// then the sample mapped. A plain draw's map is the identity; a lookup's takes
+/// the sample's raw channels — what the format stores, straight — and draws the
+/// table entry they pick, as the Skia lookup does.
 /// </summary>
 internal sealed class ImageShader : Shader
 {
@@ -560,6 +571,13 @@ internal sealed class ImageShader : Shader
     private bool _bilinear;
     private Matrix3x2 _deviceToImage;
 
+    // The lookup, when there is one: _table is null for a plain draw.
+    private uint[]? _table;
+    private int _tw, _th;
+    private uint _rawMask;          // ARGB bytes the format really stores; the rest read 0
+    private bool _straight;         // RGBA8/BGRA8: un-premultiply before reading
+    private int _xShift, _yShift;   // bit position of the picking channel in ARGB; -1 picks entry 0
+
     public void Set(uint[] pixels, int width, int height, Rect dest, bool bilinear)
     {
         _px = pixels;
@@ -567,7 +585,33 @@ internal sealed class ImageShader : Shader
         _h = height;
         _dest = dest;
         _bilinear = bilinear;
+        _table = null;
     }
+
+    public void SetLookup(TextureFormat format, TextureLookup lookup, ManagedTexture table)
+    {
+        (_table, _tw, _th) = (table.Argb, table.Width, table.Height);
+        // The look of each format (ManagedTexture.Write) holds its raw channels
+        // where they belong; what it fills in that the format lacks is masked off.
+        _rawMask = format switch
+        {
+            TextureFormat.R8 => 0xFFFF0000u,
+            TextureFormat.A8 => 0xFF000000u,
+            TextureFormat.RG8 => 0xFFFFFF00u,
+            _ => 0xFFFFFFFFu,
+        };
+        _straight = format is TextureFormat.RGBA8 or TextureFormat.BGRA8;
+        (_xShift, _yShift) = (Shift(lookup.X), Shift(lookup.Y));
+    }
+
+    private static int Shift(TextureChannel channel) => channel switch
+    {
+        TextureChannel.R => 16,
+        TextureChannel.G => 8,
+        TextureChannel.B => 0,
+        TextureChannel.A => 24,
+        _ => -1,
+    };
 
     public override void Begin(in Matrix3x2 localToDevice)
     {
@@ -583,8 +627,26 @@ internal sealed class ImageShader : Shader
         for (int i = 0; i < dst.Length; i++)
         {
             var p = Vector2.Transform(new Vector2(x + i + 0.5f, y + 0.5f), m);
-            dst[i] = _bilinear ? Bilinear(p.X - 0.5f, p.Y - 0.5f) : At((int)MathF.Floor(p.X), (int)MathF.Floor(p.Y));
+            uint s = _bilinear ? Bilinear(p.X - 0.5f, p.Y - 0.5f) : At((int)MathF.Floor(p.X), (int)MathF.Floor(p.Y));
+            dst[i] = _table is null ? s : Lookup(s);
         }
+    }
+
+    private uint Lookup(uint s)
+    {
+        if (_straight) s = Unpremul(s);
+        s &= _rawMask;
+        int col = _xShift < 0 ? 0 : Math.Min((int)(s >> _xShift & 0xFF), _tw - 1);
+        int row = _yShift < 0 ? 0 : Math.Min((int)(s >> _yShift & 0xFF), _th - 1);
+        return _table![row * _tw + col];
+    }
+
+    private static uint Unpremul(uint p)
+    {
+        uint a = p >> 24;
+        if (a is 0 or 255) return p;
+        uint Ch(int sh) => Math.Min(255u, (((p >> sh) & 0xFF) * 255 + a / 2) / a) << sh;
+        return a << 24 | Ch(16) | Ch(8) | Ch(0);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

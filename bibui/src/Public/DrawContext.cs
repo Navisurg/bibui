@@ -179,6 +179,21 @@ public readonly ref partial struct DrawContext
         List.SetPaint(ref op, paint.FillPaint());
     }
 
+    /// <summary>
+    /// <paramref name="texture"/> scaled into <paramref name="dest"/> through
+    /// <paramref name="lookup"/>: each pixel's raw channel (or two) picks the colour
+    /// drawn from the lookup's table (<see cref="TextureLookup"/>). The fill
+    /// colour's alpha modulates it, as for any texture. A released table draws
+    /// nothing; <see cref="TextureLookup.None"/> draws the texture plainly.
+    /// </summary>
+    public void DrawTexture(TextureHandle texture, RectF dest, in Paint paint, TextureLookup lookup)
+    {
+        ref var op = ref List.Push(DrawOpKind.Texture);
+        (op.Texture, op.Rect) = (texture, dest);
+        if (!lookup.IsNone) op.Resource = List.AddLookup(lookup);
+        List.SetPaint(ref op, paint.FillPaint());
+    }
+
     // ── State ────────────────────────────────────────────────────────────────
     // Each push is undone by its pop, in order. Clips, transforms and opacity
     // share one stack, counted so a callback's are its own (see StateFloor).
@@ -213,14 +228,49 @@ public readonly ref partial struct DrawContext
 
     public void PopTransform() => Pop();
 
-    /// <summary>Composites everything until <see cref="PopOpacity"/> at <paramref name="opacity"/> (0..1).</summary>
+    /// <summary>
+    /// Composites everything until <see cref="PopOpacity"/> at <paramref name="opacity"/>
+    /// (0..1): a colour matrix that only scales alpha (<see cref="PushColorMatrix"/>).
+    /// </summary>
     public void PushOpacity(float opacity)
     {
-        List.Push(DrawOpKind.PushOpacity).Alpha = (byte)Math.Clamp((int)MathF.Round(opacity * 255f), 0, 255);
-        _ctx.StateDepth++;
+        // In 1/255 steps, as a layer's alpha is kept.
+        float a = Math.Clamp((int)MathF.Round(opacity * 255f), 0, 255) / 255f;
+        PushColorMatrix([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, a, 0]);
     }
 
     public void PopOpacity() => Pop();
+
+    /// <summary>
+    /// Draws everything until <see cref="PopBlendMode"/> into a layer, blending
+    /// with each other normally, and composites that layer onto what is under it
+    /// with <paramref name="mode"/>: one Multiply over a network of strokes
+    /// darkens once where they cross. SrcOver composites as if there were no group.
+    /// </summary>
+    public void PushBlendMode(BlendMode mode)
+    {
+        List.Push(DrawOpKind.PushBlendMode).Blend = mode;
+        _ctx.StateDepth++;
+    }
+
+    public void PopBlendMode() => Pop();
+
+    /// <summary>
+    /// Draws everything until <see cref="PopColorMatrix"/> into a layer and
+    /// composites it through <paramref name="matrix"/>: 20 floats, a 4×5 matrix
+    /// row by row, each output channel (r, g, b, a) = the row's four weights times
+    /// the straight colour (0..1) plus its fifth, the translation. Saturation,
+    /// brightness and opacity are matrices.
+    /// </summary>
+    public void PushColorMatrix(ReadOnlySpan<float> matrix)
+    {
+        if (matrix.Length != 20) throw new ArgumentException($"A colour matrix is 20 floats (4×5), not {matrix.Length}.", nameof(matrix));
+        ref var op = ref List.Push(DrawOpKind.PushColorMatrix);
+        (op.Start, op.Count) = (List.AddFloats(matrix), 20);
+        _ctx.StateDepth++;
+    }
+
+    public void PopColorMatrix() => Pop();
 
     /// <summary>Makes <paramref name="paint"/> the current paint, until <see cref="PopPaint"/>.</summary>
     public void PushPaint(in Paint paint) => _ctx.PushPaint(paint);

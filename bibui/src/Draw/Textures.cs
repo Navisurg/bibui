@@ -51,6 +51,30 @@ public enum TextureKind : byte
     Stream,
 }
 
+/// <summary>
+/// A channel of a texture as it is stored, before its format's default look:
+/// R8 has R, A8 has A, RG8 has R and G, RGBA8 and BGRA8 have all four (straight
+/// alpha). A channel the format does not have reads 0, and A reads 255.
+/// </summary>
+public enum TextureChannel : byte { R, G, B, A, None = 255 }
+
+/// <summary>
+/// A texture draw through a table: each pixel's raw <see cref="X"/> channel
+/// (0–255) picks a column of <see cref="Table"/>, and with <see cref="Y"/> also
+/// a row, and that entry, as it is, is the colour drawn. The table is a texture
+/// the app made: 256×1 for one channel, 256×256 for two, RGBA8 for its colours
+/// and alpha. Colormaps, a window and gamma, a threshold, a tint: whatever maps
+/// a value to a colour, baked once into the table. The source is filtered as the
+/// paint says before its value is read; the table is read exactly, entry by entry.
+/// <see cref="None"/> draws the texture with its default look.
+/// </summary>
+public readonly record struct TextureLookup(TextureHandle Table, TextureChannel X, TextureChannel Y = TextureChannel.None)
+{
+    public static TextureLookup None => default;
+
+    public bool IsNone => Table.IsNone;
+}
+
 /// <summary>The sizes a renderer checks a texture's pixels against.</summary>
 public static class TexturePixels
 {

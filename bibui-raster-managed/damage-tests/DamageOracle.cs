@@ -597,6 +597,55 @@ internal static class DamageOracle
             return (Build, f => { frame = f; Move(rt, 40 + (f * 7) % 200, 270); });
         });
 
+        // Groups: blend modes and colour matrices, some held still while a
+        // square moves through and past them. A Src layer and a matrix that adds
+        // alpha write all of their clip, transparent pixels included, so a
+        // repaint must hold them to its rect.
+        yield return new Scene("groups", 560, 260, 1f, 70, (rt, renderer) =>
+        {
+            int frame = 0;
+            UiNode Build()
+            {
+                var canvas = new Box
+                {
+                    Draw = (_, ctx) =>
+                    {
+                        float x = 10 + (frame * 7) % 500;
+                        ctx.DrawRect(new RectF(0, 0, 560, 200), 0, Paint.Filled(new Rgba(40, 60, 90)));
+                        ctx.DrawRect(new RectF(x, 60, x + 30, 90), 4, Paint.Filled(new Rgba(250, 200, 60)));
+
+                        ctx.PushBlendMode(BlendMode.Multiply);
+                        ctx.DrawRect(new RectF(20, 20, 120, 120), 8, Paint.Filled(new Rgba(255, 120, 120)));
+                        ctx.DrawRect(new RectF(60, 40, 160, 140), 8, Paint.Filled(new Rgba(120, 255, 120, 180)));
+                        ctx.PopBlendMode();
+
+                        ctx.PushClip(new RectF(180, 20, 300, 140));
+                        ctx.PushBlendMode(BlendMode.Src);
+                        ctx.DrawRect(new RectF(200, 40, 260, 100), 6, Paint.Filled(new Rgba(80, 160, 255, 128)));
+                        ctx.PopBlendMode();
+                        ctx.PopClip();
+
+                        ctx.PushClip(new RectF(320, 20, 440, 140));
+                        ctx.PushColorMatrix([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0.3f, 0, 0, 0, 1, 0.25f]);
+                        ctx.DrawRect(new RectF(340, 40, 400, 100), 6, Paint.Filled(new Rgba(255, 80, 80)));
+                        ctx.PopColorMatrix();
+                        ctx.PopClip();
+
+                        float sat = frame / 20 % 2 == 0 ? 0f : 1f;
+                        float ir = 0.2126f * (1 - sat), ig = 0.7152f * (1 - sat), ib = 0.0722f * (1 - sat);
+                        ctx.PushColorMatrix([ir + sat, ig, ib, 0, 0, ir, ig + sat, ib, 0, 0, ir, ig, ib + sat, 0, 0, 0, 0, 0, 1, 0]);
+                        ctx.DrawRect(new RectF(460, 30, 540, 110), 10, Paint.Filled(new Rgba(40, 200, 120)));
+                        ctx.PushBlendMode(BlendMode.Screen);
+                        ctx.DrawRect(new RectF(480, 60, 530, 130), 10, Paint.Filled(new Rgba(200, 40, 200)));
+                        ctx.PopBlendMode();
+                        ctx.PopColorMatrix();
+                    },
+                }.Px(560f, 200f);
+                return Page(Arrange.Column(canvas, Arrange.Space(8f), rt.Button("gb", "Hover me").Node), 0f);
+            }
+            return (Build, f => { frame = f; Move(rt, 40 + (f * 7) % 200, 225); });
+        });
+
         // The dense case damage tracking is for: 600 solid buttons filling a HiDPI surface.
         yield return new Scene("solid-grid-2x", 900, 700, 2f, 40, (rt, renderer) =>
         {

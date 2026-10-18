@@ -15,8 +15,20 @@ public enum DrawOpKind : byte
     /// renderer may take the cheaper path for them.
     /// </summary>
     PushTransform,
-    /// <summary>Draws what follows into a layer composited at <see cref="DrawOp.Alpha"/>.</summary>
-    PushOpacity,
+    /// <summary>
+    /// Draws what follows, to its Pop, into a layer composited with
+    /// <see cref="DrawOp.Blend"/>. SrcOver composites as if there were no layer,
+    /// and a renderer may draw it without one.
+    /// </summary>
+    PushBlendMode,
+    /// <summary>
+    /// Draws what follows, to its Pop, into a layer composited through a 4×5
+    /// colour matrix: 20 floats in <see cref="DrawList.Floats"/> from Start, row
+    /// by row, (r, g, b, a, translate) on straight colour in 0..1. Opacity is a
+    /// matrix that only scales alpha. The identity changes nothing, and a renderer
+    /// may draw it without a layer.
+    /// </summary>
+    PushColorMatrix,
     Pop,
     /// <summary><see cref="DrawOp.Rect"/> with corner radii (A, B), in the op's paint: a plain rect at 0.</summary>
     Rect,
@@ -26,12 +38,68 @@ public enum DrawOpKind : byte
     Path,
     /// <summary><see cref="DrawOp.Count"/> points from <see cref="DrawList.Points"/>, as <see cref="DrawOp.Mode"/> says.</summary>
     Points,
-    /// <summary><see cref="DrawOp.Texture"/> scaled into <see cref="DrawOp.Rect"/>.</summary>
+    /// <summary>
+    /// <see cref="DrawOp.Texture"/> scaled into <see cref="DrawOp.Rect"/>: with its
+    /// format's default look, or through <see cref="DrawList.LookupAt"/>(Resource)
+    /// when that is not <see cref="TextureLookup.None"/>.
+    /// </summary>
     Texture,
     /// <summary>Blurs what is painted in <see cref="DrawOp.Region"/> by A and draws it back clipped to <see cref="DrawOp.Rect"/>.</summary>
     BackdropBlur,
     /// <summary>Glyphs of <see cref="DrawList.FaceAt"/>(Resource) at size C, at their positions from origin (A, B), in <see cref="DrawOp.Color"/>.</summary>
     Glyphs,
+}
+
+/// <summary>
+/// How a layer's pixels are combined with what is under them, Skia's modes on
+/// premultiplied colour. SrcOver is ordinary alpha blending and the default;
+/// nothing about it is special.
+/// </summary>
+public enum BlendMode : byte
+{
+    /// <summary>Over what is under it: s + d·(1 − sa).</summary>
+    SrcOver,
+    /// <summary>Multiplied into what is under it, darkening: s·d + s·(1 − da) + d·(1 − sa).</summary>
+    Multiply,
+    /// <summary>Added to what is under it, clamped: min(1, s + d).</summary>
+    Plus,
+    /// <summary>The inverse of multiplying the inverses, lightening: s + d − s·d.</summary>
+    Screen,
+    /// <summary>Multiply where what is under it is dark, Screen where it is light.</summary>
+    Overlay,
+    /// <summary>Replaces what is under it, over the whole layer, transparent included.</summary>
+    Src,
+}
+
+/// <summary>
+/// What a colour matrix (<see cref="DrawOpKind.PushColorMatrix"/>) amounts to, so
+/// a renderer takes the cheapest way that draws it: none for the identity, an
+/// opacity layer for one that only scales alpha.
+/// </summary>
+public static class ColorMatrices
+{
+    /// <summary>Changes nothing: the identity, translation zero.</summary>
+    public static bool IsIdentity(ReadOnlySpan<float> m)
+    {
+        for (int i = 0; i < 20; i++)
+            if (m[i] != (i is 0 or 6 or 12 or 18 ? 1f : 0f)) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Only scales alpha, by a whole 1/255 step: what an opacity layer does.
+    /// <paramref name="alpha"/> is that step.
+    /// </summary>
+    public static bool IsOpacity(ReadOnlySpan<float> m, out byte alpha)
+    {
+        alpha = 0;
+        for (int i = 0; i < 20; i++)
+            if (i != 18 && m[i] != (i is 0 or 6 or 12 ? 1f : 0f)) return false;
+        float a = m[18] * 255f;
+        if (a < 0f || a > 255f || MathF.Abs(a - MathF.Round(a)) > 1e-3f) return false;
+        alpha = (byte)MathF.Round(a);
+        return true;
+    }
 }
 
 /// <summary>A paint's gradient, as values: the colours and stops are ranges of <see cref="DrawList.Colors"/> and <see cref="DrawList.Floats"/>.</summary>
@@ -57,14 +125,14 @@ public struct DrawOp
 {
     public DrawOpKind Kind;
     public PointMode Mode;          // Points
-    public byte Alpha;              // PushOpacity
+    public BlendMode Blend;         // PushBlendMode
     public Rgba Color;              // Clear, Glyphs
     public RectF Rect;              // Rect, PushClip, Texture, BackdropBlur's clip
     public float A, B, C, D;        // see DrawOpKind
     public Matrix3x2 Matrix;        // PushTransform
     public int Start, Count;        // payload: points, glyphs, path verbs
     public int Start2, Count2;      // payload: glyph positions, path args
-    public int Resource;            // DrawList.PathAt or FaceAt; -1 for none
+    public int Resource;            // DrawList.PathAt, FaceAt or LookupAt (Texture); -1 for none
     public TextureHandle Texture;   // Texture
     public PixelRect Region;        // BackdropBlur's read region
 
@@ -101,6 +169,9 @@ public sealed class DrawList
     private readonly List<VectorPath> _paths = [];
     private readonly List<FontFace> _faces = [];
     private readonly Dictionary<int, int> _faceIndex = [];
+    // Empty until a frame draws through a table: most frames never do.
+    private TextureLookup[] _lookups = [];
+    private int _lookupCount;
 
     public ReadOnlySpan<DrawOp> Ops => _ops.AsSpan(0, _opCount);
     public ReadOnlySpan<Vector2> Points => _points.AsSpan(0, _pointCount);
@@ -115,11 +186,19 @@ public sealed class DrawList
     /// <summary>The face a glyph op draws.</summary>
     public FontFace FaceAt(int index) => _faces[index];
 
+    /// <summary>
+    /// The table a texture op draws through: <see cref="TextureLookup.None"/> for
+    /// any index that names none (-1 included), so a renderer asks with the op's
+    /// <see cref="DrawOp.Resource"/> as it is.
+    /// </summary>
+    public TextureLookup LookupAt(int index) =>
+        index >= 0 && index < _lookupCount ? _lookups[index] : TextureLookup.None;
+
     // ── Recording, the core's side ───────────────────────────────────────────
 
     internal void Reset()
     {
-        _opCount = _pointCount = _verbCount = _floatCount = _colorCount = _glyphCount = 0;
+        _opCount = _pointCount = _verbCount = _floatCount = _colorCount = _glyphCount = _lookupCount = 0;
         _paths.Clear();
         _faces.Clear();
         _faceIndex.Clear();
@@ -140,6 +219,8 @@ public sealed class DrawList
     internal int AddVerbs(ReadOnlySpan<PathVerb> verbs) => Append(ref _verbs, ref _verbCount, verbs);
     internal int AddFloats(ReadOnlySpan<float> floats) => Append(ref _floats, ref _floatCount, floats);
     internal int AddColors(ReadOnlySpan<Rgba> colors) => Append(ref _colors, ref _colorCount, colors);
+
+    internal int AddLookup(TextureLookup lookup) => Append(ref _lookups, ref _lookupCount, [lookup]);
 
     internal int AddPath(VectorPath path)
     {
