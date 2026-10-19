@@ -1,0 +1,24 @@
+<Project>
+  <!-- The native text libraries bibui's text engine calls, which iOS does not
+       have: FreeType and HarfBuzz as dynamic frameworks, embedded in the app's
+       Frameworks folder (TextLibraries.cs points bibui's imports at them).
+       Built once, on the first build, by native/build-text-natives.sh into
+       native/out.
+
+       Imported by bibui-platform-silk-ios.csproj and by the app that references
+       it (samples/counter-ios): an iOS class library does not hand its own
+       NativeReferences on to the app, so the app takes them from here, as it
+       would from a package's buildTransitive targets. -->
+  <PropertyGroup>
+    <_BibuiIosNative>$(MSBuildThisFileDirectory)../native/</_BibuiIosNative>
+    <_BibuiTextNatives>$(_BibuiIosNative)out/</_BibuiTextNatives>
+  </PropertyGroup>
+  <ItemGroup>
+    <NativeReference Include="$(_BibuiTextNatives)freetype.xcframework" Kind="Framework" />
+    <NativeReference Include="$(_BibuiTextNatives)harfbuzz.xcframework" Kind="Framework" />
+  </ItemGroup>
+  <Target Name="_BuildBibuiTextNatives" BeforeTargets="PrepareForBuild"
+          Condition="!Exists('$(_BibuiTextNatives)freetype.xcframework') Or !Exists('$(_BibuiTextNatives)harfbuzz.xcframework')">
+    <Exec Command="&quot;$(_BibuiIosNative)build-text-natives.sh&quot; &quot;$(_BibuiTextNatives.TrimEnd('/'))&quot;" />
+  </Target>
+</Project>
