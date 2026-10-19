@@ -2,14 +2,21 @@
 // canvas. The source is a multi-line field on the left and the viewer draws
 // it on the right as it is typed; a task box ticked in the viewer ticks it in
 // the source. Registered as "markdown-editor" (Program.cs).
+using System.Runtime.InteropServices.JavaScript;
 using Bibui;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 
 namespace DocsDemos;
 
-internal sealed class MarkdownEditor
+internal sealed partial class MarkdownEditor
 {
+    // A link clicked in the viewer opens in a new tab. It is called in the
+    // frame the click is handled, within the click's user activation, so the
+    // popup blocker lets it through.
+    [JSImport("globalThis.open")]
+    private static partial JSObject? Open(string url, string target, string features);
+
     private const string Initial =
         "# Hello, bibui\n"
         + "\n"
@@ -58,9 +65,11 @@ internal sealed class MarkdownEditor
             runtime.Gap(16f);
 
             // The viewer: the right half, scrolled by the wheel, cut at its edge.
+            // It asks after the document inside it: ask order is z-order, and a
+            // container that asked first would take the presses meant for the
+            // task boxes and links.
             Box view = runtime.BoxFromId("md-view", InteractionKinds.ViewScrollY | InteractionKinds.ClampY
                 | InteractionKinds.Clip | InteractionKinds.LeftPress);
-            Interaction onView = runtime.InteractionsFor(view);
             view.ChildLayoutAxis = LayoutAxis.Y;
             view.FillX().FillY();
             view.AllowOverflowY = true;
@@ -72,8 +81,10 @@ internal sealed class MarkdownEditor
             {
                 var doc = runtime.Markdown("md-doc", _source);
                 if (doc.TaskClicked) Markdown.ToggleTask(_source, doc.ToggledTask);
+                if (doc.LinkClicked && IsWebLink(doc.ClickedLink!) && OperatingSystem.IsBrowser())
+                    Open(doc.ClickedLink!, "_blank", "noopener")?.Dispose();
             }
-            if (onView.Pressed) _focused = false;
+            if (runtime.InteractionsFor(view).Pressed) _focused = false;
         }
 
         if (_focused)
@@ -84,4 +95,7 @@ internal sealed class MarkdownEditor
                     ev.Eat();
                 }
     }
+
+    private static bool IsWebLink(string url) =>
+        url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
 }
