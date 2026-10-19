@@ -150,44 +150,47 @@ static class MotionTests
 
         // ── Ease: the steps, as pure functions ──────────────────────────────
 
-        run("Ease: Animate steps exactly as Ease.Exponential does", () =>
+        run("Ease: exponential approach halves the gap speed times a second, by time and not by frames", () =>
         {
-            float target = 0f;
-            var runtime = Asking(rt => rt.Animate("e", "x", target, speed: 12f));
-            Frames(runtime, 1);
-            target = 100f;
-            float byHand = 0f;
-            for (int i = 0; i < 10; i++)
-            {
-                Frames(runtime, 1);
-                byHand = Ease.Exponential(byHand, 100f, 12f, runtime.Dt);
-                Eq(byHand, runtime.Animate("e", "x", 100f, speed: 12f), $"frame {i + 1}");
-            }
+            Near(0.5f, Ease.Exponential(0f, 1f, 20f, 1f / 20f), 1e-6f, "one halving");
+            Near(0.75f, Ease.Exponential(0f, 1f, 20f, 2f / 20f), 1e-6f, "two halvings");
+            Near(0.5f, Ease.ExponentialRate(20f, 1f / 20f), 1e-6f, "the rate is the share of the gap closed");
+            float half = Ease.Exponential(0f, 1f, 20f, 1f / 120f);
+            Near(Ease.Exponential(0f, 1f, 20f, 1f / 60f), Ease.Exponential(half, 1f, 20f, 1f / 120f), 1e-6f, "two half frames reach where one frame does");
         });
 
-        run("Ease: a spring transition steps exactly as Ease.Spring does", () =>
+        run("Ease: the vector overloads ease each component as the float one does", () =>
         {
-            float target = 0f;
-            var tr = Transition.OnSpring(Spring.Gentle);
-            var runtime = Asking(rt => rt.Animate("e", "x", target, tr));
-            Frames(runtime, 1);
-            target = 100f;
-            float byHand = 0f, velocity = 0f;
-            for (int i = 0; i < 10; i++)
-            {
-                Frames(runtime, 1);
-                Ease.Spring(ref byHand, ref velocity, 100f, Spring.Gentle, runtime.Dt);
-                Eq(byHand, runtime.Animate("e", "x", 100f, tr), $"frame {i + 1}");
-            }
+            float x = Ease.Exponential(1f, 5f, 12f, 1f / 60f), y = Ease.Exponential(-2f, 3f, 12f, 1f / 60f);
+            Eq(new Vector2(x, y), Ease.Exponential(new Vector2(1f, -2f), new Vector2(5f, 3f), 12f, 1f / 60f), "Vector2");
+            Eq(new Vector4(x, y, x, y), Ease.Exponential(new Vector4(1f, -2f, 1f, -2f), new Vector4(5f, 3f, 5f, 3f), 12f, 1f / 60f), "Vector4");
         });
 
-        run("Ease: exponential approach goes by time, not by frames", () =>
+        run("Ease: a spring settles on its target; critically damped it never overshoots, bouncy it does", () =>
         {
-            float once = Ease.Exponential(0f, 1f, 20f, 1f / 60f);
-            float twice = Ease.Exponential(Ease.Exponential(0f, 1f, 20f, 1f / 120f), 1f, 20f, 1f / 120f);
-            Near(once, twice, 1e-6f, "two half frames reach where one whole frame does");
-            Near(0.5f, Ease.ExponentialRate(20f, 1f / 20f), 1e-6f, "speed is halvings of the gap a second");
-            Eq(new System.Numerics.Vector2(once, 2f * once), Ease.Exponential(System.Numerics.Vector2.Zero, new System.Numerics.Vector2(1f, 2f), 20f, 1f / 60f), "a vector eases each component the same way");
+            float Peak(Spring spring, out float end)
+            {
+                float x = 0f, v = 0f, peak = 0f;
+                for (int i = 0; i < 120; i++) { Ease.Spring(ref x, ref v, 1f, spring, 1f / 60f); peak = MathF.Max(peak, x); }
+                end = x;
+                return peak;
+            }
+            IsTrue(Peak(Spring.Snappy, out float snappy) <= 1.0001f, "snappy stays at or under its target");
+            Near(1f, snappy, 1e-3f, "snappy has settled after two seconds");
+            IsTrue(Peak(Spring.Bouncy, out _) > 1.01f, "bouncy goes past it");
+        });
+
+        run("Ease: the float spring is the vector spring's first component", () =>
+        {
+            float x = 0f, v = 0f;
+            Vector4 xs = Vector4.Zero, vs = Vector4.Zero;
+            for (int i = 0; i < 10; i++)
+            {
+                Ease.Spring(ref x, ref v, 100f, Spring.Gentle, 1f / 60f);
+                Ease.Spring(ref xs, ref vs, new Vector4(100f), Spring.Gentle, 1f / 60f);
+            }
+            Eq(xs.X, x, "position");
+            Eq(vs.X, v, "velocity");
         });
 
         // ── Spring ──────────────────────────────────────────────────────────
