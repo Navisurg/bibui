@@ -48,14 +48,22 @@ for (const ratio of ratios) {
   console.log(`devicePixelRatio ${ratio}`);
   const profile = await mkdtemp(join(tmpdir(), 'bibui-smoke-'));
   const port = 9300 + Math.floor(Math.random() * 600);
-  const browser = spawn(chrome, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
+  // CI runners (Ubuntu 24.04 on GitHub) forbid the unprivileged user
+  // namespaces Chromium's sandbox needs, and Chromium then exits at once. The
+  // page under test is the sample, served from this checkout, so in CI the
+  // sandbox is left off; on a desktop it stays on.
+  const sandbox = process.env.CI ? ['--no-sandbox'] : [];
+  const browser = spawn(chrome, ['--headless=new', ...sandbox, `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
     '--no-first-run', '--no-default-browser-check', '--window-size=640,360', `--force-device-scale-factor=${ratio}`,
-    'about:blank'], { stdio: 'ignore' });
+    'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let stderr = '';
+  browser.stderr.on('data', d => { stderr += d; });
   try {
     let targets;
     for (let i = 0; i < 100 && !targets; i++) {
       try { targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { await sleep(100); }
     }
+    if (!targets) throw new Error(`${chrome} did not start (exit ${browser.exitCode}): ${stderr.trim().split('\n').slice(-5).join(' | ')}`);
     const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise(r => ws.onopen = r);
     let id = 0;
