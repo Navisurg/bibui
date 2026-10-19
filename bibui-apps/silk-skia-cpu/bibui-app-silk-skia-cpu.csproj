@@ -13,6 +13,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- This package's own code: Silk.NET under it is not trim-safe, so an app
+         on it runs on the JIT (docs/aot.md). As Bibui.Platform.Silk says. -->
     <IsAotCompatible>true</IsAotCompatible>
     <PackageId>Bibui.App.SilkSkiaCpu</PackageId>
     <Description>A bibui app in one package: bibui, a Silk window drawn by Skia on the CPU, shown through the window's GL framebuffer. BibuiApp opens the window and renderer and runs the frame in two calls; the same type in every Bibui.App package.</Description>
@@ -31,6 +33,8 @@
   <ItemGroup>
     <ProjectReference Include="../../bibui/bibui.csproj" />
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+    <!-- GlCpuFramebuffer: the CPU frame shown on the window's GL framebuffer. -->
+    <ProjectReference Include="../../bibui-gl/bibui-gl.csproj" />
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
   </ItemGroup>
 

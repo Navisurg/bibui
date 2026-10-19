@@ -84,7 +84,8 @@ jobs:
             samples/component-gallery/component-gallery.csproj \
             samples/bibui-app/bibui-app.csproj \
             samples/counter/counter.csproj \
-            samples/counter-cpu/counter-cpu.csproj
+            samples/counter-cpu/counter-cpu.csproj \
+            samples/counter-wayland/counter-wayland.csproj
           do
             echo "==> build $proj"
             dotnet build "$proj" --configuration Release -p:TreatWarningsAsErrors=true
@@ -140,3 +141,16 @@ jobs:
             --output aot/wayland-hello
           ls -l aot/wayland-hello/wayland-hello
           aot/wayland-hello/wayland-hello --first-frame
+
+      # The same for an app on a Bibui.App package: what docs/app-packages.md
+      # promises of Bibui.App.WaylandManaged. It opens a window to run, so CI
+      # only publishes it.
+      - name: Native AOT publish of counter-wayland (Bibui.App.WaylandManaged)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish samples/counter-wayland/counter-wayland.csproj \
+            --configuration Release -r linux-x64 \
+            -p:PublishAot=true -p:TreatWarningsAsErrors=true \
+            --output aot/counter-wayland
+          ls -l aot/counter-wayland/counter-wayland

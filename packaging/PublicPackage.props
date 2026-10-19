@@ -19,7 +19,6 @@
     <PackageTags>bibui;ui;gui;native-ui;desktop;linux</PackageTags>
   </PropertyGroup>
 
-
   <ItemGroup>
     <!-- Items are evaluated after every property, so $(PackageId) is the csproj's own here. -->
     <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="" Visible="false" />

@@ -38,7 +38,11 @@ while (app.BeginFrame())
 ## The packages
 
 `BibuiApp` is the same type, with the same calls, in every package. Changing
-the package changes how the app is drawn, and nothing in its code.
+the package changes how the app is drawn, and nothing in its code. Because it
+is the same type, an app references exactly one `Bibui.App` package, and a
+library references none: two in one app do not compile (CS0433). A library
+takes the parts it needs (`Bibui`, a renderer) and leaves the choice of window
+and renderer to the app.
 
 | Package | Window | Renderer | Native AOT |
 |---|---|---|---|
@@ -46,7 +50,7 @@ the package changes how the app is drawn, and nothing in its code.
 | `Bibui.App.SilkSkiaCpu` | Silk (GLFW), OpenGL | Skia, on the CPU | No |
 | `Bibui.App.SilkManaged` | Silk (GLFW), OpenGL | bibui's managed rasterizer, on the CPU | No |
 | `Bibui.App.WaylandManaged` | Wayland | bibui's managed rasterizer, on the CPU | Yes |
-| `Bibui.App.WaylandSkiaCpu` | Wayland | Skia, on the CPU | No |
+| `Bibui.App.WaylandSkiaCpu` | Wayland | Skia, on the CPU | Yes, beside `libSkiaSharp.so` |
 
 Where they differ:
 
@@ -60,11 +64,19 @@ Where they differ:
   `app.OnRefresh` is never called, because a Wayland window never blocks the
   loop. The compositor groups and themes windows by an application id:
   `new BibuiAppOptions { AppId = "dev.example.app" }`.
-  `WaylandManaged` has no native dependency beyond libwayland-client and
-  publishes as one Native AOT binary.
+  Both publish with Native AOT: `WaylandManaged` as one binary with no native
+  dependency beyond libwayland-client, `WaylandSkiaCpu` beside Skia's
+  `libSkiaSharp.so`. The Silk packages run on the JIT: Silk.NET is not
+  trim-safe.
 - **Test-server screenshots** are drawn by the app's own renderer, so they hold
   its textures, except on `SilkSkiaGl`, where the GPU draws into the window
   and a separate CPU renderer draws the screenshots.
+
+The counter is in the repository three times, with the same code and a
+different package: [`samples/counter`](https://github.com/Navisurg/bibui/tree/main/samples/counter)
+(`SilkSkiaGl`), [`samples/counter-cpu`](https://github.com/Navisurg/bibui/tree/main/samples/counter-cpu)
+(`SilkSkiaCpu`) and [`samples/counter-wayland`](https://github.com/Navisurg/bibui/tree/main/samples/counter-wayland)
+(`WaylandManaged`, one Native AOT binary).
 
 ## The test server
 

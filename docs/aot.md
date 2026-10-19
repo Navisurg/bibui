@@ -205,8 +205,11 @@ broken; with `TreatWarningsAsErrors` that warning fails the build.
   ```
 
 - **Check every dependency.** A package you add can break these rules on your
-  behalf. Publish with AOT once after adding one; a library that ships
-  `IsAotCompatible` has already been checked by its authors.
+  behalf. Publish with AOT once after adding one. A library that ships
+  `IsAotCompatible` has had its own code checked by its authors, not
+  necessarily its dependencies': the Silk-based `Bibui.App` packages, and
+  `Bibui.Platform.Silk` under them, are AOT-clean themselves but bring
+  Silk.NET, which is not, so they run on the JIT.
 - **Do not suppress the warnings.** An `[UnconditionalSuppressMessage]` or a
   `NoWarn` for IL2xxx/IL3xxx hides a failure that shows up later, at run time,
   as a missing member. Fix the code instead.

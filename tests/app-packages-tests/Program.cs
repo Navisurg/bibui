@@ -24,21 +24,45 @@ static string TypeName(Type t) =>
     : t.IsGenericType ? $"{t.Name}[{string.Join(",", t.GetGenericArguments().Select(TypeName))}]"
     : t.FullName!;
 
+// A type as declared, nullability included: Action? and Action differ.
+static string Declared(Type t, NullabilityInfo n) =>
+    TypeName(t) + (!t.IsValueType && n.ReadState == NullabilityState.Nullable ? "?" : "");
+
 static string[] Api(Type type)
 {
+    var nullability = new NullabilityInfoContext();
     var members = new List<string>();
-    foreach (var m in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+    const BindingFlags Public = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+    foreach (var m in type.GetMembers(Public))
     {
         switch (m)
         {
             case FieldInfo f:
-                members.Add(f.Name is "Window" or "Renderer" ? $"field {f.Name}" : $"field {TypeName(f.FieldType)} {f.Name}");
+                members.Add(f.Name is "Window" or "Renderer"
+                    ? $"field {(f.IsInitOnly ? "readonly " : "")}{f.Name}"
+                    : $"field {(f.IsInitOnly ? "readonly " : "")}{Declared(f.FieldType, nullability.Create(f))} {f.Name}");
                 break;
             case PropertyInfo p:
-                members.Add($"property {TypeName(p.PropertyType)} {p.Name} {(p.CanRead ? "get" : "")}{(p.SetMethod?.IsPublic == true ? " set" : "")}");
+            {
+                // init is a modreq on the setter's return: the same name, a different promise.
+                var set = p.SetMethod is { IsPublic: true } setter
+                    ? setter.ReturnParameter.GetRequiredCustomModifiers().Any(x => x.Name == "IsExternalInit") ? " init" : " set"
+                    : "";
+                members.Add($"property {Declared(p.PropertyType, nullability.Create(p))} {p.Name} {(p.CanRead ? "get" : "")}{set}");
+                break;
+            }
+            case EventInfo e:
+                members.Add($"event {TypeName(e.EventHandlerType!)} {e.Name}");
                 break;
             case MethodInfo mi when !mi.IsSpecialName:
-                members.Add($"method {(mi.IsStatic ? "static " : "")}{TypeName(mi.ReturnType)} {mi.Name}({string.Join(", ", mi.GetParameters().Select(x => $"{TypeName(x.ParameterType)} {x.Name}{(x.HasDefaultValue ? " = default" : "")}"))})");
+                members.Add($"method {(mi.IsStatic ? "static " : "")}{Declared(mi.ReturnType, nullability.Create(mi.ReturnParameter))} {mi.Name}("
+                    + string.Join(", ", mi.GetParameters().Select(x => $"{Declared(x.ParameterType, nullability.Create(x))} {x.Name}{(x.HasDefaultValue ? " = default" : "")}")) + ")");
+                break;
+            case ConstructorInfo c:
+                members.Add($"constructor ({string.Join(", ", c.GetParameters().Select(x => Declared(x.ParameterType, nullability.Create(x))))})");
+                break;
+            case Type nested:
+                members.Add($"nested {nested.Name}");
                 break;
         }
     }

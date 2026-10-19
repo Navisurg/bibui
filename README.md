@@ -34,7 +34,7 @@ dotnet add package Bibui.App.SilkSkiaGl
 | `Bibui.App.SilkSkiaCpu` | Silk (GLFW) | Skia on the CPU | No, JIT only for now |
 | `Bibui.App.SilkManaged` | Silk (GLFW) | managed rasterizer, on the CPU | No, JIT only for now |
 | `Bibui.App.WaylandManaged` | Wayland | managed rasterizer, on the CPU | Yes |
-| `Bibui.App.WaylandSkiaCpu` | Wayland | Skia on the CPU | No |
+| `Bibui.App.WaylandSkiaCpu` | Wayland | Skia on the CPU | Yes, beside `libSkiaSharp.so` |
 
 Each has the same `BibuiApp` type with the same calls, so changing the package
 changes how your app is drawn and nothing in its code. [Bibui.App
