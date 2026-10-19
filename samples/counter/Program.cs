@@ -1,5 +1,6 @@
-// The README's quick start: a label and a button that counts its clicks, in a
-// Silk window drawn by Skia on the GPU, through the Bibui.App.SilkSkiaGl package.
+// The README's quick start: a label and a button that counts its clicks. This
+// directory is only the app; samples/counter-gl, counter-cpu and counter-wayland
+// compile it, each with a different Bibui.App package, and the code is the same.
 using Bibui.App;
 using Bibui.Core.Runtime;
 

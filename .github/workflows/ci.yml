@@ -85,7 +85,7 @@ jobs:
             tests/browser-tests/browser-tests.csproj \
             samples/component-gallery/component-gallery.csproj \
             samples/bibui-app/bibui-app.csproj \
-            samples/counter/counter.csproj \
+            samples/counter-gl/counter-gl.csproj \
             samples/counter-cpu/counter-cpu.csproj \
             samples/counter-wayland/counter-wayland.csproj
           do

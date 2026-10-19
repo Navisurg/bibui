@@ -1,14 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- The README's quick start: one Bibui.App package, a Silk window drawn by Skia on the GPU. -->
+  <!-- The counter drawn by Skia on the GPU into a Silk window, through Bibui.App.SilkSkiaGl. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <AssemblyName>counter</AssemblyName>
+    <AssemblyName>counter-gl</AssemblyName>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The app is samples/counter; this project only picks its package. -->
+    <Compile Include="../counter/*.cs" />
     <ProjectReference Include="../../bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj" />
   </ItemGroup>
 </Project>
