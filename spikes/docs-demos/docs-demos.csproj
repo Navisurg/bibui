@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+  <!--
+    The docs site's live examples: every docs/components/*.md example
+    (DocsExamples.targets compiles them from the markdown), each on its own
+    canvas with its own runtime, on the shared browser host (../browser-host).
+    bibui-demos.js is the page's API: boot(), demos(), mount(canvas, id).
+
+    ./build-dist.sh publishes it into dist/ (interpreter; AOT=1 for AOT).
+  -->
+  <Import Project="../browser-host/BrowserHost.props" />
+  <Import Project="DocsExamples.targets" />
+  <PropertyGroup>
+    <AssemblyName>bibui-docs-demos</AssemblyName>
+    <!-- The docs page serves the files as they are; its CDN compresses. -->
+    <CompressionEnabled>false</CompressionEnabled>
+    <DebugType>none</DebugType>
+    <WasmEmitSymbolMap>false</WasmEmitSymbolMap>
+  </PropertyGroup>
+</Project>

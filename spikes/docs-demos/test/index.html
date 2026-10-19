@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>bibui docs demos: test page</title>
+  <style>
+    body { margin: 0; padding: 24px; background: #1a1815; color: #ccc; font: 13px system-ui, sans-serif; }
+    .stage { background: #0B0907; border-radius: 8px; margin: 0 0 24px; overflow: hidden; }
+    .stage canvas { display: block; width: 100%; height: 160px; }
+    .stage.tall canvas { height: 260px; }
+    h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+  </style>
+</head>
+<body>
+  <!-- The docs page's shape: dist/ served at /bibui/demos/, imported by URL. -->
+  <div id="list"></div>
+  <script type="module">
+    const ids = (new URLSearchParams(location.search).get('ids') ?? 'switch,slider,text-field,select').split(',');
+    const t0 = performance.now();
+    const m = await import('/bibui/demos/bibui-demos.js');
+    await m.boot();
+    window.bootMs = performance.now() - t0;
+    window.allDemos = m.demos();
+    window.mounted = {};
+    for (const id of ids) {
+      const h = document.createElement('h2'); h.textContent = id;
+      const stage = document.createElement('div'); stage.className = 'stage' + (id === 'select' || id.startsWith('menu') || id === 'dialog' ? ' tall' : '');
+      const canvas = document.createElement('canvas'); canvas.id = 'demo-' + id;
+      stage.append(canvas); document.getElementById('list').append(h, stage);
+      window.mounted[id] = m.mount(canvas, id);
+    }
+    window.unknown = m.mount(document.createElement('canvas'), 'no-such-demo');
+    window.ready = true;
+  </script>
+</body>
+</html>
