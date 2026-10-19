@@ -144,13 +144,13 @@ and Skia out of the AOT binary, so only the managed route ships:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Bibui" Version="0.10.0" />
-  <PackageReference Include="Bibui.Platform.Wayland" Version="0.10.0" />
-  <PackageReference Include="Bibui.Raster.Managed.Backend" Version="0.10.0" />
+  <PackageReference Include="Bibui" Version="0.10.1" />
+  <PackageReference Include="Bibui.Platform.Wayland" Version="0.10.1" />
+  <PackageReference Include="Bibui.Raster.Managed.Backend" Version="0.10.1" />
 </ItemGroup>
 <ItemGroup Condition="'$(AppRoute)' != 'wayland'">
-  <PackageReference Include="Bibui.Platform.Silk" Version="0.10.0" />
-  <PackageReference Include="Bibui.Raster.Skia" Version="0.10.0" />
+  <PackageReference Include="Bibui.Platform.Silk" Version="0.10.1" />
+  <PackageReference Include="Bibui.Raster.Skia" Version="0.10.1" />
 </ItemGroup>
 <PropertyGroup Condition="'$(AppRoute)' == 'wayland'">
   <DefineConstants>$(DefineConstants);WAYLAND_ONLY</DefineConstants>

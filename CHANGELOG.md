@@ -6,6 +6,35 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-19
+
+Frame pacing: windows draw at the display's refresh rate, and animation
+keeps its length in real time.
+
+### Changed
+
+- **Windows set `TargetHz` to the display's refresh rate.** The Wayland
+  window takes it from the current mode of the outputs its surface is on;
+  the Silk window from the monitor GLFW reports, when it opens and when it
+  moves, and paces its loop to it. It was always 60.
+- **The window measures `Dt` (breaking only if you relied on
+  `Dt == 1 / TargetHz`).** `Dt` is now a property the window sets in its
+  `BeginFrame`, before the build: the time since the last frame started. A
+  frame that follows a wait for input is one frame at `TargetHz`, so a
+  window woken after a long idle does not jump. Without a window (headless,
+  tests) it stays 1/60 unless set, so runs are deterministic. Setting
+  `TargetHz` no longer changes the animation step; set `Dt` instead.
+
+### Fixed
+
+- **A hidden Silk window no longer hangs.** `VSync = false` never reached
+  the GL context, so on Wayland `SwapBuffers` waited for frame callbacks a
+  hidden window never gets, and Hyprland showed its not-responding dialog.
+  The window now sets the swap interval to 0.
+- **Animations in the Wayland packages ran twice as fast on a 120 Hz
+  display**, because the window drew 120 frames a second while `Dt` was
+  1/60.
+
 ## [0.10.0] - 2026-10-19
 
 bibui 0.10: the app owns its loop and its renderer. A frame is built, laid
@@ -582,6 +611,7 @@ before it was published.
   pipeline.
 - The `Bibui.Contracts` and `Bibui.Runtime` packages (merged into `Bibui`).
 
-[Unreleased]: https://github.com/Navisurg/bibui/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/Navisurg/bibui/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/Navisurg/bibui/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/Navisurg/bibui/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/Navisurg/bibui/releases/tag/v0.9.3
