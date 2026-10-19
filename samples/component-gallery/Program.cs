@@ -152,7 +152,7 @@ static (string Group, string[] Routes)[] NavGroups() => new[]
             "Drawer", "DropdownMenu", "ContextMenu", "CommandPalette" }),
         ("Navigation", new[] { "Tabs", "Accordion", "Expander", "NavBar", "Sidebar",
             "Breadcrumb", "Pagination", "MenuBar" }),
-        ("Layout", new[] { "SplitPane", "Carousel", "ButtonStrip", "Stack", "InteractiveBox", "Section", "Scrollbar" }),
+        ("Layout", new[] { "SplitPane", "Carousel", "ButtonStrip", "Stack", "InteractiveBox", "Section", "Scrollbar", "ScrollList" }),
     };
 
 // Beside the page at its width, or, folded (width 0), the whole window under
@@ -321,6 +321,7 @@ static UiNode BuildDemo(BibuiRuntime runtime, GalleryState state, Gallery galler
         or "Breadcrumb" or "Pagination" or "MenuBar"
             => DemoNavigation.Build(runtime, state.Route, state.Navigation, s => gallery.State = state with { Navigation = s }),
     "Scrollbar" => DemoScrollbar.Build(runtime),
+    "ScrollList" => DemoScrollList.Build(runtime),
     "SplitPane" or "Carousel" or "ButtonStrip" or "Stack" or "InteractiveBox" or "Section"
             => DemoLayout.Build(runtime, state.Route, state.Layout, s => gallery.State = state with { Layout = s }),
     _ => runtime.Text("Select a component from the sidebar.", textColor: TextColor.Secondary),

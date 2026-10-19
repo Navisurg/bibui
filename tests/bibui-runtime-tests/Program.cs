@@ -7811,6 +7811,9 @@ AppIconTests.Register(Run);
 Console.WriteLine();
 Console.WriteLine("Motion");
 MotionTests.Register(Run);
+Console.WriteLine();
+Console.WriteLine("Scroll list");
+ScrollListTests.Register(Run);
 
 Console.WriteLine($"Results: {passed} passed, {failed} failed, {skipped} skipped"
     + (filter is null ? "" : $" ({filteredOut} not matching '{filter}')"));
