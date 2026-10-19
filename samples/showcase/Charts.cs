@@ -1,7 +1,6 @@
 using Bibui;
 using Bibui.Draw;
 using Bibui.Runtime;
-using static Bibui.Arrange;
 
 namespace Showcase;
 
@@ -106,13 +105,14 @@ internal static class Charts
     /// <summary>The axis beside an area chart: its tick values, top to bottom, spread over the plot's height.</summary>
     public static Box Axis(BibuiRuntime rt, Series s)
     {
-        var col = Column().FillY().Px(width: 44f);
-        for (int t = 0; t <= s.Ticks; t++)
-        {
-            if (t > 0) Spring(col);
-            float v = s.Max - (s.Max - s.Min) * t / s.Ticks;
-            UiNode.PushIntoParent(col, Ui.T(rt, v.ToString(s.Format, System.Globalization.CultureInfo.InvariantCulture), FontSize.Px(11f), UiColor.TextSecondary));
-        }
+        var col = rt.ColumnFillY().Px(width: 44f);
+        using (rt.PushParent(col))
+            for (int t = 0; t <= s.Ticks; t++)
+            {
+                if (t > 0) rt.Spring();
+                float v = s.Max - (s.Max - s.Min) * t / s.Ticks;
+                Ui.T(rt, v.ToString(s.Format, System.Globalization.CultureInfo.InvariantCulture), FontSize.Px(11f), UiColor.TextSecondary);
+            }
         return col;
     }
 

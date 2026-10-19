@@ -1,6 +1,5 @@
 using Bibui;
 using Bibui.Runtime;
-using static Bibui.Arrange;
 using static Showcase.Ui;
 
 namespace Showcase;
@@ -43,65 +42,82 @@ internal sealed partial class App
 
         float fade = Math.Clamp((open - 0.35f) / 0.65f, 0f, 1f);
 
-        // The brand: a small orb painted with gradients, and the name beside it.
-        var brand = Row(CentredY(Orb(rt, 34f)));
-        if (fade > 0f)
+        // The asked nodes above are linked in here, in their places.
+        using (rt.PushParent(side))
         {
-            var words = Column(Bold(rt, "Zenith", ComponentSize.Lg, UiColor.TextPrimary),
-                T(rt, Data.SiteName + " observatory", FontSize.Px(11.5f), UiColor.TextSecondary));
-            words.Style.Opacity = fade;
-            Gap(brand, 12f);
-            UiNode.PushIntoParent(brand, CentredY(words));
-        }
-        brand.FillX().Px(height: 44f);
-        UiNode.PushIntoParent(side, brand);
-        Gap(side, 26f);
+            // The brand: a small orb painted with gradients, and the name beside it.
+            using (rt.PushParent(rt.RowFillX(44f)))
+            {
+                CentredY(rt, Orb(rt, 34f));
+                if (fade > 0f)
+                {
+                    rt.Gap(12f);
+                    var words = rt.ColumnFit();
+                    using (rt.PushParent(words))
+                    {
+                        Bold(rt, "Zenith", ComponentSize.Lg, UiColor.TextPrimary);
+                        T(rt, Data.SiteName + " observatory", FontSize.Px(11.5f), UiColor.TextSecondary);
+                    }
+                    words.Style.Opacity = fade;
+                    CentredY(rt, words);
+                }
+            }
+            rt.Gap(26f);
 
-        if (fade > 0f)
-        {
-            var eyebrow = Row(Space(12f), Eyebrow(rt, "Observe"));
-            eyebrow.Style.Opacity = fade;
-            UiNode.PushIntoParent(side, eyebrow);
-        }
-        else UiNode.PushIntoParent(side, rt.Box().Px(1f, 13f));
-        Gap(side, 10f);
-        foreach (var item in items)
-        {
-            UiNode.PushIntoParent(side, item);
-            Gap(side, 4f);
-        }
+            if (fade > 0f)
+            {
+                var eyebrow = rt.RowFit();
+                using (rt.PushParent(eyebrow))
+                {
+                    rt.Gap(12f);
+                    Eyebrow(rt, "Observe");
+                }
+                eyebrow.Style.Opacity = fade;
+            }
+            else rt.Box().Px(1f, 13f);
+            rt.Gap(10f);
+            foreach (var item in items)
+            {
+                Place(rt, item);
+                rt.Gap(4f);
+            }
 
-        Spring(side);
+            rt.Spring();
 
-        if (fade > 0.6f)
-        {
-            var site = SiteCard(rt, live.Node);
-            site.Style.Opacity = (fade - 0.6f) / 0.4f;
-            UiNode.PushIntoParent(side, site);
-        }
-        else UiNode.PushIntoParent(side, CentredX(live.Node));
-        Gap(side, 14f);
-        UiNode.PushIntoParent(side, Rule(rt));
-        Gap(side, 14f);
+            if (fade > 0.6f)
+            {
+                var site = SiteCard(rt, live.Node);
+                site.Style.Opacity = (fade - 0.6f) / 0.4f;
+            }
+            else CentredX(rt, live.Node);
+            rt.Gap(14f);
+            Rule(rt);
+            rt.Gap(14f);
 
-        // Who is on shift, and the fold.
-        var you = Row(CentredY(Avatar.Build(rt, "IR", 32f, ink: UiColor.AccentForeground, fontSize: ComponentSize.Sm)));
-        if (fade > 0f)
-        {
-            var who = Column(Bold(rt, "Ines Rowe", ComponentSize.Sm, UiColor.TextPrimary),
-                T(rt, "Night lead", FontSize.Px(11.5f), UiColor.TextSecondary));
-            who.Style.Opacity = fade;
-            Gap(you, 10f);
-            UiNode.PushIntoParent(you, CentredY(who));
-            Spring(you);
-            UiNode.PushIntoParent(you, CentredY(fold.Node));
-        }
-        you.FillX().Px(height: 36f);
-        UiNode.PushIntoParent(side, you);
-        if (fade <= 0f)
-        {
-            Gap(side, 10f);
-            UiNode.PushIntoParent(side, CentredX(fold.Node));
+            // Who is on shift, and the fold.
+            using (rt.PushParent(rt.RowFillX(36f)))
+            {
+                CentredY(rt, Avatar.Build(rt, "IR", 32f, ink: UiColor.AccentForeground, fontSize: ComponentSize.Sm));
+                if (fade > 0f)
+                {
+                    rt.Gap(10f);
+                    var who = rt.ColumnFit();
+                    using (rt.PushParent(who))
+                    {
+                        Bold(rt, "Ines Rowe", ComponentSize.Sm, UiColor.TextPrimary);
+                        T(rt, "Night lead", FontSize.Px(11.5f), UiColor.TextSecondary);
+                    }
+                    who.Style.Opacity = fade;
+                    CentredY(rt, who);
+                    rt.Spring();
+                    CentredY(rt, fold.Node);
+                }
+            }
+            if (fade <= 0f)
+            {
+                rt.Gap(10f);
+                CentredX(rt, fold.Node);
+            }
         }
         return side;
     }
@@ -118,19 +134,24 @@ internal sealed partial class App
             ? UiColor.Accent.WithAlpha(0.16f + 0.06f * item.HotT)
             : UiColor.SurfaceRaisedHover.WithAlpha(item.HotT);
 
-        UiNode.PushIntoParent(item, CentredY(Icon(rt, icon, 18f, selected ? UiColor.Accent : UiColor.TextSecondary)));
         float fade = Math.Clamp((open - 0.35f) / 0.65f, 0f, 1f);
-        if (fade > 0f)
+        using (rt.PushParent(item))
         {
-            Gap(item, 12f);
-            var words = Row(
-                CentredY(Bold(rt, label, ComponentSize.Sm, selected ? UiColor.TextPrimary : UiColor.TextSecondary)),
-                Spring(),
-                CentredY(T(rt, key, FontSize.Px(11f), UiColor.TextDisabled)));
-            words.FillX().FillY().Style.Opacity = fade;
-            UiNode.PushIntoParent(item, words);
+            CentredY(rt, Icon(rt, icon, 18f, selected ? UiColor.Accent : UiColor.TextSecondary));
+            if (fade > 0f)
+            {
+                rt.Gap(12f);
+                var words = rt.RowFill();
+                using (rt.PushParent(words))
+                {
+                    CentredY(rt, Bold(rt, label, ComponentSize.Sm, selected ? UiColor.TextPrimary : UiColor.TextSecondary));
+                    rt.Spring();
+                    CentredY(rt, T(rt, key, FontSize.Px(11f), UiColor.TextDisabled));
+                }
+                words.Style.Opacity = fade;
+            }
         }
-        else if (i.Hovering)
+        if (fade <= 0f && i.Hovering)
         {
             Tooltip.Build(rt, label + "  ·  " + key, item);
         }
@@ -142,15 +163,7 @@ internal sealed partial class App
     {
         double m = Minutes;
         float wind = Data.Wind(m), hum = Data.Humidity(m);
-        var card = Column(
-            Row(Eyebrow(rt, "Site"), Spring(), Pill(rt, "Dome open", UiColor.Success, dot: true, height: 20f)).FillX(),
-            Space(12f),
-            Meter(rt, "Wind", $"{wind:0} km/h", wind / 40f, UiColor.Accent),
-            Space(10f),
-            Meter(rt, "Humidity", $"{hum:0} %", hum / 100f, UiColor.Accent),
-            Space(14f),
-            liveSwitch);
-        card.FillX();
+        var card = rt.ColumnFillX();
         card.Style = new Style
         {
             Padding = EdgeInsets.All(14f),
@@ -159,14 +172,40 @@ internal sealed partial class App
             BorderWidth = rt.Theme.Borders.Width,
             BorderColor = UiColor.Border,
         };
+        using (rt.PushParent(card))
+        {
+            using (rt.PushParent(rt.RowFillX()))
+            {
+                Eyebrow(rt, "Site");
+                rt.Spring();
+                Pill(rt, "Dome open", UiColor.Success, dot: true, height: 20f);
+            }
+            rt.Gap(12f);
+            Meter(rt, "Wind", $"{wind:0} km/h", wind / 40f, UiColor.Accent);
+            rt.Gap(10f);
+            Meter(rt, "Humidity", $"{hum:0} %", hum / 100f, UiColor.Accent);
+            rt.Gap(14f);
+            Place(rt, liveSwitch);
+        }
         return card;
     }
 
-    private static Box Meter(BibuiRuntime rt, string label, string value, float share, UiColor color) => Column(
-            Row(T(rt, label, FontSize.Px(12f), UiColor.TextSecondary), Spring(), Bold(rt, value, FontSize.Px(12f), UiColor.TextPrimary)).FillX(),
-            Space(6f),
-            Progress.Build(rt, Math.Clamp(share, 0f, 1f) * 100f, thickness: 4f, fill: color))
-        .FillX();
+    private static Box Meter(BibuiRuntime rt, string label, string value, float share, UiColor color)
+    {
+        var meter = rt.ColumnFillX();
+        using (rt.PushParent(meter))
+        {
+            using (rt.PushParent(rt.RowFillX()))
+            {
+                T(rt, label, FontSize.Px(12f), UiColor.TextSecondary);
+                rt.Spring();
+                Bold(rt, value, FontSize.Px(12f), UiColor.TextPrimary);
+            }
+            rt.Gap(6f);
+            Progress.Build(rt, Math.Clamp(share, 0f, 1f) * 100f, thickness: 4f, fill: color);
+        }
+        return meter;
+    }
 
     /// <summary>The brand mark: an orb lit from the upper left, in the accent.</summary>
     private static Box Orb(BibuiRuntime rt, float size)
@@ -208,7 +247,9 @@ internal sealed partial class App
         b.Style.BackgroundColor = on
             ? UiColor.Accent.WithAlpha(0.14f + 0.1f * b.HotT)
             : UiColor.SurfaceRaisedHover.WithAlpha(b.HotT * 0.9f - 0.3f * b.ActiveT);
-        Centred(b, CentredY(Icon(rt, icon, size * 0.46f, on ? UiColor.Accent : UiColor.TextPrimary)));
+        using (rt.PushParent(b))
+        using (rt.Centred())
+            CentredY(rt, Icon(rt, icon, size * 0.46f, on ? UiColor.Accent : UiColor.TextPrimary));
         if (tip is not null && i.Hovering) Tooltip.Build(rt, tip, b);
         return new BibuiWidget(b, i);
     }
@@ -255,7 +296,10 @@ internal sealed partial class App
             rt.Scrollbar("page-bar", view);
         rt.InteractionsFor(view);   // after everything inside it
 
-        return Column(bar, wrap).Px(w, h);
+        var main = rt.ColumnPx(w, h);
+        UiNode.PushIntoParent(main, bar);
+        UiNode.PushIntoParent(main, wrap);
+        return main;
     }
 
     private Box TopBar(BibuiRuntime rt, float w, float barH)
@@ -270,31 +314,37 @@ internal sealed partial class App
         var look = IconButton(rt, "appearance", "sliders", on: SettingsOpen, tip: "Appearance  ·  ,");
         if (look.Clicked) SettingsOpen = !SettingsOpen;
 
-        var bar = Row(
-            CentredY(Column(
-                Bold(rt, Nav[(int)Page].Label, ComponentSize.Xl, UiColor.TextPrimary),
-                Space(2f),
-                T(rt, Subtitles[(int)Page], ComponentSize.Sm, UiColor.TextSecondary))),
-            Spring());
-        if (field is not null)
-        {
-            UiNode.PushIntoParent(bar, CentredY(field));
-            Gap(bar, 16f);
-        }
-        UiNode.PushIntoParent(bar, CentredY(ClockChip(rt)));
-        Gap(bar, 16f);
-        UiNode.PushIntoParent(bar, CentredY(pause.Node));
-        Gap(bar, 8f);
-        UiNode.PushIntoParent(bar, CentredY(mode.Node));
-        Gap(bar, 8f);
-        UiNode.PushIntoParent(bar, CentredY(look.Node));
-        bar.Px(w, barH);
+        var bar = rt.RowPx(w, barH);
         bar.Style = new Style
         {
             Padding = EdgeInsets.Symmetric(horizontal: 28f, vertical: 0f),
             BorderBottom = new EdgeBorder(rt.Theme.Borders.Width, UiColor.Border),
             BackgroundColor = UiColor.Background,
         };
+        using (rt.PushParent(bar))
+        {
+            var title = rt.ColumnFit();
+            using (rt.PushParent(title))
+            {
+                Bold(rt, Nav[(int)Page].Label, ComponentSize.Xl, UiColor.TextPrimary);
+                rt.Gap(2f);
+                T(rt, Subtitles[(int)Page], ComponentSize.Sm, UiColor.TextSecondary);
+            }
+            CentredY(rt, title);
+            rt.Spring();
+            if (field is not null)
+            {
+                CentredY(rt, field);
+                rt.Gap(16f);
+            }
+            CentredY(rt, ClockChip(rt));
+            rt.Gap(16f);
+            CentredY(rt, pause.Node);
+            rt.Gap(8f);
+            CentredY(rt, mode.Node);
+            rt.Gap(8f);
+            CentredY(rt, look.Node);
+        }
         return bar;
     }
 
@@ -303,15 +353,7 @@ internal sealed partial class App
     {
         double lst = Data.Lst(Clock);
         int lh = (int)lst, lm = (int)((lst - lh) * 60);
-        var chip = Row(
-            CentredY(Pill(rt, Live ? "LIVE" : "PAUSED", Live ? UiColor.Success : UiColor.TextSecondary, dot: true, height: 20f)),
-            Space(10f),
-            CentredY(Bold(rt, Utc, ComponentSize.Sm, UiColor.TextPrimary)),
-            Space(6f),
-            CentredY(T(rt, "UTC", FontSize.Px(11f), UiColor.TextSecondary)),
-            Space(12f),
-            CentredY(T(rt, $"LST {lh:00}:{lm:00}", ComponentSize.Sm, UiColor.TextSecondary)));
-        chip.Px(height: 36f).SizeX = SemanticSize.ChildrenSum();
+        var chip = rt.RowHeight(36f);
         chip.Style = new Style
         {
             Padding = EdgeInsets.Symmetric(horizontal: 8f, vertical: 0f),
@@ -320,6 +362,16 @@ internal sealed partial class App
             BorderColor = UiColor.Border,
             BackgroundColor = UiColor.Surface,
         };
+        using (rt.PushParent(chip))
+        {
+            CentredY(rt, Pill(rt, Live ? "LIVE" : "PAUSED", Live ? UiColor.Success : UiColor.TextSecondary, dot: true, height: 20f));
+            rt.Gap(10f);
+            CentredY(rt, Bold(rt, Utc, ComponentSize.Sm, UiColor.TextPrimary));
+            rt.Gap(6f);
+            CentredY(rt, T(rt, "UTC", FontSize.Px(11f), UiColor.TextSecondary));
+            rt.Gap(12f);
+            CentredY(rt, T(rt, $"LST {lh:00}:{lm:00}", ComponentSize.Sm, UiColor.TextSecondary));
+        }
         return chip;
     }
 
@@ -332,11 +384,19 @@ internal sealed partial class App
         field.Px(width, 36f);
         var line = rt.TextField("search", Search, SearchEdit, SearchFocused, placeholder: "Search targets");
         if (line.Pressed) { SearchFocused = true; NoteFocused = false; }
-        UiNode.PushIntoParent(field, CentredY(Icon(rt, "search", 15f, UiColor.TextSecondary)));
-        Gap(field, 8f);
-        UiNode.PushIntoParent(field, Column(Spring(), line.Node.FillX(), Spring()).FillX().FillY());
-        Gap(field, 8f);
-        UiNode.PushIntoParent(field, CentredY(KeyboardShortcut.Build(rt, "/")));
+        using (rt.PushParent(field))
+        {
+            CentredY(rt, Icon(rt, "search", 15f, UiColor.TextSecondary));
+            rt.Gap(8f);
+            using (rt.PushParent(rt.ColumnFill()))
+            {
+                rt.Spring();
+                Place(rt, line.Node.FillX());
+                rt.Spring();
+            }
+            rt.Gap(8f);
+            CentredY(rt, KeyboardShortcut.Build(rt, "/"));
+        }
         return field;
     }
 }

@@ -2,7 +2,6 @@ using Bibui;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 using Bibui.Theming;
-using static Bibui.Arrange;
 using static Showcase.Ui;
 
 namespace Showcase;
@@ -124,10 +123,9 @@ internal sealed partial class App
         var sidebar = Sidebar(rt, open, h);
         var main = Main(rt, w - SidebarWidth(open), h);
 
-        var page = Row(sidebar, main)
-            .Px(w, h)
-            .Styled(new Style { BackgroundColor = UiColor.Background });
-        UiNode.PushIntoParent(rt.ParentInScope, page);   // built with Arrange: linked under the frame's root
+        var page = rt.RowPx(w, h).Styled(new Style { BackgroundColor = UiColor.Background });
+        UiNode.PushIntoParent(page, sidebar);
+        UiNode.PushIntoParent(page, main);
     }
 
     /// <summary>One whole frame: BeginBuild with the frame's input (none, headless), the app, EndBuild.</summary>
