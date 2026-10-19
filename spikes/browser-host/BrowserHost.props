@@ -1,0 +1,35 @@
+<Project>
+  <!--
+    The browser host, for a Microsoft.NET.Sdk.WebAssembly app (no Blazor):
+    BrowserHost.cs compiled into the app, bibui-host.js beside _framework in
+    its output, bibui and ManagedRenderer, and FreeType and HarfBuzz linked in
+    statically from native/lib (native/build.sh). Needs the wasm-tools
+    workload, for the relink.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NuGetAudit>false</NuGetAudit>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <WasmEnableSIMD>true</WasmEnableSIMD>
+    <WasmBuildNative>true</WasmBuildNative>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../bibui/bibui.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
+    <Compile Include="$(MSBuildThisFileDirectory)BrowserHost.cs" Link="BrowserHost/BrowserHost.cs" />
+    <Content Include="$(MSBuildThisFileDirectory)bibui-host.js" Link="wwwroot/bibui-host.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The pinvoke table is keyed by the file's name without its extension,
+         which must be the [LibraryImport] name bibui uses: libfreetype.so.6
+         and libharfbuzz.so.0. So the archives carry those names. -->
+    <NativeFileReference Include="$(MSBuildThisFileDirectory)native/lib/libfreetype.so.6.a" />
+    <NativeFileReference Include="$(MSBuildThisFileDirectory)native/lib/libharfbuzz.so.0.a" />
+  </ItemGroup>
+</Project>

@@ -1,38 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk.WebAssembly">
   <!--
-    Spike: the counter sample in the browser. .NET on WebAssembly (no Blazor),
-    one frame per requestAnimationFrame, drawn by ManagedRenderer into memory
-    that main.js puts on a <canvas>. FreeType and HarfBuzz are linked in
-    statically from native/lib (native/build.sh).
+    Spike: the counter sample in the browser, on the shared browser host
+    (../browser-host): .NET on WebAssembly (no Blazor), one frame per
+    requestAnimationFrame, drawn by ManagedRenderer into memory that
+    bibui-host.js puts on a <canvas>.
 
     Needs the wasm-tools workload (a user-local SDK: DOTNET_ROOT=~/.dotnet-wasm).
-      native/build.sh <freetype-src> <harfbuzz-src>
+      ../browser-host/native/build.sh <freetype-src> <harfbuzz-src>
       dotnet publish -c Release -o out                      (interpreter + jiterpreter)
       dotnet publish -c Release -o out -p:RunAOTCompilation=true
       dotnet publish -c Release -o out -p:Renderer=skia     (SkiaCpuRenderer)
       python3 -m http.server 8731 -b 127.0.0.1 -d out/wwwroot
     then http://127.0.0.1:8731/  (?heavy: 96 buttons, ?bench: draw every rAF)
   -->
+  <Import Project="../browser-host/BrowserHost.props" />
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
-    <OutputType>Exe</OutputType>
     <AssemblyName>browser-counter</AssemblyName>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <NuGetAudit>false</NuGetAudit>
-    <InvariantGlobalization>true</InvariantGlobalization>
-    <WasmEnableSIMD>true</WasmEnableSIMD>
-    <!-- Static linking of the native libraries needs the relink, which the
-         wasm-tools workload provides. -->
-    <WasmBuildNative>true</WasmBuildNative>
   </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="../../bibui/bibui.csproj" />
-    <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
-  </ItemGroup>
   <!-- -p:Renderer=skia draws with SkiaCpuRenderer instead, on SkiaSharp's
        WebAssembly static library. -->
   <PropertyGroup Condition="'$(Renderer)' == 'skia'">
@@ -41,13 +25,5 @@
   <ItemGroup Condition="'$(Renderer)' == 'skia'">
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
     <PackageReference Include="SkiaSharp.NativeAssets.WebAssembly" Version="4.153.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- The pinvoke table is keyed by the file's name without its extension,
-         which must be the [LibraryImport] name bibui uses: libfreetype.so.6
-         and libharfbuzz.so.0. So the archives carry those names. -->
-    <NativeFileReference Include="native/lib/libfreetype.so.6.a" />
-    <NativeFileReference Include="native/lib/libharfbuzz.so.0.a" />
   </ItemGroup>
 </Project>
