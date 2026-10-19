@@ -285,6 +285,11 @@ public sealed class SilkWindow : IDisposable
         native.Load += () =>
         {
             var context = native.GLContext!;
+            // VSync = false above does not reach the context: on Wayland the swap
+            // interval stays EGL's default of 1, Mesa asks for a frame callback on
+            // every swap, and the hang the options comment describes happens
+            // anyway. Set it here, where the context is current.
+            context.SwapInterval(0);
             window.Gl.GetProcAddress = name => context.TryGetProcAddress(name, out var at) ? at : 0;
             Resize(window, native.FramebufferSize);
         };
