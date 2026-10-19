@@ -46,28 +46,35 @@ const pass = (what) => console.log(`  [PASS] ${what}`);
 
 for (const ratio of ratios) {
   console.log(`devicePixelRatio ${ratio}`);
-  const profile = await mkdtemp(join(tmpdir(), 'bibui-smoke-'));
-  const port = 9300 + Math.floor(Math.random() * 600);
   // CI runners (Ubuntu 24.04 on GitHub) forbid the unprivileged user
   // namespaces Chromium's sandbox needs, and Chromium then exits at once. The
   // page under test is the sample, served from this checkout, so in CI the
   // sandbox is left off; on a desktop it stays on.
   const sandbox = process.env.CI ? ['--no-sandbox'] : [];
-  const browser = spawn(chrome, ['--headless=new', ...sandbox, `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
-    '--no-first-run', '--no-default-browser-check', '--window-size=640,360', `--force-device-scale-factor=${ratio}`,
-    'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
-  let stderr = '';
-  browser.stderr.on('data', d => { stderr += d; });
-  try {
-    // The first start on a cold machine can take well over ten seconds (CI's
-    // did), so wait up to 30 for the debugging port to list a page.
-    let targets;
-    for (let i = 0; i < 300 && !targets; i++) {
+  // Chromium picks its own debugging port (0) and writes it to
+  // DevToolsActivePort in the profile, so no port is guessed and none can be
+  // taken already. The first start on a fresh CI runner has also hung once
+  // without listing a page; a start that does not come up in 30 seconds is
+  // tried once more with a new profile.
+  let browser, profile, targets, stderr = '';
+  for (let attempt = 1; attempt <= 2 && !targets; attempt++) {
+    if (browser) { browser.kill(); await rm(profile, { recursive: true, force: true }).catch(() => {}); }
+    profile = await mkdtemp(join(tmpdir(), 'bibui-smoke-'));
+    stderr = '';
+    browser = spawn(chrome, ['--headless=new', ...sandbox, '--remote-debugging-port=0', `--user-data-dir=${profile}`,
+      '--no-first-run', '--no-default-browser-check', '--window-size=640,360', `--force-device-scale-factor=${ratio}`,
+      'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    browser.stderr.on('data', d => { stderr += d; });
+    for (let i = 0; i < 300 && !targets && browser.exitCode === null; i++) {
       try {
-        const list = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
+        const port = (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0];
+        const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
         if (list.some(t => t.type === 'page')) targets = list; else await sleep(100);
       } catch { await sleep(100); }
     }
+    if (!targets) console.log(`  (${chrome} did not come up on attempt ${attempt}, exit ${browser.exitCode})`);
+  }
+  try {
     if (!targets) throw new Error(`${chrome} did not start (exit ${browser.exitCode}): ${stderr.trim().split('\n').slice(-5).join(' | ')}`);
     const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise(r => ws.onopen = r);
