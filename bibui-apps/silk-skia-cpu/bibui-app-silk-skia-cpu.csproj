@@ -19,6 +19,8 @@
     <PackageTags>$(PackageTags);silk;skia;cpu</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <IsPackable>true</IsPackable>
+    <!-- One README for the five Bibui.App packages, with what differs between them. -->
+    <PackageReadmeSource>$(MSBuildThisFileDirectory)../../docs/app-packages.md</PackageReadmeSource>
   </PropertyGroup>
   <ItemGroup>
     <!-- The window and renderer this package is, under the names BibuiApp.cs uses. -->

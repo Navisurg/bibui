@@ -5,6 +5,8 @@
 items:
 - name: Getting started
   href: getting-started.md
+- name: Bibui.App packages
+  href: app-packages.md
 - name: Concepts
   href: concepts.md
 - name: Theming

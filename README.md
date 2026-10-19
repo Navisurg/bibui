@@ -37,7 +37,8 @@ dotnet add package Bibui.App.SilkSkiaGl
 | `Bibui.App.WaylandSkiaCpu` | Wayland | Skia on the CPU | No |
 
 Each has the same `BibuiApp` type with the same calls, so changing the package
-changes how your app is drawn and nothing in its code. Headless tests use
+changes how your app is drawn and nothing in its code. [Bibui.App
+packages](docs/app-packages.md) says where they differ. Headless tests use
 `Bibui.Testing`.
 
 ## Quick start

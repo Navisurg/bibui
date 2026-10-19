@@ -1,0 +1,101 @@
+# Bibui.App packages
+
+A bibui app in one package: each `Bibui.App` package brings bibui, a window
+and a renderer, and runs the frame in two calls.
+
+```bash
+dotnet add package Bibui.App.SilkSkiaGl
+```
+
+```csharp
+using Bibui.App;
+using Bibui.Runtime;
+
+var runtime = BibuiRuntime.Create();
+using var app = BibuiApp.Open(runtime, new("Counter", 360, 160));
+int count = 0;
+
+while (app.BeginFrame())
+{
+    runtime.BeginBuild(app.Events);
+    using (runtime.PushParent(runtime.ColumnFit()))
+    {
+        runtime.Text($"Clicked {count} times");
+        if (runtime.Button("add", "Add one").Clicked) count++;
+    }
+    runtime.EndBuild();
+    app.EndFrame();
+}
+```
+
+- `app.BeginFrame()` waits until a frame is wanted and collects its input into
+  `app.Events`; it returns false once the window is closing.
+- `app.EndFrame()` draws the runtime's draw list into the window, presents it,
+  and paces the loop.
+- `app.Renderer` is the renderer, for textures (`CreateTexture`,
+  `UpdateTexture`, `ReleaseTexture`); `app.Window` is the window.
+
+## The packages
+
+`BibuiApp` is the same type, with the same calls, in every package. Changing
+the package changes how the app is drawn, and nothing in its code.
+
+| Package | Window | Renderer | Native AOT |
+|---|---|---|---|
+| `Bibui.App.SilkSkiaGl` | Silk (GLFW), OpenGL | Skia, on the GPU | No |
+| `Bibui.App.SilkSkiaCpu` | Silk (GLFW), OpenGL | Skia, on the CPU | No |
+| `Bibui.App.SilkManaged` | Silk (GLFW), OpenGL | bibui's managed rasterizer, on the CPU | No |
+| `Bibui.App.WaylandManaged` | Wayland | bibui's managed rasterizer, on the CPU | Yes |
+| `Bibui.App.WaylandSkiaCpu` | Wayland | Skia, on the CPU | No |
+
+Where they differ:
+
+- **The Silk packages** open the window with GLFW and present through OpenGL.
+  `SilkSkiaCpu` and `SilkManaged` draw on the CPU into memory, which is then
+  shown on the window's GL framebuffer. Set `app.OnRefresh` to the loop's body
+  to keep drawing while the window is resized on Windows and macOS, where the
+  OS blocks the loop.
+- **The Wayland packages** talk to the compositor directly, with no GLFW and no
+  GL: the frame is drawn into the window's shared-memory buffers.
+  `app.OnRefresh` is never called, because a Wayland window never blocks the
+  loop. The compositor groups and themes windows by an application id:
+  `new BibuiAppOptions { AppId = "dev.example.app" }`.
+  `WaylandManaged` has no native dependency beyond libwayland-client and
+  publishes as one Native AOT binary.
+- **Test-server screenshots** are drawn by the app's own renderer, so they hold
+  its textures, except on `SilkSkiaGl`, where the GPU draws into the window
+  and a separate CPU renderer draws the screenshots.
+
+## The test server
+
+The test server lets a test or an agent drive a running app: click, type,
+read the tree, take a screenshot. It starts when the app asks,
+`BibuiApp.Open(runtime, window, new BibuiAppOptions { TestServer = true })`,
+or when the environment variable `BIBUI_TEST_SERVER=1` is set. Otherwise it is
+off.
+
+## Writing the loop yourself
+
+A `Bibui.App` package is a window package and a renderer package, put
+together. Reference those instead (for `SilkSkiaGl`: `Bibui`,
+`Bibui.Platform.Silk`, `Bibui.Raster.Skia`) to write the loop yourself, draw
+more than one renderer into a window, or bring a window or renderer of your
+own:
+
+```csharp
+using var window = SilkWindow.Open(runtime, new("Counter", 360, 160));
+using var skia = new SkiaGlRenderer(window.Gl);
+
+while (SilkWindow.BeginFrame(window, runtime))
+{
+    runtime.BeginBuild(window.Events);
+    Build();
+    runtime.EndBuild();
+    SilkWindow.BeginDraw(window);
+    skia.Draw(runtime.DrawList);
+    SilkWindow.EndDraw(window);
+    SilkWindow.EndFrame(window, runtime);
+}
+```
+
+More at https://github.com/Navisurg/bibui.
