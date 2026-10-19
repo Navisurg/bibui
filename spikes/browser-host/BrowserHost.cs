@@ -35,6 +35,13 @@ public sealed class BrowserSurface : IDisposable
     byte[] _bgra = [], _rgba = [];
     int _w, _h;
     internal bool Dirty = true;
+
+    // The canvas's size in device pixels, as the browser reported it. Frames
+    // are drawn at exactly this size: going through the runtime's logical size
+    // and back rounds, and at a fractional devicePixelRatio (792 px at 1.25 is
+    // 633.6 logical, 634 rounded, 793 back) the frame came out a pixel wider
+    // than the canvas, and bibui-host.js drops a frame that does not fit.
+    internal int PhysicalWidth, PhysicalHeight;
     // The clipboard as the last paste event gave it: the runtime reads the
     // clipboard synchronously, and the browser only hands it over in a paste.
     internal string? PastedText;
@@ -67,8 +74,8 @@ public sealed class BrowserSurface : IDisposable
         rt.EndBuild();
         long t1 = Stopwatch.GetTimestamp();
 
-        int w = SurfaceOptions.PhysicalSize(rt.SurfaceWidth, rt.ScaleFactor);
-        int h = SurfaceOptions.PhysicalSize(rt.SurfaceHeight, rt.ScaleFactor);
+        int w = PhysicalWidth > 0 ? PhysicalWidth : SurfaceOptions.PhysicalSize(rt.SurfaceWidth, rt.ScaleFactor);
+        int h = PhysicalHeight > 0 ? PhysicalHeight : SurfaceOptions.PhysicalSize(rt.SurfaceHeight, rt.ScaleFactor);
         if (w <= 0 || h <= 0) return false;
         if (w != _w || h != _h)
         {
@@ -148,6 +155,7 @@ public static partial class BrowserHost
     {
         if (Surface(handle) is not { } s) return;
         s.Runtime.ResizeSurface(physicalWidth, physicalHeight, (float)scale);
+        (s.PhysicalWidth, s.PhysicalHeight) = (physicalWidth, physicalHeight);
         s.Dirty = true;
     }
 
