@@ -379,9 +379,11 @@ before it was published.
 
 - **`Ease`: the runtime's animation steps as pure functions.** A value and its
   target in, the value `dt` seconds on out, with nothing kept by the runtime:
-  `Ease.Exponential(current, target, speed, dt)` (for `float`, `Vector2` and
-  `Vector4`), `Ease.ExponentialRate(speed, dt)`, the share of the gap that
-  closes, and `Ease.Spring(ref current, ref velocity, target, spring, dt)`.
+  `Ease.Rate(speed, dt)`, the share of the gap closed in a frame, computed
+  once for every value eased at that speed; `Ease.Exponential(current, target,
+  rate)` and `Ease.Exponential(current, target, speed, dt)` (for `float`,
+  `Vector2` and `Vector4`); and `Ease.Spring(ref current, ref velocity, target,
+  spring, dt)`.
   `Animate`, hover and press, view scrolling, transitions and
   `DrawContext.Animate` all step through them, so a value eased by hand moves
   exactly as one the runtime eases (tested, frame by frame). Snapping to the

@@ -95,7 +95,7 @@ public sealed partial class BibuiRuntime
             if (entry.Touched != _eased.Frame) continue;
 
             var cell = entry.Value;
-            float next = instant ? cell.Target : Ease.Exponential(cell.Current, cell.Target, cell.Speed, Dt);
+            float next = Ease.Exponential(cell.Current, cell.Target, instant ? 1f : Ease.Rate(cell.Speed, Dt));
             if (MathF.Abs(cell.Target - next) <= cell.Epsilon)
             {
                 next = cell.Target;

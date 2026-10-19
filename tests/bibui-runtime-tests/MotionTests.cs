@@ -154,7 +154,9 @@ static class MotionTests
         {
             Near(0.5f, Ease.Exponential(0f, 1f, 20f, 1f / 20f), 1e-6f, "one halving");
             Near(0.75f, Ease.Exponential(0f, 1f, 20f, 2f / 20f), 1e-6f, "two halvings");
-            Near(0.5f, Ease.ExponentialRate(20f, 1f / 20f), 1e-6f, "the rate is the share of the gap closed");
+            Near(0.5f, Ease.Rate(20f, 1f / 20f), 1e-6f, "the rate is the share of the gap closed");
+            Eq(Ease.Exponential(3f, 7f, 20f, 1f / 60f), Ease.Exponential(3f, 7f, Ease.Rate(20f, 1f / 60f)), "a shared rate steps as the speed does");
+            Eq(7f, Ease.Exponential(3f, 7f, 1f), "a rate of 1 lands on the target");
             float half = Ease.Exponential(0f, 1f, 20f, 1f / 120f);
             Near(Ease.Exponential(0f, 1f, 20f, 1f / 60f), Ease.Exponential(half, 1f, 20f, 1f / 120f), 1e-6f, "two half frames reach where one frame does");
         });

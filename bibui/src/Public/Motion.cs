@@ -146,26 +146,46 @@ public static class Ease
     /// <summary>
     /// The share of the gap exponential approach closes in <paramref name="dt"/>
     /// seconds at <paramref name="speed"/> halvings of the gap a second:
-    /// 1 − 2^(−speed·dt). The same share every frame of the same length, so
-    /// the motion depends on time, not on how many frames it took.
+    /// 1 − 2^(−speed·dt). It depends only on the speed and the frame, so values
+    /// eased at one speed share it: compute it once a frame, then step each
+    /// value with <see cref="Exponential(float, float, float)"/>. A rate of 1
+    /// lands every value on its target at once, which is how to honour reduced
+    /// motion.
     /// </summary>
-    public static float ExponentialRate(float speed, float dt) => 1f - MathF.Pow(2f, -speed * dt);
+    public static float Rate(float speed, float dt) => 1f - MathF.Pow(2f, -speed * dt);
+
+    /// <summary>
+    /// <paramref name="current"/> moved towards <paramref name="target"/> by
+    /// <paramref name="rate"/>, the share of the gap closed this frame (from
+    /// <see cref="Rate"/>).
+    /// </summary>
+    public static float Exponential(float current, float target, float rate) =>
+        current + (target - current) * rate;
+
+    /// <inheritdoc cref="Exponential(float, float, float)"/>
+    public static Vector2 Exponential(Vector2 current, Vector2 target, float rate) =>
+        current + (target - current) * rate;
+
+    /// <inheritdoc cref="Exponential(float, float, float)"/>
+    public static Vector4 Exponential(Vector4 current, Vector4 target, float rate) =>
+        current + (target - current) * rate;
 
     /// <summary>
     /// <paramref name="current"/> moved towards <paramref name="target"/> by
     /// exponential approach: <paramref name="speed"/> halvings of the gap a
-    /// second, for <paramref name="dt"/> seconds.
+    /// second, for <paramref name="dt"/> seconds. For a value eased on its own;
+    /// many at one speed share a <see cref="Rate"/> instead.
     /// </summary>
     public static float Exponential(float current, float target, float speed, float dt) =>
-        current + (target - current) * ExponentialRate(speed, dt);
+        Exponential(current, target, Rate(speed, dt));
 
     /// <inheritdoc cref="Exponential(float, float, float, float)"/>
     public static Vector2 Exponential(Vector2 current, Vector2 target, float speed, float dt) =>
-        current + (target - current) * ExponentialRate(speed, dt);
+        Exponential(current, target, Rate(speed, dt));
 
     /// <inheritdoc cref="Exponential(float, float, float, float)"/>
     public static Vector4 Exponential(Vector4 current, Vector4 target, float speed, float dt) =>
-        current + (target - current) * ExponentialRate(speed, dt);
+        Exponential(current, target, Rate(speed, dt));
 
     // Springs are integrated in steps no longer than this, so a stiff spring
     // stays stable at 30 Hz as well as at 144.
