@@ -6,10 +6,11 @@ using static Bibui.Runtime.Scrollbar;
 namespace Bibui.Runtime;
 
 /// <summary>
-/// Where a scroll list is scrolled to, counted in rows. The caller keeps it
-/// between frames, beside the rows it scrolls, and hands it to
-/// <see cref="ScrollListExtensions.BeginScrollList"/> and
-/// <see cref="ScrollListExtensions.EndScrollList"/> by reference.
+/// Where a scroll list is scrolled to, counted in rows, and which rows are in
+/// sight. The caller keeps it between frames, beside the rows it scrolls, and
+/// hands it to <see cref="ScrollListExtensions.BeginScrollList"/> and
+/// <see cref="ScrollListExtensions.EndScrollList"/> by reference: it is all the
+/// list needs from one frame to the next.
 ///
 /// <see cref="Idx"/> and <see cref="Px"/> are the target: where the list comes
 /// to rest. <see cref="Off"/> is how far, in rows, the list is still shown from
@@ -29,14 +30,19 @@ public struct ScrollPt
     /// <summary>Rows still to travel to the target. Eased to 0 once a frame by the list.</summary>
     public float Off;
 
-    /// <summary>The list's: how many whole rows its view held, as of last frame.</summary>
-    public int ViewRows;
+    /// <summary>The first row in sight: build rows <see cref="First"/> up to, not including, <see cref="Last"/>. Set by Begin.</summary>
+    public int First { readonly get; internal set; }
 
-    /// <summary>The scrollbar's: the top row shown when its thumb was pressed.</summary>
-    public float Grab;
+    /// <summary>One past the last row in sight. Set by Begin.</summary>
+    public int Last { readonly get; internal set; }
 
-    /// <summary>The list's: the frame <see cref="Off"/> was last eased in, so a build run twice eases once.</summary>
-    public long Stepped;
+    /// <summary>How many whole rows the view holds, as of last frame. Set by Begin.</summary>
+    public int ViewRows { readonly get; internal set; }
+
+    internal float Grab;      // the scrollbar's: the top row shown when its thumb was pressed
+    internal long Stepped;    // the frame Off was last eased in, so a build run twice eases once
+    internal float Pitch;     // Begin's, for End
+    internal float MaxPx;     // Begin's, for End: the furthest the target goes
 
     /// <summary>
     /// Moves the target to row <paramref name="idx"/>, <paramref name="px"/>
@@ -49,34 +55,6 @@ public struct ScrollPt
         Off += (Idx - idx) + (Px - px) / pitch;
         Idx = idx;
         Px = px;
-    }
-}
-
-/// <summary>
-/// What <see cref="ScrollListExtensions.BeginScrollList"/> built: the rows to
-/// build, <see cref="Min"/> up to, not including, <see cref="Max"/>, and the
-/// <see cref="Area"/> to size. Hand it back to
-/// <see cref="ScrollListExtensions.EndScrollList"/>.
-/// </summary>
-public readonly struct ScrollListRows
-{
-    /// <summary>The first row in sight.</summary>
-    public readonly int Min;
-
-    /// <summary>One past the last row in sight.</summary>
-    public readonly int Max;
-
-    /// <summary>The list as a whole, the view and its bar beside it: the caller sizes it.</summary>
-    public readonly Box Area;
-
-    internal readonly Box View;
-    internal readonly float Pitch;
-    internal readonly float MaxPx;
-    internal readonly BibuiRuntime.ParentScope Parent;
-
-    internal ScrollListRows(int min, int max, Box area, Box view, float pitch, float maxPx, BibuiRuntime.ParentScope parent)
-    {
-        (Min, Max, Area, View, Pitch, MaxPx, Parent) = (min, max, area, view, pitch, maxPx, parent);
     }
 }
 
@@ -103,10 +81,9 @@ internal static class PartIds
 /// from the row count, not from the view's content.
 ///
 /// <code>
-/// var rows = runtime.BeginScrollList("log", ref scroll, pitch: 24f, count: lines.Count);
-/// for (int i = rows.Min; i &lt; rows.Max; i++) Row(lines[i]);
-/// runtime.EndScrollList(ref scroll, rows);
-/// rows.Area.FillX().FillY();
+/// runtime.BeginScrollList("log", ref scroll, pitch: 24f, count: lines.Count);
+/// for (int i = scroll.First; i &lt; scroll.Last; i++) Row(lines[i]);
+/// runtime.EndScrollList(ref scroll);
 /// </code>
 /// </summary>
 public static class ScrollListExtensions
@@ -116,11 +93,11 @@ public static class ScrollListExtensions
     private const float Unmeasured = 4096f;
 
     /// <summary>
-    /// Builds the list named <paramref name="id"/> under the parent in scope (an
-    /// area holding the view and its bar) and pushes the view as the parent for
-    /// the rows. Build rows <see cref="ScrollListRows.Min"/> up to
-    /// <see cref="ScrollListRows.Max"/>, each exactly <paramref name="pitch"/>
-    /// tall, then call <see cref="EndScrollList"/>.
+    /// Builds the list named <paramref name="id"/>, filling the parent in scope
+    /// with its view and the bar beside it, and pushes the view as the parent for
+    /// the rows. Build rows <see cref="ScrollPt.First"/> up to
+    /// <see cref="ScrollPt.Last"/>, each exactly <paramref name="pitch"/> tall,
+    /// then call <see cref="EndScrollList"/>.
     ///
     /// Once a frame it eases <paramref name="pt"/> towards its target at
     /// <see cref="MotionRates.Follow"/>, lets the bar move it, and keeps the
@@ -131,7 +108,7 @@ public static class ScrollListExtensions
     /// anything between rows. The list assumes every row has this same pitch.
     /// </param>
     /// <param name="count">How many rows there are.</param>
-    public static ScrollListRows BeginScrollList(this BibuiRuntime runtime, string id, ref ScrollPt pt, float pitch, int count)
+    public static void BeginScrollList(this BibuiRuntime runtime, string id, ref ScrollPt pt, float pitch, int count)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -141,6 +118,7 @@ public static class ScrollListExtensions
         // the wheel without moving on it: End turns the wheel into rows.
         Box area = runtime.BoxFromId(PartIds.Of(id, "-area"));
         area.ChildLayoutAxis = LayoutAxis.X;
+        (area.SizeX, area.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
         Box view = runtime.BoxFromId(id, InteractionKinds.Scroll | InteractionKinds.Clip, area);
         view.ChildLayoutAxis = LayoutAxis.Y;
         (view.SizeX, view.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
@@ -150,6 +128,7 @@ public static class ScrollListExtensions
         float height = view.Extent.Y > 0f ? view.Extent.Y : Unmeasured;
         float maxPx = MathF.Max(0f, count * pitch - height);   // the last row flush with the bottom
         pt.ViewRows = (int)(height / pitch);
+        (pt.Pitch, pt.MaxPx) = (pitch, maxPx);
 
         // Ease, once a frame however often the build runs, and to half a pixel.
         if (pt.Stepped != runtime.FrameCount)
@@ -167,29 +146,31 @@ public static class ScrollListExtensions
 
         // The rows in sight. Shown within range, so a list that shrank shows its end at once.
         float top = Math.Clamp(pt.Idx + pt.Px / pitch + pt.Off, 0f, maxPx / pitch);
-        int min = Math.Clamp((int)top, 0, count);
-        int max = Math.Clamp(min + (int)MathF.Ceiling(height / pitch) + 1, min, count);
-        view.ViewOffset = view.TargetViewOffset = new Vector2(0f, (top - min) * pitch);
+        pt.First = Math.Clamp((int)top, 0, count);
+        pt.Last = Math.Clamp(pt.First + (int)MathF.Ceiling(height / pitch) + 1, pt.First, count);
+        view.ViewOffset = view.TargetViewOffset = new Vector2(0f, (top - pt.First) * pitch);
 
-        return new ScrollListRows(min, max, area, view, pitch, maxPx, runtime.PushParent(view));
+        runtime.PushParent(view);   // EndScrollList pops it
     }
 
     /// <summary>
-    /// Pops the view <see cref="BeginScrollList"/> pushed, then takes the wheel
-    /// over it, after the rows so they have it first, and moves the target by
-    /// its pixels.
+    /// Pops the view <see cref="BeginScrollList"/> pushed, the parent in scope,
+    /// then takes the wheel over it, after the rows so they have it first, and
+    /// moves the target by its pixels.
     /// </summary>
-    public static void EndScrollList(this BibuiRuntime runtime, ref ScrollPt pt, ScrollListRows rows)
+    public static void EndScrollList(this BibuiRuntime runtime, ref ScrollPt pt)
     {
         ArgumentNullException.ThrowIfNull(runtime);
-        rows.Parent.Dispose();
-        float dy = runtime.InteractionsFor(rows.View).ScrollY;
-        if (dy == 0f) return;
+        if (runtime.ParentInScope is not Box { Claims: var claims } view || (claims & InteractionKinds.Scroll) == 0)
+            throw new InvalidOperationException("EndScrollList pops the list's view, and the parent in scope is not one: a parent pushed inside the list was not popped.");
+        new BibuiRuntime.ParentScope(runtime, view).Dispose();
 
+        float dy = runtime.InteractionsFor(view).ScrollY;
+        if (dy == 0f) return;
         float px = pt.Px + dy;
-        int carry = (int)MathF.Floor(px / rows.Pitch);
-        pt.Target(pt.Idx + carry, px - carry * rows.Pitch, rows.Pitch);
-        ClampTarget(ref pt, rows.Pitch, rows.MaxPx);
+        int carry = (int)MathF.Floor(px / pt.Pitch);
+        pt.Target(pt.Idx + carry, px - carry * pt.Pitch, pt.Pitch);
+        ClampTarget(ref pt, pt.Pitch, pt.MaxPx);
     }
 
     // The target kept between the first row at the top and the last row at the

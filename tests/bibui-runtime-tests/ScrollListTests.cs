@@ -20,22 +20,25 @@ static class ScrollListTests
         if (MathF.Abs(expected - actual) > tolerance) throw new Exception($"{message}: expected {expected} ± {tolerance} but got {actual}");
     }
 
-    /// <summary>A list of 1000 rows filling a 400×300 surface, the scroll point it keeps and the rows it last built.</summary>
+    /// <summary>A list of 1000 rows filling a 400×300 surface, and the scroll point it keeps.</summary>
     sealed class List
     {
         public ScrollPt Pt;
-        public ScrollListRows Rows;
         public readonly BibuiRuntime Runtime = BibuiRuntime.Create();
 
         public List()
         {
             Runtime.SetBuild(() =>
             {
-                Rows = Runtime.BeginScrollList("list", ref Pt, Pitch, Count);
-                for (int i = Rows.Min; i < Rows.Max; i++)
-                    Runtime.BoxFromId("row-" + i).FillX().Px(height: Pitch);
-                Runtime.EndScrollList(ref Pt, Rows);
-                return Rows.Area.FillX().FillY();
+                var panel = Runtime.BoxFromId("panel").FillX().FillY();
+                using (Runtime.PushParent(panel))
+                {
+                    Runtime.BeginScrollList("list", ref Pt, Pitch, Count);
+                    for (int i = Pt.First; i < Pt.Last; i++)
+                        Runtime.BoxFromId("row-" + i).FillX().Px(height: Pitch);
+                    Runtime.EndScrollList(ref Pt);
+                }
+                return panel;
             }, ThemeRegistry.Load("bibui-dark"), new SurfaceOptions { Width = 400, Height = (int)Height, ScaleFactor = 1f });
             Frame();
             Frame();   // laid out: the view has its height
@@ -64,7 +67,7 @@ static class ScrollListTests
             var list = new List();
             list.Pt = new ScrollPt { Idx = 50, Px = 10f, Off = 0f };
             list.Frame();
-            Eq((50, 50 + 16), (list.Rows.Min, list.Rows.Max), "row 50, half out of the top, to the one half in at the bottom");
+            Eq((50, 50 + 16), (list.Pt.First, list.Pt.Last), "row 50, half out of the top, to the one half in at the bottom");
             Near(10f, ((Box)list.Runtime.FindById("list")!).ViewOffset.Y, 0.01f, "offset by the pixels into row 50");
             Eq(15, list.Pt.ViewRows, "whole rows in view");
         });

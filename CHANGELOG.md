@@ -378,12 +378,12 @@ before it was published.
 ### Added
 
 - **ScrollList: rows of one height, of which only those in sight are built.**
-  `runtime.BeginScrollList(id, ref scroll, pitch, count)` builds a view and a
-  bar and returns the rows in sight, `Min` up to `Max`; build those, then
-  `runtime.EndScrollList(ref scroll, rows)`. The list scrolls by rows: a
-  `ScrollPt` the caller keeps holds the target row and the pixels into it, and
-  how far the list is still shown from there, which eases to 0 at
-  `Rates.Follow`. The wheel moves it by pixels, the thumb drags by rows from
+  `runtime.BeginScrollList(id, ref scroll, pitch, count)` fills the parent in
+  scope with a view and a bar and pushes the view; build rows `scroll.First` up
+  to `scroll.Last`, then `runtime.EndScrollList(ref scroll)` pops it. The list
+  scrolls by rows: the `ScrollPt` the caller keeps is all it needs between
+  frames, the target row and the pixels into it, how far the list is still
+  shown from there (eased to 0 at `Rates.Follow`), and the rows in sight. The wheel moves it by pixels, the thumb drags by rows from
   where it was pressed, and the track pages by the rows in view.
   `scroll.Target(idx, px, pitch)` moves it from the caller's side, keeping what
   is shown. A scrolling frame allocates nothing beyond the caller's rows. The
