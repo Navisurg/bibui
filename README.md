@@ -222,7 +222,8 @@ JIT for now.
 - Samples: [`samples/showcase`](samples/showcase) is an observatory console
   that uses most of bibui, [`samples/bibui-app`](samples/bibui-app) is a short
   interactive app, and [`samples/component-gallery`](samples/component-gallery)
-  has a page per component.
+  has a page per component. [`samples/counter-browser`](samples/counter-browser)
+  is the counter in the browser.
 
 ## Building from source
 
