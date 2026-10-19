@@ -59,9 +59,14 @@ for (const ratio of ratios) {
   let stderr = '';
   browser.stderr.on('data', d => { stderr += d; });
   try {
+    // The first start on a cold machine can take well over ten seconds (CI's
+    // did), so wait up to 30 for the debugging port to list a page.
     let targets;
-    for (let i = 0; i < 100 && !targets; i++) {
-      try { targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { await sleep(100); }
+    for (let i = 0; i < 300 && !targets; i++) {
+      try {
+        const list = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
+        if (list.some(t => t.type === 'page')) targets = list; else await sleep(100);
+      } catch { await sleep(100); }
     }
     if (!targets) throw new Error(`${chrome} did not start (exit ${browser.exitCode}): ${stderr.trim().split('\n').slice(-5).join(' | ')}`);
     const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
