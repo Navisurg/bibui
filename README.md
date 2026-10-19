@@ -25,7 +25,7 @@ supported yet. We expect macOS and, and maybe even iOS, to be supported in the n
 
 **Getting started with a bibui app**
 
-bibui provides a set of [meta-packages](bibui-apps/) for getting up and running with a bibui app. Each package pulls in everything you need to get started:
+bibui provides a set of [app-packages](bibui-apps/) for getting up and running with a bibui app. Each package pulls in everything you need to get started:
 
 ```bash
 dotnet new console -n Counter && cd Counter
@@ -113,39 +113,22 @@ You may instead reference directly `Bibui.Core`, `Bibui.Platform.Silk`,
 using var window = SilkWindow.Open(runtime, new("Counter", 360, 160));
 using var skia = new SkiaGlRenderer(window.Gl);
 
-while (SilkWindow.BeginFrame(window, runtime))
+while (SilkWindow.BeginFrame(window, runtime))  // window:   wait for a frame; Silk input → window.Events
 {
-    runtime.BeginBuild(window.Events);
-    Build();
-    runtime.EndBuild();
-    SilkWindow.BeginDraw(window);
+    runtime.BeginBuild(window.Events);          // runtime:  WindowEvent → BibUiEvent; start a new tree
+    Build();                                    // your app: build boxes and text, read interactions
+    runtime.EndBuild();                         // runtime:  lay the tree out, record runtime.DrawList
+    SilkWindow.BeginDraw(window);               // renderer: draw the DrawList into the GL framebuffer
     skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);
-    SilkWindow.EndFrame(window, runtime);
+    SilkWindow.EndDraw(window);                 // window:   swap; the frame is on screen
+    SilkWindow.EndFrame(window, runtime);       // window:   sleep until the next frame is due
 }
 ```
 
-The example demonstrates 4 layers in bibui:
+Each layer sends data only to layers below it, and each layer is then free to interpret the data however it likes. This enables us to easily have different combinations of platform layers to handle inputs, and renderers.
 
-1. Window and input layer (`BeginFrame`)
-2. Bibui UI tree building layer (`BeginBuild`)
-3. Draw layer (`EndBuild` + `BeginDraw`)
-4. Render layer (`EndDraw`/`EndFrame`)
-
-Data only flows from one layer down to the next with each layer being able
-to freely interpret the data. In the example above each layer does the following:
-
-1. `BeginFrame` consumes Silk input and window events and convert them to bibui `WindowEvent`
-2. `BeginBuild` converts the `WindowWevent` stream to intent-based `BibuiEvent`, and clears previous frames builder state. 
-`EndBuild` walks the UI tree and performs an auto layout pass to produce a final UI tree with coordinates for each node in the tree.
-3.  `EndBuild` walks the final resolved UI tree and issues [draw operations](bibui/src/Draw/DrawList.cs). This doesn't do any drawing, but specifies intent for what to be rendered in a separate pass.
-4. `Skia.Draw` takes the list of draw operations produced by the previous layer and interprets them into a series of Skia operations.
-`EndDraw` and `EndFrame` marks the end of drawing, and the screen is updated.
-
-This way, a new platform can be added by creating
-
-- A new platform layer that translates the platform events to `WindowEvent`s
-- A render layer that interprets the draw operations.
+Adding your own platform requires you to write a platform layer that produces `WindowEvent`s. You maybe be able to reuse any of the renderers, or write a new one for the platform that renders using the draw operations issued to a `DrawList`,
+[Bibui.Platform.Wayland](bibui-platform-wayland) and the managed rasterizer are both built this way.
 
 ### The test server
 
