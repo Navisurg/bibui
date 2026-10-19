@@ -45,7 +45,7 @@ internal static class DemoLayout
 
     private static UiNode SplitPanePage(BibuiRuntime runtime)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             DemoNavigation.Heading(runtime, "Two panes side by side: drag the divider between them");
@@ -145,7 +145,7 @@ internal static class DemoLayout
     {
         int index = Math.Clamp(state.CarouselIndex, 0, Slides.Length - 1);
         int go = index;
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             DemoNavigation.Heading(runtime, "One slide at a time: the arrows, the dots or the buttons move between them");
@@ -258,7 +258,7 @@ internal static class DemoLayout
 
     private static UiNode ButtonStripPage(BibuiRuntime runtime)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             DemoNavigation.Heading(runtime, "Each button lights under the pointer; this page gives them nothing to do");
@@ -309,7 +309,7 @@ internal static class DemoLayout
     private static UiNode StackPage(BibuiRuntime runtime, LayoutState state, Action<LayoutState> set)
     {
         bool clicked = false;
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             DemoNavigation.Heading(runtime, "Flow children (vertical, like Column)");
@@ -385,7 +385,7 @@ internal static class DemoLayout
     private static UiNode InteractiveBoxPage(BibuiRuntime runtime, LayoutState state, Action<LayoutState> set)
     {
         int clicks = 0;
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             DemoNavigation.Heading(runtime, "Clickable styled containers");
@@ -432,7 +432,7 @@ internal static class DemoLayout
     private static UiNode SectionPage(BibuiRuntime runtime, LayoutState state, Action<LayoutState> set)
     {
         string[] colormaps = ["inferno", "viridis", "magma", "plasma", "turbo"];
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text("Composite panel: header + stack of controls", ComponentSize.Sm, TextColor.Secondary);

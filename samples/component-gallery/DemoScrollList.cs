@@ -15,6 +15,9 @@ internal static class DemoScrollList
 
     internal static UiNode Build(BibuiRuntime runtime)
     {
+        var page = runtime.ColumnFit();
+        using var inPage = runtime.PushParent(page);
+
         var panel = runtime.BoxFromId("sl-panel");
         (panel.SizeX, panel.SizeY) = (SemanticSize.Pixels(420f), SemanticSize.Pixels(320f));
         panel.Style.Draw = DrawFlags.Border;
@@ -37,11 +40,13 @@ internal static class DemoScrollList
             runtime.EndScrollList(ref _scroll);
         }
 
-        return Arrange.Column(
-            Bold(runtime, $"{Rows:N0} rows of {Pitch}px, about {_scroll.Last - _scroll.First} built. Wheel, drag the thumb, or press the track to page.",
-                ComponentSize.Sm, TextColor.Secondary),
-            Arrange.Space(16f),
-            panel);
+        // The caption counts the rows the list built, so it is built after the
+        // list, and the panel is moved after it.
+        Bold(runtime, $"{Rows:N0} rows of {Pitch}px, about {_scroll.Last - _scroll.First} built. Wheel, drag the thumb, or press the track to page.",
+            ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(16f);
+        UiNode.PushIntoParent(page, panel);
+        return page;
     }
 
     // A row's label, made once per row rather than once a frame.

@@ -8,14 +8,21 @@ namespace ComponentGallery;
 // lane beside the view rather than covering it.
 internal static class DemoScrollbar
 {
-    internal static UiNode Build(BibuiRuntime runtime) => Arrange.Column(
-        Caption(runtime, "Vertical: 40 rows in a 200px view. Wheel, drag the thumb, or press the track to page."),
-        Arrange.Space(16f),
-        Vertical(runtime),
-        Arrange.Space(16f),
-        Caption(runtime, "Horizontal: 24 cards in a 360px strip. Shift+wheel, drag the thumb, or press the track to page."),
-        Arrange.Space(16f),
-        Horizontal(runtime));
+    internal static UiNode Build(BibuiRuntime runtime)
+    {
+        var page = runtime.ColumnFit();
+        using (runtime.PushParent(page))
+        {
+            Caption(runtime, "Vertical: 40 rows in a 200px view. Wheel, drag the thumb, or press the track to page.");
+            runtime.Gap(16f);
+            Vertical(runtime);
+            runtime.Gap(16f);
+            Caption(runtime, "Horizontal: 24 cards in a 360px strip. Shift+wheel, drag the thumb, or press the track to page.");
+            runtime.Gap(16f);
+            Horizontal(runtime);
+        }
+        return page;
+    }
 
     private static UiNode Vertical(BibuiRuntime runtime)
     {

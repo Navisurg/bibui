@@ -49,26 +49,32 @@ internal static class DemoTexture
         Update(s_grey, s_grey8);
         runtime.RequestFrame();
 
-        return Arrange.Column(
-            Bold(runtime, "Made once, drawn scaled up", ComponentSize.Sm, TextColor.Secondary),
-            Arrange.Space(10f),
-            Picture(s_still),
-            Arrange.Space(22f),
-            Bold(runtime, "One Stream texture, its pixels updated every frame", ComponentSize.Sm, TextColor.Secondary),
-            Arrange.Space(10f),
-            Picture(s_moving),
-            Arrange.Space(22f),
-            Bold(runtime, "An R8 Stream texture: one byte a pixel, drawn grey", ComponentSize.Sm, TextColor.Secondary),
-            Arrange.Space(10f),
-            Picture(s_grey));
+        var page = runtime.ColumnFit();
+        using (runtime.PushParent(page))
+        {
+            Bold(runtime, "Made once, drawn scaled up", ComponentSize.Sm, TextColor.Secondary);
+            runtime.Gap(10f);
+            Picture(runtime, s_still);
+            runtime.Gap(22f);
+            Bold(runtime, "One Stream texture, its pixels updated every frame", ComponentSize.Sm, TextColor.Secondary);
+            runtime.Gap(10f);
+            Picture(runtime, s_moving);
+            runtime.Gap(22f);
+            Bold(runtime, "An R8 Stream texture: one byte a pixel, drawn grey", ComponentSize.Sm, TextColor.Secondary);
+            runtime.Gap(10f);
+            Picture(runtime, s_grey);
+        }
+        return page;
     }
 
     // Nearest sampling: each texel stays a sharp square at 6x.
-    private static Box Picture(TextureHandle texture) => new Box
+    private static Box Picture(BibuiRuntime runtime, TextureHandle texture)
     {
-        Draw = (_, ctx) => ctx.DrawTexture(texture, ctx.Rect,
-            new Paint { Fill = Rgba.Black, Filter = FilterQuality.None, Antialias = false }),
-    }.Px(Size * 6f, Size * 6f);
+        var picture = runtime.Box().Px(Size * 6f, Size * 6f);
+        picture.Draw = (_, ctx) => ctx.DrawTexture(texture, ctx.Rect,
+            new Paint { Fill = Rgba.Black, Filter = FilterQuality.None, Antialias = false });
+        return picture;
+    }
 
     private static TextureHandle Create(TextureFormat format, TextureKind kind, byte[] pixels)
         => SkiaGl?.CreateTexture(format, kind, Size, Size, pixels)

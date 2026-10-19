@@ -39,14 +39,7 @@ internal static class DemoInputs
     "Checkbox" => CheckboxPage(runtime, state, set),
     "TextField" => TextFieldPage(runtime),
 
-    "Switch" => Arrange.Column(
-        Bold(runtime, "Toggle a setting on or off", ComponentSize.Sm, TextColor.Secondary),
-        Arrange.Space(16f),
-        SwitchToggle(runtime, state, set),
-        Arrange.Space(16f),
-        runtime.Text(state.SwitchChecked ? "Notifications enabled" : "Notifications disabled", ComponentSize.Sm, state.SwitchChecked ? TextColor.Accent : TextColor.Secondary),
-        Arrange.Space(16f),
-        DisabledSwitch(runtime)),
+    "Switch" => SwitchPage(runtime, state, set),
 
     "RadioGroup" => RadioGroupPage(runtime, state, set),
 
@@ -74,6 +67,22 @@ internal static class DemoInputs
     /// the caller applies it. Nothing round-trips through a local, and a record
     /// property is no longer awkward to pass.
     /// </summary>
+    private static UiNode SwitchPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
+    {
+        var page = runtime.ColumnFit();
+        using (runtime.PushParent(page))
+        {
+            Bold(runtime, "Toggle a setting on or off", ComponentSize.Sm, TextColor.Secondary);
+            runtime.Gap(16f);
+            SwitchToggle(runtime, state, set);
+            runtime.Gap(16f);
+            runtime.Text(state.SwitchChecked ? "Notifications enabled" : "Notifications disabled", ComponentSize.Sm, state.SwitchChecked ? TextColor.Accent : TextColor.Secondary);
+            runtime.Gap(16f);
+            DisabledSwitch(runtime);
+        }
+        return page;
+    }
+
     private static UiNode SwitchToggle(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
         var sw = runtime.Switch("demo-switch", state.SwitchChecked, label: "Enable notifications");
@@ -98,7 +107,7 @@ internal static class DemoInputs
     // page's to build; these are plain runtime.SelectItem rows.
     private static UiNode SliderPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Drag to select a value in a range");
@@ -117,7 +126,7 @@ internal static class DemoInputs
 
     private static UiNode SelectPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Choose one from a list");
@@ -154,7 +163,7 @@ internal static class DemoInputs
 
     private static UiNode CheckboxPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Interactive checkbox");
@@ -178,7 +187,7 @@ internal static class DemoInputs
 
     private static UiNode ToggleGroupPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Group of toggles (single-select)");
@@ -197,7 +206,7 @@ internal static class DemoInputs
     // and mark are, in bytes — what an application holds and edits.
     private static UiNode TextFieldPage(BibuiRuntime runtime)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Live: press to focus, then type");
@@ -350,7 +359,7 @@ internal static class DemoInputs
 
     private static UiNode InputPage(BibuiRuntime runtime)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Basic input");
@@ -380,7 +389,7 @@ internal static class DemoInputs
 
     private static UiNode TextareaPage(BibuiRuntime runtime)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Multi-line text input");
@@ -466,7 +475,7 @@ internal static class DemoInputs
 
     private static UiNode ButtonPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Caption(runtime, "Variants");
@@ -640,7 +649,7 @@ internal static class DemoInputs
 
     private static UiNode RadioGroupPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Select one option");
@@ -687,7 +696,7 @@ internal static class DemoInputs
 
     private static UiNode TogglePage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Pressable toggle button");
@@ -882,7 +891,7 @@ internal static class DemoInputs
 
     private static UiNode CalendarPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var page = Arrange.Column().FillX();
+        var page = runtime.ColumnFillX();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Standalone calendar picker");
@@ -910,7 +919,7 @@ internal static class DemoInputs
 
     private static UiNode DatePickerPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Pick a date from a popover calendar");
@@ -952,7 +961,7 @@ internal static class DemoInputs
 
     private static UiNode TimePickerPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Select a time");
@@ -1081,7 +1090,7 @@ internal static class DemoInputs
 
     private static UiNode ColorPickerPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Pick a color from a palette");

@@ -44,7 +44,7 @@ internal static class DemoMarkdown
 
     internal static UiNode Page(BibuiRuntime runtime)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Bold(runtime, "Edit the source on the left; the viewer draws it as you type. Escape stops editing.",

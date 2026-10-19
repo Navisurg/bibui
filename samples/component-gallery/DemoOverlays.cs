@@ -97,7 +97,7 @@ internal static class DemoOverlays
     private static UiNode PopoverPage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
         const string id = "demo-popover-content";
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Its button opens and closes it, and a press elsewhere closes it");
@@ -137,7 +137,7 @@ internal static class DemoOverlays
     private static UiNode HoverPreviewPage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
         const string id = "demo-hover-preview-content";
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Point at @fernway, or click it to pin the preview open");
@@ -198,7 +198,7 @@ internal static class DemoOverlays
 
     private static UiNode TooltipPage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Point at a button, or pin the first hint open");
@@ -261,7 +261,7 @@ internal static class DemoOverlays
     private static UiNode DropdownMenuPage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
         const string id = "demo-dropdown-menu-list";
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "A menu that opens under its button");
@@ -334,7 +334,7 @@ internal static class DemoOverlays
     private static UiNode ContextMenuPage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
         const string id = "demo-context-menu-list";
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Right-click in the box: the menu opens where you pressed");
@@ -398,7 +398,7 @@ internal static class DemoOverlays
     // field opens it, the button or Escape closes it.
     private static UiNode CommandPalettePage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Press the field or the button, then type; Escape closes it");
@@ -519,7 +519,7 @@ internal static class DemoOverlays
     // A page whose button opens a modal, and says whether it is open.
     private static Box ModalTrigger(BibuiRuntime runtime, string heading, string id, string name, bool open, Action toggle)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, heading);
@@ -605,7 +605,7 @@ internal static class DemoOverlays
     // with a grab handle. Each has its own button and its own state.
     private static UiNode DrawerPage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Open either one; the cross or a press beside it closes it");

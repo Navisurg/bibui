@@ -147,7 +147,7 @@ internal static class DemoNavigation
 
     private static UiNode TabsPage(BibuiRuntime runtime, NavigationState state, Action<NavigationState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "One panel at a time, chosen by its tab");
@@ -183,7 +183,7 @@ internal static class DemoNavigation
 
     private static UiNode AccordionPage(BibuiRuntime runtime, NavigationState state, Action<NavigationState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Sections that open one at a time");
@@ -217,7 +217,7 @@ internal static class DemoNavigation
 
     private static UiNode ExpanderPage(BibuiRuntime runtime, NavigationState state, Action<NavigationState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Press the header, or the button, to open and close it");
@@ -248,7 +248,7 @@ internal static class DemoNavigation
     private static UiNode NavBarPage(BibuiRuntime runtime, NavigationState state, Action<NavigationState> set)
     {
         string? picked = null;
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Press a link, or a button below it, to make it current");
@@ -313,7 +313,7 @@ internal static class DemoNavigation
     private static UiNode SidebarPage(BibuiRuntime runtime, NavigationState state, Action<NavigationState> set)
     {
         string? picked = null;
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Press an entry to make it current");
@@ -366,7 +366,7 @@ internal static class DemoNavigation
 
     private static UiNode BreadcrumbPage(BibuiRuntime runtime)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Where you are, and the places above it");
@@ -407,7 +407,7 @@ internal static class DemoNavigation
     {
         int current = state.PaginationPage;
         int? go = null;
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "Step through numbered pages");
@@ -499,7 +499,7 @@ internal static class DemoNavigation
 
     private static UiNode MenuBarPage(BibuiRuntime runtime, NavigationState state, Action<NavigationState> set)
     {
-        var page = Arrange.Column();
+        var page = runtime.ColumnFit();
         using (runtime.PushParent(page))
         {
             Heading(runtime, "File, Edit, View: menus along the top of a window");
