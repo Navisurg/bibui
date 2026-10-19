@@ -350,7 +350,7 @@ public readonly ref partial struct DrawContext
         // to both callers.
         cell.Next = _ctx.ReducedMotion
             ? target
-            : cell.Current + (target - cell.Current) * (1f - MathF.Pow(2f, -speed * _ctx.Dt));
+            : Ease.Exponential(cell.Current, target, speed, _ctx.Dt);
         return cell.Current;
     }
 

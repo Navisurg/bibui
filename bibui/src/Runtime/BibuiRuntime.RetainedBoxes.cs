@@ -229,7 +229,7 @@ public sealed partial class BibuiRuntime
         // faster than DrawContext.Animate's 12, since a hover that takes half a
         // second to arrive reads as lag, not as easing.
         var motion = _theme.Motion;
-        float rate = Instant ? 1f : 1f - MathF.Pow(2f, -motion.Hover * Dt);
+        float rate = Instant ? 1f : Ease.ExponentialRate(motion.Hover, Dt);
         bool animating = false;
 
         foreach (var (id, entry) in _retainedBoxes.Entries)

@@ -377,6 +377,16 @@ before it was published.
 
 ### Added
 
+- **`Ease`: the runtime's animation steps as pure functions.** A value and its
+  target in, the value `dt` seconds on out, with nothing kept by the runtime:
+  `Ease.Exponential(current, target, speed, dt)` (for `float`, `Vector2` and
+  `Vector4`), `Ease.ExponentialRate(speed, dt)`, the share of the gap that
+  closes, and `Ease.Spring(ref current, ref velocity, target, spring, dt)`.
+  `Animate`, hover and press, view scrolling, transitions and
+  `DrawContext.Animate` all step through them, so a value eased by hand moves
+  exactly as one the runtime eases (tested, frame by frame). Snapping to the
+  target, reduced motion and `MotionEasing.None` stay with the caller.
+
 - **Groups: blend modes and colour matrices.** `ctx.PushBlendMode(mode)`
   draws until `PopBlendMode` into a layer and composites it onto what is
   under it with the mode: `SrcOver`, `Multiply`, `Plus`, `Screen`, `Overlay`

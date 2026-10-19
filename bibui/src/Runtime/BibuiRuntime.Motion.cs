@@ -437,10 +437,6 @@ public sealed partial class BibuiRuntime
         return animating;
     }
 
-    // Springs are integrated in steps no longer than this, so a stiff spring
-    // stays stable at 30 Hz as well as at 144.
-    private const float SpringStep = 1f / 240f;
-
     /// <summary>Moves <paramref name="cell"/> one frame along its transition. True while it has not arrived.</summary>
     private static bool Step(MotionCell cell, float dt, bool instant)
     {
@@ -469,17 +465,7 @@ public sealed partial class BibuiRuntime
 
             case TransitionKind.Spring:
             {
-                var s = tr.Spring;
-                float step = Math.Min(dt, moving);
-                int n = Math.Max(1, (int)MathF.Ceiling(step / SpringStep));
-                float h = step / n;
-                for (int i = 0; i < n; i++)
-                {
-                    // Semi-implicit Euler: velocity first, then position from it.
-                    Vector4 force = -s.Stiffness * (cell.Current - cell.Target) - s.Damping * cell.Velocity;
-                    cell.Velocity += force / s.Mass * h;
-                    cell.Current += cell.Velocity * h;
-                }
+                Ease.Spring(ref cell.Current, ref cell.Velocity, cell.Target, tr.Spring, Math.Min(dt, moving));
                 if (MaxAbs(cell.Current - cell.Target) <= cell.Epsilon && MaxAbs(cell.Velocity) <= cell.Epsilon * 10f)
                 {
                     Arrive(cell);
@@ -490,8 +476,7 @@ public sealed partial class BibuiRuntime
 
             default:   // Exponential
             {
-                float rate = 1f - MathF.Pow(2f, -tr.Speed * dt);
-                cell.Current += (cell.Target - cell.Current) * rate;
+                cell.Current = Ease.Exponential(cell.Current, cell.Target, tr.Speed, dt);
                 if (MaxAbs(cell.Target - cell.Current) <= cell.Epsilon) { Arrive(cell); return false; }
                 return true;
             }

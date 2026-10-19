@@ -148,6 +148,48 @@ static class MotionTests
             Near(At(30f), At(120f), 1e-4f, "half the duration at either rate");
         });
 
+        // ── Ease: the steps, as pure functions ──────────────────────────────
+
+        run("Ease: Animate steps exactly as Ease.Exponential does", () =>
+        {
+            float target = 0f;
+            var runtime = Asking(rt => rt.Animate("e", "x", target, speed: 12f));
+            Frames(runtime, 1);
+            target = 100f;
+            float byHand = 0f;
+            for (int i = 0; i < 10; i++)
+            {
+                Frames(runtime, 1);
+                byHand = Ease.Exponential(byHand, 100f, 12f, runtime.Dt);
+                Eq(byHand, runtime.Animate("e", "x", 100f, speed: 12f), $"frame {i + 1}");
+            }
+        });
+
+        run("Ease: a spring transition steps exactly as Ease.Spring does", () =>
+        {
+            float target = 0f;
+            var tr = Transition.OnSpring(Spring.Gentle);
+            var runtime = Asking(rt => rt.Animate("e", "x", target, tr));
+            Frames(runtime, 1);
+            target = 100f;
+            float byHand = 0f, velocity = 0f;
+            for (int i = 0; i < 10; i++)
+            {
+                Frames(runtime, 1);
+                Ease.Spring(ref byHand, ref velocity, 100f, Spring.Gentle, runtime.Dt);
+                Eq(byHand, runtime.Animate("e", "x", 100f, tr), $"frame {i + 1}");
+            }
+        });
+
+        run("Ease: exponential approach goes by time, not by frames", () =>
+        {
+            float once = Ease.Exponential(0f, 1f, 20f, 1f / 60f);
+            float twice = Ease.Exponential(Ease.Exponential(0f, 1f, 20f, 1f / 120f), 1f, 20f, 1f / 120f);
+            Near(once, twice, 1e-6f, "two half frames reach where one whole frame does");
+            Near(0.5f, Ease.ExponentialRate(20f, 1f / 20f), 1e-6f, "speed is halvings of the gap a second");
+            Eq(new System.Numerics.Vector2(once, 2f * once), Ease.Exponential(System.Numerics.Vector2.Zero, new System.Numerics.Vector2(1f, 2f), 20f, 1f / 60f), "a vector eases each component the same way");
+        });
+
         // ── Spring ──────────────────────────────────────────────────────────
 
         run("Spring: settles exactly on its target and stops asking for frames", () =>

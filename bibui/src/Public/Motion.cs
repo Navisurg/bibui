@@ -128,6 +128,80 @@ public readonly record struct Spring(float Stiffness, float Damping, float Mass 
     }
 }
 
+/// <summary>
+/// The steps the runtime's animations take each frame, as pure functions: a
+/// value and its target in, the value <paramref name="dt"/> seconds on out.
+/// <c>Animate</c>, hover and press, view scrolling and transitions all step
+/// through these, so a value eased by hand moves exactly as one the runtime
+/// eases, and needs nothing kept by the runtime.
+///
+/// None of them arrives on its own: exponential approach only nears its
+/// target. Snap to the target once the gap is under what anyone can see (0.01
+/// of a 0..1 fade, half a pixel of an offset), as the runtime does. Reduced
+/// motion and <see cref="Theming.MotionEasing.None"/> are the caller's to
+/// honour, by taking the target at once.
+/// </summary>
+public static class Ease
+{
+    /// <summary>
+    /// The share of the gap exponential approach closes in <paramref name="dt"/>
+    /// seconds at <paramref name="speed"/> halvings of the gap a second:
+    /// 1 − 2^(−speed·dt). The same share every frame of the same length, so
+    /// the motion depends on time, not on how many frames it took.
+    /// </summary>
+    public static float ExponentialRate(float speed, float dt) => 1f - MathF.Pow(2f, -speed * dt);
+
+    /// <summary>
+    /// <paramref name="current"/> moved towards <paramref name="target"/> by
+    /// exponential approach: <paramref name="speed"/> halvings of the gap a
+    /// second, for <paramref name="dt"/> seconds.
+    /// </summary>
+    public static float Exponential(float current, float target, float speed, float dt) =>
+        current + (target - current) * ExponentialRate(speed, dt);
+
+    /// <inheritdoc cref="Exponential(float, float, float, float)"/>
+    public static Vector2 Exponential(Vector2 current, Vector2 target, float speed, float dt) =>
+        current + (target - current) * ExponentialRate(speed, dt);
+
+    /// <inheritdoc cref="Exponential(float, float, float, float)"/>
+    public static Vector4 Exponential(Vector4 current, Vector4 target, float speed, float dt) =>
+        current + (target - current) * ExponentialRate(speed, dt);
+
+    // Springs are integrated in steps no longer than this, so a stiff spring
+    // stays stable at 30 Hz as well as at 144.
+    internal const float SpringStep = 1f / 240f;
+
+    /// <summary>
+    /// <paramref name="current"/> and its <paramref name="velocity"/> moved
+    /// <paramref name="dt"/> seconds along <paramref name="spring"/>, pulled
+    /// towards <paramref name="target"/>, each component on its own. The
+    /// velocity is the spring's state: keep it with the value, and a new target
+    /// bends the path instead of restarting it.
+    /// </summary>
+    public static void Spring(ref Vector4 current, ref Vector4 velocity, Vector4 target, Spring spring, float dt)
+    {
+        if (dt <= 0f) return;
+        int n = Math.Max(1, (int)MathF.Ceiling(dt / SpringStep));
+        float h = dt / n;
+        for (int i = 0; i < n; i++)
+        {
+            // Semi-implicit Euler: velocity first, then position from it.
+            Vector4 force = -spring.Stiffness * (current - target) - spring.Damping * velocity;
+            velocity += force / spring.Mass * h;
+            current += velocity * h;
+        }
+    }
+
+    /// <inheritdoc cref="Spring(ref Vector4, ref Vector4, Vector4, Bibui.Spring, float)"/>
+    public static void Spring(ref float current, ref float velocity, float target, Spring spring, float dt)
+    {
+        var c = new Vector4(current, 0f, 0f, 0f);
+        var v = new Vector4(velocity, 0f, 0f, 0f);
+        Spring(ref c, ref v, new Vector4(target, 0f, 0f, 0f), spring, dt);
+        (current, velocity) = (c.X, v.X);
+    }
+}
+
 /// <summary>Which of the ways a <see cref="Transition"/> travels.</summary>
 public enum TransitionKind
 {
