@@ -210,6 +210,7 @@ public sealed partial class BibuiRuntime
         if (events is not null) ApplyInput(events);
         _frameSurface = _surface;
         _frameTheme = PaintedTheme(_theme);
+        Rates = MotionRates.From(_theme.Motion, Dt, Instant);
         _buildStarted = Stopwatch.GetTimestamp();
         BeginDropDowns();
         ResetForBuild(_root);
@@ -330,6 +331,7 @@ public sealed partial class BibuiRuntime
     {
         Dt              = Dt,
         ReducedMotion   = ReducedMotion,
+        Rates           = Rates,
     };
 
     /// <summary>

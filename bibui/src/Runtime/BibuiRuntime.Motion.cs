@@ -6,7 +6,7 @@ namespace Bibui.Runtime;
 public sealed partial class BibuiRuntime
 {
     // ── Motion ────────────────────────────────────────────────────────────────
-    // Animate(id, property, target, speed) eases by exponential approach and
+    // Animate(id, property, target, rate) eases by exponential approach and
     // nothing else. This is the rest: a value that takes a set time along a
     // named curve, or rides a spring that keeps its speed when the target
     // moves; a colour crossfading in Oklab; something that has to stay on
@@ -38,6 +38,19 @@ public sealed partial class BibuiRuntime
     }
 
     private bool _reducedMotion = Environment.GetEnvironmentVariable("BIBUI_REDUCED_MOTION") is "1" or "true";
+
+    /// <summary>
+    /// This frame's rates, one per kind of motion, computed once as the build
+    /// begins: step a value of that kind with <see cref="Ease.Exponential(float, float, float)"/>
+    /// and it moves as the runtime's own do. All 1 when motion is instant.
+    /// </summary>
+    public MotionRates Rates { get; private set; }
+
+    /// <summary>
+    /// The rate for a speed of the caller's own (halvings of the gap a second)
+    /// this frame: 1 when motion is instant, as every rate in <see cref="Rates"/> is.
+    /// </summary>
+    public float Rate(float speed) => Instant ? 1f : Ease.Rate(speed, Dt);
 
     /// <summary>Whether this frame snaps rather than travels.</summary>
     private bool Instant => _reducedMotion || _theme.Motion.Easing == MotionEasing.None;
@@ -476,7 +489,7 @@ public sealed partial class BibuiRuntime
 
             default:   // Exponential
             {
-                cell.Current = Ease.Exponential(cell.Current, cell.Target, tr.Speed, dt);
+                cell.Current = Ease.Exponential(cell.Current, cell.Target, Ease.Rate(tr.Speed, dt));
                 if (MaxAbs(cell.Target - cell.Current) <= cell.Epsilon) { Arrive(cell); return false; }
                 return true;
             }

@@ -21,7 +21,7 @@ internal sealed partial class App
     private void BuildSettings(BibuiRuntime rt)
     {
         // Asked every frame, open or not, so closing glides as opening does.
-        float shown = rt.Animate("settings", "shown", SettingsOpen ? 1f : 0f, rt.Theme.Motion.Toggle);
+        float shown = rt.Animate("settings", "shown", SettingsOpen ? 1f : 0f, rt.Rates.Toggle);
         if (shown <= 0.002f) return;
 
         const float width = 392f;

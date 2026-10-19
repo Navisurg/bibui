@@ -130,34 +130,31 @@ public readonly record struct Spring(float Stiffness, float Damping, float Mass 
 
 /// <summary>
 /// The steps the runtime's animations take each frame, as pure functions: a
-/// value and its target in, the value <paramref name="dt"/> seconds on out.
-/// <c>Animate</c>, hover and press, view scrolling and transitions all step
-/// through these, so a value eased by hand moves exactly as one the runtime
-/// eases, and needs nothing kept by the runtime.
+/// value and its target in, the value one frame on out. <c>Animate</c>, hover
+/// and press, view scrolling and transitions all step through these, so a value
+/// eased by hand moves exactly as one the runtime eases, and needs nothing kept
+/// by the runtime.
 ///
-/// None of them arrives on its own: exponential approach only nears its
-/// target. Snap to the target once the gap is under what anyone can see (0.01
-/// of a 0..1 fade, half a pixel of an offset), as the runtime does. Reduced
-/// motion and <see cref="Theming.MotionEasing.None"/> are the caller's to
-/// honour, by taking the target at once.
+/// Exponential approach steps by a rate, the share of the gap closed this
+/// frame. Take it from <see cref="Runtime.BibuiRuntime.Rates"/>, which names
+/// one per kind of motion, so everything of a kind moves alike; a rate of 1
+/// lands on the target at once. None of them arrives on its own: snap to the
+/// target once the gap is under what anyone can see (0.01 of a 0..1 fade, half
+/// a pixel of an offset), as the runtime does.
 /// </summary>
 public static class Ease
 {
     /// <summary>
     /// The share of the gap exponential approach closes in <paramref name="dt"/>
     /// seconds at <paramref name="speed"/> halvings of the gap a second:
-    /// 1 − 2^(−speed·dt). It depends only on the speed and the frame, so values
-    /// eased at one speed share it: compute it once a frame, then step each
-    /// value with <see cref="Exponential(float, float, float)"/>. A rate of 1
-    /// lands every value on its target at once, which is how to honour reduced
-    /// motion.
+    /// 1 − 2^(−speed·dt). It depends only on the speed and the frame, so
+    /// everything eased at one speed shares it, computed once.
     /// </summary>
     public static float Rate(float speed, float dt) => 1f - MathF.Pow(2f, -speed * dt);
 
     /// <summary>
     /// <paramref name="current"/> moved towards <paramref name="target"/> by
-    /// <paramref name="rate"/>, the share of the gap closed this frame (from
-    /// <see cref="Rate"/>).
+    /// <paramref name="rate"/>, the share of the gap closed this frame.
     /// </summary>
     public static float Exponential(float current, float target, float rate) =>
         current + (target - current) * rate;
@@ -169,23 +166,6 @@ public static class Ease
     /// <inheritdoc cref="Exponential(float, float, float)"/>
     public static Vector4 Exponential(Vector4 current, Vector4 target, float rate) =>
         current + (target - current) * rate;
-
-    /// <summary>
-    /// <paramref name="current"/> moved towards <paramref name="target"/> by
-    /// exponential approach: <paramref name="speed"/> halvings of the gap a
-    /// second, for <paramref name="dt"/> seconds. For a value eased on its own;
-    /// many at one speed share a <see cref="Rate"/> instead.
-    /// </summary>
-    public static float Exponential(float current, float target, float speed, float dt) =>
-        Exponential(current, target, Rate(speed, dt));
-
-    /// <inheritdoc cref="Exponential(float, float, float, float)"/>
-    public static Vector2 Exponential(Vector2 current, Vector2 target, float speed, float dt) =>
-        Exponential(current, target, Rate(speed, dt));
-
-    /// <inheritdoc cref="Exponential(float, float, float, float)"/>
-    public static Vector4 Exponential(Vector4 current, Vector4 target, float speed, float dt) =>
-        Exponential(current, target, Rate(speed, dt));
 
     // Springs are integrated in steps no longer than this, so a stiff spring
     // stays stable at 30 Hz as well as at 144.
@@ -220,6 +200,26 @@ public static class Ease
         Spring(ref c, ref v, new Vector4(target, 0f, 0f, 0f), spring, dt);
         (current, velocity) = (c.X, v.X);
     }
+}
+
+/// <summary>
+/// This frame's rates for exponential approach (<see cref="Ease.Exponential(float, float, float)"/>),
+/// one per kind of motion, from the theme's <see cref="Theming.MotionTokens"/>
+/// and the frame's dt. The runtime computes them once a frame
+/// (<see cref="Runtime.BibuiRuntime.Rates"/>) and everything of a kind steps
+/// by the same one. Every rate is 1 when motion is instant (reduced motion, or
+/// <see cref="Theming.MotionEasing.None"/>), so a caller never checks for it.
+/// </summary>
+/// <param name="Hover">Feedback under the pointer: a box going hot, or pressed.</param>
+/// <param name="Follow">A position chasing what the input did: a view's scroll offset, the caret.</param>
+/// <param name="Toggle">A control or panel crossing between two states: a switch's knob, a panel opening.</param>
+/// <param name="Default">Anything else; what <c>Animate</c> takes when given no rate.</param>
+public readonly record struct MotionRates(float Hover, float Follow, float Toggle, float Default)
+{
+    /// <summary>The rates for <paramref name="motion"/>'s speeds over <paramref name="dt"/>, or all 1 when <paramref name="instant"/>.</summary>
+    public static MotionRates From(Theming.MotionTokens motion, float dt, bool instant) => instant
+        ? new(1f, 1f, 1f, 1f)
+        : new(Ease.Rate(motion.Hover, dt), Ease.Rate(motion.Follow, dt), Ease.Rate(motion.Toggle, dt), Ease.Rate(motion.Default, dt));
 }
 
 /// <summary>Which of the ways a <see cref="Transition"/> travels.</summary>

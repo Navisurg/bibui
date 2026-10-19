@@ -377,17 +377,27 @@ before it was published.
 
 ### Added
 
-- **`Ease`: the runtime's animation steps as pure functions.** A value and its
-  target in, the value `dt` seconds on out, with nothing kept by the runtime:
-  `Ease.Rate(speed, dt)`, the share of the gap closed in a frame, computed
-  once for every value eased at that speed; `Ease.Exponential(current, target,
-  rate)` and `Ease.Exponential(current, target, speed, dt)` (for `float`,
-  `Vector2` and `Vector4`); and `Ease.Spring(ref current, ref velocity, target,
-  spring, dt)`.
-  `Animate`, hover and press, view scrolling, transitions and
-  `DrawContext.Animate` all step through them, so a value eased by hand moves
-  exactly as one the runtime eases (tested, frame by frame). Snapping to the
-  target, reduced motion and `MotionEasing.None` stay with the caller.
+- **One rate per kind of motion, and everything eases by it (breaking).**
+  `runtime.Rates` holds this frame's rates for exponential approach, computed
+  once as the build begins from the theme's motion speeds: `Hover` (hot and
+  pressed boxes), `Follow` (a view's scroll offset, the caret), `Toggle` (a
+  switch's knob, a panel opening) and `Default` (anything else). Every rate is
+  1 under reduced motion or `MotionEasing.None`, so no caller checks for it.
+  `runtime.Rate(speed)` gives one for a speed of your own, the same way.
+  - `Ease.Exponential(current, target, rate)` (`float`, `Vector2`, `Vector4`),
+    `Ease.Rate(speed, dt)` and `Ease.Spring(ref current, ref velocity, target,
+    spring, dt)` are the steps as pure functions; the runtime's hover, press,
+    scrolling, `Animate`, transitions and `DrawContext.Animate` all step
+    through them.
+  - `runtime.Animate(id, property, target, rate)` and
+    `DrawContext.Animate(key, target, rate)` take a rate where they took a
+    speed: `runtime.Rates.Toggle`, `runtime.Rate(18f)`, or 1 for a value driven
+    directly (it was `float.PositiveInfinity`). With none, `Rates.Default`;
+    `DrawContext.Animate`'s default was a speed of 12, and is now the theme's
+    default, 20.
+  - `MotionTokens.Caret` is `MotionTokens.Follow`, and view scrolling eases at
+    it rather than at `Hover`. A theme file's `"caret"` is still read as
+    `"follow"`.
 
 - **Groups: blend modes and colour matrices.** `ctx.PushBlendMode(mode)`
   draws until `PopBlendMode` into a layer and composites it onto what is

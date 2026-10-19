@@ -459,7 +459,7 @@ public sealed class ThemeFile
 
     private MotionTokens Motion(MotionTokens m, JsonElement e)
     {
-        float hover = m.Hover, caret = m.Caret, toggle = m.Toggle, dflt = m.Default;
+        float hover = m.Hover, follow = m.Follow, toggle = m.Toggle, dflt = m.Default;
         var easing = m.Easing;
         foreach (var p in Members(e, "motion"))
         {
@@ -467,14 +467,14 @@ public sealed class ThemeFile
             switch (p.Name)
             {
                 case "hover": hover = Number(key, p.Value); break;
-                case "caret": caret = Number(key, p.Value); break;
+                case "follow" or "caret": follow = Number(key, p.Value); break;   // caret: its name before it was shared
                 case "toggle": toggle = Number(key, p.Value); break;
                 case "default": dflt = Number(key, p.Value); break;
                 case "easing": easing = Choice<MotionEasing>(key, p.Value); break;
-                default: throw Unknown("motion", p.Name, "hover, caret, toggle, default, easing");
+                default: throw Unknown("motion", p.Name, "hover, follow, toggle, default, easing");
             }
         }
-        return new() { Hover = hover, Caret = caret, Toggle = toggle, Default = dflt, Easing = easing };
+        return new() { Hover = hover, Follow = follow, Toggle = toggle, Default = dflt, Easing = easing };
     }
 
     // ── values ──────────────────────────────────────────────────────────────

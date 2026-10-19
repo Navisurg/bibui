@@ -23,7 +23,7 @@ public sealed partial class BibuiRuntime
     {
         public float Current;
         public float Target;
-        public float Speed;
+        public float Rate;   // the share of the gap it closes a frame, as last asked
         public float Epsilon;
     }
 
@@ -47,23 +47,24 @@ public sealed partial class BibuiRuntime
     /// answer both times, and a value asked for twice in one frame cannot move
     /// twice. The loop is kept awake for as long as anything is still moving.
     ///
-    /// A <paramref name="speed"/> of <see cref="float.PositiveInfinity"/> closes
-    /// the whole gap in one step, for the frames where a value is driven
+    /// <paramref name="rate"/> is the share of the gap closed each frame, from
+    /// <see cref="Rates"/> for the kind of motion it is, or <see cref="Rate"/>
+    /// for a speed of the caller's own. A rate of 1 closes the whole gap in one step, for the frames where a value is driven
     /// directly rather than animated — a slider handle under the cursor should
     /// not ease toward it. That step is still the end-of-frame one, so the value
     /// read *this* frame is where the target was last frame; the next frame
-    /// naming a finite speed eases on from wherever it was left.
+    /// naming a smaller rate eases on from wherever it was left.
     ///
-    /// With no <paramref name="speed"/>, the theme's
-    /// <see cref="Bibui.Theming.MotionTokens.Default"/>. Whatever the speed, a
-    /// theme whose <see cref="Bibui.Theming.MotionTokens.Easing"/> is
-    /// <see cref="Bibui.Theming.MotionEasing.None"/> closes the gap in one step.
+    /// With no <paramref name="rate"/>, <see cref="MotionRates.Default"/>.
+    /// Whatever the rate, reduced motion, or a theme whose
+    /// <see cref="Bibui.Theming.MotionTokens.Easing"/> is
+    /// <see cref="Bibui.Theming.MotionEasing.None"/>, closes the gap in one step.
     /// </summary>
     public float Animate(
         string id,
         string property,
         float target,
-        float? speed = null,
+        float? rate = null,
         float epsilon = 0.001f)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -71,7 +72,7 @@ public sealed partial class BibuiRuntime
         var cell = _eased.FromKey(AnimKey.For(id, property), target,
             static t => new Eased { Current = t, Target = t });
         cell.Target = target;
-        cell.Speed = speed ?? _theme.Motion.Default;
+        cell.Rate = rate ?? Rates.Default;
         cell.Epsilon = epsilon;
 
         return cell.Current;
@@ -95,7 +96,7 @@ public sealed partial class BibuiRuntime
             if (entry.Touched != _eased.Frame) continue;
 
             var cell = entry.Value;
-            float next = Ease.Exponential(cell.Current, cell.Target, instant ? 1f : Ease.Rate(cell.Speed, Dt));
+            float next = Ease.Exponential(cell.Current, cell.Target, instant ? 1f : cell.Rate);
             if (MathF.Abs(cell.Target - next) <= cell.Epsilon)
             {
                 next = cell.Target;

@@ -32,4 +32,12 @@ public sealed record FrameInput
     /// arrives at its target on the next frame.
     /// </summary>
     public bool ReducedMotion { get; init; }
+
+    /// <summary>
+    /// This frame's rates for exponential approach, from
+    /// <c>BibuiRuntime.Rates</c>: what <c>DrawContext.Animate</c> steps by.
+    /// All zero here and in <see cref="None"/>, like <see cref="Dt"/>: with no
+    /// time passing, nothing moves.
+    /// </summary>
+    public MotionRates Rates { get; init; }
 }

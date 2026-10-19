@@ -77,7 +77,7 @@ public static class SwitchExtensions
         // The state is a bool; what gets drawn is 0..1. The runtime keeps the
         // in-between, so this component owns no animation machinery of its own.
         // As fast as the theme moves a control between its states.
-        float crossed = runtime.Animate(id, "checked", target, speed: runtime.Theme.Motion.Toggle);
+        float crossed = runtime.Animate(id, "checked", target, runtime.Rates.Toggle);
 
         // The 44x24 track's proportions: 11/6 as wide as it is tall, a knob
         // 5/6 of the height, inset a twelfth of it from either end.

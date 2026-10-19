@@ -150,22 +150,78 @@ static class MotionTests
 
         // ── Ease: the steps, as pure functions ──────────────────────────────
 
-        run("Ease: exponential approach halves the gap speed times a second, by time and not by frames", () =>
+        run("Ease: exponential approach closes the rate's share of the gap; the rate halves it speed times a second", () =>
         {
-            Near(0.5f, Ease.Exponential(0f, 1f, 20f, 1f / 20f), 1e-6f, "one halving");
-            Near(0.75f, Ease.Exponential(0f, 1f, 20f, 2f / 20f), 1e-6f, "two halvings");
-            Near(0.5f, Ease.Rate(20f, 1f / 20f), 1e-6f, "the rate is the share of the gap closed");
-            Eq(Ease.Exponential(3f, 7f, 20f, 1f / 60f), Ease.Exponential(3f, 7f, Ease.Rate(20f, 1f / 60f)), "a shared rate steps as the speed does");
+            Near(0.5f, Ease.Rate(20f, 1f / 20f), 1e-6f, "one halving");
+            Near(0.75f, Ease.Rate(20f, 2f / 20f), 1e-6f, "two halvings");
+            Near(0.5f, Ease.Exponential(0f, 1f, Ease.Rate(20f, 1f / 20f)), 1e-6f, "the step closes the rate's share");
             Eq(7f, Ease.Exponential(3f, 7f, 1f), "a rate of 1 lands on the target");
-            float half = Ease.Exponential(0f, 1f, 20f, 1f / 120f);
-            Near(Ease.Exponential(0f, 1f, 20f, 1f / 60f), Ease.Exponential(half, 1f, 20f, 1f / 120f), 1e-6f, "two half frames reach where one frame does");
+            float half = Ease.Rate(20f, 1f / 120f);
+            Near(Ease.Exponential(0f, 1f, Ease.Rate(20f, 1f / 60f)), Ease.Exponential(Ease.Exponential(0f, 1f, half), 1f, half), 1e-6f, "two half frames reach where one frame does");
         });
 
         run("Ease: the vector overloads ease each component as the float one does", () =>
         {
-            float x = Ease.Exponential(1f, 5f, 12f, 1f / 60f), y = Ease.Exponential(-2f, 3f, 12f, 1f / 60f);
-            Eq(new Vector2(x, y), Ease.Exponential(new Vector2(1f, -2f), new Vector2(5f, 3f), 12f, 1f / 60f), "Vector2");
-            Eq(new Vector4(x, y, x, y), Ease.Exponential(new Vector4(1f, -2f, 1f, -2f), new Vector4(5f, 3f, 5f, 3f), 12f, 1f / 60f), "Vector4");
+            float rate = Ease.Rate(12f, 1f / 60f);
+            float x = Ease.Exponential(1f, 5f, rate), y = Ease.Exponential(-2f, 3f, rate);
+            Eq(new Vector2(x, y), Ease.Exponential(new Vector2(1f, -2f), new Vector2(5f, 3f), rate), "Vector2");
+            Eq(new Vector4(x, y, x, y), Ease.Exponential(new Vector4(1f, -2f, 1f, -2f), new Vector4(5f, 3f, 5f, 3f), rate), "Vector4");
+        });
+
+        run("Rates: one per kind of motion from the theme's speeds, and all 1 when motion is instant", () =>
+        {
+            var motion = new MotionTokens { Hover = 60f, Follow = 30f, Toggle = 22f, Default = 20f };
+            var rates = MotionRates.From(motion, 1f / 60f, instant: false);
+            Eq(new MotionRates(Ease.Rate(60f, 1f / 60f), Ease.Rate(30f, 1f / 60f), Ease.Rate(22f, 1f / 60f), Ease.Rate(20f, 1f / 60f)), rates, "each from its speed");
+            Eq(new MotionRates(1f, 1f, 1f, 1f), MotionRates.From(motion, 1f / 60f, instant: true), "instant");
+
+            var runtime = Asking(_ => { });
+            runtime.Step();
+            Eq(MotionRates.From(runtime.Theme.Motion, runtime.Dt, instant: false), runtime.Rates, "the runtime's, from its theme");
+            Eq(Ease.Rate(18f, runtime.Dt), runtime.Rate(18f), "a speed of one's own");
+            runtime.ReducedMotion = true;
+            runtime.Step();
+            Eq(new MotionRates(1f, 1f, 1f, 1f), runtime.Rates, "reduced motion");
+            Eq(1f, runtime.Rate(18f), "reduced motion, for a speed of one's own");
+        });
+
+        run("Rates: easing by them allocates nothing, asked or stepped", () =>
+        {
+            float target = 0f;
+            var runtime = Asking(rt =>
+            {
+                rt.Animate("a", "toggle", target, rt.Rates.Toggle);
+                rt.Animate("a", "own", target, rt.Rate(18f));
+                rt.Animate("a", "default", target);
+            });
+            Frames(runtime, 3);
+
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            float x = 0f, v = 0f;
+            Vector2 p = Vector2.Zero;
+            Vector4 q = Vector4.Zero, qv = Vector4.Zero;
+            for (int i = 0; i < 1000; i++)
+            {
+                var rates = runtime.Rates;
+                x = Ease.Exponential(x, 1f, rates.Follow) + runtime.Rate(18f) * 0f;
+                p = Ease.Exponential(p, Vector2.One, rates.Hover);
+                q = Ease.Exponential(q, Vector4.One, rates.Toggle);
+                Ease.Spring(ref x, ref v, 1f, Spring.Snappy, runtime.Dt);
+                Ease.Spring(ref q, ref qv, Vector4.One, Spring.Gentle, runtime.Dt);
+            }
+            Eq(0L, GC.GetAllocatedBytesForCurrentThread() - before, "bytes allocated by a thousand steps");
+
+            // Frames that ease (the values travelling) against frames that do not.
+            Frames(runtime, 5);
+            before = GC.GetAllocatedBytesForCurrentThread();
+            Frames(runtime, 10);
+            long settled = GC.GetAllocatedBytesForCurrentThread() - before;
+            target = 1f;
+            Frames(runtime, 1);
+            before = GC.GetAllocatedBytesForCurrentThread();
+            Frames(runtime, 10);
+            long moving = GC.GetAllocatedBytesForCurrentThread() - before;
+            IsTrue(moving <= settled, $"easing frames allocate no more than settled ones ({moving} vs {settled} bytes over ten frames)");
         });
 
         run("Ease: a spring settles on its target; critically damped it never overshoots, bouncy it does", () =>
@@ -657,7 +713,7 @@ static class MotionTests
             {
                 timed = rt.Animate("m", "timed", target, Transition.Timed(1f));
                 spring = rt.Animate("m", "spring", target, Transition.OnSpring(Spring.Gentle));
-                plain = rt.Animate("m", "plain", target, speed: 1f);
+                plain = rt.Animate("m", "plain", target, Ease.Rate(1f, rt.Dt));
                 p = rt.Presence("m", open, exit: Transition.Timed(1f));
                 rows = rt.PresenceList("m", items, s => s, exit: Transition.Timed(1f));
                 color = rt.AnimateColor("m", "c", target > 0 ? "#FFFFFF" : "#000000", Transition.Timed(1f));

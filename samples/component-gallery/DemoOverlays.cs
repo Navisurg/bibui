@@ -535,7 +535,7 @@ internal static class DemoOverlays
     // How far open a modal is, eased: asked every frame, open or not, so it
     // travels both ways.
     private static float Shown(BibuiRuntime runtime, string id, bool open)
-        => runtime.Animate(id, "open", open ? 1f : 0f, speed: 18f);
+        => runtime.Animate(id, "open", open ? 1f : 0f, runtime.Rate(18f));
 
     // A dialog's title and the words under it.
     private static void DialogHeader(BibuiRuntime runtime, string id, string title, string description)

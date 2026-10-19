@@ -108,7 +108,7 @@ it yourself on Escape, on Submit, or on a press elsewhere.
   width) while focused. The edge is `runtime.Theme.Borders.Width` wide, and the
   vertical padding is scaled by `runtime.Theme.Density`.
 - Field: the text is `textColor`, the placeholder is `TextColor.Secondary`, and
-  the caret is `TextPrimary`, gliding at `runtime.Theme.Motion.Caret`. The
+  the caret is `TextPrimary`, gliding at `runtime.Rates.Follow`. The
   selection highlight is a fixed translucent blue, not a token yet.
 
 ## Example
