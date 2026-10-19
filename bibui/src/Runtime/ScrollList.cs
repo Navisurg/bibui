@@ -8,8 +8,8 @@ namespace Bibui.Runtime;
 /// <summary>
 /// Where a scroll list is scrolled to, counted in rows, and which rows are in
 /// sight. The caller keeps it between frames, beside the rows it scrolls, and
-/// hands it to <see cref="ScrollListExtensions.BeginScrollList"/> and
-/// <see cref="ScrollListExtensions.EndScrollList"/> by reference: it is all the
+/// hands it to <see cref="ScrollList.BeginScrollList"/> and
+/// <see cref="ScrollList.EndScrollList"/> by reference: it is all the
 /// list needs from one frame to the next.
 ///
 /// <see cref="Idx"/> and <see cref="Px"/> are the target: where the list comes
@@ -86,7 +86,7 @@ internal static class PartIds
 /// runtime.EndScrollList(ref scroll);
 /// </code>
 /// </summary>
-public static class ScrollListExtensions
+public static class ScrollList
 {
     // A view not laid out yet has no height. Build as if for a tall screen, so
     // its first frame is not a single row.
@@ -184,11 +184,7 @@ public static class ScrollListExtensions
             pt.Target(idx, maxPx - idx * pitch, pitch);
         }
     }
-}
 
-/// <summary>The Scrollbar component for a list counted in rows, called on the runtime that builds it.</summary>
-public static class RowScrollbarExtensions
-{
     /// <summary>
     /// Builds the bar named <paramref name="id"/> for a list of
     /// <paramref name="count"/> rows with <paramref name="viewRows"/> in view,
@@ -199,7 +195,7 @@ public static class RowScrollbarExtensions
     /// the track, placed by the top row shown. Dragging it moves the top row by
     /// as many rows as the thumb travels from where it was pressed, at once and
     /// on a whole row. Pressing either space pages by the rows in view, eased.
-    /// The caller keeps the result in range; <see cref="ScrollListExtensions.BeginScrollList"/> does.
+    /// The caller keeps the result in range; <see cref="BeginScrollList"/> does.
     /// </summary>
     public static ScrollPt Scrollbar(this BibuiRuntime runtime, string id, ScrollPt pt, int count, float viewRows)
     {
