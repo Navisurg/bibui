@@ -67,6 +67,7 @@ jobs:
             bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj \
             bibui-platform-silk/bibui-platform-silk.csproj \
             bibui-platform-wayland/bibui-platform-wayland.csproj \
+            bibui-platform-browser/bibui-platform-browser.csproj \
             bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj \
             bibui-apps/silk-skia-cpu/bibui-app-silk-skia-cpu.csproj \
             bibui-apps/silk-managed/bibui-app-silk-managed.csproj \
@@ -81,6 +82,7 @@ jobs:
             tests/wayland-tests/wayland-tests.csproj \
             tests/wayland-hello/wayland-hello.csproj \
             tests/app-packages-tests/app-packages-tests.csproj \
+            tests/browser-tests/browser-tests.csproj \
             samples/component-gallery/component-gallery.csproj \
             samples/bibui-app/bibui-app.csproj \
             samples/counter/counter.csproj \
@@ -105,7 +107,8 @@ jobs:
             tests/wayland-tests/wayland-tests.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
             bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
-            tests/app-packages-tests/app-packages-tests.csproj
+            tests/app-packages-tests/app-packages-tests.csproj \
+            tests/browser-tests/browser-tests.csproj
           do
             echo "==> test $proj"
             dotnet run --project "$proj" --configuration Release --no-build
@@ -154,3 +157,100 @@ jobs:
             -p:PublishAot=true -p:TreatWarningsAsErrors=true \
             --output aot/counter-wayland
           ls -l aot/counter-wayland/counter-wayland
+
+  # The browser route: the wasm-tools workload, FreeType and HarfBuzz built
+  # for the browser from their pinned releases, the package and the sample
+  # built with warnings as errors, and the sample driven in headless Chrome.
+  # The library itself and tests/browser-tests build and run in build-test,
+  # which needs no workload.
+  browser:
+    runs-on: ubuntu-24.04
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      ContinuousIntegrationBuild: "true"
+      # The SDK in a directory the job owns, so the workload installs without sudo.
+      DOTNET_INSTALL_DIR: ${{ github.workspace }}/../dotnet
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      # Emscripten and the native relink the browser app's link needs.
+      - name: Install the wasm-tools workload
+        shell: bash
+        run: dotnet workload install wasm-tools
+
+      # The archives depend only on the pinned releases and the build files
+      # (versions.env holds the releases, their hashes and the Emscripten).
+      - name: Cache FreeType and HarfBuzz for the browser
+        id: native
+        uses: actions/cache@v4
+        with:
+          path: bibui-platform-browser/native/lib
+          key: browser-native-${{ hashFiles('bibui-platform-browser/native/*') }}
+
+      - name: Build FreeType and HarfBuzz for the browser
+        if: steps.native.outputs.cache-hit != 'true'
+        shell: bash
+        run: bibui-platform-browser/native/build.sh
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          for proj in \
+            bibui-platform-browser/bibui-platform-browser.csproj \
+            samples/counter-browser/counter-browser.csproj
+          do
+            echo "==> build $proj"
+            dotnet build "$proj" --configuration Release -p:TreatWarningsAsErrors=true
+          done
+
+      # The package carries the JavaScript module, the archives, their
+      # licences and the targets that link them.
+      - name: Pack Bibui.Platform.Browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet pack bibui-platform-browser/bibui-platform-browser.csproj --configuration Release \
+            --output nupkgs -p:TreatWarningsAsErrors=true
+          listing=$(unzip -l nupkgs/Bibui.Platform.Browser.*.nupkg)
+          echo "$listing"
+          for file in staticwebassets/bibui-browser.js buildTransitive/Bibui.Platform.Browser.targets \
+            buildTransitive/native/libfreetype.so.6.a buildTransitive/native/libharfbuzz.so.0.a \
+            licenses/FreeType-FTL.txt licenses/HarfBuzz-COPYING.txt
+          do
+            grep -qF "$file" <<< "$listing" || { echo "::error::the package has no $file"; exit 1; }
+          done
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      # The counter in headless Chrome at devicePixelRatio 1, 1.25 and 2:
+      # it draws text, the button answers the pointer, clicks count.
+      - name: Browser smoke test
+        shell: bash
+        env:
+          SMOKE_SCREENSHOTS: smoke
+        run: |
+          set -euo pipefail
+          dotnet publish samples/counter-browser/counter-browser.csproj --configuration Release \
+            -p:TreatWarningsAsErrors=true --output out/counter-browser
+          node tests/browser-smoke/smoke.mjs out/counter-browser/wwwroot
+
+      - name: Upload the smoke test's screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-smoke
+          path: smoke/
+          if-no-files-found: ignore
+          retention-days: 7

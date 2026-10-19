@@ -37,6 +37,9 @@ PROJECTS=(
   "bibui-raster-managed/src/Bibui.Raster.Managed.csproj"
   "bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj"
   "bibui-platform-wayland/bibui-platform-wayland.csproj"
+  # The browser host, with FreeType and HarfBuzz built for the browser
+  # (bibui-platform-browser/native/build.sh; skipped below until they are).
+  "bibui-platform-browser/bibui-platform-browser.csproj"
   # A bibui app in one package: bibui, a window and a renderer (docs/app-packages.md).
   "bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj"
   "bibui-apps/silk-skia-cpu/bibui-app-silk-skia-cpu.csproj"
@@ -57,6 +60,10 @@ for list in "$SCRIPT_DIR"/*/nuget-projects; do
 done
 
 for proj in "${PROJECTS[@]}"; do
+  if [[ $proj == bibui-platform-browser/* && ! -f "$SCRIPT_DIR/bibui-platform-browser/native/lib/libfreetype.so.6.a" ]]; then
+    echo "==> Skipping $proj: run bibui-platform-browser/native/build.sh first (it needs the wasm-tools workload)"
+    continue
+  fi
   echo "==> Packing $proj"
   args=("dotnet" "pack" "$SCRIPT_DIR/$proj" "--configuration" "Release" "--output" "$FEED")
   if [[ -n "$VERSION" ]]; then

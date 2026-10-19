@@ -52,8 +52,21 @@ jobs:
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        env:
+          # The SDK in a directory the job owns, so the workload installs without sudo.
+          DOTNET_INSTALL_DIR: ${{ github.workspace }}/../dotnet
         with:
           dotnet-version: "10.0.x"
+
+      # Bibui.Platform.Browser carries FreeType and HarfBuzz built for the
+      # browser, from the releases pinned in versions.env, with the workload's
+      # Emscripten. The build is reproducible: the same archives as CI's.
+      - name: Build FreeType and HarfBuzz for the browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet workload install wasm-tools
+          bibui-platform-browser/native/build.sh
 
       # v2.0.0 -> 2.0.0. Refuses a tag that is not a NuGet SemVer 2.0 version.
       - name: Version from the tag
@@ -86,6 +99,7 @@ jobs:
             bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj
             bibui-platform-silk/bibui-platform-silk.csproj
             bibui-platform-wayland/bibui-platform-wayland.csproj
+            bibui-platform-browser/bibui-platform-browser.csproj
             bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj
             bibui-apps/silk-skia-cpu/bibui-app-silk-skia-cpu.csproj
             bibui-apps/silk-managed/bibui-app-silk-managed.csproj
@@ -125,6 +139,11 @@ jobs:
             repo=$(grep -o '<repository [^>]*>' "$dir"/*.nuspec || true)
             if [[ ${repo,,} != *"url=\"https://github.com/${GITHUB_REPOSITORY,,}\""* || $repo != *"commit=\"$GITHUB_SHA\""* ]]; then
               echo "::error::$pkg: nuspec $repo does not name https://github.com/$GITHUB_REPOSITORY at $GITHUB_SHA"; bad=1
+            fi
+            if [[ $pkg == */Bibui.Platform.Browser.* ]]; then
+              for file in staticwebassets/bibui-browser.js buildTransitive/native/libfreetype.so.6.a buildTransitive/native/libharfbuzz.so.0.a; do
+                [[ -f $dir/$file ]] || { echo "::error::$pkg has no $file"; bad=1; }
+              done
             fi
             for dll in "$dir"/lib/*/*.dll; do
               if ! grep -qaF "+$GITHUB_SHA" "$dll"; then
