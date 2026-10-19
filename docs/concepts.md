@@ -749,7 +749,7 @@ The runtime is independent of the window and of the rasterizer. It holds no
 raster backend: each frame it records a `DrawList`, and a renderer that the
 owner of the loop chose draws that list. Two pieces connect it to the outside:
 
-- A **window** (`SilkWindow`, `WaylandWindow`) owns the native window, the
+- A **window** (`SilkWindow`, `WaylandWindow`, `BrowserWindow`) owns the native window, the
   event pump, the framebuffer, presenting, the clipboard and the cursor. It
   knows nothing of any renderer. The app owns the loop:
   `while (SilkWindow.BeginFrame(window, runtime)) { runtime.BeginBuild(window.Events); build; runtime.EndBuild(); SilkWindow.BeginDraw(window); draw; SilkWindow.EndDraw(window); SilkWindow.EndFrame(window, runtime); }`.
@@ -760,9 +760,11 @@ owner of the loop chose draws that list. Two pieces connect it to the outside:
   in `window.Cpu`), `EndDraw` puts what was drawn on screen (a swap; a
   commit), and `EndFrame` paces the loop. A window offers two targets:
   `window.Gl`, a `GlTarget` (the GL framebuffer, Silk only; `Bibui.Gl`), and `window.Cpu`,
-  a `CpuTarget` (memory the window presents: a `wl_shm` buffer, Wayland only).
+  a `CpuTarget` (memory the window presents: a `wl_shm` buffer on Wayland,
+  the canvas's frame in the browser).
   CPU memory on a Silk window is `GlCpuFramebuffer`'s, below. bibui does no discovery and no
-  reflection.
+  reflection. The browser is the one host whose loop the app does not own,
+  below.
 - A **renderer** draws a `DrawList`: clipping, transforms, shapes, paths,
   textures and glyphs. Bound to a window's target, `renderer.Draw(runtime.DrawList)`
   draws there: `new SkiaGlRenderer(window.Gl)`, `new SkiaCpuRenderer(window.Cpu)`
@@ -775,7 +777,7 @@ owner of the loop chose draws that list. Two pieces connect it to the outside:
   `void (DrawList list, RasterPixels target)` delegate, and a renderer's `Draw`
   method group converts to it.
 
-There are two complete combinations.
+There are three complete combinations.
 
 [`samples/counter`](../samples/counter/Program.cs) is the first, in full.
 
@@ -870,6 +872,33 @@ while (WaylandWindow.BeginFrame(window, runtime))
     WaylandWindow.EndDraw(window);
     WaylandWindow.EndFrame(window, runtime);
 }
+```
+
+**In the browser: a canvas and managed raster.** `BrowserWindow` (package
+`Bibui.Platform.Browser`) is a `<canvas>` in a .NET WebAssembly app, drawn on
+the CPU by `ManagedRenderer` and shown with `putImageData`. A page may not
+block, so the browser owns the loop: the app hands the frame's body to
+`BrowserWindow.Run`, which returns at once, and the browser calls it on
+`requestAnimationFrame` whenever the window has input, owes frames or was
+resized, and its canvas is in view. Several windows on one page share one
+loop. [bibui in the browser](browser.md) has the details.
+
+```csharp
+using Bibui.Platform.Browser;
+using Bibui.Raster.Managed.Backend;
+
+var runtime = BibuiRuntime.Create();
+var window = await BrowserWindow.OpenAsync(runtime, "app");   // <canvas id="app">
+var managed = new ManagedRenderer(window.Cpu);
+BrowserWindow.Run(window, runtime, () =>
+{
+    runtime.BeginBuild(window.Events);
+    BuildUi(runtime);
+    runtime.EndBuild();
+    BrowserWindow.BeginDraw(window);
+    managed.Draw(runtime.DrawList);
+    BrowserWindow.EndDraw(window);
+});
 ```
 
 **Damage tracking.** The managed rasterizer can rasterise only what changed.

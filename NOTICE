@@ -144,6 +144,35 @@ Licence:  Silk.NET: MIT.
 Source:   https://github.com/dotnet/Silk.NET, https://www.glfw.org
 
 -------------------------------------------------------------------------------
+10. FreeType and HarfBuzz, built for the browser
+-------------------------------------------------------------------------------
+What:     FreeType 2.14.3 and HarfBuzz 11.5.1, compiled unmodified to
+          WebAssembly static libraries (libfreetype.so.6.a,
+          libharfbuzz.so.0.a) from their release tarballs by
+          bibui-platform-browser/native/build.sh.
+Where:    the Bibui.Platform.Browser package (buildTransitive/native/), and
+          so the browser apps that reference it. Not in this repository.
+Licence:  FreeType: the FreeType License (FTL), which it is used under here;
+          the full text is packed as licenses/FreeType-FTL.txt. Portions of
+          this software are copyright (c) 2026 The FreeType Project
+          (https://freetype.org). All rights reserved.
+          HarfBuzz: the "Old MIT" licence, packed as
+          licenses/HarfBuzz-COPYING.txt.
+Source:   https://freetype.org, https://harfbuzz.github.io
+
+-------------------------------------------------------------------------------
+11. Emscripten's setjmp entry points
+-------------------------------------------------------------------------------
+What:     __wasm_setjmp and __wasm_setjmp_test, as later Emscripten
+          releases define them, for the browser's FreeType.
+Where:    bibui-platform-browser/native/wasm_sjlj_shim.c (in the
+          Bibui.Platform.Browser package's libfreetype.so.6.a).
+Licence:  MIT (Emscripten is MIT or University of Illinois/NCSA, at the
+          user's choice).
+          Copyright (c) 2010-2014 Emscripten authors
+Source:   https://emscripten.org
+
+-------------------------------------------------------------------------------
 Not redistributed by bibui
 -------------------------------------------------------------------------------
 These are used at run time but are not part of bibui's source or packages;
@@ -156,7 +185,8 @@ with their own licences:
 - TextCopy (MIT), referenced by Bibui.Platform.Silk.
 - System.IO.Hashing (MIT), referenced by Bibui.
 - FreeType (FTL or GPLv2) and HarfBuzz (MIT-style "Old MIT"), loaded from
-  the system by Bibui.Text.FreeType; libwayland-client and libxkbcommon
+  the system by Bibui on Linux (in the browser they are redistributed, 10.
+  above); libwayland-client and libxkbcommon
   (MIT), loaded from the system by Bibui.Platform.Wayland.
 
 ===============================================================================
@@ -179,12 +209,13 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
---- MIT License (Feather; Tailwind CSS; shadcn/ui; Silk.NET) ------------------
+--- MIT License (Feather; Tailwind CSS; shadcn/ui; Silk.NET; Emscripten) ------
 
 Copyright (c) 2013-present Cole Bemis
 Copyright (c) Tailwind Labs, Inc.
 Copyright (c) 2023 shadcn
 Copyright (c) .NET Foundation and Contributors
+Copyright (c) 2010-2014 Emscripten authors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

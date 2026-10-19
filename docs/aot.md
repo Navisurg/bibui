@@ -12,6 +12,7 @@ result.
 |---|---|---|
 | Wayland + managed raster | `Bibui`, `Bibui.Platform.Wayland`, `Bibui.Raster.Managed.Backend` | **Yes.** Tested in CI with warnings as errors |
 | Silk + Skia | `Bibui`, `Bibui.Platform.Silk`, `Bibui.Raster.Skia` | **No, JIT only for now** |
+| Browser + managed raster | `Bibui`, `Bibui.Platform.Browser`, `Bibui.Raster.Managed.Backend` | Not Native AOT: WebAssembly, interpreted or ahead-of-time compiled ([bibui in the browser](browser.md)) |
 
 The Silk + Skia route is JIT-only for now. bibui's own Silk window and Skia
 renderer are AOT compatible, but Silk.NET itself is not trim-safe: it finds its
@@ -21,6 +22,11 @@ IL3000, IL3002). Those cannot be suppressed for one assembly, and bibui does not
 ask you to accept them. Run the Silk + Skia route on the JIT, and use the
 Wayland + managed route when you need a native binary. This may change if
 Silk.NET becomes trim-safe or GPU rendering comes to the Wayland host.
+
+The browser route is not a native binary: it is a .NET WebAssembly app, run by
+the .NET runtime's interpreter in the page, or compiled to WebAssembly ahead
+of time with `-p:RunAOTCompilation=true`. Its publish trims the app as a
+Native AOT publish does, so the same rules for your own code apply to it.
 
 Your build code does not depend on the route. Only `Program.cs`, which opens
 the window and binds the renderer, differs.

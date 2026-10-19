@@ -8,8 +8,8 @@ a part of that API is retired.
 bibui follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 Every public package (`Bibui`, `Bibui.Gl`, `Bibui.Testing`,
 `Bibui.Raster.Skia`, `Bibui.Raster.Managed`, `Bibui.Raster.Managed.Backend`,
-`Bibui.Platform.Silk`, `Bibui.Platform.Wayland` and the five `Bibui.App`
-packages) is released together, at the same version, from one tag. Depend on one version of all of them.
+`Bibui.Platform.Silk`, `Bibui.Platform.Wayland`, `Bibui.Platform.Browser` and
+the five `Bibui.App` packages) is released together, at the same version, from one tag. Depend on one version of all of them.
 
 Given a version `MAJOR.MINOR.PATCH`:
 
@@ -52,7 +52,8 @@ Also part of the promise:
   ask consumes, what the layout solver does with a size;
 - the theme file format read by `ThemeFile`, and the names of the themes
   bibui ships;
-- the supported platforms and target framework (today Linux on .NET 10), and
+- the supported platforms and target framework (today Linux on .NET 10, and
+  the browser through .NET 10's WebAssembly), and
   the native libraries a package needs at run time. Dropping a platform or a
   target framework, or requiring a new native library, is a major change;
 - Native AOT compatibility of the packages that promise it (the Wayland host
