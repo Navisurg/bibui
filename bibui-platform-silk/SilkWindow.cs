@@ -174,9 +174,9 @@ public sealed class SilkWindow : IDisposable
 
     // ── Pacing ───────────────────────────────────────────────────────────────
     // GLFW does not pace: EndFrame sleeps out what is left of the frame at the
-    // runtime's TargetHz, which also sets what a second means to an animation.
-    // The window sets TargetHz to its monitor's refresh rate (ApplyRefresh), so
-    // it draws as often as the screen shows a frame, and an animation takes as
+    // runtime's TargetHz, which the window sets to its monitor's refresh rate
+    // (ApplyRefresh), so it draws as often as the screen shows a frame.
+    // BeginFrame measures the runtime's Dt on Clock, so an animation takes as
     // long at 120 Hz as at 60.
 
     /// <summary>
@@ -192,6 +192,8 @@ public sealed class SilkWindow : IDisposable
 
     internal readonly Stopwatch Clock = Stopwatch.StartNew();
     internal double NextFrameMs;
+    // When the last frame started, on Clock: what the next frame's Dt is measured from.
+    internal double LastFrameSeconds;
 
     /// <summary>
     /// Closes the window and destroys it with its GL context. Dispose a renderer
@@ -342,6 +344,8 @@ public sealed class SilkWindow : IDisposable
     /// </summary>
     public static bool BeginFrame(SilkWindow window, BibuiRuntime runtime)
     {
+        // Nothing owed: the loop waits for input, and the wait is not frame time.
+        bool waited = !s_alwaysRender && runtime.FramesRequested == 0;
         while (true)
         {
             if (window.IsClosing) return false;
@@ -356,6 +360,9 @@ public sealed class SilkWindow : IDisposable
             {
                 // Taken before the frame is built, so what the build asks for is still owed after it.
                 runtime.ConsumeFrame();
+                double now = window.Clock.Elapsed.TotalSeconds;
+                runtime.Dt = waited || window.LastFrameSeconds == 0 ? 1f / runtime.TargetHz : (float)(now - window.LastFrameSeconds);
+                window.LastFrameSeconds = now;
                 return true;
             }
         }

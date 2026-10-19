@@ -365,8 +365,7 @@ public readonly ref partial struct DrawContext
     /// when travelling *to* somewhere; a repeating ramp has no destination, and
     /// an exponential one would visibly race then dawdle within every turn. It
     /// also makes the period a number you can state rather than one that falls
-    /// out of a rate and a threshold — seconds at the runtime's TargetHz, since
-    /// the clock is nominal.
+    /// out of a rate and a threshold — seconds of the runtime's Dt.
     ///
     /// Never settles by construction, so it keeps a draw-on-demand host running
     /// for as long as it is on screen — which is what a spinner should do.

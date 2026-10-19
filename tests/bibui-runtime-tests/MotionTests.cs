@@ -34,7 +34,7 @@ static class MotionTests
     static BibuiRuntime Asking(Action<BibuiRuntime> ask, float hz = 60f)
     {
         var runtime = BibuiRuntime.Create();
-        runtime.TargetHz = hz;
+        runtime.Dt = 1f / hz;
         runtime.SetBuild(() => { ask(runtime); return Root(); }, new SurfaceOptions { Width = 200, Height = 100 });
         return runtime;
     }
