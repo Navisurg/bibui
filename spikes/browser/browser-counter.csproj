@@ -4,6 +4,14 @@
     one frame per requestAnimationFrame, drawn by ManagedRenderer into memory
     that main.js puts on a <canvas>. FreeType and HarfBuzz are linked in
     statically from native/lib (native/build.sh).
+
+    Needs the wasm-tools workload (a user-local SDK: DOTNET_ROOT=~/.dotnet-wasm).
+      native/build.sh <freetype-src> <harfbuzz-src>
+      dotnet publish -c Release -o out                      (interpreter + jiterpreter)
+      dotnet publish -c Release -o out -p:RunAOTCompilation=true
+      dotnet publish -c Release -o out -p:Renderer=skia     (SkiaCpuRenderer)
+      python3 -m http.server 8731 -b 127.0.0.1 -d out/wwwroot
+    then http://127.0.0.1:8731/  (?heavy: 96 buttons, ?bench: draw every rAF)
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -25,6 +33,16 @@
     <ProjectReference Include="../../bibui/bibui.csproj" />
     <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
   </ItemGroup>
+  <!-- -p:Renderer=skia draws with SkiaCpuRenderer instead, on SkiaSharp's
+       WebAssembly static library. -->
+  <PropertyGroup Condition="'$(Renderer)' == 'skia'">
+    <DefineConstants>$(DefineConstants);SKIA</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(Renderer)' == 'skia'">
+    <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
+    <PackageReference Include="SkiaSharp.NativeAssets.WebAssembly" Version="4.153.1" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- The pinvoke table is keyed by the file's name without its extension,
          which must be the [LibraryImport] name bibui uses: libfreetype.so.6

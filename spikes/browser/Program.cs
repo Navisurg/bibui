@@ -17,7 +17,11 @@ return 0;
 public static partial class Host
 {
     static BibuiRuntime? _runtime;
+#if SKIA
+    static readonly Bibui.Raster.Skia.SkiaCpuRenderer _renderer = new();
+#else
     static readonly ManagedRenderer _renderer = new();
+#endif
     static readonly List<WindowEvent> _events = new();
     static byte[] _bgra = [], _rgba = [];
     static int _w, _h;
