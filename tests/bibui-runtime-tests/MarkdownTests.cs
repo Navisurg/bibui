@@ -297,8 +297,10 @@ static class MarkdownTests
             var runtime = BibuiRuntime.Create();
             runtime.SetBuild(() =>
             {
-                last = runtime.Markdown("md", source, width: 400f);
-                return Arrange.Column(last.Node).FillX().FillY();
+                var page = runtime.ColumnFill();
+                using (runtime.PushParent(page))
+                    last = runtime.Markdown("md", source, width: 400f);
+                return page;
             }, new SurfaceOptions { Width = 500, Height = 200, ScaleFactor = 1f });
             runtime.Step();
             runtime.Step();
@@ -316,8 +318,10 @@ static class MarkdownTests
             var runtime = BibuiRuntime.Create();
             runtime.SetBuild(() =>
             {
-                last = runtime.Markdown("tasks", source, width: 300f);
-                return Arrange.Column(last.Node).FillX().FillY();
+                var page = runtime.ColumnFill();
+                using (runtime.PushParent(page))
+                    last = runtime.Markdown("tasks", source, width: 300f);
+                return page;
             }, new SurfaceOptions { Width = 400, Height = 200, ScaleFactor = 1f });
             runtime.Step();
             runtime.Step();
@@ -339,20 +343,30 @@ static class MarkdownTests
 
             var source = BibuiStr.FromStrLit(bytes);
             var runtime = BibuiRuntime.Create();
-            runtime.SetBuild(() => Arrange.Column(runtime.Markdown("same", source, width: 400f).Node).FillX().FillY(), surface);
+            runtime.SetBuild(() =>
+            {
+                var page = runtime.ColumnFill();
+                using (runtime.PushParent(page))
+                    runtime.Markdown("same", source, width: 400f);
+                return page;
+            }, surface);
             long frame = SteadyFrame(runtime);
             var texts = Descendants(runtime.FindById("same")!).OfType<Text>().Select(t => t.Content.ToArray()).ToArray();
 
             var plain = BibuiRuntime.Create();
             plain.SetBuild(() =>
             {
-                var column = plain.Box();
-                column.ChildLayoutAxis = LayoutAxis.Y;
-                column.SizeX = SemanticSize.Pixels(400f);
-                column.SizeY = SemanticSize.ChildrenSum();
-                using (plain.PushParent(column))
-                    foreach (var t in texts) plain.Text(t);
-                return Arrange.Column(column).FillX().FillY();
+                var page = plain.ColumnFill();
+                using (plain.PushParent(page))
+                {
+                    var column = plain.Box();
+                    column.ChildLayoutAxis = LayoutAxis.Y;
+                    column.SizeX = SemanticSize.Pixels(400f);
+                    column.SizeY = SemanticSize.ChildrenSum();
+                    using (plain.PushParent(column))
+                        foreach (var t in texts) plain.Text(t);
+                }
+                return page;
             }, surface);
             long yardstick = SteadyFrame(plain);
 
@@ -380,7 +394,13 @@ static class MarkdownTests
     {
         var runtime = BibuiRuntime.Create();
         var source = BibuiStr.FromStrLit(markdown);
-        runtime.SetBuild(() => Arrange.Column(runtime.Markdown("md", source, width: width).Node).FillX().FillY(),
+        runtime.SetBuild(() =>
+            {
+                var page = runtime.ColumnFill();
+                using (runtime.PushParent(page))
+                    runtime.Markdown("md", source, width: width);
+                return page;
+            },
             new SurfaceOptions { Width = (int)width + 40, Height = 1200, ScaleFactor = 1f });
         runtime.Step();
         runtime.Step();

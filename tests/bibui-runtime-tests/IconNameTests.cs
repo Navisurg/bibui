@@ -29,7 +29,7 @@ static partial class IconNameTests
             runtime.SetBuild(
                 () =>
                 {
-                    var row = Arrange.Row().Px(100f, 40f);
+                    var row = runtime.RowPx(100f, 40f);
                     using (runtime.PushParent(row))
                     {
                         try { runtime.Icon("folder-open", 20f); }
