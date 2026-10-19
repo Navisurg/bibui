@@ -23,7 +23,7 @@ done
 # If no explicit version, build one from the csproj Version + worktree name
 if [[ -z "$VERSION" ]]; then
   BASE_VERSION="$(grep -oPm1 '(?<=<Version>)[^<]+' "$SCRIPT_DIR/Directory.Build.props")"
-  VERSION="${BASE_VERSION:-0.9.0}-${WORKTREE_NAME}"
+  VERSION="${BASE_VERSION:-0.10.0}-${WORKTREE_NAME}"
 fi
 
 PROJECTS=(
@@ -37,6 +37,12 @@ PROJECTS=(
   "bibui-raster-managed/src/Bibui.Raster.Managed.csproj"
   "bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj"
   "bibui-platform-wayland/bibui-platform-wayland.csproj"
+  # A bibui app in one package: bibui, a window and a renderer (docs/app-packages.md).
+  "bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj"
+  "bibui-apps/silk-skia-cpu/bibui-app-silk-skia-cpu.csproj"
+  "bibui-apps/silk-managed/bibui-app-silk-managed.csproj"
+  "bibui-apps/wayland-managed/bibui-app-wayland-managed.csproj"
+  "bibui-apps/wayland-skia-cpu/bibui-app-wayland-skia-cpu.csproj"
 )
 
 # A layer kept in its own top-level directory lists its packages in
@@ -63,7 +69,7 @@ echo ""
 echo "Packages published to: $FEED"
 echo ""
 echo "To use in another project, add:"
-echo '  <PackageReference Include="Bibui" Version="0.9.0" />'
-echo "  plus a window and a renderer: Bibui.Platform.Silk + Bibui.Raster.Skia (SkiaGlRenderer),"
-echo "  or Bibui.Platform.Wayland + Bibui.Raster.Managed.Backend; Bibui.Testing for headless tests."
+echo "  <PackageReference Include=\"Bibui.App.SilkSkiaGl\" Version=\"$VERSION\" />"
+echo "  or another Bibui.App package (docs/app-packages.md), or Bibui plus a window and a renderer"
+echo "  for a loop of your own; Bibui.Testing for headless tests."
 echo "  samples/counter is the whole loop."

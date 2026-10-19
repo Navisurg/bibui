@@ -6,95 +6,15 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
-bibui 0.9, the first public release: a frame model of build, layout and
-paint, the library split into packages by what they depend on, and a second
-route to the screen with no native drawing dependency. The entries below are
-the changes since the private, callback-based versions bibui was used as
-before it was published.
+## [0.10.0] - 2026-10-19
+
+bibui 0.10: the app owns its loop and its renderer. A frame is built, laid
+out and recorded into a `DrawList`, and the renderer the app chose draws it;
+the `Bibui.App` packages put a window and a renderer behind two calls. Most
+entries below break code written for 0.9: each says what to use instead,
+and `samples/counter` is the whole of a loop.
 
 ### Changed
-
-- **SkiaSharp 4.153.1** (from 2.88.8) for `Bibui.Raster.Skia`.
-  - Images are drawn with Skia's sampling options; `FilterQuality` maps to
-    them as Skia mapped its old filter qualities (None nearest, Low linear,
-    Medium linear with mipmaps, High Mitchell cubic).
-  - Text is drawn with an `SKFont` (subpixel, grayscale, full hinting), and
-    native paths are made with `SKPathBuilder`. A path a frame carries in its
-    payload is cached by its content, so one drawn the same way every frame is
-    built once.
-  - The fixture suites' pixels are unchanged. 2.88's CPU runtime effects
-    crashed on recent CPUs; 4.x runs them.
-  - **Slower gradients on the CPU (`SkiaCpuRenderer`).** Skia dropped the
-    code generator (SkVM) its CPU gradients ran on: a full-window 1440×900
-    linear gradient takes about 35 ms a frame instead of 1.2 ms, a radial one
-    about 27 ms instead of 14 ms (measured on a Ryzen AI 9 365). On the GPU
-    (`SkiaGlRenderer`) and with `ManagedRenderer` nothing changes: on the
-    CPU, prefer `ManagedRenderer` for gradient-heavy screens.
-
-- **Skia is two renderers, and GL is a layer of its own (breaking).**
-  `SkiaRenderer` is `SkiaGlRenderer` (a window's GL context: `new
-  SkiaGlRenderer(window.Gl)`, `SkiaGlRenderer.ForGl`) and `SkiaCpuRenderer`
-  (memory: `new SkiaCpuRenderer()`, `new SkiaCpuRenderer(window.Cpu)`).
-  - The new package `Bibui.Gl` holds `GlTarget` (moved from `Bibui.Draw` to
-    `Bibui.Gl`) and `GlTextures`, the GL texture calls, through
-    Silk.NET.OpenGL. `Bibui.Platform.Silk` makes the `GlTarget`;
-    `SkiaGlRenderer` makes its textures with `GlTextures` and wraps each once
-    for Skia. Neither references the other.
-  - Drawing into a window is bracketed: `BeginDraw(window)` readies it (a
-    Silk window's GL context current; a Wayland window's free `wl_shm` buffer
-    in `window.Cpu`), the renderer draws, `EndDraw(window)` puts it on screen
-    (a swap; a commit). `EndFrame` only paces the loop. `GlCpuFramebuffer`
-    has the same pair, inside the Silk window's.
-  - A Silk window has no `window.Cpu`: it shows only what is drawn into its GL
-    framebuffer (`window.Gl`). A CPU renderer on a
-    Silk window draws into `GlCpuFramebuffer(window.Gl).Cpu` (`Bibui.Gl`),
-    whose `BeginDraw()` sizes the memory and `EndDraw()` uploads it into a BGRA8
-    texture and blits it onto the framebuffer: no shaders. Reading
-    `window.Cpu` used to switch on an upload every frame, over whatever a GPU
-    renderer had drawn.
-  - Every renderer has the same `CreateTexture`, `UpdateTexture`,
-    `ReleaseTexture` and `Draw(DrawList)`, so an app can name its renderer in
-    one place (`global using Renderer = ...`) and swap it there.
-
-- **Textures have a format and a kind (breaking).**
-  `CreateTexture(format, kind, width, height, pixels, rowBytes = 0)` replaces
-  `CreateTexture(rgba, width, height)`, and `UpdateTexture(texture, pixels,
-  rowBytes = 0)` takes the whole texture at the size and format it was made
-  with.
-  - Formats, rad's names: `RGBA8` and `BGRA8` (straight alpha), `R8`, `RG8`
-    and `A8`. Each draws with a default look: R8 grey, A8 white coverage, RG8
-    as red and green.
-  - Kinds: a `Static` texture is made once; an update to it is ignored. A
-    `Stream` texture is overwritten in place: on `SkiaGlRenderer` it is one GL
-    texture each update is uploaded into, wrapped by one `SKImage` for its
-    life, where an update used to make a new image and a new GPU texture.
-  - `rowBytes` takes padded rows, as a video decoder's are.
-  - A texture no longer changes size: release it and make another.
-
-- **One thread owns frames and input: the app's loop (breaking).**
-  - A frame's input goes in with the frame: `runtime.BeginBuild(window.Events)`
-    turns what the keyboard and mouse did into the frame's events, and empties
-    the list. `BeginFrame` no longer applies input, and `WindowInput` is gone.
-  - Every `WindowEvent` carries the modifiers held when it happened, stamped by
-    the platform from the OS's state at that moment; the runtime keeps no
-    record of them. `SilkWindow.HeldModifiers` is gone.
-  - `runtime.UnconsumedEvents` gives the events themselves:
-    `foreach (var ev in runtime.UnconsumedEvents) if (...) ev.Eat();`.
-    `BibUiEventHandle` is gone; `Eat`, `Consumed` and `Next` are on
-    `BibUiEvent`. Events come from a pool the end of each frame empties, so
-    input allocates nothing per frame; an event lives until `EndBuild`.
-  - The app steps its `BibuiTestServer` from its loop:
-    `runtime.BeginBuild(server?.Step(window.Events) ?? window.Events)`.
-    `Step` runs the command in hand a frame at a time and, while one runs,
-    gives the frame's keyboard and mouse events in place of the window's. A click is
-    a move, a press and a release, each in a frame of its own; `press` with
-    `ctrl` presses Ctrl around the key. Commands, screenshots and recordings
-    all run on the loop's thread.
-  - `runtime.FrameLock` and the runtime's internal locks are gone. The runtime
-    is the loop's: only `RequestFrame` (and `WakeUp`), `FramesRequested` and
-    `FrameCount` are safe from other threads.
-  - `runtime.DispatchFill` is gone (`BibuiPage.Fill` does the same);
-    `runtime.DispatchClick` says whether it clicked anything.
 
 - **The app owns its loop (breaking).** A frame is
   `runtime.BeginBuild()`, the app's build, `runtime.EndBuild()`, then the
@@ -139,6 +59,31 @@ before it was published.
   - `BibuiPage.Launch` takes a build, and `BibuiPage.From(runtime, build)` the
     function that builds a frame's tree; `page.Frame()` runs one.
 
+- **One thread owns frames and input: the app's loop (breaking).**
+  - A frame's input goes in with the frame: `runtime.BeginBuild(window.Events)`
+    turns what the keyboard and mouse did into the frame's events, and empties
+    the list. `BeginFrame` no longer applies input, and `WindowInput` is gone.
+  - Every `WindowEvent` carries the modifiers held when it happened, stamped by
+    the platform from the OS's state at that moment; the runtime keeps no
+    record of them. `SilkWindow.HeldModifiers` is gone.
+  - `runtime.UnconsumedEvents` gives the events themselves:
+    `foreach (var ev in runtime.UnconsumedEvents) if (...) ev.Eat();`.
+    `BibUiEventHandle` is gone; `Eat`, `Consumed` and `Next` are on
+    `BibUiEvent`. Events come from a pool the end of each frame empties, so
+    input allocates nothing per frame; an event lives until `EndBuild`.
+  - The app steps its `BibuiTestServer` from its loop:
+    `runtime.BeginBuild(server?.Step(window.Events) ?? window.Events)`.
+    `Step` runs the command in hand a frame at a time and, while one runs,
+    gives the frame's keyboard and mouse events in place of the window's. A click is
+    a move, a press and a release, each in a frame of its own; `press` with
+    `ctrl` presses Ctrl around the key. Commands, screenshots and recordings
+    all run on the loop's thread.
+  - `runtime.FrameLock` and the runtime's internal locks are gone. The runtime
+    is the loop's: only `RequestFrame` (and `WakeUp`), `FramesRequested` and
+    `FrameCount` are safe from other threads.
+  - `runtime.DispatchFill` is gone (`BibuiPage.Fill` does the same);
+    `runtime.DispatchClick` says whether it clicked anything.
+
 - **Renderers draw the `DrawList`; the runtime holds no backend (breaking).**
   `runtime.EndBuild()` builds, lays out and records a frame into
   `runtime.DrawList`, and the loop owner draws it with the renderer it chose:
@@ -170,42 +115,6 @@ before it was published.
   - `Bibui.Testing`'s `BibuiPage` draws `Screenshot()` with Skia on the CPU, or
     with the function `BibuiPage.From(runtime, draw)` is given. `IBibuiPage`
     is gone.
-
-- **A `Box.Draw` callback is handed its box, and draws in the box's space,
-  clipped to it (breaking).** `DrawCallback` is `(Box box, DrawContext ctx)`:
-  the box is there for its `HotT`, `ActiveT` and key. (0,0) is the box's
-  top-left, `ctx.Rect` and `ctx.Logical` start at (0,0), and nothing a callback
-  draws leaves its box. A clip, transform or opacity it leaves pushed is popped
-  after it, and a pop past its own does nothing. Code that offset its draws by
-  `ctx.Rect`/`ctx.Logical` is unchanged; a callback that drew at surface
-  coordinates subtracts the box's position, and one that drew across its own
-  edges (a stroke centred on the edge, a ring around an end point) insets.
-
-- **Text is measured and shaped by bibui's own FreeType and HarfBuzz; a raster
-  backend only draws glyphs (breaking).** Layout comes out the same whichever
-  backend draws, and what is drawn is what was measured.
-  - `Bibui.Text.FreeType` is folded into `Bibui`, as the namespace
-    `Bibui.FreeType`, and the package is gone. `Bibui` now loads the system
-    FreeType and HarfBuzz (`libfreetype6`, `libharfbuzz0b`) in every
-    configuration.
-  - The canvas's only text call is `DrawGlyphs(face, sizePx, glyphs,
-    positions, x, baselineY, color)`. `IRasterCanvas.DrawText` and
-    `DrawGlyphRun`, `IRasterBackend.ShapeText`, `RasterFont` and `ShapedRun`
-    are gone.
-  - `DrawContext.DrawText(text, x, top, font, color)` draws one line of text as
-    a `Text` node is drawn: shaped by `Fonts`, with fallback runs, at a
-    physical position. Use it rather than drawing glyphs by hand.
-  - `FontFace` replaces `RasterTypeface`. `Fonts.Face(family, weight)` and
-    `DrawContext.Fonts` give a draw that hands a raster canvas glyphs its face.
-  - `IRasterBackend` loses `LoadTypeface`, `MatchFamily`, `MatchCharacter`,
-    `DefaultTypeface`, `MeasureText` and `GetMetrics`. A backend makes its own
-    face from `FontFace.FontFile` (Skia) or draws from `FontFace.FreeType`'s
-    glyph masks (the managed rasterizer, which no longer has an engine of its
-    own).
-  - Installed fonts are no longer looked up, and there is no fallback per
-    character yet. A family registered with `FontRegistry` is used, any other
-    gets the built-in Inter, and a character Inter lacks draws as its missing
-    glyph. Text no longer depends on the machine.
 
 - **A frame is recorded into a `DrawList`, then drawn (breaking).** After
   layout, the painter and every custom draw record their draws, in tree
@@ -242,6 +151,16 @@ before it was published.
     `ctx.DrawPath` draws it, or copies any other path into the list.
     `IPathBuilder` is gone.
 
+- **A `Box.Draw` callback is handed its box, and draws in the box's space,
+  clipped to it (breaking).** `DrawCallback` is `(Box box, DrawContext ctx)`:
+  the box is there for its `HotT`, `ActiveT` and key. (0,0) is the box's
+  top-left, `ctx.Rect` and `ctx.Logical` start at (0,0), and nothing a callback
+  draws leaves its box. A clip, transform or opacity it leaves pushed is popped
+  after it, and a pop past its own does nothing. Code that offset its draws by
+  `ctx.Rect`/`ctx.Logical` is unchanged; a callback that drew at surface
+  coordinates subtracts the box's position, and one that drew across its own
+  edges (a stroke centred on the edge, a ring around an end point) insets.
+
 - **The draw layer knows textures, never images (breaking).** An app gets an
   image's pixels into memory its own way (`Bibui.Imaging.Png`, a video
   decoder, its own code) and makes a texture on the renderer it chose.
@@ -257,12 +176,217 @@ before it was published.
   - The component gallery's Texture page shows both: a texture made once, and
     one whose pixels change every frame.
 
-- **Runtimes are made with `Create`, and the renderer is always chosen
-  (breaking).** `BibuiRuntime` has no public constructor: write
-  `BibuiRuntime.Create()`.
-  - There is no default renderer: `RasterBackends` is gone, and
-    Bibui.Raster.Skia no longer registers itself. Nothing is loaded by name, so
-    nothing warns under trimming or AOT.
+- **Textures have a format and a kind (breaking).**
+  `CreateTexture(format, kind, width, height, pixels, rowBytes = 0)` replaces
+  `CreateTexture(rgba, width, height)`, and `UpdateTexture(texture, pixels,
+  rowBytes = 0)` takes the whole texture at the size and format it was made
+  with.
+  - Formats, rad's names: `RGBA8` and `BGRA8` (straight alpha), `R8`, `RG8`
+    and `A8`. Each draws with a default look: R8 grey, A8 white coverage, RG8
+    as red and green.
+  - Kinds: a `Static` texture is made once; an update to it is ignored. A
+    `Stream` texture is overwritten in place: on `SkiaGlRenderer` it is one GL
+    texture each update is uploaded into, wrapped by one `SKImage` for its
+    life, where an update used to make a new image and a new GPU texture.
+  - `rowBytes` takes padded rows, as a video decoder's are.
+  - A texture no longer changes size: release it and make another.
+
+- **Skia is two renderers, and GL is a layer of its own (breaking).**
+  `SkiaRenderer` is `SkiaGlRenderer` (a window's GL context: `new
+  SkiaGlRenderer(window.Gl)`, `SkiaGlRenderer.ForGl`) and `SkiaCpuRenderer`
+  (memory: `new SkiaCpuRenderer()`, `new SkiaCpuRenderer(window.Cpu)`).
+  - The new package `Bibui.Gl` holds `GlTarget` (moved from `Bibui.Draw` to
+    `Bibui.Gl`) and `GlTextures`, the GL texture calls, through
+    Silk.NET.OpenGL. `Bibui.Platform.Silk` makes the `GlTarget`;
+    `SkiaGlRenderer` makes its textures with `GlTextures` and wraps each once
+    for Skia. Neither references the other.
+  - Drawing into a window is bracketed: `BeginDraw(window)` readies it (a
+    Silk window's GL context current; a Wayland window's free `wl_shm` buffer
+    in `window.Cpu`), the renderer draws, `EndDraw(window)` puts it on screen
+    (a swap; a commit). `EndFrame` only paces the loop. `GlCpuFramebuffer`
+    has the same pair, inside the Silk window's.
+  - A Silk window has no `window.Cpu`: it shows only what is drawn into its GL
+    framebuffer (`window.Gl`). A CPU renderer on a
+    Silk window draws into `GlCpuFramebuffer(window.Gl).Cpu` (`Bibui.Gl`),
+    whose `BeginDraw()` sizes the memory and `EndDraw()` uploads it into a BGRA8
+    texture and blits it onto the framebuffer: no shaders. Reading
+    `window.Cpu` used to switch on an upload every frame, over whatever a GPU
+    renderer had drawn.
+  - Every renderer has the same `CreateTexture`, `UpdateTexture`,
+    `ReleaseTexture` and `Draw(DrawList)`, so an app can name its renderer in
+    one place (`global using Renderer = ...`) and swap it there.
+
+- **Text is measured and shaped by bibui's own FreeType and HarfBuzz; a raster
+  backend only draws glyphs (breaking).** Layout comes out the same whichever
+  backend draws, and what is drawn is what was measured.
+  - `Bibui.Text.FreeType` is folded into `Bibui`, as the namespace
+    `Bibui.FreeType`, and the package is gone. `Bibui` now loads the system
+    FreeType and HarfBuzz (`libfreetype6`, `libharfbuzz0b`) in every
+    configuration.
+  - The canvas's only text call is `DrawGlyphs(face, sizePx, glyphs,
+    positions, x, baselineY, color)`. `IRasterCanvas.DrawText` and
+    `DrawGlyphRun`, `IRasterBackend.ShapeText`, `RasterFont` and `ShapedRun`
+    are gone.
+  - `DrawContext.DrawText(text, x, top, font, color)` draws one line of text as
+    a `Text` node is drawn: shaped by `Fonts`, with fallback runs, at a
+    physical position. Use it rather than drawing glyphs by hand.
+  - `FontFace` replaces `RasterTypeface`. `Fonts.Face(family, weight)` and
+    `DrawContext.Fonts` give a draw that hands a raster canvas glyphs its face.
+  - `IRasterBackend` loses `LoadTypeface`, `MatchFamily`, `MatchCharacter`,
+    `DefaultTypeface`, `MeasureText` and `GetMetrics`. A backend makes its own
+    face from `FontFace.FontFile` (Skia) or draws from `FontFace.FreeType`'s
+    glyph masks (the managed rasterizer, which no longer has an engine of its
+    own).
+  - Installed fonts are no longer looked up, and there is no fallback per
+    character yet. A family registered with `FontRegistry` is used, any other
+    gets the built-in Inter, and a character Inter lacks draws as its missing
+    glyph. Text no longer depends on the machine.
+
+- **SkiaSharp 4.153.1** (from 2.88.8) for `Bibui.Raster.Skia`.
+  - Images are drawn with Skia's sampling options; `FilterQuality` maps to
+    them as Skia mapped its old filter qualities (None nearest, Low linear,
+    Medium linear with mipmaps, High Mitchell cubic).
+  - Text is drawn with an `SKFont` (subpixel, grayscale, full hinting), and
+    native paths are made with `SKPathBuilder`. A path a frame carries in its
+    payload is cached by its content, so one drawn the same way every frame is
+    built once.
+  - The fixture suites' pixels are unchanged. 2.88's CPU runtime effects
+    crashed on recent CPUs; 4.x runs them.
+  - **Slower gradients on the CPU (`SkiaCpuRenderer`).** Skia dropped the
+    code generator (SkVM) its CPU gradients ran on: a full-window 1440×900
+    linear gradient takes about 35 ms a frame instead of 1.2 ms, a radial one
+    about 27 ms instead of 14 ms (measured on a Ryzen AI 9 365). On the GPU
+    (`SkiaGlRenderer`) and with `ManagedRenderer` nothing changes: on the
+    CPU, prefer `ManagedRenderer` for gradient-heavy screens.
+
+### Added
+
+- **`Bibui.App` packages: a bibui app in one package.** Five packages, one per
+  window and renderer: `Bibui.App.SilkSkiaGl` (Silk, Skia on the GPU),
+  `Bibui.App.SilkSkiaCpu`, `Bibui.App.SilkManaged` (Silk, drawn on the CPU and
+  shown through the GL framebuffer), `Bibui.App.WaylandManaged` and
+  `Bibui.App.WaylandSkiaCpu`. Each brings bibui, its window and its renderer,
+  and has the same `BibuiApp`, so changing the package changes how an app is
+  drawn and nothing in its code:
+  ```csharp
+  using var app = BibuiApp.Open(runtime, new("App", 800, 600));
+  while (app.BeginFrame())
+  {
+      runtime.BeginBuild(app.Events);
+      Build();
+      runtime.EndBuild();
+      app.EndFrame();      // draw, present, pace
+  }
+  ```
+  - `app.Renderer` is the renderer, for textures; `app.Window` the window.
+  - The test server starts with `new BibuiAppOptions { TestServer = true }` or
+    `BIBUI_TEST_SERVER=1`; otherwise it is off. On the CPU packages its
+    screenshots are drawn by the app's own renderer, textures included.
+  - The window and renderer packages stay usable on their own, for a loop an
+    app writes itself.
+  - Each depends on exactly the `Bibui`, window and renderer versions it was
+    built with.
+
+- **ScrollList: rows of one height, of which only those in sight are built.**
+  `runtime.BeginScrollList(id, ref scroll, pitch, count)` fills the parent in
+  scope with a view and a bar and pushes the view; build rows `scroll.First` up
+  to `scroll.Last`, then `runtime.EndScrollList(ref scroll)` pops it. The list
+  scrolls by rows: the `ScrollPt` the caller keeps is all it needs between
+  frames, the target row and the pixels into it, how far the list is still
+  shown from there (eased to 0 at `Rates.Follow`), and the rows in sight. The
+  wheel moves it by pixels, the thumb drags by rows from where it was pressed,
+  and the track pages by the rows in view. `scroll.Target(idx, px, pitch)`
+  moves it from the caller's side, keeping what is shown. The bar is also
+  `runtime.Scrollbar(id, scroll, count, viewRows)`, for a list built the same
+  way. A gallery page shows 100,000 rows.
+
+- **One rate per kind of motion, and everything eases by it (breaking).**
+  `runtime.Rates` holds this frame's rates for exponential approach, computed
+  once as the build begins from the theme's motion speeds: `Hover` (hot and
+  pressed boxes), `Follow` (a view's scroll offset, the caret), `Toggle` (a
+  switch's knob, a panel opening) and `Default` (anything else). Every rate is
+  1 under reduced motion or `MotionEasing.None`, so no caller checks for it.
+  `runtime.Rate(speed)` gives one for a speed of your own, the same way.
+  - `Ease.Exponential(current, target, rate)` (`float`, `Vector2`, `Vector4`),
+    `Ease.Rate(speed, dt)` and `Ease.Spring(ref current, ref velocity, target,
+    spring, dt)` are the steps as pure functions; the runtime's hover, press,
+    scrolling, `Animate`, transitions and `DrawContext.Animate` all step
+    through them.
+  - `runtime.Animate(id, property, target, rate)` and
+    `DrawContext.Animate(key, target, rate)` take a rate where they took a
+    speed: `runtime.Rates.Toggle`, `runtime.Rate(18f)`, or 1 for a value driven
+    directly (it was `float.PositiveInfinity`). With none, `Rates.Default`;
+    `DrawContext.Animate`'s default was a speed of 12, and is now the theme's
+    default, 20.
+  - `MotionTokens.Caret` is `MotionTokens.Follow`, and view scrolling eases at
+    it rather than at `Hover`. A theme file's `"caret"` is still read as
+    `"follow"`.
+
+- **Groups: blend modes and colour matrices.** `ctx.PushBlendMode(mode)`
+  draws until `PopBlendMode` into a layer and composites it onto what is
+  under it with the mode: `SrcOver`, `Multiply`, `Plus`, `Screen`, `Overlay`
+  or `Src`, Skia's formulas on premultiplied colour. `ctx.PushColorMatrix(m)`
+  composites its layer through a 4×5 matrix, row by row, on straight colour
+  in 0..1 with the fifth column a translation in 0..1. `PushOpacity` is
+  shorthand for a matrix that only scales alpha. A renderer makes no layer
+  for `SrcOver` or the identity, and draws an alpha-only matrix as the
+  opacity layer it drew before, so existing pixels do not move.
+  - On the list, `DrawOpKind.PushOpacity` and `DrawOp.Alpha` are gone (breaking
+    for a renderer of your own): the ops are `PushBlendMode` (`DrawOp.Blend`)
+    and `PushColorMatrix` (20 floats in the payload). `ColorMatrices.IsIdentity`
+    and `IsOpacity` say when a matrix needs no layer, or only an alpha.
+  - With damage tracking, a `Src` layer, or a matrix that adds alpha, writes
+    all of its clip: a partial repaint holds it to the repainted rect.
+
+- **A texture can be drawn through a lookup table.**
+  `ctx.DrawTexture(texture, dest, paint, new TextureLookup(table, TextureChannel.R))`:
+  each pixel's raw channel (as stored: R8's R, A8's A, RG8's R and G,
+  RGBA8's straight channels) picks the table's entry, a 1-D colormap from one
+  channel or a 2-D table from two. A channel the format lacks reads 0. The
+  source is filtered by the paint; the table is read exactly. A lookup drawn
+  again allocates nothing, on every renderer.
+
+### Removed
+
+- `runtime.OnUnhandledKey`. It fired as a key arrived, before any field
+  could take it, so it also reported text typed into a field. Read
+  `runtime.UnconsumedEvents` while building instead: what a component took is
+  marked eaten.
+
+### Fixed
+
+- A typed character above U+FFFF (an emoji, from Compose or an xkb layout)
+  reaches a text field whole. On the Wayland window it was sent as two halves
+  and the first one threw; on the Silk window it was cut to 16 bits and typed
+  the wrong character. `WindowEvent.Text` takes a `Rune`, and a text field
+  ignores a code point that is no character instead of throwing.
+
+## [0.9.3] - 2026-10-15
+
+bibui 0.9, the first public release: a frame model of build, layout and
+paint, the library split into packages by what they depend on, and a second
+route to the screen with no native drawing dependency. The entries below are
+the changes since the private, callback-based versions bibui was used as
+before it was published.
+
+### Changed
+
+- **Runtimes and windows are made with `Create`, and the backend and host are
+  always chosen (breaking).**
+  `BibuiWindow.Create(BibuiRuntime.Create().WithSkia()).WithSilk().Run(title: "App")`.
+  - `BibuiRuntime` and `BibuiWindow` have no public constructors. Instead of
+    `new BibuiRuntime(backend)`, write `BibuiRuntime.Create()` followed by
+    `.WithSkia()` (Bibui.Raster.Skia), `.WithManagedRasterizer()`
+    (Bibui.Raster.Managed.Backend) or `.WithRaster(backend)`, before the
+    runtime first draws or measures. Instead of `new BibuiWindow(runtime, host)`,
+    write `BibuiWindow.Create(runtime)` followed by `.WithSilk()`
+    (Bibui.Platform.Silk), `.WithWayland(options)` (Bibui.Platform.Wayland) or
+    `.WithHost(host)`.
+  - There is no default backend: `new BibuiRuntime()`, `new BibuiRenderer()`
+    and `RasterBackends` are gone, and Bibui.Raster.Skia no longer registers
+    itself. Nothing is loaded by name, so nothing warns under trimming or AOT.
+    A runtime with no backend throws when it first draws, and a window with no
+    host throws when it runs, each saying what to call.
 - **Components are called on the runtime (breaking).** Every component named
   by an id is an extension method on `BibuiRuntime`, and its static function
   is gone: `runtime.Button(id, "Save")` for `Button.Build(runtime, id, "Save")`.
@@ -335,20 +459,22 @@ before it was published.
   the box.
 - **The package split.** bibui core references no SkiaSharp: drawing goes
   through `IRasterBackend`. The packages are `Bibui` (nodes, layout, painter,
-  text, theming, and the runtime: the frame, interactions and components), `Bibui.Testing`, `Bibui.Raster.Skia`,
+  text, theming, and the runtime: the frame loop, interactions, components
+  and `BibuiWindow`), `Bibui.Testing`, `Bibui.Raster.Skia`,
   `Bibui.Platform.Silk`, `Bibui.Platform.Wayland`, `Bibui.Raster.Managed`,
   `Bibui.Raster.Managed.Backend` and `Bibui.Text.FreeType`. Referencing `Bibui.Raster.Skia` makes Skia the default backend for
   `new BibuiRenderer()` and `new BibuiRuntime()`.
-- **The window is a platform package's.** GLFW + OpenGL is
-  `Bibui.Platform.Silk`, Wayland `Bibui.Platform.Wayland`. `Bibui.Key` and
+- **`BibuiWindow` takes its platform host.** `new BibuiWindow(runtime)` is
+  now `new BibuiWindow(runtime, new SilkPlatformHost())` (GLFW + OpenGL, in
+  `Bibui.Platform.Silk`) or `new WaylandPlatformHost()`. `Bibui.Key` and
   `Bibui.MouseButton` are bibui's own types.
-- **Skia-specific API moved to the Skia packages.**
-  `renderer.RenderTo(SKSurface, ...)` and `SkiaSurface` live in
-  `Bibui.Raster.Skia`.
+- **Skia-specific API moved to the Skia packages.** `Box.CustomDraw` is now
+  `Draw = SkiaCustomDraw.Of(...)` in `Bibui.Raster.Skia`;
+  `renderer.RenderTo(SKSurface, ...)` and `SkiaSurface` live there too.
 - **Drawing types are named for what they are:** `SkiaContext` is
   `DrawContext`, `SkiaDraw` is `DrawCallback`, `SkiaKey` is `CacheKey`.
-- **The runtime is part of `Bibui`.** `BibuiRuntime`, the
-  window input and the components moved from the `Bibui.Runtime`
+- **The runtime is part of `Bibui`.** `BibuiRuntime`, `BibuiWindow`, the
+  platform-host seam and the components moved from the `Bibui.Runtime`
   package into `Bibui`; reference `Bibui` alone.
 - **Theme types are `Bibui.Theming`**, merged into `Bibui` from the former
   `Bibui.Contracts` package.
@@ -376,90 +502,6 @@ before it was published.
   (`BIBUI_TEST_SERVER_OUT`). The constructor takes that directory.
 
 ### Added
-
-- **ScrollList: rows of one height, of which only those in sight are built.**
-  `runtime.BeginScrollList(id, ref scroll, pitch, count)` fills the parent in
-  scope with a view and a bar and pushes the view; build rows `scroll.First` up
-  to `scroll.Last`, then `runtime.EndScrollList(ref scroll)` pops it. The list
-  scrolls by rows: the `ScrollPt` the caller keeps is all it needs between
-  frames, the target row and the pixels into it, how far the list is still
-  shown from there (eased to 0 at `Rates.Follow`), and the rows in sight. The
-  wheel moves it by pixels, the thumb drags by rows from where it was pressed,
-  and the track pages by the rows in view. `scroll.Target(idx, px, pitch)`
-  moves it from the caller's side, keeping what is shown. The bar is also
-  `runtime.Scrollbar(id, scroll, count, viewRows)`, for a list built the same
-  way. A gallery page shows 100,000 rows.
-
-- **`Bibui.App` packages: a bibui app in one package.** Five packages, one per
-  window and renderer: `Bibui.App.SilkSkiaGl` (Silk, Skia on the GPU),
-  `Bibui.App.SilkSkiaCpu`, `Bibui.App.SilkManaged` (Silk, drawn on the CPU and
-  shown through the GL framebuffer), `Bibui.App.WaylandManaged` and
-  `Bibui.App.WaylandSkiaCpu`. Each brings bibui, its window and its renderer,
-  and has the same `BibuiApp`, so changing the package changes how an app is
-  drawn and nothing in its code:
-  ```csharp
-  using var app = BibuiApp.Open(runtime, new("App", 800, 600));
-  while (app.BeginFrame())
-  {
-      runtime.BeginBuild(app.Events);
-      Build();
-      runtime.EndBuild();
-      app.EndFrame();      // draw, present, pace
-  }
-  ```
-  - `app.Renderer` is the renderer, for textures; `app.Window` the window.
-  - The test server starts with `new BibuiAppOptions { TestServer = true }` or
-    `BIBUI_TEST_SERVER=1`; otherwise it is off. On the CPU packages its
-    screenshots are drawn by the app's own renderer, textures included.
-  - The window and renderer packages stay usable on their own, for a loop an
-    app writes itself.
-  - Each depends on exactly the `Bibui`, window and renderer versions it was
-    built with.
-
-- **One rate per kind of motion, and everything eases by it (breaking).**
-  `runtime.Rates` holds this frame's rates for exponential approach, computed
-  once as the build begins from the theme's motion speeds: `Hover` (hot and
-  pressed boxes), `Follow` (a view's scroll offset, the caret), `Toggle` (a
-  switch's knob, a panel opening) and `Default` (anything else). Every rate is
-  1 under reduced motion or `MotionEasing.None`, so no caller checks for it.
-  `runtime.Rate(speed)` gives one for a speed of your own, the same way.
-  - `Ease.Exponential(current, target, rate)` (`float`, `Vector2`, `Vector4`),
-    `Ease.Rate(speed, dt)` and `Ease.Spring(ref current, ref velocity, target,
-    spring, dt)` are the steps as pure functions; the runtime's hover, press,
-    scrolling, `Animate`, transitions and `DrawContext.Animate` all step
-    through them.
-  - `runtime.Animate(id, property, target, rate)` and
-    `DrawContext.Animate(key, target, rate)` take a rate where they took a
-    speed: `runtime.Rates.Toggle`, `runtime.Rate(18f)`, or 1 for a value driven
-    directly (it was `float.PositiveInfinity`). With none, `Rates.Default`;
-    `DrawContext.Animate`'s default was a speed of 12, and is now the theme's
-    default, 20.
-  - `MotionTokens.Caret` is `MotionTokens.Follow`, and view scrolling eases at
-    it rather than at `Hover`. A theme file's `"caret"` is still read as
-    `"follow"`.
-
-- **Groups: blend modes and colour matrices.** `ctx.PushBlendMode(mode)`
-  draws until `PopBlendMode` into a layer and composites it onto what is
-  under it with the mode: `SrcOver`, `Multiply`, `Plus`, `Screen`, `Overlay`
-  or `Src`, Skia's formulas on premultiplied colour. `ctx.PushColorMatrix(m)`
-  composites its layer through a 4×5 matrix, row by row, on straight colour
-  in 0..1 with the fifth column a translation in 0..1. `PushOpacity` is
-  shorthand for a matrix that only scales alpha. A renderer makes no layer
-  for `SrcOver` or the identity, and draws an alpha-only matrix as the
-  opacity layer it drew before, so existing pixels do not move.
-  - On the list, `DrawOpKind.PushOpacity` and `DrawOp.Alpha` are gone (breaking
-    for a renderer of your own): the ops are `PushBlendMode` (`DrawOp.Blend`)
-    and `PushColorMatrix` (20 floats in the payload). `ColorMatrices.IsIdentity`
-    and `IsOpacity` say when a matrix needs no layer, or only an alpha.
-  - With damage tracking, a `Src` layer, or a matrix that adds alpha, writes
-    all of its clip: a partial repaint holds it to the repainted rect.
-- **A texture can be drawn through a lookup table.**
-  `ctx.DrawTexture(texture, dest, paint, new TextureLookup(table, TextureChannel.R))`:
-  each pixel's raw channel (as stored: R8's R, A8's A, RG8's R and G,
-  RGBA8's straight channels) picks the table's entry, a 1-D colormap from one
-  channel or a 2-D table from two. A channel the format lacks reads 0. The
-  source is filtered by the paint; the table is read exactly. A lookup drawn
-  again allocates nothing, on every renderer.
 
 - `runtime.Column()` and `runtime.Row()`: a pooled box along Y or X, linked
   under the parent in scope; push it to build into it:
@@ -539,17 +581,7 @@ before it was published.
 - `GetDrawOps`, the YAML specs, the render manifest, and the browser parity
   pipeline.
 - The `Bibui.Contracts` and `Bibui.Runtime` packages (merged into `Bibui`).
-- `runtime.OnUnhandledKey`. It fired as a key arrived, before any field
-  could take it, so it also reported text typed into a field. Read
-  `runtime.UnconsumedEvents` while building instead: what a component took is
-  marked eaten.
 
-### Fixed
-
-- A typed character above U+FFFF (an emoji, from Compose or an xkb layout)
-  reaches a text field whole. On the Wayland window it was sent as two halves
-  and the first one threw; on the Silk window it was cut to 16 bits and typed
-  the wrong character. `WindowEvent.Text` takes a `Rune`, and a text field
-  ignores a code point that is no character instead of throwing.
-
-[Unreleased]: https://github.com/Navisurg/bibui/commits/main
+[Unreleased]: https://github.com/Navisurg/bibui/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Navisurg/bibui/compare/v0.9.3...v0.10.0
+[0.9.3]: https://github.com/Navisurg/bibui/releases/tag/v0.9.3
