@@ -109,6 +109,27 @@ internal static unsafe class ScaleTests
             Assert.Eq(120u, s.Wanted120, "unplugged");
         });
 
+        t.Run("refresh: the current mode of the outputs the surface is on, fastest first", () =>
+        {
+            var s = new ScaleState();
+            Assert.Eq(0f, s.RefreshHz, "nothing known");
+            s.OnOutputMode(1, current: true, 60000);
+            Assert.Eq(0f, s.RefreshHz, "an output the surface is not on");
+            s.OnEnter(1);
+            Assert.Eq(60f, s.RefreshHz, "the output it is on");
+            s.OnOutputMode(1, current: false, 144000);
+            Assert.Eq(60f, s.RefreshHz, "a mode the output is not in");
+            s.OnOutputMode(2, current: true, 119880);
+            s.OnEnter(2);
+            Assert.Eq(119.88f, s.RefreshHz, "the faster of two");
+            s.OnLeave(2);
+            Assert.Eq(60f, s.RefreshHz, "left the faster one");
+            s.OnOutputMode(1, current: true, 120000);
+            Assert.Eq(120f, s.RefreshHz, "the output changed mode");
+            s.OnOutputGone(1);
+            Assert.Eq(0f, s.RefreshHz, "unplugged");
+        });
+
         t.Run("scale: a change mid-run reallocates the pool at the new size", () =>
         {
             var a = new Alloc();
