@@ -383,12 +383,12 @@ before it was published.
   to `scroll.Last`, then `runtime.EndScrollList(ref scroll)` pops it. The list
   scrolls by rows: the `ScrollPt` the caller keeps is all it needs between
   frames, the target row and the pixels into it, how far the list is still
-  shown from there (eased to 0 at `Rates.Follow`), and the rows in sight. The wheel moves it by pixels, the thumb drags by rows from
-  where it was pressed, and the track pages by the rows in view.
-  `scroll.Target(idx, px, pitch)` moves it from the caller's side, keeping what
-  is shown. A scrolling frame allocates nothing beyond the caller's rows. The
-  bar is also `runtime.Scrollbar(id, scroll, count, viewRows)`, for a list built
-  the same way. A gallery page shows 100,000 rows.
+  shown from there (eased to 0 at `Rates.Follow`), and the rows in sight. The
+  wheel moves it by pixels, the thumb drags by rows from where it was pressed,
+  and the track pages by the rows in view. `scroll.Target(idx, px, pitch)`
+  moves it from the caller's side, keeping what is shown. The bar is also
+  `runtime.Scrollbar(id, scroll, count, viewRows)`, for a list built the same
+  way. A gallery page shows 100,000 rows.
 
 - **One rate per kind of motion, and everything eases by it (breaking).**
   `runtime.Rates` holds this frame's rates for exponential approach, computed
