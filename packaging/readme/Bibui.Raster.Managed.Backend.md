@@ -1,12 +1,24 @@
 # Bibui.Raster.Managed.Backend
 
-bibui's raster backend with no SkiaSharp: shapes, clips, layers, images and PNG
-through the managed rasterizer (`Bibui.Raster.Managed`), and text through
-FreeType and HarfBuzz (`Bibui.Text.FreeType`).
+bibui's renderer with no SkiaSharp: `ManagedRenderer` draws a frame's
+`DrawList` (shapes, clips, layers, textures) through the managed rasterizer
+(`Bibui.Raster.Managed`), and text from the glyph masks of bibui's own FreeType
+and HarfBuzz engine.
 
 ```csharp
-var runtime = BibuiRuntime.Create().WithManagedRasterizer();
+using Bibui.Raster.Managed.Backend;
+
+var managed = new ManagedRenderer();
+runtime.EndBuild();
+managed.Draw(runtime.DrawList, pixels);   // RasterPixels: BGRA8888 premultiplied, yours
 ```
+
+A host takes `managed.Draw` as its `DrawToPixels`. `DamageTracking` (or
+`BIBUI_DAMAGE=1`) redraws only what changed since the last list onto a buffer
+that still holds an earlier frame; `LastRepaint` says what was redrawn.
+`CreateTexture(format, kind, width, height, pixels)`, `UpdateTexture` and
+`ReleaseTexture` make the textures a custom draw callback draws: RGBA8, R8,
+RG8 or A8, Static or Stream (one texture a video's frames overwrite).
 
 With `Bibui.Platform.Wayland` this is bibui's Native AOT route: an app that
 ships no libSkiaSharp. It needs FreeType and HarfBuzz on the machine.

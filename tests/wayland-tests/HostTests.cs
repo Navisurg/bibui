@@ -204,30 +204,28 @@ internal static unsafe class HostTests
 
         // ── The host before it is opened ─────────────────────────────────────
 
-        t.Run("host: closed and inert until opened; Wake is a no-op", () =>
+        t.Run("window: closed and inert until opened; Wake is a no-op", () =>
         {
-            var host = new WaylandPlatformHost();
+            var host = new WaylandWindow();
             Assert.True(host.IsClosing, "closing before open");
-            Assert.True(host.PacesFrames, "paces frames");
-            Assert.Eq(HostPresentation.CpuPixels, host.Presentation, "presentation");
             Assert.Eq(1f, host.Scale, "scale");
             Assert.Eq(KeyModifiers.None, host.HeldModifiers, "modifiers");
             Assert.True(host.GetClipboardText() is null, "no clipboard");
             host.SetClipboardText("x");
             host.SetCursor(CursorShape.Text);
             host.Wake();
-            var events = new List<WindowEvent> { WindowEvent.FocusLost() };
+            var events = new List<WindowEvent>();
             host.WaitEvents(events);
-            Assert.Eq(0, events.Count, "WaitEvents on a closed host returns nothing at once");
-            host.Shutdown(); // copes with never having opened
-            Assert.Throws<ArgumentOutOfRangeException>(() => new WaylandPlatformHost(new WaylandHostOptions { Buffers = 1 }));
+            Assert.Eq(0, events.Count, "WaitEvents on a closed window returns nothing at once");
+            host.Dispose(); // copes with never having opened
+            Assert.Throws<ArgumentOutOfRangeException>(() => new WaylandWindow(new WaylandHostOptions { Buffers = 1 }));
         });
 
         // ── Live, with no surface ────────────────────────────────────────────
 
         t.Run("live probe: bind globals, draw a frame into a real wl_shm buffer (no surface)", () =>
         {
-            if (!WaylandPlatformHost.IsSupported) throw new SkipException("no Wayland session");
+            if (!WaylandWindow.IsSupported) throw new SkipException("no Wayland session");
             Probe();
         });
     }
@@ -270,17 +268,20 @@ internal static unsafe class HostTests
             Assert.Eq(1, _formats, "ARGB8888 advertised (enum-typed event)");
 
             // A real buffer — memfd, mmap, fd passed in create_pool — drawn
-            // into by the runtime, and compared with the runtime's own render.
-            var runtime = BibuiRuntime.Create().WithSkia();
-            runtime.Mount(() => Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box()))
+            // into by a renderer, and compared with the same frame drawn packed.
+            var runtime = BibuiRuntime.Create();
+            using var skia = new SkiaCpuRenderer();
+            runtime.SetBuild(() => Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box()))
                     .Styled(new Bibui.Style { BackgroundColor = Bibui.UiColor.Accent, CornerRadius = 8f }),
                 new Bibui.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });
-            pool = new BufferPool<ShmBuffer>(new ShmAllocator(_shm, runtime.Raster, bufferListener, null), depth: 2);
+            pool = new BufferPool<ShmBuffer>(new ShmAllocator(_shm, bufferListener, null), depth: 2);
             var buffer = pool.TryAcquire(64, 48)!;
-            runtime.RenderTo(buffer.Surface);
+            runtime.Step();
+            skia.Draw(runtime.DrawList, buffer.Pixels);
             var shmPixels = new ReadOnlySpan<byte>((void*)buffer.Map, 64 * 48 * 4).ToArray();
-            var reference = runtime.Render().RawBgraBytes;
-            Assert.True(shmPixels.AsSpan().SequenceEqual(reference.AsSpan(0, shmPixels.Length)), "shm pixels equal Render()'s");
+            var reference = new byte[64 * 48 * 4];
+            fixed (byte* p = reference) skia.Draw(runtime.DrawList, new Bibui.Draw.RasterPixels((nint)p, 64, 48, 64 * 4));
+            Assert.True(shmPixels.AsSpan().SequenceEqual(reference), "shm pixels equal the frame drawn packed");
             Assert.True(WaylandNative.wl_display_roundtrip(display) >= 0, "the compositor accepted pool and buffer");
             pool.Clear();
             pool = null;

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -6,15 +7,24 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Bibui.Renderer;
-using Bibui.TextEdit;
+using Bibui.Draw;
+using Bibui.Runtime.Platform;
 
 namespace Bibui.Runtime;
 
 /// <summary>
 /// A TCP test server that exposes <see cref="BibuiRuntime"/> as a line-delimited
 /// JSON command API on the loopback interface, for workflow automation and video
-/// recording. Start alongside <see cref="BibuiWindow"/>.
+/// recording. The app holds it and steps it from its loop:
+/// <code>
+/// using var server = BibuiTestServer.StartIfEnabled(runtime, draw: renderer.Draw);
+/// while (SilkWindow.BeginFrame(window, runtime))
+/// {
+///     // While a command runs, the server is the keyboard and mouse.
+///     runtime.BeginBuild(server?.Step(window.Events) ?? window.Events);
+///     ...
+/// }
+/// </code>
 ///
 /// <para>It is off unless the app asks for it. <see cref="StartIfEnabled"/> starts
 /// one only when the environment variable <c>BIBUI_TEST_SERVER</c> is <c>1</c>;
@@ -27,10 +37,19 @@ namespace Bibui.Runtime;
 /// written only inside <see cref="OutputDirectory"/>: <c>screenshot</c> and
 /// <c>start_recording</c> take paths relative to it.</para>
 ///
-/// <para>Protocol: each request and response is a single JSON line. Commands are
-/// dispatched synchronously — the response is sent once the action completes.
-/// The <c>start_recording</c> command begins streaming frames to FFmpeg;
-/// <c>stop_recording</c> finalises the video.</para>
+/// <para>The server builds no frames and touches the runtime from no thread but
+/// the loop's. A client's thread only queues its command and waits; the loop
+/// runs it in <see cref="Step"/>, a frame at a time, as a hand would: a click is a
+/// move, then a press, then a release, each in a frame of its own. The reply goes
+/// back once the frames the command waits for are built. Screenshots and
+/// recordings draw the runtime's <see cref="BibuiRuntime.DrawList"/> there too,
+/// with the function the server was given (null refuses them): the app's
+/// renderer when it draws into memory, so the textures the app made on it are in
+/// them, or a CPU renderer of its own beside a GPU one.</para>
+///
+/// <para>Protocol: each request and response is a single JSON line, the response
+/// sent once the command has run. The <c>start_recording</c> command begins
+/// streaming frames to FFmpeg; <c>stop_recording</c> finalises the video.</para>
 /// </summary>
 public sealed class BibuiTestServer : IDisposable
 {
@@ -44,6 +63,8 @@ public sealed class BibuiTestServer : IDisposable
     public const string OutputVariable = "BIBUI_TEST_SERVER_OUT";
 
     private readonly BibuiRuntime _runtime;
+    // What a screenshot and a recording draw the frame's list with; null refuses both.
+    private readonly DrawToPixels? _draw;
     private readonly int _port;
     private readonly string _outputDir;
     private readonly byte[] _token;
@@ -52,10 +73,39 @@ public sealed class BibuiTestServer : IDisposable
     private Thread? _acceptThread;
     private volatile bool _stopping;
 
-    // Recording state
-    private readonly object _recordLock = new();
+    // ── Client threads → the loop ──────────────────────────────────────────
+    // The one thing that crosses threads: a command, queued by a client's
+    // thread, which waits on Done for the reply the loop writes.
+    private sealed class Pending(JsonObject request)
+    {
+        public readonly JsonObject Request = request;
+        public string Reply = "";
+        public readonly ManualResetEventSlim Done = new();
+    }
+    private readonly ConcurrentQueue<Pending> _queue = new();
+
+    /// <summary>How long a client waits for the loop to run its command.</summary>
+    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(30);
+
+    // ── The loop's ─────────────────────────────────────────────────────────
+    // Loop thread only: the command running, its steps (one per frame it
+    // waits for), the reply it has decided on, and this frame's input.
+    private Pending? _running;
+    private IEnumerator<bool>? _steps;
+    private string _reply = "";
+    private readonly List<WindowEvent> _events = [];
+    // Where the server's pointer is: a release given no point lands here.
+    private float _pointerX, _pointerY;
+
+    // ── Recording ──────────────────────────────────────────────────────────
+    // The loop draws each new frame for the record thread (_latest, under
+    // _latestLock); the record thread writes the latest at 30 fps.
     private volatile bool _recording;
     private Thread? _recordThread;
+    private long _recordedFrame = -1;
+    private readonly object _latestLock = new();
+    private byte[]? _latest;
+    private int _latestW, _latestH;
 
     /// <summary>
     /// A server on <paramref name="runtime"/> that writes only inside
@@ -67,8 +117,12 @@ public sealed class BibuiTestServer : IDisposable
     /// <param name="port">The loopback port.</param>
     /// <param name="token">The token a request must carry, 16 characters or more; null for a random one.</param>
     /// <param name="writeTokenFile">Whether <see cref="Start"/> writes the token to <see cref="TokenFile"/>.</param>
+    /// <param name="draw">
+    /// Draws a frame's list into pixels, for <c>screenshot</c> and <c>start_recording</c>:
+    /// the app's renderer, on the CPU. Null refuses both.
+    /// </param>
     public BibuiTestServer(BibuiRuntime runtime, string outputDirectory, int port = DefaultPort,
-        string? token = null, bool writeTokenFile = true)
+        string? token = null, bool writeTokenFile = true, DrawToPixels? draw = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
@@ -76,6 +130,7 @@ public sealed class BibuiTestServer : IDisposable
             throw new ArgumentException("A token must be at least 16 characters.", nameof(token));
 
         _runtime = runtime;
+        _draw = draw;
         _port = port;
         _outputDir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputDirectory));
         Token = token ?? Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
@@ -105,14 +160,15 @@ public sealed class BibuiTestServer : IDisposable
     /// and returns it; otherwise returns null and opens nothing. Its output directory
     /// is <c>BIBUI_TEST_SERVER_OUT</c>, or <c>bibui-test-output</c> under the working
     /// directory. Where the token is, not the token, is written to stderr.
+    /// <paramref name="draw"/> is what screenshots are drawn with; null refuses them.
     /// </summary>
-    public static BibuiTestServer? StartIfEnabled(BibuiRuntime runtime, int port = DefaultPort)
+    public static BibuiTestServer? StartIfEnabled(BibuiRuntime runtime, int port = DefaultPort, DrawToPixels? draw = null)
     {
         if (!IsEnabled) return null;
         var output = Environment.GetEnvironmentVariable(OutputVariable);
         if (string.IsNullOrWhiteSpace(output))
             output = Path.Combine(Directory.GetCurrentDirectory(), "bibui-test-output");
-        var server = new BibuiTestServer(runtime, output, port);
+        var server = new BibuiTestServer(runtime, output, port, draw: draw);
         server.Start();
         Console.Error.WriteLine(
             $"[BibuiTestServer] listening on 127.0.0.1:{port}; token in {server.TokenFile}; output in {server.OutputDirectory}");
@@ -231,7 +287,7 @@ public sealed class BibuiTestServer : IDisposable
                 while ((line = reader.ReadLine()) is not null)
                 {
                     var refusal = Admit(line, out var request);
-                    var response = refusal ?? ProcessCommand(request!);
+                    var response = refusal ?? RunOnLoop(request!);
                     try { writer.WriteLine(response); }
                     catch (IOException) { break; } // client closed mid-response
                     // A refused line ends the connection: whatever follows it on the
@@ -292,149 +348,192 @@ public sealed class BibuiTestServer : IDisposable
         return false;
     }
 
-    // ── Command dispatch ───────────────────────────────────────────────────
+    // ── Commands, on the loop ──────────────────────────────────────────────
 
-    private string ProcessCommand(JsonNode node)
+    // A client's thread: queue the command, wake the loop, wait for its reply.
+    private string RunOnLoop(JsonObject request)
     {
-        try
-        {
-            var cmd  = node["cmd"]?.GetValue<string>() ?? "";
-
-            return cmd switch
-            {
-                "ping"            => Ok(),
-                "click"           => HandleClick(node),
-                "click_at"        => HandleClickAt(node),
-                "right_click_at"  => HandleRightClickAt(node),
-                "mousedown_at"    => HandleMouseDownAt(node),
-                "mouseup"         => HandleMouseUp(),
-                "scroll"          => HandleScroll(node),
-                "hover"           => HandleHover(node),
-                "gesture"         => HandleGesture(node),
-                "press"           => HandlePress(node),
-                "type"            => HandleType(node),
-                "fill"            => HandleFill(node),
-                "is_visible"      => HandleIsVisible(node),
-                "is_disabled"     => HandleIsDisabled(node),
-                "get_text"        => HandleGetText(node),
-                "screenshot"      => HandleScreenshot(node),
-                "start_recording" => HandleStartRecording(node),
-                "stop_recording"  => HandleStopRecording(),
-                _                 => Err($"Unknown command: {cmd}"),
-            };
-        }
-        catch (Exception ex)
-        {
-            return Err(ex.Message);
-        }
+        var pending = new Pending(request);
+        _queue.Enqueue(pending);
+        _runtime.RequestFrame();
+        return pending.Done.Wait(CommandTimeout)
+            ? pending.Reply
+            : Err("The app's loop did not run the command: does it call server.Step() once a frame?");
     }
 
-    // ── Action handlers ────────────────────────────────────────────────────
-
     /// <summary>
-    /// One synthesised mouse event. The whole point of building these rather
-    /// than calling the runtime's dispatch methods: a scripted press takes the
-    /// path a real one takes, so what a test proves is what a user gets.
+    /// The loop's turn, once a frame before <see cref="BibuiRuntime.BeginBuild"/>:
+    /// runs the command in hand a frame further, or starts the next one. Returns
+    /// the frame's input: <paramref name="windowEvents"/> when no command is
+    /// running; otherwise the keyboard and mouse events the command makes this
+    /// frame, and <paramref name="windowEvents"/> is emptied — while a command
+    /// runs, the server is the only keyboard and mouse.
     /// </summary>
-    private static BibUiEvent Mouse(BibUiEventKind kind, MouseButton button, float x, float y)
-        => new() { Kind = kind, Button = button, X = x, Y = y };
+    public List<WindowEvent> Step(List<WindowEvent> windowEvents)
+    {
+        CaptureForRecording();
+        if (_running is null)
+        {
+            if (!_queue.TryDequeue(out var next)) return windowEvents;
+            (_running, _reply) = (next, Ok());
+            _steps = Run(next.Request).GetEnumerator();
+        }
+
+        bool waiting;
+        try { waiting = _steps!.MoveNext(); }
+        catch (Exception ex) { (_reply, waiting) = (Err(ex.Message), false); }
+        if (!waiting)
+        {
+            _running.Reply = _reply;
+            _running.Done.Set();
+            (_running, _steps) = (null, null);
+        }
+        // A command waiting on frames, or one queued behind it, keeps the loop going.
+        if (_running is not null || !_queue.IsEmpty) _runtime.RequestFrame();
+        windowEvents.Clear();
+        return _events;
+    }
+
+    // A command is a sequence of frames: each `yield return true` builds one
+    // before the command goes on. What it decides to answer goes in _reply.
+    private IEnumerable<bool> Run(JsonNode node)
+    {
+        var cmd = node["cmd"]?.GetValue<string>() ?? "";
+        return cmd switch
+        {
+            "ping"            => [],
+            "click"           => Click(node),
+            "click_at"        => ClickAt(node, MouseButton.Left, "click_at"),
+            "right_click_at"  => ClickAt(node, MouseButton.Right, "right_click_at"),
+            "mousedown_at"    => MouseDownAt(node),
+            "mouseup"         => MouseUp(),
+            "scroll"          => Scroll(node),
+            "hover"           => Hover(node),
+            "gesture"         => Gesture(node),
+            "press"           => Press(node),
+            "type"            => Type(node),
+            "fill"            => Fill(node),
+            "is_visible"      => Query(node, n => OkResult(n is not null)),
+            "is_disabled"     => Query(node, n => OkResult(n is Box box && (box.Claims & InteractionKinds.Disabled) != 0)),
+            "get_text"        => GetText(node),
+            "screenshot"      => Screenshot(node),
+            "start_recording" => StartRecording(node),
+            "stop_recording"  => StopRecording(),
+            _                 => Refuse($"Unknown command: {cmd}"),
+        };
+    }
+
+    private IEnumerable<bool> Refuse(string message)
+    {
+        _reply = Err(message);
+        return [];
+    }
+
+    // ── Input commands ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// Renders until what is on screen is the result of the command, not the frame that
-    /// noticed it.
+    /// Frames a command waits for after its input, so what is on screen is the
+    /// result of the command, not the frame that noticed it.
     ///
     /// <para>An interaction is answered by a box asking about it <em>during</em> a build, so
-    /// anything the answer changes — state the host writes back from a click — lands after
-    /// the tree for that frame has already been described. One render sees the click; the
+    /// anything the answer changes — state the app writes back from a click — lands after
+    /// the tree for that frame has already been described. One frame sees the click; the
     /// next one shows what it did. A control that only exists once the click has happened —
     /// the second half of a confirm, a field that opens under a row — is therefore not in the
-    /// tree until that second render.</para>
-    ///
-    /// <para>That is invisible to a caller who reads the tree between two commands and a
-    /// trap for one who does not: the next command looks up a control that is on screen by
-    /// every account except the one the runtime has. Rendering the owed frame here is what
-    /// makes a command mean "this happened" rather than "this was noticed". The old callback
-    /// path had the same guarantee for a different reason — it invoked the handler before the
-    /// render rather than inside it.</para>
+    /// tree until that second frame.</para>
     /// </summary>
-    private void Settle()
+    private const int SettleFrames = 2;
+
+    // One mouse event, the way the window reports one; the server's pointer follows it.
+    private void Mouse(WindowEventKind kind, float x, float y, MouseButton button)
     {
-        _runtime.Render();
-        _runtime.Render();
+        (_pointerX, _pointerY) = (x, y);
+        _events.Add(WindowEvent.Mouse(kind, x, y, button));
     }
 
-    private string HandleClick(JsonNode node)
+    private static (float X, float Y) Point(JsonNode node, string cmd)
+        => (node["x"]?.GetValue<float>() ?? throw new ArgumentException($"{cmd} requires 'x'"),
+            node["y"]?.GetValue<float>() ?? throw new ArgumentException($"{cmd} requires 'y'"));
+
+    // By name: a press and a release at the box's centre, addressed to that box
+    // (DispatchClick), so a card is not clicked through the button drawn on it.
+    private IEnumerable<bool> Click(JsonNode node)
     {
-        var id = RequireId(node);
-        _runtime.DispatchClick(id);
-        Settle();
-        return Ok();
+        _runtime.DispatchClick(RequireId(node));
+        for (int i = 0; i < SettleFrames; i++) yield return true;
     }
 
-    private string HandleClickAt(JsonNode node)
+    // As a hand does it: onto the point, down, up, each in a frame of its own.
+    private IEnumerable<bool> ClickAt(JsonNode node, MouseButton button, string cmd)
     {
-        float x = node["x"]?.GetValue<float>() ?? throw new ArgumentException("click_at requires 'x'");
-        float y = node["y"]?.GetValue<float>() ?? throw new ArgumentException("click_at requires 'y'");
-        // A press and a release, which is what a click is. Going through the
-        // same path as a real one means multi-click, focus and drag state all
-        // behave as they do for a user.
-        _runtime.ProcessEvents(new[]
-        {
-            Mouse(BibUiEventKind.MouseDown, MouseButton.Left, x, y),
-            Mouse(BibUiEventKind.MouseUp,   MouseButton.Left, x, y),
-        });
-        Settle();
-        return Ok();
+        var (x, y) = Point(node, cmd);
+        Mouse(WindowEventKind.MouseMove, x, y, MouseButton.Unknown);
+        yield return true;
+        Mouse(WindowEventKind.MouseDown, x, y, button);
+        yield return true;
+        Mouse(WindowEventKind.MouseUp, x, y, button);
+        for (int i = 0; i < SettleFrames; i++) yield return true;
     }
 
-    private string HandleRightClickAt(JsonNode node)
+    // Onto the point and down; the button stays down until a mouseup.
+    private IEnumerable<bool> MouseDownAt(JsonNode node)
     {
-        float x = node["x"]?.GetValue<float>() ?? throw new ArgumentException("right_click_at requires 'x'");
-        float y = node["y"]?.GetValue<float>() ?? throw new ArgumentException("right_click_at requires 'y'");
-        _runtime.ProcessEvent(Mouse(BibUiEventKind.MouseDown, MouseButton.Right, x, y));
-        Settle();
-        return Ok();
+        var (x, y) = Point(node, "mousedown_at");
+        Mouse(WindowEventKind.MouseMove, x, y, MouseButton.Unknown);
+        yield return true;
+        Mouse(WindowEventKind.MouseDown, x, y, MouseButton.Left);
+        for (int i = 0; i < SettleFrames; i++) yield return true;
     }
 
-    private string HandleMouseDownAt(JsonNode node)
+    // Where the server's pointer is.
+    private IEnumerable<bool> MouseUp()
     {
-        float x = node["x"]?.GetValue<float>() ?? throw new ArgumentException("mousedown_at requires 'x'");
-        float y = node["y"]?.GetValue<float>() ?? throw new ArgumentException("mousedown_at requires 'y'");
-        _runtime.ProcessEvent(Mouse(BibUiEventKind.MouseDown, MouseButton.Left, x, y));
-        Settle();
-        return Ok();
+        Mouse(WindowEventKind.MouseUp, _pointerX, _pointerY, MouseButton.Left);
+        for (int i = 0; i < SettleFrames; i++) yield return true;
     }
 
-    private string HandleMouseUp()
+    private IEnumerable<bool> Hover(JsonNode node)
     {
-        _runtime.ProcessEvent(Mouse(BibUiEventKind.MouseUp, MouseButton.Left, 0f, 0f));
-        Settle();
-        return Ok();
+        var (x, y) = Point(node, "hover");
+        Mouse(WindowEventKind.MouseMove, x, y, MouseButton.Unknown);
+        for (int i = 0; i < SettleFrames; i++) yield return true;
+    }
+
+    // dx and dy are logical px, as a box reads them; a wheel notch is 32 of them,
+    // and wheel up is content up.
+    private IEnumerable<bool> Scroll(JsonNode node)
+    {
+        var (x, y) = Point(node, "scroll");
+        float dy = node["dy"]?.GetValue<float>() ?? throw new ArgumentException("scroll requires 'dy'");
+        float dx = node["dx"]?.GetValue<float>() ?? 0f;
+        (_pointerX, _pointerY) = (x, y);
+        _events.Add(WindowEvent.Wheel(x, y, dx / 32f, -dy / 32f));
+        for (int i = 0; i < SettleFrames; i++) yield return true;
     }
 
     /// <summary>
     /// One continuous pointer gesture: press at the first point, move through the rest,
-    /// release at the last — with NO render in between.
+    /// release at the last — all in one frame.
     ///
-    /// <para>This exists because the per-command handlers each call <see cref="BibuiRuntime.Render"/>,
-    /// which means a test-driven drag gets a fresh frame between every move. A real pointer
-    /// does not: mouse moves arrive far faster than frames, so build code acting on a drag
-    /// is holding state from an older frame. Any app that writes back a captured
-    /// snapshot (<c>setState.Set(state with ...)</c>) instead of using
-    /// <c>setState.Update</c> is broken under a real mouse and green under a synthetic one —
-    /// exactly the bug this command makes reproducible.</para>
+    /// <para>The per-command handlers each give the app frames, which means a test-driven
+    /// drag gets a fresh frame between every move. A real pointer does not: mouse moves
+    /// arrive far faster than frames, so build code acting on a drag is holding state from
+    /// an older frame. This command reproduces that.</para>
     ///
     /// <para><c>points</c> is <c>[[x,y], …]</c>, at least two. <c>render_each</c> (default
-    /// false) restores the old per-move render for comparison — a test that passes with it
-    /// true and fails with it false has found a stale-closure bug.</para>
+    /// false) gives each step a frame of its own, for comparison: a test that passes with it
+    /// true and fails with it false has found build code that holds a stale frame's state.</para>
     ///
     /// <para>Unlike <c>mousedown_at</c>, this does not dispatch a click: a drag is not a
     /// click, and a real window only clicks when the pointer did not travel.</para>
     /// </summary>
-    private string HandleGesture(JsonNode node)
+    private IEnumerable<bool> Gesture(JsonNode node)
     {
         if (node["points"] is not JsonArray pts || pts.Count < 2)
-            return Err("gesture requires 'points': [[x,y], [x,y], ...] with at least two points");
+        {
+            _reply = Err("gesture requires 'points': [[x,y], [x,y], ...] with at least two points");
+            yield break;
+        }
         bool renderEach = node["render_each"]?.GetValue<bool>() ?? false;
 
         (float X, float Y) At(int i)
@@ -444,103 +543,94 @@ public sealed class BibuiTestServer : IDisposable
         }
 
         var start = At(0);
-        _runtime.ProcessEvent(Mouse(BibUiEventKind.MouseDown, MouseButton.Left, start.X, start.Y));
-        if (renderEach) _runtime.Render();
-
+        Mouse(WindowEventKind.MouseDown, start.X, start.Y, MouseButton.Left);
+        if (renderEach) yield return true;
         for (int i = 1; i < pts.Count; i++)
         {
             var p = At(i);
-            _runtime.ProcessEvent(Mouse(BibUiEventKind.MouseMove, MouseButton.Left, p.X, p.Y));
-            if (renderEach) _runtime.Render();
+            Mouse(WindowEventKind.MouseMove, p.X, p.Y, MouseButton.Unknown);
+            if (renderEach) yield return true;
         }
-
         var end = At(pts.Count - 1);
-        _runtime.ProcessEvent(Mouse(BibUiEventKind.MouseUp, MouseButton.Left, end.X, end.Y));
-        Settle();
-        return Ok();
-    }
-
-    private string HandleHover(JsonNode node)
-    {
-        float x = node["x"]?.GetValue<float>() ?? throw new ArgumentException("hover requires 'x'");
-        float y = node["y"]?.GetValue<float>() ?? throw new ArgumentException("hover requires 'y'");
-        _runtime.ProcessEvent(Mouse(BibUiEventKind.MouseMove, MouseButton.Unknown, x, y));
-        Settle();
-        return Ok();
+        Mouse(WindowEventKind.MouseUp, end.X, end.Y, MouseButton.Left);
+        for (int i = 0; i < SettleFrames; i++) yield return true;
     }
 
     /// <summary>
-    /// Synthesise a real key press: builds the same BibUiEvent the window pump would for this
-    /// key and enqueues it, so an app's global shortcut handling (Delete, Ctrl+A, Escape) is
-    /// reachable from a test.
+    /// A real key press, with its modifiers pressed around it as a keyboard does:
+    /// Ctrl and Shift down, the key down, each event saying what is held; then, in
+    /// a later frame, all of them up.
+    /// What an app's global shortcut handling (Delete, Ctrl+A, Escape) sees is what
+    /// a keyboard gives it.
     ///
-    /// <para>Distinct from <c>key</c>, which only steers an open dropdown and never touches the
-    /// event queue — nothing driven through that command can exercise a host's own key handler.</para>
-    ///
-    /// <para>Names are <see cref="Bibui.Key"/> values (Silk.NET's names) ("Delete", "Backspace", "Escape", "A"), with
-    /// the Arrow* spellings accepted as aliases for the bare direction names.</para>
+    /// <para>Names are <see cref="Bibui.Key"/> values ("Delete", "Backspace", "Escape", "A"),
+    /// with the Arrow* spellings accepted as aliases for the bare direction names.</para>
     /// </summary>
-    private string HandlePress(JsonNode node)
+    private IEnumerable<bool> Press(JsonNode node)
     {
         var name = node["key"]?.GetValue<string>()
             ?? throw new ArgumentException("press requires 'key' (e.g. Delete, Backspace, Escape, A)");
         bool ctrl  = node["ctrl"]?.GetValue<bool>()  ?? false;
         bool shift = node["shift"]?.GetValue<bool>() ?? false;
-
         if (!TryParseKey(name, out var key))
-            return Err($"Unknown key '{name}'. Use a Bibui.Key name, e.g. Delete or Escape.");
+        {
+            _reply = Err($"Unknown key '{name}'. Use a Bibui.Key name, e.g. Delete or Escape.");
+            yield break;
+        }
 
-        _runtime.ProcessEvent(BibuiWindow.BibUiEventFromKey(key, ctrl, shift, _runtime.ClipboardGet));
-        Settle();
-        // And let go of it, in a frame of its own, as a keyboard does. A press that never
+        var held = (ctrl ? KeyModifiers.Ctrl : 0) | (shift ? KeyModifiers.Shift : 0);
+        if (ctrl) _events.Add(WindowEvent.KeyPress(Key.ControlLeft, KeyModifiers.Ctrl));
+        if (shift) _events.Add(WindowEvent.KeyPress(Key.ShiftLeft, held));
+        _events.Add(WindowEvent.KeyPress(key, held));
+        for (int i = 0; i < SettleFrames; i++) yield return true;
+        // And let go, in a frame of its own, as a keyboard does. A press that never
         // released was a key no user can type: an app that acted on the release as well as
         // the press — Tab switching a tab over and straight back — passed every scripted case
         // and failed on the first real keystroke.
-        _runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.Release, Key = key });
-        Settle();
-        return Ok();
+        _events.Add(WindowEvent.KeyRelease(key, held));
+        if (shift) _events.Add(WindowEvent.KeyRelease(Key.ShiftLeft, held & ~KeyModifiers.Shift));
+        if (ctrl) _events.Add(WindowEvent.KeyRelease(Key.ControlLeft));
+        for (int i = 0; i < SettleFrames; i++) yield return true;
     }
 
     /// <summary>
-    /// Type text into whatever holds focus, one character at a time, exactly as a keyboard
-    /// would.
-    ///
-    /// <para>The other half of <c>press</c>. A keyboard reports a printable character on a
-    /// different channel from the key that produced it — Silk raises KeyChar separately from
-    /// KeyDown, and <see cref="BibuiWindow.BibUiEventFromKey"/> deliberately returns nothing for
-    /// printable keys because layout, not scancode, decides what "the 2 key" types. So
-    /// <c>press</c> can reach Delete and Escape but can never enter a digit, and a text field
-    /// stayed undrivable.</para>
-    ///
-    /// <para>Distinct from <c>fill</c>, which presses the field first and replaces what it
-    /// holds. This only types, through the same per-keystroke path a user does.</para>
-    ///
-    /// <para>Click the field first; typing with nothing focused reaches no field, which is
-    /// not an error, matching what a real keyboard does.</para>
+    /// Types text into whatever holds focus, a character at a time, as a keyboard would:
+    /// what a key types arrives apart from the key, so <c>press</c> reaches Delete and
+    /// Escape but never a digit. Control characters are skipped; Enter and Tab are key
+    /// presses. Distinct from <c>fill</c>, which presses the field first and replaces what
+    /// it holds. Typing with nothing focused reaches no field, which is not an error.
     /// </summary>
-    private string HandleType(JsonNode node)
+    private IEnumerable<bool> Type(JsonNode node)
     {
-        var text = node["text"]?.GetValue<string>()
-            ?? throw new ArgumentException("type requires 'text'");
-
+        var text = node["text"]?.GetValue<string>() ?? throw new ArgumentException("type requires 'text'");
         foreach (var rune in text.EnumerateRunes())
+            if (!Rune.IsControl(rune)) _events.Add(WindowEvent.Text(rune));
+        for (int i = 0; i < SettleFrames; i++) yield return true;
+    }
+
+    /// <summary>
+    /// Replaces the whole text of the field named <c>id</c> with <c>value</c>, the way a
+    /// person would: presses the field, which its app focuses; then, a frame later, Ctrl+A
+    /// and the value typed, or Backspace for an empty one. Nothing when no box that asks
+    /// carries the name.
+    /// </summary>
+    private IEnumerable<bool> Fill(JsonNode node)
+    {
+        var id    = RequireId(node);
+        var value = node["value"]?.GetValue<string>() ?? "";
+        if (!_runtime.DispatchClick(id)) yield break;
+        yield return true;
+        _events.Add(WindowEvent.KeyPress(Key.ControlLeft, KeyModifiers.Ctrl));
+        _events.Add(WindowEvent.KeyPress(Key.A, KeyModifiers.Ctrl));
+        _events.Add(WindowEvent.KeyRelease(Key.A, KeyModifiers.Ctrl));
+        _events.Add(WindowEvent.KeyRelease(Key.ControlLeft));
+        if (value.Length == 0)
         {
-            // Control characters have no printable event; Enter and Tab are
-            // key presses, so route them through press rather than smuggling
-            // them in as text.
-            if (Rune.IsControl(rune)) continue;
-
-            _runtime.ProcessEvent(new BibUiEvent
-            {
-                Kind      = BibUiEventKind.Text,
-                Key       = Key.Unknown,
-                Char      = (char)rune.Value,
-                CodePoint = (uint)rune.Value,
-            });
+            _events.Add(WindowEvent.KeyPress(Key.Backspace));
+            _events.Add(WindowEvent.KeyRelease(Key.Backspace));
         }
-
-        Settle();
-        return Ok();
+        foreach (var rune in value.EnumerateRunes()) _events.Add(WindowEvent.Text(rune));
+        for (int i = 0; i < SettleFrames; i++) yield return true;
     }
 
     private static bool TryParseKey(string name, out Key key)
@@ -554,50 +644,24 @@ public sealed class BibuiTestServer : IDisposable
             && Enum.IsDefined(typeof(Key), key);
     }
 
-    private string HandleScroll(JsonNode node)
-    {
-        float x = node["x"]?.GetValue<float>() ?? throw new ArgumentException("scroll requires 'x'");
-        float y = node["y"]?.GetValue<float>() ?? throw new ArgumentException("scroll requires 'y'");
-        float dy = node["dy"]?.GetValue<float>() ?? throw new ArgumentException("scroll requires 'dy'");
-        float dx = node["dx"]?.GetValue<float>() ?? 0f;
-        _runtime.ProcessEvent(new BibUiEvent
-        {
-            Kind = BibUiEventKind.Scroll, X = x, Y = y, ScrollX = dx, ScrollY = dy,
-        });
-        Settle();
-        return Ok();
-    }
+    // ── Queries ────────────────────────────────────────────────────────────
 
-    private string HandleFill(JsonNode node)
-    {
-        var id    = RequireId(node);
-        var value = node["value"]?.GetValue<string>() ?? "";
-        _runtime.DispatchFill(id, value);
-        Settle();
-        return Ok();
-    }
-
-    // ── Query handlers ─────────────────────────────────────────────────────
-
-    // Rendered first, so a query answers for the frame a person would be looking at.
-    private UiNode? Find(JsonNode node)
+    // A frame first, so a query answers for the frame a person would be looking at.
+    private IEnumerable<bool> Query(JsonNode node, Func<UiNode?, string> answer)
     {
         var id = RequireId(node);
-        _runtime.Render();
-        return _runtime.FindById(id);
+        yield return true;
+        _reply = answer(_runtime.FindById(id));
     }
 
-    private string HandleIsVisible(JsonNode node) => OkResult(Find(node) is not null);
-
-    private string HandleIsDisabled(JsonNode node)
-        => OkResult(Find(node) is Box box && (box.Claims & InteractionKinds.Disabled) != 0);
-
     // A text's own words, or the first text under the node.
-    private string HandleGetText(JsonNode node)
+    private IEnumerable<bool> GetText(JsonNode node)
     {
-        var found = Find(node);
-        if (found is null) return Err($"No node with id '{RequireId(node)}'");
-        return OkResult(FirstText(found) is { } text ? new string(text.Content) : null);
+        var id = RequireId(node);
+        yield return true;
+        var found = _runtime.FindById(id);
+        _reply = found is null ? Err($"No node with id '{id}'")
+            : OkResult(FirstText(found) is { } text ? new string(text.Content) : null);
 
         static Text? FirstText(UiNode n)
         {
@@ -608,19 +672,26 @@ public sealed class BibuiTestServer : IDisposable
         }
     }
 
-    private string HandleScreenshot(JsonNode node)
+    // ── Pixels ─────────────────────────────────────────────────────────────
+
+    private IEnumerable<bool> Screenshot(JsonNode node)
     {
         var path = ResolveOutputPath(
             node["path"]?.GetValue<string>() ?? throw new ArgumentException("screenshot requires 'path'"));
-        var output = _runtime.Render();
+        if (_draw is null)
+        {
+            _reply = Err("This server was started without a renderer to draw screenshots with");
+            yield break;
+        }
+        yield return true;
+        var png = FramePixels.Png(_runtime, _draw);
 
         // Written beside the target and renamed over it, so a link put in the
         // target's place after the check is replaced, not written through.
         var temp = Path.Combine(Path.GetDirectoryName(path)!, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
         using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write))
-            stream.Write(output.PngBytes);
+            stream.Write(png);
         File.Move(temp, path, overwrite: true);
-        return Ok();
     }
 
     /// <summary>
@@ -658,41 +729,31 @@ public sealed class BibuiTestServer : IDisposable
         return full;
     }
 
-    // ── Recording handlers ─────────────────────────────────────────────────
+    // ── Recording ──────────────────────────────────────────────────────────
 
-    private string HandleStartRecording(JsonNode node)
+    private IEnumerable<bool> StartRecording(JsonNode node)
     {
         var outputPath = ResolveOutputPath(node["output"]?.GetValue<string>() ?? "recording.mp4");
+        if (_recording) { _reply = Err("Already recording"); yield break; }
+        if (_draw is null) { _reply = Err("This server was started without a renderer to record with"); yield break; }
+        yield return true;
 
-        lock (_recordLock)
-        {
-            if (_recording) return Err("Already recording");
-        }
-
-        var first = _runtime.Render();
-        int width  = first.Width;
-        int height = first.Height;
-
-        lock (_recordLock)
-            _recording = true;
-
-        // GPU-rendered windows produce pixel-less frames by default; ask the
-        // runtime to read pixels back while we record. No-op on the CPU path.
-        _runtime.CapturePixels = true;
+        // The recording's size is the frame's now; frames after a resize are scaled to it.
+        _recordedFrame = -1;
+        _recording = true;
+        CaptureForRecording();
+        int width, height;
+        lock (_latestLock) (width, height) = (_latestW, _latestH);
 
         _recordThread = new Thread(() =>
         {
-            try
-            {
-                RecordLoop(width, height, outputPath);
-            }
+            try { RecordLoop(width, height, outputPath); }
             catch (Exception ex)
             {
                 // A recorder failure (ffmpeg died, pipe broke) must never take
-                // down the host process from a background thread.
+                // down the app from a background thread.
                 Console.Error.WriteLine($"[BibuiTestServer] recording failed: {ex.Message}");
-                lock (_recordLock) _recording = false;
-                _runtime.CapturePixels = false;
+                _recording = false;
             }
         })
         {
@@ -700,24 +761,24 @@ public sealed class BibuiTestServer : IDisposable
             Name = "test-server-record"
         };
         _recordThread.Start();
-
-        return Ok();
     }
 
-    private string HandleStopRecording()
+    // Waits, a frame at a time, for the record thread to close ffmpeg and finalise the file.
+    private IEnumerable<bool> StopRecording()
     {
-        lock (_recordLock)
-        {
-            if (!_recording) return Err("Not recording");
-            _recording = false;
-        }
-
-        // Block until the record thread closes FFmpeg and the file is finalised
-        _recordThread?.Join();
+        if (!_recording) { _reply = Err("Not recording"); yield break; }
+        _recording = false;
+        while (_recordThread is { IsAlive: true }) yield return true;
         _recordThread = null;
-        _runtime.CapturePixels = false;
+    }
 
-        return Ok();
+    // Each frame the loop builds while recording, drawn once for the record thread.
+    private void CaptureForRecording()
+    {
+        if (!_recording || _runtime.FrameCount == _recordedFrame) return;
+        _recordedFrame = _runtime.FrameCount;
+        var bgra = FramePixels.Bgra(_runtime, _draw!, out int w, out int h);
+        lock (_latestLock) (_latest, _latestW, _latestH) = (bgra, w, h);
     }
 
     // ── Frame capture & encode ─────────────────────────────────────────────
@@ -758,27 +819,16 @@ public sealed class BibuiTestServer : IDisposable
         var       stdin = proc.StandardInput.BaseStream;
 
         const int frameMs = 1000 / 30;
-        RenderOutput? lastOutput = null;
-        byte[]?       lastRgba   = null;
-
         while (_recording)
         {
-            var output = _runtime.LastOutput;
-            // Skip frames without pixel data (immediate-mode frames rendered
-            // before CapturePixels took effect).
-            if (output is { HasPixels: true })
-            {
-                // Convert only when the frame has changed (each render is a new output)
-                if (!ReferenceEquals(output, lastOutput))
-                {
-                    lastRgba   = BgraToRgba(output.RawBgraBytes, output.Width, output.Height, width, height);
-                    lastOutput = output;
-                }
-
-                if (lastRgba is not null)
-                    stdin.Write(lastRgba, 0, lastRgba.Length);
-            }
-
+            // The frame the loop last built, written again while nothing changes:
+            // recording adds no frames of its own, so it does not speed up what it records.
+            byte[]? bgra;
+            int srcW, srcH;
+            lock (_latestLock) (bgra, srcW, srcH) = (_latest, _latestW, _latestH);
+            if (bgra is null) { Thread.Sleep(frameMs); continue; }
+            var rgba = BgraToRgba(bgra, srcW, srcH, width, height);
+            stdin.Write(rgba, 0, rgba.Length);
             Thread.Sleep(frameMs);
         }
 
@@ -789,8 +839,7 @@ public sealed class BibuiTestServer : IDisposable
     /// <summary>
     /// The frame as the RGBA ffmpeg is told to expect, nearest-neighbour scaled
     /// to the recording size when the window has since been resized. Straight
-    /// off the frame's own pixels — no PNG round trip, and no raster backend,
-    /// which belongs to the render thread.
+    /// off the frame's own pixels, no PNG round trip.
     /// </summary>
     private static byte[] BgraToRgba(byte[] bgra, int srcW, int srcH, int width, int height)
     {

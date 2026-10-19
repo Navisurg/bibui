@@ -64,8 +64,8 @@ static class AppIconTests
     // A 40×40 frame with the icon at 24 px in the middle, or nothing.
     static byte[] Render(string? icon)
     {
-        var runtime = BibuiRuntime.Create().WithSkia();
-        runtime.Mount(
+        var runtime = BibuiRuntime.Create();
+        runtime.SetBuild(
             () =>
             {
                 var row = Arrange.Row().Px(40f, 40f);
@@ -77,7 +77,7 @@ static class AppIconTests
                 return row;
             },
             new SurfaceOptions { Width = 40, Height = 40 });
-        return runtime.Render().RawBgraBytes.ToArray();
+        return runtime.Frame().RawBgraBytes.ToArray();
     }
 
     static void Throws<T>(Action action, string mentions) where T : Exception

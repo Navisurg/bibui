@@ -1,6 +1,5 @@
 using System.Numerics;
-using Bibui.Raster;
-using Bibui.Renderer;
+using Bibui.Draw;
 
 namespace Bibui;
 
@@ -18,16 +17,23 @@ public readonly ref partial struct DrawContext
     /// <paramref name="baselineY"/>. Position is physical; <paramref name="size"/>
     /// is logical, as everywhere a font size is named.
     ///
-    /// Takes the description rather than a paint, because one text is not one
-    /// paint: a font without a glyph falls back, so the run split decides how
-    /// many typefaces this draw needs.
+    /// Each run is shaped by <see cref="Fonts"/> and handed to the canvas as
+    /// glyphs, so the backend draws exactly what was measured.
     /// </summary>
     private void DrawRuns(ReadOnlySpan<char> text, float x, float baselineY,
         float size, Rgba color, string? family, int weight)
     {
         float cursor = x;
+        float sizePx = size * Scale;
         for (var run = Fonts.SplitRuns(text, family, weight); run is not null; run = run.Next)
-            cursor += Canvas.DrawText(text[run.Start..run.End], cursor, baselineY, _ctx.Font(run.Typeface, size), color);
+        {
+            var shaped = Fonts.Shape(text[run.Start..run.End], run.Face, sizePx);
+            ref var op = ref List.Push(DrawOpKind.Glyphs);
+            op.Resource = List.AddFace(run.Face);
+            (op.A, op.B, op.C, op.Color) = (cursor, baselineY, sizePx, color);
+            (op.Start, op.Count, op.Start2) = (List.AddGlyphs(shaped.Glyphs), shaped.Glyphs.Length, List.AddPoints(shaped.Positions));
+            cursor += shaped.Width;
+        }
     }
 
     /// <summary>Ascent and descent of the base font — one baseline for every run.</summary>
@@ -60,11 +66,19 @@ public readonly ref partial struct DrawContext
     /// ascent at <paramref name="top"/>. What a <see cref="Text"/> is drawn with.
     /// </summary>
     internal void DrawTextTop(ReadOnlySpan<char> text, float x, float top, in Font font, ReadOnlySpan<char> color)
+        => DrawText(text, x * Scale, top * Scale, font, Color(color));
+
+    /// <summary>
+    /// One line of <paramref name="text"/> in <paramref name="font"/>, drawn as a
+    /// <see cref="Text"/> is: at (<paramref name="x"/>, <paramref name="top"/>) in
+    /// physical px, its ascent at the top. Measure it with <see cref="Fonts"/> and
+    /// the same font.
+    /// </summary>
+    public void DrawText(ReadOnlySpan<char> text, float x, float top, in Font font, Rgba color)
     {
         if (text.IsEmpty) return;
-        var c = Color(color);
-        float baselineY = (top * Scale) - FontMetrics(font.Size, font.Family, font.Weight).Ascent;
-        DrawRuns(text, x * Scale, baselineY, font.Size, c, font.Family, font.Weight);
+        float baselineY = top - FontMetrics(font.Size, font.Family, font.Weight).Ascent;
+        DrawRuns(text, x, baselineY, font.Size, color, font.Family, font.Weight);
     }
 
     // An icon with no path: one glyph, centred in the logical rect.
@@ -90,10 +104,7 @@ public readonly ref partial struct DrawContext
     /// app does not fall over. An unknown name is still a mistake: check one that
     /// comes from data with <see cref="Icon.IsKnown"/>.
     /// </summary>
-    public void DrawIcon(string? iconName, float cx, float cy, float size, ReadOnlySpan<char> color)
-        => DrawIcon(iconName, cx, cy, size, Color(color));
-
-    public void DrawIcon(string? iconName, float cx, float cy, float size, Rgba color)
+    internal void DrawIcon(string? iconName, float cx, float cy, float size, Rgba color)
     {
         var srcPath = SvgPathParser.Parse(IconRegistry.Get(iconName));
         if (srcPath is null)
@@ -113,30 +124,21 @@ public readonly ref partial struct DrawContext
         // in and every on-screen position would be its own entry.
         float s = size / 24f * Scale;
 
-        // The parse is process-wide and backend-free, so the icon is replayed into
-        // a path of this frame's backend at its own 24-unit scale and then mapped
-        // to the target size — in that order, so the scaled geometry is exactly
-        // what scaling the parsed path gives.
+        // The parse is process-wide and backend-free. The icon is added at its own
+        // 24-unit scale and mapped to the target size, so a renderer builds the
+        // parsed path and then scales it, in that order: the scaled geometry is
+        // exactly what scaling the parsed path gives.
         var scaledPath = Path(
             CacheKey.Of([CacheKey.Bits(s)], CacheKey.OfString(iconName)),
-            (srcPath, s, backend: _ctx.Backend),
-            static (p, path) =>
-            {
-                using var unscaled = p.backend.CreatePath();
-                p.srcPath.ReplayInto(unscaled);
-                path.AddPath(unscaled, Matrix3x2.CreateScale(p.s, p.s));
-            });
+            (srcPath, s),
+            static (p, path) => path.AddPath(p.srcPath, Matrix3x2.CreateScale(p.s, p.s)));
 
         float strokeW = MathF.Max(1f, 1.5f * (size / 18f) * Scale);
-        var paint = Paint(PaintSpec.Stroke(color, strokeW) with
-        {
-            StrokeCap = StrokeCap.Round,
-            StrokeJoin = StrokeJoin.Round,
-        });
+        var paint = new Paint { Stroke = color, StrokeWidth = strokeW, Cap = StrokeCap.Round, Join = StrokeJoin.Round };
 
-        PushTranslation(cx - size / 2f, cy - size / 2f);
+        PushTransform(Matrix3x2.CreateTranslation((cx - size / 2f) * Scale, (cy - size / 2f) * Scale));
         DrawPath(scaledPath, paint);
-        PopTranslation();
+        PopTransform();
     }
 
     /// <summary>
@@ -148,9 +150,9 @@ public readonly ref partial struct DrawContext
     /// way to cache it. Exposing the surface would hand callers a factory for
     /// exactly the uncached native objects the rest of this API exists to avoid.
     /// </summary>
-    public void BlurBackdrop(float x, float y, float w, float h, float sigma)
+    internal void BlurBackdrop(float x, float y, float w, float h, float sigma)
     {
-        if (sigma <= 0f || !_ctx.CanBlurBackdrop)
+        if (sigma <= 0f)
         {
             return;
         }
@@ -182,6 +184,7 @@ public readonly ref partial struct DrawContext
         }
 
         var clipRect = new RectF(x * Scale, y * Scale, (x + w) * Scale, (y + h) * Scale);
-        Canvas.DrawBackdropBlur(physSubset, clipRect, sigma * Scale);
+        ref var op = ref List.Push(DrawOpKind.BackdropBlur);
+        (op.Region, op.Rect, op.A) = (physSubset, clipRect, sigma * Scale);
     }
 }

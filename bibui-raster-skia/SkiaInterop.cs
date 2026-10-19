@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Bibui.Draw;
 using SkiaSharp;
 
 namespace Bibui.Raster.Skia;
@@ -22,13 +23,22 @@ internal static class SkiaInterop
 
     public static SKPoint ToSk(this Vector2 p) => new(p.X, p.Y);
 
-    public static TextMetrics ToTextMetrics(this in SKFontMetrics m) => new(m.Ascent, m.Descent, m.Leading);
-
     // The bibui enums are declared with Skia's values, so these are casts.
     public static SKPaintStyle ToSk(this PaintStyle s) => (SKPaintStyle)(int)s;
     public static SKStrokeCap ToSk(this StrokeCap c) => (SKStrokeCap)(int)c;
     public static SKStrokeJoin ToSk(this StrokeJoin j) => (SKStrokeJoin)(int)j;
-    public static SKFilterQuality ToSk(this FilterQuality q) => (SKFilterQuality)(int)q;
+    /// <summary>
+    /// How an image is sampled at a filter quality: Skia's own mapping of its old
+    /// filter qualities (<c>SkSamplingPriv::FromFQ</c>), so pixels drawn at a
+    /// quality are the ones that quality drew before sampling options replaced it.
+    /// </summary>
+    public static SKSamplingOptions ToSk(this FilterQuality q) => q switch
+    {
+        FilterQuality.None => new(SKFilterMode.Nearest, SKMipmapMode.None),
+        FilterQuality.Low => new(SKFilterMode.Linear, SKMipmapMode.None),
+        FilterQuality.Medium => new(SKFilterMode.Linear, SKMipmapMode.Nearest),
+        _ => new(SKCubicResampler.Mitchell),
+    };
     public static SKPointMode ToSk(this PointMode m) => (SKPointMode)(int)m;
 
     /// <summary>Same packing (0xAARRGGBB), so a span reinterprets rather than copies.</summary>

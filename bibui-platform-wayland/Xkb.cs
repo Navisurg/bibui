@@ -181,7 +181,7 @@ internal sealed unsafe class XkbKeyboard : IDisposable
     /// <summary>
     /// The modifiers held: depressed or latched, not locked — Caps Lock is not
     /// Shift — the same as the Silk host, which reads which modifier keys are
-    /// down. Super is reported as Super; BibuiWindow folds it into Ctrl.
+    /// down. Super is reported as Super; the runtime folds it into Ctrl.
     /// </summary>
     public KeyModifiers HeldModifiers
     {

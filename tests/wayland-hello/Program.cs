@@ -2,8 +2,6 @@
 //
 //   dotnet run --project tests/wayland-hello -c Release            # animates: a frame per compositor callback
 //   dotnet run --project tests/wayland-hello -c Release -- --still # draws once, then idles at 0% CPU
-//   BIBUI_PROFILE_FRAMES=600 dotnet run --project tests/wayland-hello -c Release
-//                                                                    # 600 frames, prints the frame profile, closes
 //   dotnet run --project tests/wayland-hello -c Release -- --first-frame
 //                                                                    # headless: one frame, then exits (CI's start-up check)
 //
@@ -32,11 +30,12 @@ float wheelX = 0f, wheelY = 0f;
 string lastButton = "none yet";
 KeyModifiers lastModifiers = KeyModifiers.None;
 
-// The backend is named: the Wayland host brings none, and Native AOT keeps only what is named.
-var runtime = BibuiRuntime.Create().WithManagedRasterizer();
+var runtime = BibuiRuntime.Create();
+runtime.Surface = new SurfaceOptions { Width = 760, Height = 560, ScaleFactor = 1f };
 long frame = 0;
 
-runtime.Mount(() =>
+// One frame of the app, built from the state above.
+void Build()
 {
     frame++;
     // Keep asking while animating: one request per frame keeps the loop
@@ -60,11 +59,11 @@ runtime.Mount(() =>
         line = runtime.TextField("typed", typed, typedEdit, typing,
             placeholder: "Type here: dead keys, AltGr, held keys repeat, Ctrl+A, Ctrl+Left");
     if (line.Pressed) typing = true;
-    foreach (var handle in runtime.UnconsumedEvents)
-        if (typing && handle.Event is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
+    foreach (var ev in runtime.UnconsumedEvents)
+        if (typing && ev is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
         {
             typing = false;
-            handle.Eat();
+            ev.Eat();
         }
 
     // The pad takes every button and the wheel, and shows what arrived.
@@ -109,7 +108,7 @@ runtime.Mount(() =>
         fill.Style.BackgroundColor = UiColor.Accent;
     }
 
-    return Column(
+    var page = Column(
             Bold(runtime, "Hello from raw Wayland", ComponentSize.Xxl, TextColor.Primary),
             Space(16f),
             runtime.Text("wl_shm buffers, CPU raster, frame-callback pacing, xkbcommon input. No GLFW, no GL.",
@@ -129,22 +128,40 @@ runtime.Mount(() =>
                 ComponentSize.Sm, TextColor.Secondary))
         .FillX().FillY()
         .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(28f) });
-}, new SurfaceOptions { Width = 760, Height = 560, ScaleFactor = 1f });
+    UiNode.PushIntoParent(runtime.ParentInScope, page);   // built with Arrange: linked under the frame's root
+}
 
+// CI's start-up check: one frame built and drawn headless, then exit.
 if (args.Contains("--first-frame"))
 {
-    runtime.Render();
+    using var cpu = new ManagedRenderer();
+    runtime.BeginBuild();
+    Build();
+    runtime.EndBuild();
+    FramePixels.Bgra(runtime, cpu.Draw, out _, out _);
     return 0;
 }
 
-if (!WaylandPlatformHost.IsSupported)
+if (!WaylandWindow.IsSupported)
 {
     Console.Error.WriteLine("wayland-hello needs a Wayland session (WAYLAND_DISPLAY) and libwayland-client.");
     return 1;
 }
 
-BibuiWindow.Create(runtime).WithWayland(new WaylandHostOptions { AppId = "bibui-wayland-hello" })
-    .Run("bibui — wayland-hello");
+// The renderer is named: the Wayland window brings none, and Native AOT keeps only what is named.
+using var window = WaylandWindow.Open(runtime, new("bibui — wayland-hello", 760, 560),
+    new WaylandHostOptions { AppId = "bibui-wayland-hello" });
+using var managed = new ManagedRenderer(window.Cpu);
+while (WaylandWindow.BeginFrame(window, runtime))
+{
+    runtime.BeginBuild(window.Events);
+    Build();
+    runtime.EndBuild();
+    WaylandWindow.BeginDraw(window);
+    managed.Draw(runtime.DrawList);
+    WaylandWindow.EndDraw(window);
+    WaylandWindow.EndFrame(window, runtime);
+}
 return 0;
 
 // A text at the bold weight, where a PushFontFace scope cannot go: inside an expression.

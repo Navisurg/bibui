@@ -1,27 +1,22 @@
 using Bibui.Platform.Wayland.Protocol;
-using Bibui.Raster;
+using Bibui.Draw;
 
 namespace Bibui.Platform.Wayland;
 
 /// <summary>
-/// One wl_shm buffer: shared memory the compositor reads, and a raster surface
-/// over the same memory, so a frame is drawn where it is presented from — no
-/// copy. BGRA8888 premultiplied is wl_shm's ARGB8888 on a little-endian machine.
+/// One wl_shm buffer: shared memory the compositor reads, drawn into where it
+/// lies, so a frame is drawn where it is presented from — no copy. BGRA8888
+/// premultiplied is wl_shm's ARGB8888 on a little-endian machine.
 /// </summary>
-internal sealed class ShmBuffer(WlBuffer wl, nint map, nuint size, int width, int height, IRasterSurface surface)
+internal sealed class ShmBuffer(WlBuffer wl, nint map, nuint size, int width, int height)
 {
     public readonly WlBuffer Wl = wl;
     public readonly nint Map = map;
     public readonly nuint Size = size;
     public readonly int Width = width, Height = height;
 
-    /// <summary>
-    /// Where the frame is drawn. Today the runtime's backend (Skia) over the
-    /// mapped memory; a managed rasterizer slots in through
-    /// <see cref="IRasterBackend.CreateSurface(in RasterPixels)"/> without
-    /// anything here changing.
-    /// </summary>
-    public readonly IRasterSurface Surface = surface;
+    /// <summary>The mapped memory, as a renderer draws into it.</summary>
+    public RasterPixels Pixels => new(Map, Width, Height, Width * 4);
 }
 
 /// <summary>
@@ -30,7 +25,7 @@ internal sealed class ShmBuffer(WlBuffer wl, nint map, nuint size, int width, in
 /// one shared pool, so a buffer retired by a resize frees its memory on its own
 /// release without moving any other.
 /// </summary>
-internal sealed unsafe class ShmAllocator(WlShm shm, IRasterBackend raster, WlBuffer.Listener* listener, void* data)
+internal sealed unsafe class ShmAllocator(WlShm shm, WlBuffer.Listener* listener, void* data)
     : IBufferAllocator<ShmBuffer>
 {
     public ShmBuffer Allocate(int width, int height)
@@ -54,8 +49,7 @@ internal sealed unsafe class ShmAllocator(WlShm shm, IRasterBackend raster, WlBu
             pool.Destroy(); // the buffer keeps the memory; the pool object is done
             wl.AddListener(listener, data);
 
-            var surface = raster.CreateSurface(new RasterPixels(map, width, height, stride));
-            return new ShmBuffer(wl, map, size, width, height, surface);
+            return new ShmBuffer(wl, map, size, width, height);
         }
         catch
         {
@@ -70,7 +64,6 @@ internal sealed unsafe class ShmAllocator(WlShm shm, IRasterBackend raster, WlBu
 
     public void Destroy(ShmBuffer buffer)
     {
-        buffer.Surface.Dispose();
         buffer.Wl.Destroy();
         Libc.munmap(buffer.Map, buffer.Size);
     }

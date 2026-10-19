@@ -2,11 +2,9 @@
   <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
   <Import Project="../packaging/PublicPackage.props" />
 
-  <!-- bibui's IRasterBackend on SkiaSharp, out of the core library, so an
-       app that draws with another backend (the managed rasterizer)
-       ships no libSkiaSharp. Referencing it makes Skia the backend the
-       parameterless new BibuiRenderer() / new BibuiRuntime() pick
-       (Bibui.RasterBackends). -->
+  <!-- SkiaGlRenderer and SkiaCpuRenderer: draw bibui's DrawList with SkiaSharp,
+       on a window's GL context or into memory. Out of the core library, so an
+       app that draws with the managed rasterizer ships no libSkiaSharp. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Bibui.Raster.Skia</AssemblyName>
@@ -19,17 +17,19 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NuGetAudit>false</NuGetAudit>
     <PackageId>Bibui.Raster.Skia</PackageId>
-    <Description>Bibui's SkiaSharp raster backend. Referencing it makes Skia the default for new BibuiRenderer() and new BibuiRuntime().</Description>
+    <Description>Draws Bibui's DrawList with SkiaSharp: SkiaGlRenderer on a window's GL context (GPU), SkiaCpuRenderer into memory (CPU). The app constructs the one it wants, bound to the window's target.</Description>
     <PackageTags>$(PackageTags);skia;skiasharp;rendering</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../bibui/bibui.csproj" />
+    <!-- GlTarget and the GL texture calls SkiaGlRenderer makes its textures with. -->
+    <ProjectReference Include="../bibui-gl/bibui-gl.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="SkiaSharp" Version="2.88.8" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.88.8" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.153.1" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,11 +1,12 @@
 // Damage tracking in the managed raster backend. The runtime builds, lays out
-// and paints every frame whole; ManagedRasterBackend.DamageTracking rasterises
+// and paints every frame whole; ManagedRenderer.DamageTracking rasterises
 // only what changed. DamageOracle.cs checks that byte for byte over scripted
 // apps; the tests above it pin the policy a host relies on.
 //
 //   dotnet run -c Release --project bibui-raster-managed/damage-tests [filter]
 using Bibui;
-using Bibui.Raster;
+using Bibui.Draw;
+using Surface = Bibui.Raster.Managed.Surface;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
 using Bibui.Theming;
@@ -45,13 +46,20 @@ static void Eq(string expected, string? actual)
     if (expected != actual) throw new Exception($"Expected \"{expected}\" but got \"{actual}\"");
 }
 
-// A grid of buttons on a tracking managed backend, and a surface to draw it into.
-static (BibuiRuntime Rt, ManagedRasterBackend Backend, IRasterSurface Target) Rig()
+// One frame: built, then drawn onto target by renderer.
+static void Frame(BibuiRuntime rt, ManagedRenderer renderer, Surface target)
 {
-    var backend = new ManagedRasterBackend { DamageTracking = true };
-    var rt = BibuiRuntime.Create().WithRaster(backend);
+    rt.Step();
+    renderer.Draw(rt.DrawList, target);
+}
+
+// A grid of buttons, a tracking managed renderer, and a surface to draw it into.
+static (BibuiRuntime Rt, ManagedRenderer Backend, Surface Target) Rig()
+{
+    var backend = new ManagedRenderer { DamageTracking = true };
+    var rt = BibuiRuntime.Create();
     rt.TargetHz = 60f;
-    rt.Mount(() =>
+    rt.SetBuild(() =>
     {
         var rows = new List<Arrange.Item>();
         for (int r = 0; r < 3; r++)
@@ -67,55 +75,55 @@ static (BibuiRuntime Rt, ManagedRasterBackend Backend, IRasterSurface Target) Ri
         }
         return Arrange.Column([.. rows]).FillX().FillY().Padded(EdgeInsets.All(8f));
     }, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = 400, Height = 160, ScaleFactor = 1f });
-    return (rt, backend, backend.CreateSurface(400, 160));
+    return (rt, backend, new Surface(400, 160));
 }
 
-Run("A surface the backend has not drawn, a new background and a resize are painted whole", () =>
+Run("A surface the renderer has not drawn, a new background and a resize are painted whole", () =>
 {
     var (rt, backend, target) = Rig();
-    rt.RenderTo(target);
+    Frame(rt, backend, target);
     Eq("first frame", backend.LastFullRepaintReason);
-    using var other = backend.CreateSurface(400, 160);
-    rt.RenderTo(other);
+    var other = new Surface(400, 160);
+    Frame(rt, backend, other);
     Eq("surface holds an unknown frame", backend.LastFullRepaintReason);
-    rt.RenderTo(target);
+    Frame(rt, backend, target);
     IsTrue(backend.LastRepaint is not null, "a surface two frames old is repainted in part");
-    for (int i = 0; i < 30; i++) rt.RenderTo(target);
+    for (int i = 0; i < 30; i++) Frame(rt, backend, target);
     IsTrue(backend.LastRepaint is { Count: 0 }, "an idle frame repaints nothing");
 
     rt.SetTheme(ThemeLoader.BibuiLight());
-    rt.RenderTo(target);
+    Frame(rt, backend, target);
     Eq("background", backend.LastFullRepaintReason);
 
     rt.ResizeSurface(300, 160, 1f);
-    using var smaller = backend.CreateSurface(300, 160);
-    rt.RenderTo(smaller);
+    var smaller = new Surface(300, 160);
+    Frame(rt, backend, smaller);
     Eq("resize", backend.LastFullRepaintReason);
 });
 
 Run("Turning tracking off and on again forgets every surface", () =>
 {
     var (rt, backend, target) = Rig();
-    rt.RenderTo(target);
+    Frame(rt, backend, target);
     backend.DamageTracking = false;
-    rt.RenderTo(target);
+    Frame(rt, backend, target);
     backend.DamageTracking = true;
-    rt.RenderTo(target);
+    Frame(rt, backend, target);
     IsNull(backend.LastRepaint, "the surface was painted untracked in between");
 });
 
 Run("A retained box's draw callback follows a theme change, as a whole repaint does", () =>
 {
-    (BibuiRuntime, IRasterSurface, Func<byte[]>) Rig2(bool tracked)
+    (Action, Action<ThemeTokens>, Func<uint[]>) Rig2(bool tracked)
     {
-        var backend = new ManagedRasterBackend { DamageTracking = tracked };
-        var rt = BibuiRuntime.Create().WithRaster(backend);
+        var backend = new ManagedRenderer { DamageTracking = tracked };
+        var rt = BibuiRuntime.Create();
         rt.TargetHz = 60f;
-        rt.Mount(() =>
+        rt.SetBuild(() =>
         {
             var chart = rt.BoxFromId("chart", InteractionKinds.LeftPress);
             chart.Px(120f, 60f);
-            chart.Draw = ctx =>
+            chart.Draw = (_, ctx) =>
             {
                 var r = ctx.Logical;
                 ctx.DrawRRect(r.Left, r.Top, r.Width, r.Height, 6f, ctx.Resolve(UiColor.Surface), ctx.Resolve(UiColor.Border), 1f);
@@ -123,19 +131,19 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
             };
             return Arrange.Column(chart).FillX().FillY().Padded(EdgeInsets.All(8f));
         }, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = 160, Height = 80, ScaleFactor = 1f });
-        var target = backend.CreateSurface(160, 80);
-        return (rt, target, () => { var px = new byte[160 * 80 * 4]; target.ReadPixels(px, 160, 80); return px; });
+        var target = new Surface(160, 80);
+        return (() => Frame(rt, backend, target), rt.SetTheme, () => { var px = new uint[160 * 80]; target.CopyTo(px); return px; });
     }
 
-    var (dmg, dt, dpx) = Rig2(tracked: true);
-    var (full, ft, fpx) = Rig2(tracked: false);
-    dmg.RenderTo(dt); full.RenderTo(ft);
-    dmg.RenderTo(dt); full.RenderTo(ft);
+    var (dmg, dmgTheme, dpx) = Rig2(tracked: true);
+    var (full, fullTheme, fpx) = Rig2(tracked: false);
+    dmg(); full();
+    dmg(); full();
     var before = dpx();
     IsTrue(before.AsSpan().SequenceEqual(fpx()), "tracked and whole agree before the change");
 
-    dmg.SetTheme(ThemeLoader.BibuiLight()); full.SetTheme(ThemeLoader.BibuiLight());
-    dmg.RenderTo(dt); full.RenderTo(ft);
+    dmgTheme(ThemeLoader.BibuiLight()); fullTheme(ThemeLoader.BibuiLight());
+    dmg(); full();
     var after = dpx();
     IsTrue(!after.AsSpan().SequenceEqual(before), "the callback's colours followed the theme");
     IsTrue(after.AsSpan().SequenceEqual(fpx()), "and the tracked frame equals a whole repaint");

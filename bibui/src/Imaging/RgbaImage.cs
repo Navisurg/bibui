@@ -18,7 +18,7 @@ public enum ChannelOrder
     /// <summary>R, G, B, A: <see cref="RgbaImage"/>'s order, and PNG's.</summary>
     Rgba,
 
-    /// <summary>B, G, R, A: what <c>IRasterBackend</c> frames hold on little-endian machines.</summary>
+    /// <summary>B, G, R, A: what a CPU renderer's frames (<c>RasterPixels</c>) hold on little-endian machines.</summary>
     Bgra,
 }
 

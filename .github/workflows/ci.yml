@@ -60,8 +60,8 @@ jobs:
           set -euo pipefail
           for proj in \
             bibui/bibui.csproj \
+            bibui-gl/bibui-gl.csproj \
             bibui-testing/bibui-testing.csproj \
-            bibui-text-freetype/Bibui.Text.FreeType.csproj \
             bibui-raster-skia/bibui-raster-skia.csproj \
             bibui-raster-managed/src/Bibui.Raster.Managed.csproj \
             bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj \
@@ -76,7 +76,9 @@ jobs:
             tests/wayland-tests/wayland-tests.csproj \
             tests/wayland-hello/wayland-hello.csproj \
             samples/component-gallery/component-gallery.csproj \
-            samples/bibui-app/bibui-app.csproj
+            samples/bibui-app/bibui-app.csproj \
+            samples/counter/counter.csproj \
+            samples/counter-cpu/counter-cpu.csproj
           do
             echo "==> build $proj"
             dotnet build "$proj" --configuration Release -p:TreatWarningsAsErrors=true

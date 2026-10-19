@@ -498,7 +498,7 @@ public static class Png
     /// <summary>
     /// Encodes pixels held anywhere — a rasterizer's frame, a native buffer — without
     /// first making an image of them. <paramref name="order"/> says whether each pixel
-    /// is R,G,B,A or B,G,R,A (what <c>IRasterBackend</c> frames hold), and
+    /// is R,G,B,A or B,G,R,A (what a CPU renderer's frames, <c>RasterPixels</c>, hold), and
     /// <paramref name="alpha"/> whether colour is premultiplied.
     /// </summary>
     public static byte[] Encode(ReadOnlySpan<byte> pixels, int width, int height, int stride, ChannelOrder order, AlphaMode alpha)

@@ -100,7 +100,7 @@ internal static unsafe class InputTests
             Assert.Eq(null, kb.Press(KEY_A), "Alt+a types nothing");
             kb.UpdateKey(KEY_LEFTALT, false);
 
-            // Super is reported as Super; BibuiWindow folds it into Ctrl, as for the Silk host.
+            // Super is reported as Super; the runtime folds it into Ctrl, as for the Silk host.
             kb.UpdateKey(KEY_LEFTMETA, true);
             Assert.Eq(KeyModifiers.Super, kb.HeldModifiers);
             kb.UpdateKey(KEY_LEFTSHIFT, true);
@@ -183,6 +183,18 @@ internal static unsafe class InputTests
             finally { input.Destroy(); }
         });
 
+        t.Run("input: typed text is one KeyChar per character; an emoji is one, not two halves", () =>
+        {
+            var events = new List<WindowEvent>();
+            var input = new WaylandInput(events.Add);
+            try
+            {
+                input.EmitText("a\U0001F600é");
+                Assert.Eq("KeyChar a; KeyChar \U0001F600; KeyChar é", Describe(events));
+            }
+            finally { input.Destroy(); }
+        });
+
         t.Run("input: keyboard leave releases held keys and buttons, then FocusLost", () =>
         {
             var events = new List<WindowEvent>();
@@ -231,7 +243,7 @@ internal static unsafe class InputTests
                 Assert.Eq(1, Libc.poll(fds, 1, 1000), "timer fired");
                 input.OnRepeatTimer();
                 Assert.True(events.Count >= 1, "a repeat");
-                Assert.True(events.All(e => e.Kind == WindowEventKind.KeyChar && e.Char == 'a'), $"only text: {Describe(events)}");
+                Assert.True(events.All(e => e.Kind == WindowEventKind.KeyChar && e.CodePoint.Value == 'a'), $"only text: {Describe(events)}");
 
                 input.OnKey(KEY_A, WlKeyboard.KeyState.Released);
                 Assert.Eq(null, input.Repeat.NextDue, "released: no repeat due");
@@ -411,7 +423,7 @@ internal static unsafe class InputTests
     private static (PointerFrame, List<WindowEvent>) Pointer()
     {
         var events = new List<WindowEvent>();
-        return (new PointerFrame(events.Add), events);
+        return (new PointerFrame(events.Add, () => KeyModifiers.None), events);
     }
 
     private static string Describe(List<WindowEvent> events)
@@ -425,7 +437,7 @@ internal static unsafe class InputTests
                 WindowEventKind.MouseDown or WindowEventKind.MouseUp => $"{e.Kind} {e.Button} {P(e.X)},{P(e.Y)}",
                 WindowEventKind.Scroll => $"Scroll {P(e.ScrollX)},{P(e.ScrollY)} @{P(e.X)},{P(e.Y)}",
                 WindowEventKind.KeyDown or WindowEventKind.KeyUp => $"{e.Kind} {e.Key}",
-                WindowEventKind.KeyChar => $"KeyChar {e.Char}",
+                WindowEventKind.KeyChar => $"KeyChar {e.CodePoint}",
                 _ => e.Kind.ToString(),
             }));
     }

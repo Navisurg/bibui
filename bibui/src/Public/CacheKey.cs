@@ -71,7 +71,8 @@ public readonly record struct CacheKey(UInt128 Hash)
         return Of(parts);
     }
 
-    internal static CacheKey OfGradient(
+    /// <summary>A gradient's key: its kind (0 linear, 1 radial), ends or centre and radius, colours and stops.</summary>
+    public static CacheKey OfGradient(
         int kind, System.Numerics.Vector2 a, System.Numerics.Vector2 b, float radius,
         scoped ReadOnlySpan<Rgba> colors, scoped ReadOnlySpan<float> stops)
     {

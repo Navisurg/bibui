@@ -126,7 +126,7 @@ internal interface IClipboardWire
 /// <list type="bullet">
 /// <item><b>Copy</b> creates a wl_data_source offering
 /// <see cref="SelectionOffers.TextMimes"/> and sets it as the selection with
-/// the latest input serial (<see cref="WaylandPlatformHost.LastInputSerial"/>,
+/// the latest input serial (<see cref="WaylandWindow.LastInputSerial"/>,
 /// which the input feature sets). Each <c>send</c> is served on a thread of
 /// its own, through a non-blocking fd with a stall bound, so a slow or absent
 /// reader never touches the frame loop. The text is encoded once, at copy.</item>
@@ -190,7 +190,7 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
     /// <summary>True while the selection is the text we copied.</summary>
     public bool OwnsSelection => _ownText is not null;
 
-    // ── IPlatformHost's side ─────────────────────────────────────────────────
+    // ── The window's side ────────────────────────────────────────────────────
 
     public string? GetText()
     {

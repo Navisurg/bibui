@@ -68,7 +68,7 @@ public sealed partial class BibuiRuntime
         // (A static call with its arguments spelled out rather than a local
         // function: one capturing these locals costs an allocation per ask.)
         Dictionary<string, Drawn>? transforms;
-        lock (_syncRoot) transforms = _pointerTransforms;
+        transforms = _pointerTransforms;
 
         InteractionKinds claims = box.Claims;
         if (claims == InteractionKinds.Disabled)
@@ -81,11 +81,10 @@ public sealed partial class BibuiRuntime
             // The wheel is left alone. A disabled button inside a scroll area
             // is a reason not to press it, not a reason the area cannot
             // scroll under it.
-            foreach (var handle in _frameEvents)
+            for (var blocked = _firstEvent; blocked is not null; blocked = blocked.Next)
             {
-                if (handle.Consumed) continue;
+                if (blocked.Consumed) continue;
 
-                BibUiEvent blocked = handle.Event;
                 if (blocked.Kind is not (BibUiEventKind.MouseDown or BibUiEventKind.MouseUp)) continue;
                 Vector2 at = new(blocked.X, blocked.Y);
                 if (!Hit(at, geometry, rect, size, transforms) || IsUnderDropDown(box, at)) continue;
@@ -98,20 +97,18 @@ public sealed partial class BibuiRuntime
                 if (blocked.Kind == BibUiEventKind.MouseUp
                     && _activeId[blockedButton] is not null && _activeId[blockedButton] != id) continue;
 
-                handle.Eat();
+                blocked.Eat();
                 if (blocked.Kind == BibUiEventKind.MouseDown) PressTaken(box);
             }
             return interaction;
         }
 
         float mouseX, mouseY;
-        lock (_syncRoot) { mouseX = _mouseX; mouseY = _mouseY; }
+        mouseX = _mouseX; mouseY = _mouseY;
 
-        foreach (var handle in _frameEvents)
+        for (var ev = _firstEvent; ev is not null; ev = ev.Next)
         {
-            if (handle.Consumed) continue;
-
-            BibUiEvent ev = handle.Event;
+            if (ev.Consumed) continue;
 
             // Addressed to one box by name. A by-name dispatch has already decided
             // which box it means, so the point it carries is only how the event
@@ -135,7 +132,7 @@ public sealed partial class BibuiRuntime
                 _hotId = id;
                 _activeId[button] = id;
                 _pressPos[button] = pos;
-                handle.Eat();
+                ev.Eat();
                 PressTaken(box);
 
 
@@ -169,7 +166,7 @@ public sealed partial class BibuiRuntime
                 }
 
                 interaction.Modifiers |= ev.Modifiers;
-                handle.Eat();
+                ev.Eat();
             }
 
             // Not gated on being hot: hotness needs a press claim, and a box
@@ -198,7 +195,7 @@ public sealed partial class BibuiRuntime
                 interaction.ScrollX += dx;
                 interaction.ScrollY += dy;
                 interaction.Modifiers |= ev.Modifiers;
-                if (ev.ScrollX == 0f && ev.ScrollY == 0f) handle.Eat();
+                if (ev.ScrollX == 0f && ev.ScrollY == 0f) ev.Eat();
             }
         }
 
@@ -309,8 +306,7 @@ public sealed partial class BibuiRuntime
     /// <summary>The transform the box named <paramref name="id"/> was drawn through last frame, or null for none.</summary>
     private Matrix3x2? PointerTransformOf(string id)
     {
-        lock (_syncRoot)
-            return _pointerTransforms is not null && _pointerTransforms.TryGetValue(id, out var d) ? d.World : null;
+        return _pointerTransforms is not null && _pointerTransforms.TryGetValue(id, out var d) ? d.World : null;
     }
 
     /// <summary>
@@ -403,7 +399,7 @@ public sealed partial class BibuiRuntime
     private void NotePointer(BibUiEvent ev)
     {
         if (!IsPointerKind(ev.Kind)) return;
-        lock (_syncRoot) { _mouseX = ev.X; _mouseY = ev.Y; }
+        _mouseX = ev.X; _mouseY = ev.Y;
     }
 
     private static bool IsPointerKind(BibUiEventKind kind) =>

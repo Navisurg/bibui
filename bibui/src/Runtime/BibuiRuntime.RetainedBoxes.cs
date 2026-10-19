@@ -1,5 +1,4 @@
 using System.Numerics;
-using Bibui.Renderer;
 using Bibui.Theming;
 
 namespace Bibui.Runtime;
@@ -42,20 +41,18 @@ public sealed partial class BibuiRuntime
     public Box BoxFromId(string id, InteractionKinds claims = InteractionKinds.None, UiNode? parent = null)
     {
         ArgumentNullException.ThrowIfNull(id);
-        // The cache is not thread-safe by design (the render lock single-flights
-        // frames); _syncRoot is what makes an ask from outside a build safe too.
-        lock (_syncRoot)
-        {
-            var box = _retainedBoxes.FromKey(id, id, static key => new Box { Id = key });
-            ResetForBuild(box);
-            box.Claims = claims;
-            box.ChildLayoutAxis = _axisStack.Count > 0 ? _axisStack[^1] : LayoutAxis.X;
-            if (_sizeXStack.Count > 0) box.SizeX = _sizeXStack[^1];
-            if (_sizeYStack.Count > 0) box.SizeY = _sizeYStack[^1];
+        var box = _retainedBoxes.FromKey(id, id, static key => new Box { Id = key });
+        // Acquired again this frame: out of where it was first linked, so
+        // that parent's children do not still name it.
+        if (box.Parent is not null && box.Parent.FirstChild is not null) UiNode.Unlink(box);
+        ResetForBuild(box);
+        box.Claims = claims;
+        box.ChildLayoutAxis = _axisStack.Count > 0 ? _axisStack[^1] : LayoutAxis.X;
+        if (_sizeXStack.Count > 0) box.SizeX = _sizeXStack[^1];
+        if (_sizeYStack.Count > 0) box.SizeY = _sizeYStack[^1];
 
-            LinkUnder(box, parent);
-            return box;
-        }
+        LinkUnder(box, parent);
+        return box;
     }
 
     /// <summary>
@@ -74,11 +71,8 @@ public sealed partial class BibuiRuntime
     /// </summary>
     private Box? PeekBox(string id)
     {
-        lock (_syncRoot)
-        {
-            if (_retainedBoxes.Entries.TryGetValue(id, out var entry)) return entry.Value;
-            return _interactiveBoxes.TryGetValue(id, out var box) ? box : null;
-        }
+        if (_retainedBoxes.Entries.TryGetValue(id, out var entry)) return entry.Value;
+        return _interactiveBoxes.TryGetValue(id, out var box) ? box : null;
     }
 
     /// <summary>
@@ -123,7 +117,8 @@ public sealed partial class BibuiRuntime
     private void LinkUnder(UiNode node, UiNode? parent)
     {
         parent ??= _parentStack.Count > 0 ? _parentStack[^1] : null;
-        if (parent is null) return;
+        // A box acquired again inside its own scope is not its own child.
+        if (parent is null || parent == node) return;
         node.Parent = parent;
         node.Prev = parent.LastChild;
         if (parent.LastChild is not null) parent.LastChild.Next = node;
@@ -146,60 +141,55 @@ public sealed partial class BibuiRuntime
     /// one-frame lag the bounds it hit-tests against already have. Once per
     /// render, so a build that runs twice cannot step anything twice.
     /// </summary>
-    private void EndBuild()
+    private void SweepFrame()
     {
         bool animating;
-        lock (_syncRoot)
-        {
-            // A scope left open would link next frame's boxes under this
-            // frame's parent.
-            bool unbalanced = _parentStack.Count > 0 || _axisStack.Count > 0
-                || _sizeXStack.Count > 0 || _sizeYStack.Count > 0 || _fontSizeStack.Count > 0 || _faceStack.Count > 0;
-            _parentStack.Clear();
-            _axisStack.Clear();
-            _sizeXStack.Clear();
-            _sizeYStack.Clear();
-            _fontSizeStack.Clear();
-            _faceStack.Clear();
-            if (unbalanced)
-                throw new InvalidOperationException(
-                    "PushParent, PushAxis, PushFontSize, PushFontFace or a size scope was not disposed before the build returned; use them with `using`.");
+        // A scope left open would link next frame's boxes under this
+        // frame's parent.
+        bool unbalanced = _parentStack.Count > 0 || _axisStack.Count > 0
+            || _sizeXStack.Count > 0 || _sizeYStack.Count > 0 || _fontSizeStack.Count > 0 || _faceStack.Count > 0;
+        _parentStack.Clear();
+        _axisStack.Clear();
+        _sizeXStack.Clear();
+        _sizeYStack.Clear();
+        _fontSizeStack.Clear();
+        _faceStack.Clear();
+        if (unbalanced)
+            throw new InvalidOperationException(
+                "PushParent, PushAxis, PushFontSize, PushFontFace or a size scope was not disposed before the build returned; use them with `using`.");
 
-            animating = StepHotAndActive();
-            animating |= StepEased();
-            animating |= StepMotion();
+        animating = StepHotAndActive();
+        animating |= StepEased();
+        animating |= StepMotion();
 
-            // A box that has gone disabled, or left the tree, cannot release
-            // the button itself: the release block needs it to ask, and it
-            // never will. While it holds one,
-            // the hover guard below fails for every box and nothing can go hot
-            // again — so the button has to be taken off it here.
-            //
-            // Against _interactiveBoxes, which the render rebuilds whole, so a
-            // box that stopped being built is gone from it at once. Not against
-            // _retainedBoxes: that keeps entries for 60 frames, and a box that
-            // stopped being built keeps its last Claims the whole time, because
-            // only BoxFromId clears them.
-            for (int b = 0; b < 3; b++)
-                if (_activeId[b] is string activeId
-                    && (!_interactiveBoxes.TryGetValue(activeId, out var activeBox)
-                        || activeBox.Claims == InteractionKinds.Disabled))
-                    _activeId[b] = null;
+        // A box that has gone disabled, or left the tree, cannot release
+        // the button itself: the release block needs it to ask, and it
+        // never will. While it holds one,
+        // the hover guard below fails for every box and nothing can go hot
+        // again — so the button has to be taken off it here.
+        //
+        // Against _interactiveBoxes, which the render rebuilds whole, so a
+        // box that stopped being built is gone from it at once. Not against
+        // _retainedBoxes: that keeps entries for 60 frames, and a box that
+        // stopped being built keeps its last Claims the whole time, because
+        // only BoxFromId clears them.
+        for (int b = 0; b < 3; b++)
+            if (_activeId[b] is string activeId
+                && (!_interactiveBoxes.TryGetValue(activeId, out var activeBox)
+                    || activeBox.Claims == InteractionKinds.Disabled))
+                _activeId[b] = null;
 
-            // Cleared once a frame so the asks that come next decide it
-            // afresh — but only while no button is held: a drag that wanders
-            // off its box stays the engaged control. Swept first, so a
-            // button freed just above lets hot clear on the same frame.
-            if (_activeId[Left] is null && _activeId[Middle] is null && _activeId[Right] is null)
-                _hotId = null;
-            _retainedBoxes.EndFrame();
-            RewindLeaves();
-            _eased.EndFrame();
-            _motion.EndFrame();
-            _lists.EndFrame();
-        }
-        // Outside the lock: RequestFrame wakes the host, and a wake handler is
-        // not ours to run with _syncRoot held.
+        // Cleared once a frame so the asks that come next decide it
+        // afresh — but only while no button is held: a drag that wanders
+        // off its box stays the engaged control. Swept first, so a
+        // button freed just above lets hot clear on the same frame.
+        if (_activeId[Left] is null && _activeId[Middle] is null && _activeId[Right] is null)
+            _hotId = null;
+        _retainedBoxes.EndFrame();
+        RewindLeaves();
+        _eased.EndFrame();
+        _motion.EndFrame();
+        _lists.EndFrame();
         if (animating) RequestFrame();
     }
 
@@ -221,7 +211,7 @@ public sealed partial class BibuiRuntime
 
     /// <summary>
     /// Eases every retained box toward what this frame's input says it is, and
-    /// reports whether anything is still moving. Caller holds <c>_syncRoot</c>.
+    /// reports whether anything is still moving.
     ///
     /// Hot eases both ways. Active does not: a press lands on 1 at once,
     /// because a button that fades in under the finger feels unresponsive, and
