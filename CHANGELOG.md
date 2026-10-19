@@ -377,6 +377,28 @@ before it was published.
 
 ### Added
 
+- **One rate per kind of motion, and everything eases by it (breaking).**
+  `runtime.Rates` holds this frame's rates for exponential approach, computed
+  once as the build begins from the theme's motion speeds: `Hover` (hot and
+  pressed boxes), `Follow` (a view's scroll offset, the caret), `Toggle` (a
+  switch's knob, a panel opening) and `Default` (anything else). Every rate is
+  1 under reduced motion or `MotionEasing.None`, so no caller checks for it.
+  `runtime.Rate(speed)` gives one for a speed of your own, the same way.
+  - `Ease.Exponential(current, target, rate)` (`float`, `Vector2`, `Vector4`),
+    `Ease.Rate(speed, dt)` and `Ease.Spring(ref current, ref velocity, target,
+    spring, dt)` are the steps as pure functions; the runtime's hover, press,
+    scrolling, `Animate`, transitions and `DrawContext.Animate` all step
+    through them.
+  - `runtime.Animate(id, property, target, rate)` and
+    `DrawContext.Animate(key, target, rate)` take a rate where they took a
+    speed: `runtime.Rates.Toggle`, `runtime.Rate(18f)`, or 1 for a value driven
+    directly (it was `float.PositiveInfinity`). With none, `Rates.Default`;
+    `DrawContext.Animate`'s default was a speed of 12, and is now the theme's
+    default, 20.
+  - `MotionTokens.Caret` is `MotionTokens.Follow`, and view scrolling eases at
+    it rather than at `Hover`. A theme file's `"caret"` is still read as
+    `"follow"`.
+
 - **Groups: blend modes and colour matrices.** `ctx.PushBlendMode(mode)`
   draws until `PopBlendMode` into a layer and composites it onto what is
   under it with the mode: `SrcOver`, `Multiply`, `Plus`, `Screen`, `Overlay`

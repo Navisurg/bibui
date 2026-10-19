@@ -334,8 +334,8 @@ internal static class DamageOracle
             int frame = 0;
             UiNode Build()
             {
-                float w = rt.Animate("bar", "width", (frame / 25) % 2 == 0 ? 60f : 420f, speed: 8f);
-                float a = rt.Animate("bar", "alpha", (frame / 30) % 2 == 0 ? 1f : 0.3f, speed: 6f);
+                float w = rt.Animate("bar", "width", (frame / 25) % 2 == 0 ? 60f : 420f, rt.Rate(8f));
+                float a = rt.Animate("bar", "alpha", (frame / 30) % 2 == 0 ? 1f : 0.3f, rt.Rate(6f));
                 var bar = rt.Box().Px(w, 30f);
                 bar.Style.CornerRadius = 6f;
                 bar.Style.BackgroundColor = UiColor.Hex(new Rgba(59, 130, 246, (byte)Math.Clamp((int)(a * 255f), 0, 255)).ToString());
@@ -355,7 +355,7 @@ internal static class DamageOracle
             {
                 bool popover = (frame / 15) % 2 == 1;
                 bool dialog = frame >= 30 && frame < 75;
-                float shown = rt.Animate("dialog", "shown", dialog ? 1f : 0f, speed: 10f);
+                float shown = rt.Animate("dialog", "shown", dialog ? 1f : 0f, rt.Rate(10f));
                 var trigger = rt.Button("pop-trigger", "Details");
                 var tipped = rt.Button("tip-trigger", "Hover for a tip", ghost: true);
                 if (tipped.Hovering) Tooltip.Build(rt, "A tooltip over the grid", (Box)tipped.Node);
@@ -492,7 +492,7 @@ internal static class DamageOracle
             int frame = 0;
             UiNode Build()
             {
-                float o = rt.Animate("fade", "o", (frame / 20) % 2 == 0 ? 1f : 0.25f, speed: 8f);
+                float o = rt.Animate("fade", "o", (frame / 20) % 2 == 0 ? 1f : 0.25f, rt.Rate(8f));
                 var kids = new List<Arrange.Item>();
                 for (int i = 0; i < 4; i++)
                 {

@@ -56,7 +56,7 @@ replacing it. Otherwise a name would mean whichever theme was registered last.
 | `Borders` | `BorderTokens` | `Width` 1 for outlines and rules, `Strong` 2 for a chosen outline | by components as they build |
 | `FocusRing` | `FocusRingTokens` | width, offset and colour of the keyboard focus ring | by components as they build |
 | `Density` | `DensityTokens` | `Compact`, `Default` or `Comfortable` vertical rhythm | by components as they build |
-| `Motion` | `MotionTokens` | speeds for hover, caret, toggles and `runtime.Animate`, and the easing | by the runtime and components |
+| `Motion` | `MotionTokens` | speeds for hover, following (scrolling, the caret), toggles and `runtime.Animate`, and the easing; the runtime turns them into `runtime.Rates` once a frame | by the runtime and components |
 
 Every default reproduces what the built-in components draw. A theme sets only
 what it changes.
@@ -359,8 +359,8 @@ public static BibuiWidget Build(BibuiRuntime runtime, string id, ReadOnlySpan<ch
     row.Style.BorderColor = on ? UiColor.Accent : UiColor.Border;
     row.Style.Shadow = theme.Elevation.Level(1);
 
-    // Eased at the theme's toggle speed, so a reduced-motion theme snaps.
-    float t = runtime.Animate(id, "on", on ? 1f : 0f, speed: theme.Motion.Toggle);
+    // Eased at the theme's toggle rate, so a reduced-motion theme snaps.
+    float t = runtime.Animate(id, "on", on ? 1f : 0f, runtime.Rates.Toggle);
     row.Style.BackgroundColor = UiColor.Accent.WithAlpha(0.2f * t);
 
     using (runtime.PushParent(row))
@@ -379,12 +379,14 @@ The conventions the built-in components follow:
 - **`Elevation.Level(ElevationTokens.Overlay)`** for dropdowns, menus and
   popovers, `ElevationTokens.Tooltip` for tooltips, and `ElevationTokens.Modal`
   for dialogs. Pick the level by role, not by look.
-- **`Motion.Toggle`** for a control crossing between two states,
-  **`Motion.Hover`** for hover (the runtime already uses it for `HotT`), and
-  **`Motion.Default`** for anything else, which is what `runtime.Animate` uses
-  when you pass no speed. Do not hard-code speeds. A theme with
-  `Motion.Easing = MotionEasing.None` is how an app honours a reduced-motion
-  preference.
+- **`runtime.Rates`**, the theme's motion speeds as this frame's rates:
+  **`Rates.Toggle`** for a control crossing between two states,
+  **`Rates.Hover`** for hover (the runtime already uses it for `HotT`),
+  **`Rates.Follow`** for a position chasing input (view scrolling and the caret
+  use it), and **`Rates.Default`** for anything else, which is what
+  `runtime.Animate` uses when you pass no rate. Do not hard-code speeds; for
+  one of your own, `runtime.Rate(speed)`. Every rate is 1 under reduced motion
+  or `Motion.Easing = MotionEasing.None`, so nothing else has to check.
 
 ## Contrast
 

@@ -323,10 +323,13 @@ public readonly ref partial struct DrawContext
     /// <inheritdoc cref="DrawingContext.Dt"/>
     public float Dt => _ctx.Dt;
 
+    /// <inheritdoc cref="DrawingContext.Rates"/>
+    public MotionRates Rates => _ctx.Rates;
+
     /// <summary>
-    /// Where <paramref name="target"/> has got to. <paramref name="speed"/> is
-    /// halvings per second, so the shape of the curve does not depend on the
-    /// frame rate.
+    /// Where <paramref name="target"/> has got to. <paramref name="rate"/> is
+    /// the share of the gap closed this frame, from <see cref="Rates"/> for the
+    /// kind of motion it is; with none, <see cref="MotionRates.Default"/>.
     ///
     /// A value asked for the first time arrives *at* its target rather than
     /// travelling to it — otherwise everything would fade in from nothing on the
@@ -338,7 +341,7 @@ public readonly ref partial struct DrawContext
     /// units — 0.01 for a 0..1 fade, 0.5 for a pixel offset. It is what makes
     /// the animation *stop*: exponential approach never actually arrives.
     /// </summary>
-    public float Animate(AnimKey key, float target, float speed = 12f, float epsilon = 0.01f)
+    public float Animate(AnimKey key, float target, float? rate = null, float epsilon = 0.01f)
     {
         var cell = _caches.Anims.FromKey(key, target,
             static t => new AnimCell { Current = t, Next = t, Target = t });
@@ -350,7 +353,7 @@ public readonly ref partial struct DrawContext
         // to both callers.
         cell.Next = _ctx.ReducedMotion
             ? target
-            : cell.Current + (target - cell.Current) * (1f - MathF.Pow(2f, -speed * _ctx.Dt));
+            : Ease.Exponential(cell.Current, target, rate ?? _ctx.Rates.Default);
         return cell.Current;
     }
 

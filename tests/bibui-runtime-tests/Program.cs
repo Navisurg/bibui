@@ -535,7 +535,7 @@ Run("Animate: travels to a moved target, then settles and stops asking", () =>
         () => new Box
         {
             Id = "anim",
-            Draw = (_, ctx) => observed = ctx.Animate(key, target, speed: 12f, epsilon: 0.01f),
+            Draw = (_, ctx) => observed = ctx.Animate(key, target, Ease.Rate(12f, ctx.Dt), epsilon: 0.01f),
         }.Px(100f, 100f),
         surface: new SurfaceOptions { Width = 100, Height = 100 });
 
@@ -1660,6 +1660,12 @@ Run("ThemeFile: a file that extends default-light and changes only the accent", 
         Eq("#0D9488", runtime.Theme.Colors.Accent, "mounts by name");
     }
     finally { Directory.Delete(dir, recursive: true); }
+});
+
+Run("ThemeFile: motion's follow speed, also read under its old name caret", () =>
+{
+    Eq(30f, ThemeFileTests.Parse("""{ "name": "t-follow", "motion": { "follow": 30 } }""").Resolve().Motion.Follow, "follow");
+    Eq(30f, ThemeFileTests.Parse("""{ "name": "t-caret", "motion": { "caret": 30 } }""").Resolve().Motion.Follow, "caret, as before");
 });
 
 Run("ThemeFile: extends merges group by group, field by field", () =>
@@ -5766,19 +5772,19 @@ Run("Animate: an infinite speed closes the whole gap in one step", () =>
     runtime.SetBuild(
         () =>
         {
-            runtime.Animate("thing", "x", target, speed: float.PositiveInfinity);
+            runtime.Animate("thing", "x", target, rate: 1f);
             return Layer(null).Px(400f, 200f);
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
 
     target = 1f;
-    runtime.Step();   // one step, at an infinite rate
-    Eq(1f, runtime.Animate("thing", "x", 1f, speed: float.PositiveInfinity), "all the way, in one step");
+    runtime.Step();   // one step, at a rate of 1
+    Eq(1f, runtime.Animate("thing", "x", 1f, rate: 1f), "all the way, in one step");
 
     target = 0f;
     runtime.Step();
-    Eq(0f, runtime.Animate("thing", "x", 0f, speed: float.PositiveInfinity), "and back the same way");
+    Eq(0f, runtime.Animate("thing", "x", 0f, rate: 1f), "and back the same way");
 });
 
 Run("Animate: separate properties of one id are separate values", () =>
@@ -7638,7 +7644,7 @@ Run("Tokens: the defaults are the literals the components drew before them", () 
     Eq(1f, t.Borders.Width); Eq(2f, t.Borders.Strong);
     Eq(1f, t.FocusRing.Width); Eq(0f, t.FocusRing.Offset); Eq(UiColor.BorderFocus, t.FocusRing.Color);
     Eq(1f, t.Density.Scale); Eq(7.5f, t.Density.Of(7.5f), "a length at the default density is exactly itself");
-    Eq(60f, t.Motion.Hover); Eq(60f, t.Motion.Caret); Eq(22f, t.Motion.Toggle); Eq(20f, t.Motion.Default);
+    Eq(60f, t.Motion.Hover); Eq(60f, t.Motion.Follow); Eq(22f, t.Motion.Toggle); Eq(20f, t.Motion.Default);
     Eq(MotionEasing.Exponential, t.Motion.Easing);
     for (int level = 0; level <= 4; level++) IsNull(t.Elevation.Level(level), $"level {level} is flat");
     IsNull(ThemeLoader.NeutralDark().Elevation.Level(ElevationTokens.Overlay), "a built-in theme is flat too");
@@ -7753,7 +7759,7 @@ Run("Tokens: a theme's toggle speed is how fast a switch's knob crosses", () =>
     IsTrue(standard > slow + 1f, $"the faster theme's knob is further across ({standard} vs {slow})");
 });
 
-Run("Tokens: Animate with no speed takes the theme's default", () =>
+Run("Tokens: Animate with no rate takes the theme's default", () =>
 {
     float After(float speed)
     {
@@ -7780,7 +7786,7 @@ Run("Tokens: MotionEasing.None closes every gap in one step", () =>
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() =>
     {
-        runtime.Animate("thing", "x", target, speed: 1f);
+        runtime.Animate("thing", "x", target, Ease.Rate(1f, runtime.Dt));   // a rate of its own, not from Rates
         Box b = runtime.BoxFromId("b", InteractionKinds.LeftPress);
         runtime.InteractionsFor(b);
         b.Px(50f, 50f).At(0f, 0f);
@@ -7790,7 +7796,7 @@ Run("Tokens: MotionEasing.None closes every gap in one step", () =>
     target = 1f;
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = 10f, Y = 10f });
     runtime.Step();
-    Eq(1f, runtime.Animate("thing", "x", 1f, speed: 1f), "even a slow ease arrives at once");
+    Eq(1f, runtime.Animate("thing", "x", 1f, Ease.Rate(1f, runtime.Dt)), "even a slow ease arrives at once");
     Eq(1f, ((Box)runtime.FindById("b")!).HotT, "and hover is all the way on after one frame");
 });
 Console.WriteLine();

@@ -6,7 +6,7 @@ namespace Bibui.Runtime;
 public sealed partial class BibuiRuntime
 {
     // ── Motion ────────────────────────────────────────────────────────────────
-    // Animate(id, property, target, speed) eases by exponential approach and
+    // Animate(id, property, target, rate) eases by exponential approach and
     // nothing else. This is the rest: a value that takes a set time along a
     // named curve, or rides a spring that keeps its speed when the target
     // moves; a colour crossfading in Oklab; something that has to stay on
@@ -38,6 +38,19 @@ public sealed partial class BibuiRuntime
     }
 
     private bool _reducedMotion = Environment.GetEnvironmentVariable("BIBUI_REDUCED_MOTION") is "1" or "true";
+
+    /// <summary>
+    /// This frame's rates, one per kind of motion, computed once as the build
+    /// begins: step a value of that kind with <see cref="Ease.Exponential(float, float, float)"/>
+    /// and it moves as the runtime's own do. All 1 when motion is instant.
+    /// </summary>
+    public MotionRates Rates { get; private set; }
+
+    /// <summary>
+    /// The rate for a speed of the caller's own (halvings of the gap a second)
+    /// this frame: 1 when motion is instant, as every rate in <see cref="Rates"/> is.
+    /// </summary>
+    public float Rate(float speed) => Instant ? 1f : Ease.Rate(speed, Dt);
 
     /// <summary>Whether this frame snaps rather than travels.</summary>
     private bool Instant => _reducedMotion || _theme.Motion.Easing == MotionEasing.None;
@@ -437,10 +450,6 @@ public sealed partial class BibuiRuntime
         return animating;
     }
 
-    // Springs are integrated in steps no longer than this, so a stiff spring
-    // stays stable at 30 Hz as well as at 144.
-    private const float SpringStep = 1f / 240f;
-
     /// <summary>Moves <paramref name="cell"/> one frame along its transition. True while it has not arrived.</summary>
     private static bool Step(MotionCell cell, float dt, bool instant)
     {
@@ -469,17 +478,7 @@ public sealed partial class BibuiRuntime
 
             case TransitionKind.Spring:
             {
-                var s = tr.Spring;
-                float step = Math.Min(dt, moving);
-                int n = Math.Max(1, (int)MathF.Ceiling(step / SpringStep));
-                float h = step / n;
-                for (int i = 0; i < n; i++)
-                {
-                    // Semi-implicit Euler: velocity first, then position from it.
-                    Vector4 force = -s.Stiffness * (cell.Current - cell.Target) - s.Damping * cell.Velocity;
-                    cell.Velocity += force / s.Mass * h;
-                    cell.Current += cell.Velocity * h;
-                }
+                Ease.Spring(ref cell.Current, ref cell.Velocity, cell.Target, tr.Spring, Math.Min(dt, moving));
                 if (MaxAbs(cell.Current - cell.Target) <= cell.Epsilon && MaxAbs(cell.Velocity) <= cell.Epsilon * 10f)
                 {
                     Arrive(cell);
@@ -490,8 +489,7 @@ public sealed partial class BibuiRuntime
 
             default:   // Exponential
             {
-                float rate = 1f - MathF.Pow(2f, -tr.Speed * dt);
-                cell.Current += (cell.Target - cell.Current) * rate;
+                cell.Current = Ease.Exponential(cell.Current, cell.Target, Ease.Rate(tr.Speed, dt));
                 if (MaxAbs(cell.Target - cell.Current) <= cell.Epsilon) { Arrive(cell); return false; }
                 return true;
             }

@@ -226,10 +226,9 @@ public sealed partial class BibuiRuntime
         if (_retainedBoxes.Count == 0) return false;
 
         // The theme's hover speed, 60 halvings a second by default: deliberately
-        // faster than DrawContext.Animate's 12, since a hover that takes half a
+        // faster than Animate's default 20, since a hover that takes half a
         // second to arrive reads as lag, not as easing.
-        var motion = _theme.Motion;
-        float rate = Instant ? 1f : 1f - MathF.Pow(2f, -motion.Hover * Dt);
+        float hover = Rates.Hover, follow = Rates.Follow;   // one each, for every box
         bool animating = false;
 
         foreach (var (id, entry) in _retainedBoxes.Entries)
@@ -237,7 +236,7 @@ public sealed partial class BibuiRuntime
             var box = entry.Value;
 
             float hotTarget = id == _hotId ? 1f : 0f;
-            float hot = box.HotT + rate * (hotTarget - box.HotT);
+            float hot = Ease.Exponential(box.HotT, hotTarget, hover);
             if (MathF.Abs(hotTarget - hot) <= BoxAnimEpsilon) hot = hotTarget;
             else animating = true;
             box.HotT = hot;
@@ -248,7 +247,7 @@ public sealed partial class BibuiRuntime
             }
             else
             {
-                float active = box.ActiveT + rate * (0f - box.ActiveT);
+                float active = Ease.Exponential(box.ActiveT, 0f, hover);
                 if (active <= BoxAnimEpsilon) active = 0f;
                 else animating = true;
                 box.ActiveT = active;
@@ -257,8 +256,7 @@ public sealed partial class BibuiRuntime
             // NOTE(K): Update view offsets for the boxes: ViewOffset->TargetViewOffset
             // using our exponential decay
             ClampViewOffset(box, box);
-            // TODO(k): Use the call to animate
-            Vector2 view = box.ViewOffset + rate * (box.TargetViewOffset - box.ViewOffset);
+            Vector2 view = Ease.Exponential(box.ViewOffset, box.TargetViewOffset, follow);
             if (Vector2.Distance(view, box.TargetViewOffset) <= ViewOffsetEpsilon) view = box.TargetViewOffset;
             else animating = true;
             box.ViewOffset = view;

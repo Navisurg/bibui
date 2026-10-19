@@ -383,8 +383,8 @@ public sealed class MotionTokens
     /// <summary>Hover and press: how fast a box goes hot, and comes back.</summary>
     public float Hover { get; init; } = 60f;
 
-    /// <summary>A text caret gliding to where the cursor went.</summary>
-    public float Caret { get; init; } = 60f;
+    /// <summary>A position chasing what the input did: a view scrolling to its offset, the caret gliding to the cursor.</summary>
+    public float Follow { get; init; } = 60f;
 
     /// <summary>A control crossing between two states: a switch's knob.</summary>
     public float Toggle { get; init; } = 22f;

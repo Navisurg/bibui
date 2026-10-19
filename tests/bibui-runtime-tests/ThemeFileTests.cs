@@ -170,7 +170,7 @@ static class ThemeFileTests
         lines.Add($"focusRing {t.FocusRing.Width} {t.FocusRing.Offset} {t.FocusRing.Color.Resolve(c)}");
         lines.Add($"density {t.Density.Mode} {t.Density.CompactScale} {t.Density.ComfortableScale}");
         var m = t.Motion;
-        lines.Add($"motion {m.Hover} {m.Caret} {m.Toggle} {m.Default} {m.Easing}");
+        lines.Add($"motion {m.Hover} {m.Follow} {m.Toggle} {m.Default} {m.Easing}");
         return lines;
     }
 

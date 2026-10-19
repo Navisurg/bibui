@@ -81,6 +81,9 @@ internal sealed class DrawingContext
     /// <inheritdoc cref="FrameInput.ReducedMotion"/>
     public bool ReducedMotion => _input.ReducedMotion;
 
+    /// <inheritdoc cref="FrameInput.Rates"/>
+    public MotionRates Rates => _input.Rates;
+
     /// <inheritdoc cref="Fonts.Metrics"/>
     internal TextMetrics Metrics(float logicalFontSize, string? family, int weight)
         => _fonts.Metrics(logicalFontSize, family, weight, _scale);

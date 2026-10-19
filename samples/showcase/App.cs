@@ -76,7 +76,7 @@ internal sealed partial class App
             {
                 Motion = new MotionTokens
                 {
-                    Hover = t.Motion.Hover, Caret = t.Motion.Caret, Toggle = t.Motion.Toggle,
+                    Hover = t.Motion.Hover, Follow = t.Motion.Follow, Toggle = t.Motion.Toggle,
                     Default = t.Motion.Default, Easing = MotionEasing.None,
                 },
             };

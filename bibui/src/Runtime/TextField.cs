@@ -157,10 +157,10 @@ public static class TextField
         float before = runtime.Fonts.Measure(line[..lo], font);
         if (caret == hi && hi > lo) before += runtime.Fonts.Measure(line[lo..hi], font);
 
-        // The theme's caret speed: 60 halvings a second by default, half the way each frame at 60 Hz.
-        float speed = edited ? float.PositiveInfinity : runtime.Theme.Motion.Caret;
-        float easedX = runtime.Animate(view.Id!, "caret-x", before, speed);
-        float easedY = runtime.Animate(view.Id!, "caret-y", top, speed);
+        // The caret follows the cursor: 60 halvings a second by default, half the way each frame at 60 Hz.
+        float rate = edited ? 1f : runtime.Rates.Follow;
+        float easedX = runtime.Animate(view.Id!, "caret-x", before, rate);
+        float easedY = runtime.Animate(view.Id!, "caret-y", top, rate);
         float x = edited ? before : easedX, y = edited ? top : easedY;
         Box bar = runtime.Box();
         bar.SizeX = SemanticSize.Pixels(CaretWidth);
