@@ -20,32 +20,58 @@ supported yet.
 
 ## Install
 
-bibui needs .NET 10. Add `Bibui`, a window package and a renderer package:
+bibui needs .NET 10. Add one `Bibui.App` package: it brings bibui, a window
+and a renderer.
 
 ```bash
 dotnet new console -n Counter && cd Counter
-dotnet add package Bibui
-dotnet add package Bibui.Platform.Silk
-dotnet add package Bibui.Raster.Skia
+dotnet add package Bibui.App.SilkSkiaGl
 ```
 
-| Route | Packages | Native AOT |
-|---|---|---|
-| Silk + Skia (GLFW and OpenGL) | `Bibui`, `Bibui.Platform.Silk`, `Bibui.Raster.Skia` | No, JIT only for now |
-| Wayland + managed raster | `Bibui`, `Bibui.Platform.Wayland`, `Bibui.Raster.Managed.Backend` | Yes |
-| Headless tests | `Bibui.Testing` | |
+| Package | Window | Renderer | Native AOT |
+|---|---|---|---|
+| `Bibui.App.SilkSkiaGl` | Silk (GLFW) | Skia on the GPU (OpenGL) | No, JIT only for now |
+| `Bibui.App.SilkSkiaCpu` | Silk (GLFW) | Skia on the CPU | No, JIT only for now |
+| `Bibui.App.SilkManaged` | Silk (GLFW) | managed rasterizer, on the CPU | No, JIT only for now |
+| `Bibui.App.WaylandManaged` | Wayland | managed rasterizer, on the CPU | Yes |
+| `Bibui.App.WaylandSkiaCpu` | Wayland | Skia on the CPU | Yes, beside `libSkiaSharp.so` |
+
+Each has the same `BibuiApp` type with the same calls, so changing the package
+changes how your app is drawn and nothing in its code. [Bibui.App
+packages](docs/app-packages.md) says where they differ. Headless tests use
+`Bibui.Testing`.
 
 ## Quick start
 
 [`samples/counter`](samples/counter/Program.cs) is a simple bibui app: a label
-and a button that counts its clicks. The app owns its loop:
+and a button that counts its clicks.
 
-- the window waits for input and paces the loop (`SilkWindow.BeginFrame` /
-  `EndFrame`);
-- the runtime builds each frame and records it (`runtime.BeginBuild` /
-  `EndBuild`);
-- a renderer draws what was recorded into the window (`skia.Draw`, between
-  `SilkWindow.BeginDraw` and `EndDraw`, which swaps).
+```csharp
+using Bibui.App;
+using Bibui.Runtime;
+
+var runtime = BibuiRuntime.Create();
+using var app = BibuiApp.Open(runtime, new("Counter", 360, 160));
+int count = 0;
+
+while (app.BeginFrame())
+{
+    runtime.BeginBuild(app.Events);
+    using (runtime.PushParent(runtime.ColumnFit()))
+    {
+        runtime.Text($"Clicked {count} times");
+        if (runtime.Button("add", "Add one").Clicked) count++;
+    }
+    runtime.EndBuild();
+    app.EndFrame();
+}
+```
+
+The app owns its loop:
+
+- `app.BeginFrame()` waits until a frame is wanted and collects its input;
+- `runtime.BeginBuild` / `EndBuild` build the frame and record what to draw;
+- `app.EndFrame()` draws that into the window, presents it, and paces the loop.
 
 The build is ordinary code inside that loop, and the app's state is its own
 variables. Run it:
@@ -83,6 +109,40 @@ This appends each node to `column`'s children.
 `runtime.Button` is itself a composition: a `Box` that claims left presses,
 with a `Text` inside. `button.Clicked` reports a click, so the app reacts to it
 inline, with no callbacks.
+
+### Writing the loop yourself
+
+A `Bibui.App` package is a window package and a renderer package, put
+together. Reference those instead (`Bibui`, `Bibui.Platform.Silk`,
+`Bibui.Raster.Skia`) and the same loop is:
+
+```csharp
+using var window = SilkWindow.Open(runtime, new("Counter", 360, 160));
+using var skia = new SkiaGlRenderer(window.Gl);
+
+while (SilkWindow.BeginFrame(window, runtime))
+{
+    runtime.BeginBuild(window.Events);
+    Build();
+    runtime.EndBuild();
+    SilkWindow.BeginDraw(window);
+    skia.Draw(runtime.DrawList);
+    SilkWindow.EndDraw(window);
+    SilkWindow.EndFrame(window, runtime);
+}
+```
+
+That is the way to draw several renderers into one window, step a test server
+of your own, or bring a window or renderer that bibui does not ship.
+[`samples/bibui-app`](samples/bibui-app/Program.cs) is written this way.
+
+### The test server
+
+The test server lets a test or an agent drive a running app: click, type,
+read the tree, take a screenshot. A `BibuiApp` starts it when asked,
+`BibuiApp.Open(runtime, window, new BibuiAppOptions { TestServer = true })`,
+or when the environment variable `BIBUI_TEST_SERVER=1` is set. Otherwise it is
+off.
 
 ## Component Library
 

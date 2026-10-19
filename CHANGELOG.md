@@ -390,6 +390,32 @@ before it was published.
   `runtime.Scrollbar(id, scroll, count, viewRows)`, for a list built the same
   way. A gallery page shows 100,000 rows.
 
+- **`Bibui.App` packages: a bibui app in one package.** Five packages, one per
+  window and renderer: `Bibui.App.SilkSkiaGl` (Silk, Skia on the GPU),
+  `Bibui.App.SilkSkiaCpu`, `Bibui.App.SilkManaged` (Silk, drawn on the CPU and
+  shown through the GL framebuffer), `Bibui.App.WaylandManaged` and
+  `Bibui.App.WaylandSkiaCpu`. Each brings bibui, its window and its renderer,
+  and has the same `BibuiApp`, so changing the package changes how an app is
+  drawn and nothing in its code:
+  ```csharp
+  using var app = BibuiApp.Open(runtime, new("App", 800, 600));
+  while (app.BeginFrame())
+  {
+      runtime.BeginBuild(app.Events);
+      Build();
+      runtime.EndBuild();
+      app.EndFrame();      // draw, present, pace
+  }
+  ```
+  - `app.Renderer` is the renderer, for textures; `app.Window` the window.
+  - The test server starts with `new BibuiAppOptions { TestServer = true }` or
+    `BIBUI_TEST_SERVER=1`; otherwise it is off. On the CPU packages its
+    screenshots are drawn by the app's own renderer, textures included.
+  - The window and renderer packages stay usable on their own, for a loop an
+    app writes itself.
+  - Each depends on exactly the `Bibui`, window and renderer versions it was
+    built with.
+
 - **One rate per kind of motion, and everything eases by it (breaking).**
   `runtime.Rates` holds this frame's rates for exponential approach, computed
   once as the build begins from the theme's motion speeds: `Hover` (hot and

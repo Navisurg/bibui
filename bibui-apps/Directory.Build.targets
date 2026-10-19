@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    A Bibui.App package depends on exactly the bibui, window and renderer
+    packages it was built with: [0.10.0], not >= 0.10.0. BibuiApp.cs calls
+    into all three, and they are released together, so a newer one under an
+    older app package is a pairing nobody has built.
+
+    Pack takes each project reference's version from _GetProjectReferenceVersions;
+    this rewrites it to an exact range before the nuspec is written.
+  -->
+  <Target Name="_PinProjectReferenceVersions" AfterTargets="_GetProjectReferenceVersions">
+    <ItemGroup>
+      <_ProjectReferencesWithVersions Update="@(_ProjectReferencesWithVersions)" ProjectVersion="[%(ProjectVersion)]" />
+    </ItemGroup>
+  </Target>
+</Project>

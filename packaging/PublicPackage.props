@@ -6,7 +6,9 @@
     Authors and Copyright come from Directory.Build.props for every package.
 
     A package adds its own tags after the import: <PackageTags>$(PackageTags);skia</PackageTags>.
-    Its README is packaging/readme/<PackageId>.md, packed as README.md.
+    Its README is packaging/readme/<PackageId>.md, packed as README.md, unless
+    the package names another in PackageReadmeSource (the Bibui.App packages
+    share docs/app-packages.md).
   -->
   <PropertyGroup>
     <PackageProjectUrl>https://github.com/Navisurg/bibui</PackageProjectUrl>
@@ -20,6 +22,9 @@
   <ItemGroup>
     <!-- Items are evaluated after every property, so $(PackageId) is the csproj's own here. -->
     <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="" Visible="false" />
-    <None Include="$(MSBuildThisFileDirectory)readme/$(PackageId).md" Pack="true" PackagePath="README.md" Visible="false" />
+    <!-- Items read properties once all of them are set, so PackageId and a
+         PackageReadmeSource the csproj sets after this import are both known. -->
+    <None Condition="'$(PackageReadmeSource)' == ''" Include="$(MSBuildThisFileDirectory)readme/$(PackageId).md" Pack="true" PackagePath="README.md" Visible="false" />
+    <None Condition="'$(PackageReadmeSource)' != ''" Include="$(PackageReadmeSource)" Pack="true" PackagePath="README.md" Visible="false" />
   </ItemGroup>
 </Project>

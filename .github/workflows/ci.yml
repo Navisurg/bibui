@@ -67,6 +67,11 @@ jobs:
             bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj \
             bibui-platform-silk/bibui-platform-silk.csproj \
             bibui-platform-wayland/bibui-platform-wayland.csproj \
+            bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj \
+            bibui-apps/silk-skia-cpu/bibui-app-silk-skia-cpu.csproj \
+            bibui-apps/silk-managed/bibui-app-silk-managed.csproj \
+            bibui-apps/wayland-managed/bibui-app-wayland-managed.csproj \
+            bibui-apps/wayland-skia-cpu/bibui-app-wayland-skia-cpu.csproj \
             tools/wayland-scanner/wayland-scanner.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
             bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
@@ -75,10 +80,12 @@ jobs:
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
             tests/wayland-hello/wayland-hello.csproj \
+            tests/app-packages-tests/app-packages-tests.csproj \
             samples/component-gallery/component-gallery.csproj \
             samples/bibui-app/bibui-app.csproj \
             samples/counter/counter.csproj \
-            samples/counter-cpu/counter-cpu.csproj
+            samples/counter-cpu/counter-cpu.csproj \
+            samples/counter-wayland/counter-wayland.csproj
           do
             echo "==> build $proj"
             dotnet build "$proj" --configuration Release -p:TreatWarningsAsErrors=true
@@ -97,7 +104,8 @@ jobs:
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
-            bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj
+            bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
+            tests/app-packages-tests/app-packages-tests.csproj
           do
             echo "==> test $proj"
             dotnet run --project "$proj" --configuration Release --no-build
@@ -133,3 +141,16 @@ jobs:
             --output aot/wayland-hello
           ls -l aot/wayland-hello/wayland-hello
           aot/wayland-hello/wayland-hello --first-frame
+
+      # The same for an app on a Bibui.App package: what docs/app-packages.md
+      # promises of Bibui.App.WaylandManaged. It opens a window to run, so CI
+      # only publishes it.
+      - name: Native AOT publish of counter-wayland (Bibui.App.WaylandManaged)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish samples/counter-wayland/counter-wayland.csproj \
+            --configuration Release -r linux-x64 \
+            -p:PublishAot=true -p:TreatWarningsAsErrors=true \
+            --output aot/counter-wayland
+          ls -l aot/counter-wayland/counter-wayland

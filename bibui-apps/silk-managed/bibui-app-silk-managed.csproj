@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../../packaging/PublicPackage.props" />
+
+  <!-- A bibui app in one package: bibui, a Silk window drawn by bibui's managed rasterizer (no native drawing library), shown through the window's GL framebuffer.
+       BibuiApp is the same type in every Bibui.App package (../BibuiApp.cs);
+       this package names its window and renderer, and says how they open and
+       draw (SilkManaged.cs). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.App.SilkManaged</AssemblyName>
+    <RootNamespace>Bibui.App</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- This package's own code: Silk.NET under it is not trim-safe, so an app
+         on it runs on the JIT (docs/aot.md). As Bibui.Platform.Silk says. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>Bibui.App.SilkManaged</PackageId>
+    <Description>A bibui app in one package: bibui, a Silk window drawn by bibui's managed rasterizer (no native drawing library), shown through the window's GL framebuffer. BibuiApp opens the window and renderer and runs the frame in two calls; the same type in every Bibui.App package.</Description>
+    <PackageTags>$(PackageTags);silk;managed;cpu</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+    <!-- One README for the five Bibui.App packages, with what differs between them. -->
+    <PackageReadmeSource>$(MSBuildThisFileDirectory)../../docs/app-packages.md</PackageReadmeSource>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The window and renderer this package is, under the names BibuiApp.cs uses. -->
+    <Using Include="Bibui.Runtime.Platform.SilkWindow" Alias="AppWindow" />
+    <Using Include="Bibui.Raster.Managed.Backend.ManagedRenderer" Alias="AppRenderer" />
+    <Compile Include="../BibuiApp.cs" Link="BibuiApp.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+    <!-- GlCpuFramebuffer: the CPU frame shown on the window's GL framebuffer. -->
+    <ProjectReference Include="../../bibui-gl/bibui-gl.csproj" />
+    <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+</Project>

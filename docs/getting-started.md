@@ -12,22 +12,20 @@ only.
 ```bash
 dotnet new console -n Stepper
 cd Stepper
-dotnet add package Bibui
-dotnet add package Bibui.Platform.Silk
-dotnet add package Bibui.Raster.Skia
+dotnet add package Bibui.App.SilkSkiaGl
 ```
 
-`Bibui` is the library. `Bibui.Platform.Silk` is a platform: it opens the
-window (GLFW) and puts frames on screen with OpenGL. `Bibui.Raster.Skia` is the
-renderer that draws them, with Skia on the GPU. This route runs on the JIT; for a single
-native binary, section 7 moves the same app to the other platform, Wayland with
-the managed rasterizer.
+`Bibui.App.SilkSkiaGl` brings the three parts an app needs: `Bibui`, the
+library; `Bibui.Platform.Silk`, a platform that opens the window (GLFW) and puts
+frames on screen with OpenGL; and `Bibui.Raster.Skia`, the renderer that draws
+them, with Skia on the GPU. This route runs on the JIT; for a single native
+binary, section 7 moves the same app to Wayland with the managed rasterizer by
+changing the package.
 
 ### Building against a clone instead
 
 To work against the source rather than the packages, clone the repository and
-reference the platform's and the renderer's projects. They bring `Bibui` with
-them:
+reference the same package's project. It brings the rest with it:
 
 ```bash
 git clone https://github.com/Navisurg/bibui ../bibui
@@ -35,8 +33,7 @@ git clone https://github.com/Navisurg/bibui ../bibui
 
 ```xml
 <ItemGroup>
-  <ProjectReference Include="../bibui/bibui-platform-silk/bibui-platform-silk.csproj" />
-  <ProjectReference Include="../bibui/bibui-raster-skia/bibui-raster-skia.csproj" />
+  <ProjectReference Include="../bibui/bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj" />
 </ItemGroup>
 ```
 
@@ -46,44 +43,39 @@ Replace `Program.cs`:
 
 ```csharp
 using Bibui;
-using Bibui.Raster.Skia;
+using Bibui.App;
 using Bibui.Runtime;
-using Bibui.Runtime.Platform;
 using static Bibui.Arrange;
 
 var runtime = BibuiRuntime.Create();
 var hello = "Hello, bibui";
 
-using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Stepper", 800, 600));
-using var skia = new SkiaGlRenderer(window.Gl);
-while (SilkWindow.BeginFrame(window, runtime))
+using var app = BibuiApp.Open(runtime, new("Stepper", 800, 600));
+while (app.BeginFrame())
 {
-    runtime.BeginBuild(window.Events);
+    runtime.BeginBuild(app.Events);
     UiNode.PushIntoParent(runtime.ParentInScope,
         Column(runtime.Text(hello)).FillX().FillY().Padded(EdgeInsets.All(24f)));
     runtime.EndBuild();
-    SilkWindow.BeginDraw(window);
-    skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);
-    SilkWindow.EndFrame(window, runtime);
+    app.EndFrame();
 }
 ```
 
 `dotnet run` opens an 800 × 600 window.
 
-- The app owns the loop. `BeginFrame` waits until there is a frame to draw
-  (input, or a frame the runtime asked for) and returns false once the window
-  closes. `BeginDraw` and `EndDraw` go around the renderer's draw: `EndDraw`
-  puts the frame on screen (a swap). `EndFrame` paces the loop.
+- The app owns the loop. `app.BeginFrame()` waits until there is a frame to
+  draw (input, or a frame the runtime asked for) and returns false once the
+  window closes. `app.EndFrame()` draws the frame into the window, puts it on
+  screen, and paces the loop.
 - Between `BeginBuild` and `EndBuild` you build one frame. The runtime owns the
   frame's root: what you build with nothing pushed lands under it, and a tree
   made with `Arrange` (`Column(...)`) is linked there with `PushIntoParent`.
   `EndBuild` lays the tree out and records it into `runtime.DrawList`.
-- `new SkiaGlRenderer(window.Gl)` is the renderer, drawing into the window's GL
-  framebuffer; `skia.Draw(runtime.DrawList)` draws the frame. bibui never looks
-  one up at run time; you make it. `SkiaGlRenderer.ForGl(window.Gl)` answers null
-  where Skia cannot use the GL context; a CPU renderer drawing into a
-  `GlCpuFramebuffer` (`Bibui.Gl`) can draw instead.
+- `BibuiApp.Open` opens the window and makes the renderer the package names;
+  bibui never looks one up at run time. `app.Window` and `app.Renderer` are
+  those two, for when you need them (textures are made on the renderer). To
+  write the loop from the window and renderer yourself, see the README's
+  "Writing the loop yourself".
 - `Column(...)` stacks its items vertically and is as large as they are.
   `FillX()` and `FillY()` make it fill its parent, the window.
 - Every node has a size on each axis: in pixels (`.Px(...)`), a share of its
@@ -183,24 +175,19 @@ public sealed class App
 And `Program.cs` becomes:
 
 ```csharp
-using Bibui.Raster.Skia;
+using Bibui.App;
 using Bibui.Runtime;
-using Bibui.Runtime.Platform;
 
 var runtime = BibuiRuntime.Create();
-var app = new App();
+var stepper = new App();
 
-using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Stepper", 480, 320));
-using var skia = new SkiaGlRenderer(window.Gl);
-while (SilkWindow.BeginFrame(window, runtime))
+using var app = BibuiApp.Open(runtime, new("Stepper", 480, 320));
+while (app.BeginFrame())
 {
-    runtime.BeginBuild(window.Events);
-    app.Build(runtime);
+    runtime.BeginBuild(app.Events);
+    stepper.Build(runtime);
     runtime.EndBuild();
-    SilkWindow.BeginDraw(window);
-    skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);
-    SilkWindow.EndFrame(window, runtime);
+    app.EndFrame();
 }
 ```
 
@@ -310,43 +297,24 @@ you pass to a component.
 ## 7. Publishing with Native AOT
 
 The Wayland route has no native dependencies beyond libwayland-client and
-publishes as one self-contained binary. Swap the packages:
+publishes as one self-contained binary. Swap the package:
 
 ```bash
-dotnet remove package Bibui.Platform.Silk
-dotnet add package Bibui.Platform.Wayland
-dotnet add package Bibui.Raster.Managed.Backend
+dotnet remove package Bibui.App.SilkSkiaGl
+dotnet add package Bibui.App.WaylandManaged
 ```
 
-`Program.cs` names the Wayland window and the managed rasterizer. The loop is
-the same, and `App.cs` and `Stepper.cs` do not change:
+Nothing in `Program.cs`, `App.cs` or `Stepper.cs` has to change: `BibuiApp` is
+the same type in every `Bibui.App` package. A Wayland compositor groups and
+themes windows by an application id, which you can give:
 
 ```csharp
-using Bibui.Platform.Wayland;
-using Bibui.Raster.Managed.Backend;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
-
-var runtime = BibuiRuntime.Create();
-var app = new App();
-
-using var window = WaylandWindow.Open(runtime, new PlatformWindowOptions("Stepper", 480, 320),
-    new WaylandHostOptions { AppId = "dev.example.stepper" });
-using var managed = new ManagedRenderer(window.Cpu);
-while (WaylandWindow.BeginFrame(window, runtime))
-{
-    runtime.BeginBuild(window.Events);
-    app.Build(runtime);
-    runtime.EndBuild();
-    WaylandWindow.BeginDraw(window);
-    managed.Draw(runtime.DrawList);
-    WaylandWindow.EndDraw(window);
-    WaylandWindow.EndFrame(window, runtime);
-}
+using var app = BibuiApp.Open(runtime, new("Stepper", 480, 320),
+    new BibuiAppOptions { AppId = "dev.example.stepper" });
 ```
 
-The window draws on the CPU: `window.Cpu` is the `wl_shm` buffer of this frame,
-and the renderer bound to it draws there.
+The window draws on the CPU: the managed rasterizer draws each frame into the
+window's `wl_shm` buffer.
 
 Publish:
 
