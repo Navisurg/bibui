@@ -23,7 +23,7 @@ done
 # If no explicit version, build one from the csproj Version + worktree name
 if [[ -z "$VERSION" ]]; then
   BASE_VERSION="$(grep -oPm1 '(?<=<Version>)[^<]+' "$SCRIPT_DIR/Directory.Build.props")"
-  VERSION="${BASE_VERSION:-0.10.0}-${WORKTREE_NAME}"
+  VERSION="${BASE_VERSION:-0.10.1}-${WORKTREE_NAME}"
 fi
 
 PROJECTS=(
