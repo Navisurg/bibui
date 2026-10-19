@@ -44,6 +44,11 @@ library references none: two in one app do not compile (CS0433). A library
 takes the parts it needs (`Bibui`, a renderer) and leaves the choice of window
 and renderer to the app.
 
+Each package depends on exactly the version of `Bibui`, its window and its
+renderer that it was built with (`[0.10.0]`, not `>= 0.10.0`). They are
+released together, so an app that also references one of them directly
+references the same version.
+
 | Package | Window | Renderer | Native AOT |
 |---|---|---|---|
 | `Bibui.App.SilkSkiaGl` | Silk (GLFW), OpenGL | Skia, on the GPU | No |

@@ -413,6 +413,8 @@ before it was published.
     screenshots are drawn by the app's own renderer, textures included.
   - The window and renderer packages stay usable on their own, for a loop an
     app writes itself.
+  - Each depends on exactly the `Bibui`, window and renderer versions it was
+    built with.
 
 - **One rate per kind of motion, and everything eases by it (breaking).**
   `runtime.Rates` holds this frame's rates for exponential approach, computed
