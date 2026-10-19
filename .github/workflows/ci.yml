@@ -67,6 +67,11 @@ jobs:
             bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj \
             bibui-platform-silk/bibui-platform-silk.csproj \
             bibui-platform-wayland/bibui-platform-wayland.csproj \
+            bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj \
+            bibui-apps/silk-skia-cpu/bibui-app-silk-skia-cpu.csproj \
+            bibui-apps/silk-managed/bibui-app-silk-managed.csproj \
+            bibui-apps/wayland-managed/bibui-app-wayland-managed.csproj \
+            bibui-apps/wayland-skia-cpu/bibui-app-wayland-skia-cpu.csproj \
             tools/wayland-scanner/wayland-scanner.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
             bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
@@ -75,6 +80,7 @@ jobs:
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
             tests/wayland-hello/wayland-hello.csproj \
+            tests/app-packages-tests/app-packages-tests.csproj \
             samples/component-gallery/component-gallery.csproj \
             samples/bibui-app/bibui-app.csproj \
             samples/counter/counter.csproj \
@@ -97,7 +103,8 @@ jobs:
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
-            bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj
+            bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
+            tests/app-packages-tests/app-packages-tests.csproj
           do
             echo "==> test $proj"
             dotnet run --project "$proj" --configuration Release --no-build

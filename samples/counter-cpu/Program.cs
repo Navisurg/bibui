@@ -1,31 +1,20 @@
-// The counter, drawn on the CPU: Skia draws into memory, and GlCpuFramebuffer
-// shows that memory on the Silk window's GL framebuffer. samples/counter is the
-// same app drawn on the GPU; only the renderer and GlCpuFramebuffer's draw
-// bracket, inside the window's, differ.
-using Bibui.Gl;
-using Bibui.Raster.Skia;
+// The counter drawn on the CPU: the same code as samples/counter, with the
+// Bibui.App.SilkSkiaCpu package in place of Bibui.App.SilkSkiaGl.
+using Bibui.App;
 using Bibui.Runtime;
-using Bibui.Runtime.Platform;
 
 var runtime = BibuiRuntime.Create();
-using var window = SilkWindow.Open(runtime, new("Counter (CPU)", 360, 160));
-using var shown = new GlCpuFramebuffer(window.Gl);
-using var skia = new SkiaCpuRenderer(shown.Cpu);
+using var app = BibuiApp.Open(runtime, new("Counter (CPU)", 360, 160));
 int count = 0;
 
-while (SilkWindow.BeginFrame(window, runtime))
+while (app.BeginFrame())
 {
-    runtime.BeginBuild(window.Events);
+    runtime.BeginBuild(app.Events);
     using (runtime.PushParent(runtime.ColumnFit()))
     {
         runtime.Text($"Clicked {count} times");
         if (runtime.Button("add", "Add one").Clicked) count++;
     }
     runtime.EndBuild();
-    SilkWindow.BeginDraw(window);
-    shown.BeginDraw();
-    skia.Draw(runtime.DrawList);
-    shown.EndDraw();
-    SilkWindow.EndDraw(window);
-    SilkWindow.EndFrame(window, runtime);
+    app.EndFrame();
 }

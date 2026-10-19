@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- The counter drawn on the CPU: Skia into memory, shown on a Silk window's GL framebuffer. -->
+  <!-- The counter drawn on the CPU: Skia into memory, shown on a Silk window's GL framebuffer, through Bibui.App.SilkSkiaCpu. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -9,9 +9,6 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../bibui/bibui.csproj" />
-    <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
-    <ProjectReference Include="../../bibui-gl/bibui-gl.csproj" />
-    <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
+    <ProjectReference Include="../../bibui-apps/silk-skia-cpu/bibui-app-silk-skia-cpu.csproj" />
   </ItemGroup>
 </Project>

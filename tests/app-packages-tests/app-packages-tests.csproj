@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Bibui.App packages stay interchangeable: one BibuiApp, the same public
+       calls in each. Each package is referenced under an alias of its own, since
+       all five define Bibui.App.BibuiApp. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj" Aliases="SilkSkiaGl" />
+    <ProjectReference Include="../../bibui-apps/silk-skia-cpu/bibui-app-silk-skia-cpu.csproj" Aliases="SilkSkiaCpu" />
+    <ProjectReference Include="../../bibui-apps/silk-managed/bibui-app-silk-managed.csproj" Aliases="SilkManaged" />
+    <ProjectReference Include="../../bibui-apps/wayland-managed/bibui-app-wayland-managed.csproj" Aliases="WaylandManaged" />
+    <ProjectReference Include="../../bibui-apps/wayland-skia-cpu/bibui-app-wayland-skia-cpu.csproj" Aliases="WaylandSkiaCpu" />
+  </ItemGroup>
+</Project>

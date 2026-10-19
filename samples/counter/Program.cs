@@ -1,24 +1,20 @@
-// The README's quick start: a label and a button that counts its clicks.
-using Bibui.Raster.Skia;
+// The README's quick start: a label and a button that counts its clicks, in a
+// Silk window drawn by Skia on the GPU, through the Bibui.App.SilkSkiaGl package.
+using Bibui.App;
 using Bibui.Runtime;
-using Bibui.Runtime.Platform;
 
 var runtime = BibuiRuntime.Create();
-using var window = SilkWindow.Open(runtime, new("Counter", 360, 160));
-using var skia = new SkiaGlRenderer(window.Gl);
+using var app = BibuiApp.Open(runtime, new("Counter", 360, 160));
 int count = 0;
 
-while (SilkWindow.BeginFrame(window, runtime))
+while (app.BeginFrame())
 {
-    runtime.BeginBuild(window.Events);
+    runtime.BeginBuild(app.Events);
     using (runtime.PushParent(runtime.ColumnFit()))
     {
         runtime.Text($"Clicked {count} times");
         if (runtime.Button("add", "Add one").Clicked) count++;
     }
     runtime.EndBuild();
-    SilkWindow.BeginDraw(window);
-    skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);
-    SilkWindow.EndFrame(window, runtime);
+    app.EndFrame();
 }
