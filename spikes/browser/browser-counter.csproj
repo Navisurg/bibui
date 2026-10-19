@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+  <!--
+    Spike: the counter sample in the browser. .NET on WebAssembly (no Blazor),
+    one frame per requestAnimationFrame, drawn by ManagedRenderer into memory
+    that main.js puts on a <canvas>. FreeType and HarfBuzz are linked in
+    statically from native/lib (native/build.sh).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>browser-counter</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NuGetAudit>false</NuGetAudit>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <WasmEnableSIMD>true</WasmEnableSIMD>
+    <!-- Static linking of the native libraries needs the relink, which the
+         wasm-tools workload provides. -->
+    <WasmBuildNative>true</WasmBuildNative>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The pinvoke table is keyed by the file's name without its extension,
+         which must be the [LibraryImport] name bibui uses: libfreetype.so.6
+         and libharfbuzz.so.0. So the archives carry those names. -->
+    <NativeFileReference Include="native/lib/libfreetype.so.6.a" />
+    <NativeFileReference Include="native/lib/libharfbuzz.so.0.a" />
+  </ItemGroup>
+</Project>
