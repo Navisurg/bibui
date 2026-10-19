@@ -19,7 +19,6 @@ using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Runtime;
 using Bibui.TextEdit;
-using static Bibui.Arrange;
 
 bool animate = !args.Contains("--still");
 int clicks = 0;
@@ -108,27 +107,29 @@ void Build()
         fill.Style.BackgroundColor = UiColor.Accent;
     }
 
-    var page = Column(
-            Bold(runtime, "Hello from raw Wayland", ComponentSize.Xxl, TextColor.Primary),
-            Space(16f),
-            runtime.Text("wl_shm buffers, CPU raster, frame-callback pacing, xkbcommon input. No GLFW, no GL.",
-                textColor: TextColor.Secondary),
-            Space(16f),
-            toggle.Node,
-            Space(16f),
-            hello.Node,
-            Space(16f),
-            field,
-            Space(16f),
-            groove,
-            Space(16f),
-            pad,
-            Space(16f),
-            runtime.Text($"frame {frame} · {runtime.SurfaceWidth}×{runtime.SurfaceHeight} at {runtime.ScaleFactor:0.###}×",
-                ComponentSize.Sm, TextColor.Secondary))
-        .FillX().FillY()
+    // The widgets asked above are linked into their places here.
+    var page = runtime.ColumnFill()
         .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(28f) });
-    UiNode.PushIntoParent(runtime.ParentInScope, page);   // built with Arrange: linked under the frame's root
+    using (runtime.PushParent(page))
+    {
+        Bold(runtime, "Hello from raw Wayland", ComponentSize.Xxl, TextColor.Primary);
+        runtime.Gap(16f);
+        runtime.Text("wl_shm buffers, CPU raster, frame-callback pacing, xkbcommon input. No GLFW, no GL.",
+            textColor: TextColor.Secondary);
+        runtime.Gap(16f);
+        UiNode.PushIntoParent(page, toggle.Node);
+        runtime.Gap(16f);
+        UiNode.PushIntoParent(page, hello.Node);
+        runtime.Gap(16f);
+        UiNode.PushIntoParent(page, field);
+        runtime.Gap(16f);
+        UiNode.PushIntoParent(page, groove);
+        runtime.Gap(16f);
+        UiNode.PushIntoParent(page, pad);
+        runtime.Gap(16f);
+        runtime.Text($"frame {frame} · {runtime.SurfaceWidth}×{runtime.SurfaceHeight} at {runtime.ScaleFactor:0.###}×",
+            ComponentSize.Sm, TextColor.Secondary);
+    }
 }
 
 // CI's start-up check: one frame built and drawn headless, then exit.
@@ -164,7 +165,7 @@ while (WaylandWindow.BeginFrame(window, runtime))
 }
 return 0;
 
-// A text at the bold weight, where a PushFontFace scope cannot go: inside an expression.
+// A text at the bold weight.
 static Text Bold(BibuiRuntime runtime, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null)
 {
     using (runtime.PushFontFace(weight: FontWeight.Bold))
