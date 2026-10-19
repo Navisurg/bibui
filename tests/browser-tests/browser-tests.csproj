@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Tests for the browser host's logic that needs no browser: what pointer,
+       wheel and key records mean, the pixel conversion for the canvas, the
+       frame's size at fractional device pixel ratios and the frame clock.
+       Runs on Linux, like the other test programs; the browser itself is
+       tests/browser-smoke. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>bibui-browser-tests</AssemblyName>
+    <RootNamespace>Bibui.BrowserTests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui-platform-browser/bibui-platform-browser.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Read by a test that holds the module's record layout to BrowserInput's. -->
+    <None Include="../../bibui-platform-browser/wwwroot/bibui-browser.js" Link="bibui-browser.js" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
