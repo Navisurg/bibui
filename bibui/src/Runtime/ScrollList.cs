@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Numerics;
 using Bibui;
 using static Bibui.Runtime.Scrollbar;
@@ -59,17 +58,6 @@ public struct ScrollPt
 }
 
 /// <summary>
-/// The ids of a component's parts, made once per id rather than once a frame,
-/// so building a part allocates no string.
-/// </summary>
-internal static class PartIds
-{
-    private static readonly ConcurrentDictionary<(string Id, string Part), string> Ids = new();
-
-    internal static string Of(string id, string part) => Ids.GetOrAdd((id, part), static k => k.Id + k.Part);
-}
-
-/// <summary>
 /// A vertical list of rows that all have the same height, of which only the
 /// rows in sight are built. A list of a hundred thousand rows costs what its
 /// screenful does.
@@ -116,7 +104,7 @@ public static class ScrollList
 
         // The area lays the view and its bar out side by side. The view claims
         // the wheel without moving on it: End turns the wheel into rows.
-        Box area = runtime.BoxFromId(PartIds.Of(id, "-area"));
+        Box area = runtime.BoxFromId(id + "-area");
         area.ChildLayoutAxis = LayoutAxis.X;
         (area.SizeX, area.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
         Box view = runtime.BoxFromId(id, InteractionKinds.Scroll | InteractionKinds.Clip, area);
@@ -141,7 +129,7 @@ public static class ScrollList
 
         // The bar, before the rows: what it does moves the rows chosen below.
         using (runtime.PushParent(area))
-            pt = runtime.Scrollbar(PartIds.Of(id, "-bar"), pt, count, height / pitch);
+            pt = runtime.Scrollbar(id + "-bar", pt, count, height / pitch);
         ClampTarget(ref pt, pitch, maxPx);
 
         // The rows in sight. Shown within range, so a list that shrank shows its end at once.
@@ -208,9 +196,9 @@ public static class ScrollList
         float range = count - viewRows;  // rows the top can travel
         if (range <= 0f) return pt;
 
-        Box before = runtime.BoxFromId(PartIds.Of(id, "-before"), InteractionKinds.LeftPress, track);
-        Box thumb = runtime.BoxFromId(PartIds.Of(id, "-thumb"), InteractionKinds.LeftPress, track);
-        Box after = runtime.BoxFromId(PartIds.Of(id, "-after"), InteractionKinds.LeftPress, track);
+        Box before = runtime.BoxFromId(id + "-before", InteractionKinds.LeftPress, track);
+        Box thumb = runtime.BoxFromId(id + "-thumb", InteractionKinds.LeftPress, track);
+        Box after = runtime.BoxFromId(id + "-after", InteractionKinds.LeftPress, track);
 
         Interaction drag = runtime.InteractionsFor(thumb);
         if (drag.Pressed) pt.Grab = pt.Idx + pt.Off;
