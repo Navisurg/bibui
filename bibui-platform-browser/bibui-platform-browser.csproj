@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+  <!--
+    A window host in the browser: a <canvas> in a .NET WebAssembly app
+    (Microsoft.NET.Sdk.WebAssembly, no Blazor), drawn on the CPU. The Razor
+    SDK is here only for static web assets: wwwroot/bibui-browser.js is served
+    to the app at _content/Bibui.Platform.Browser/. There are no Razor
+    components and no ASP.NET Core dependency.
+
+    The package also carries FreeType and HarfBuzz as WebAssembly static
+    libraries (native/build.sh), which buildTransitive/Bibui.Platform.Browser.targets
+    links into the app: in the browser there are no system libraries to load.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Platform.Browser</AssemblyName>
+    <RootNamespace>Bibui.Platform.Browser</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The JSImport generator's marshalling, and the pinned frame memory. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <NuGetAudit>false</NuGetAudit>
+    <PackageId>Bibui.Platform.Browser</PackageId>
+    <Description>A window host for bibui in the browser: a canvas in a .NET WebAssembly app, drawn on the CPU by ManagedRenderer (Bibui.Raster.Managed.Backend), with pointer, wheel, keyboard and clipboard input, driven from requestAnimationFrame. Brings FreeType and HarfBuzz for the browser as static WebAssembly libraries.</Description>
+    <PackageTags>$(PackageTags);browser;webassembly;wasm;canvas</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+    <!-- The archives are build outputs of native/build.sh, not of this project. -->
+    <BibuiBrowserNativeLib>$(MSBuildThisFileDirectory)native/lib/</BibuiBrowserNativeLib>
+    <!-- native/obj holds the FreeType and HarfBuzz sources while they build: none of it is content. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);native/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../bibui/bibui.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The pointer, key, pixel and sizing logic is tested on Linux, without a browser. -->
+    <InternalsVisibleTo Include="bibui-browser-tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- What an app that references the package links: the targets, and the
+         FreeType and HarfBuzz archives with their licences. -->
+    <None Include="buildTransitive/Bibui.Platform.Browser.targets" Pack="true" PackagePath="buildTransitive/" />
+    <None Include="$(BibuiBrowserNativeLib)libfreetype.so.6.a" Pack="true" PackagePath="buildTransitive/native/" Visible="false" />
+    <None Include="$(BibuiBrowserNativeLib)libharfbuzz.so.0.a" Pack="true" PackagePath="buildTransitive/native/" Visible="false" />
+    <None Include="$(BibuiBrowserNativeLib)FreeType-FTL.txt" Pack="true" PackagePath="licenses/" Visible="false" />
+    <None Include="$(BibuiBrowserNativeLib)HarfBuzz-COPYING.txt" Pack="true" PackagePath="licenses/" Visible="false" />
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+  <!-- A package without the archives would build apps that cannot draw text. -->
+  <Target Name="_BibuiBrowserNativeForPack" BeforeTargets="_GetPackageFiles;GenerateNuspec">
+    <Error Condition="!Exists('$(BibuiBrowserNativeLib)libfreetype.so.6.a') Or !Exists('$(BibuiBrowserNativeLib)libharfbuzz.so.0.a') Or !Exists('$(BibuiBrowserNativeLib)FreeType-FTL.txt')"
+           Text="The browser's FreeType and HarfBuzz are not built: run bibui-platform-browser/native/build.sh before packing (it needs the wasm-tools workload)." />
+  </Target>
+</Project>

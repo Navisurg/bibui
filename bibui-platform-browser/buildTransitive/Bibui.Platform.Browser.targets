@@ -1,0 +1,36 @@
+<Project>
+  <!--
+    Links FreeType and HarfBuzz into a browser app (RuntimeIdentifier
+    browser-wasm): bibui measures and shapes text with them, and in the browser
+    there is no system library to load them from. The archives are built with
+    the Emscripten of the .NET 10 wasm-tools workload (3.1.56), with WebAssembly
+    exception handling and setjmp/longjmp on it, as the .NET runtime is.
+
+    Linking a static library needs the app's native relink (WasmBuildNative),
+    which needs the workload: dotnet workload install wasm-tools.
+
+    The archives are named after bibui's [LibraryImport] names
+    (libfreetype.so.6, libharfbuzz.so.0) with .a added: the app's link matches
+    a P/Invoke to the archive by the file name without its extension.
+
+    A project that references bibui-platform-browser by path imports this file
+    itself, with BibuiBrowserNativeDir pointing at native/lib/.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <BibuiBrowserNativeDir Condition="'$(BibuiBrowserNativeDir)' == ''">$(MSBuildThisFileDirectory)native/</BibuiBrowserNativeDir>
+    <WasmBuildNative Condition="'$(WasmBuildNative)' == ''">true</WasmBuildNative>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <NativeFileReference Include="$(BibuiBrowserNativeDir)libfreetype.so.6.a" />
+    <NativeFileReference Include="$(BibuiBrowserNativeDir)libharfbuzz.so.0.a" />
+  </ItemGroup>
+
+  <Target Name="_BibuiBrowserCheck" BeforeTargets="PrepareForBuild" Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <Error Condition="'$(TargetFrameworkVersion)' != 'v10.0'"
+           Text="Bibui.Platform.Browser's FreeType and HarfBuzz are built for .NET 10's Emscripten (3.1.56); target net10.0." />
+    <Error Condition="'$(WasmBuildNative)' != 'true'"
+           Text="Bibui.Platform.Browser links FreeType and HarfBuzz into the app, which needs WasmBuildNative=true and the wasm-tools workload." />
+    <Error Condition="!Exists('$(BibuiBrowserNativeDir)libfreetype.so.6.a') Or !Exists('$(BibuiBrowserNativeDir)libharfbuzz.so.0.a')"
+           Text="FreeType and HarfBuzz for the browser are missing from $(BibuiBrowserNativeDir). In the bibui repository, run bibui-platform-browser/native/build.sh." />
+  </Target>
+</Project>
