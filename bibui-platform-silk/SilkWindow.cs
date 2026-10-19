@@ -174,10 +174,26 @@ public sealed class SilkWindow : IDisposable
 
     // ── Pacing ───────────────────────────────────────────────────────────────
     // GLFW does not pace: EndFrame sleeps out what is left of the frame at the
-    // runtime's TargetHz, which also sets what a second means to an animation.
+    // runtime's TargetHz, which the window sets to its monitor's refresh rate
+    // (ApplyRefresh), so it draws as often as the screen shows a frame.
+    // BeginFrame measures the runtime's Dt on Clock, so an animation takes as
+    // long at 120 Hz as at 60.
+
+    /// <summary>
+    /// Sets the runtime's TargetHz to the refresh rate of the monitor GLFW puts
+    /// the window on, when it knows one. On Wayland GLFW cannot tell which
+    /// monitor a window is on, so with several monitors this may be another's.
+    /// </summary>
+    private static void ApplyRefresh(SilkWindow window)
+    {
+        if (window.Native.Monitor?.VideoMode.RefreshRate is int hz && hz > 0)
+            window.Runtime.TargetHz = hz;
+    }
 
     internal readonly Stopwatch Clock = Stopwatch.StartNew();
     internal double NextFrameMs;
+    // When the last frame started, on Clock: what the next frame's Dt is measured from.
+    internal double LastFrameSeconds;
 
     /// <summary>
     /// Closes the window and destroys it with its GL context. Dispose a renderer
@@ -285,9 +301,17 @@ public sealed class SilkWindow : IDisposable
         native.Load += () =>
         {
             var context = native.GLContext!;
+            // VSync = false above does not reach the context: on Wayland the swap
+            // interval stays EGL's default of 1, Mesa asks for a frame callback on
+            // every swap, and the hang the options comment describes happens
+            // anyway. Set it here, where the context is current.
+            context.SwapInterval(0);
             window.Gl.GetProcAddress = name => context.TryGetProcAddress(name, out var at) ? at : 0;
             Resize(window, native.FramebufferSize);
+            ApplyRefresh(window);
         };
+        // Moved onto another monitor (X11; Wayland reports no moves).
+        native.Move += _ => ApplyRefresh(window);
         native.FramebufferResize += size =>
         {
             Resize(window, size);
@@ -320,6 +344,8 @@ public sealed class SilkWindow : IDisposable
     /// </summary>
     public static bool BeginFrame(SilkWindow window, BibuiRuntime runtime)
     {
+        // Nothing owed: the loop waits for input, and the wait is not frame time.
+        bool waited = !s_alwaysRender && runtime.FramesRequested == 0;
         while (true)
         {
             if (window.IsClosing) return false;
@@ -334,6 +360,9 @@ public sealed class SilkWindow : IDisposable
             {
                 // Taken before the frame is built, so what the build asks for is still owed after it.
                 runtime.ConsumeFrame();
+                double now = window.Clock.Elapsed.TotalSeconds;
+                runtime.Dt = waited || window.LastFrameSeconds == 0 ? 1f / runtime.TargetHz : (float)(now - window.LastFrameSeconds);
+                window.LastFrameSeconds = now;
                 return true;
             }
         }

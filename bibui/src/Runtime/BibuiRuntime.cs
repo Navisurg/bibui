@@ -65,24 +65,22 @@ public sealed partial class BibuiRuntime
     private BibUiEvent? _firstEvent, _lastEvent;
 
     /// <summary>
-    /// Frames per second the loop aims for. The animation clock is derived from
-    /// it, so this is also what "one second" means to <see cref="Dt"/>.
+    /// The display's refresh rate, which a window sets as it opens: the Silk
+    /// window paces its loop to it, and a frame after a wait for input stands
+    /// for one frame of it (<see cref="Dt"/>).
     /// </summary>
     public float TargetHz { get; set; } = 60f;
 
     /// <summary>
-    /// Seconds per frame — nominal, <c>1/TargetHz</c>, never measured.
-    ///
-    /// Animation advances a fixed amount per frame rather than by elapsed time.
-    /// That is the point on a loop that blocks when idle: a window woken after
-    /// ten minutes reports an ordinary frame, not a 600-second one, so the first
-    /// interaction after a quiet spell animates instead of snapping straight to
-    /// its end state. Measuring, clamped or not, cannot tell that gap apart from
-    /// a stall. The cost is that a machine missing its frame budget animates
-    /// slower in wall-clock than the numbers say, which is the trade a nominal
-    /// <c>1/target_hz</c> makes deliberately.
+    /// Seconds this frame stands for: what every animation advances by. The
+    /// window measures it and sets it as each frame starts (its BeginFrame),
+    /// before the build, so it holds for the whole frame. A frame that follows
+    /// a wait for input is one frame at <see cref="TargetHz"/>: the wait is not
+    /// frame time, and a window woken after ten minutes must not step its
+    /// animations by ten minutes. Without a window (headless, a test) it stays
+    /// 1/60 unless set, so a run is deterministic.
     /// </summary>
-    public float Dt => 1f / TargetHz;
+    public float Dt { get; set; } = 1f / 60f;
 
     /// <summary>
     /// How many frames one request buys. More than one deliberately: a request

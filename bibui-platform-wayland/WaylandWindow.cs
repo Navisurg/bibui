@@ -47,7 +47,10 @@ public sealed record WaylandHostOptions
 /// callback, whether or not the renderer repainted all of it.</item>
 /// <item><b>Pacing</b>: <c>BeginFrame</c> waits for the previous frame's
 /// callback, so the compositor sets the frame rate and an idle window draws
-/// nothing. A pending configure skips the wait: a resize is drawn at once.</item>
+/// nothing. A pending configure skips the wait: a resize is drawn at once. The
+/// runtime's <see cref="BibuiRuntime.TargetHz"/> follows the refresh rate of the
+/// output the window is on, and its <see cref="BibuiRuntime.Dt"/> is the time
+/// measured between frames, so animations keep their length.</item>
 /// <item><b>Buffers</b>: triple-buffered by default, each tracked from commit
 /// to wl_buffer.release (<see cref="BufferPool{TBuffer}"/>); a resize retires
 /// the old ones as the compositor lets go of them.</item>
@@ -317,6 +320,7 @@ public sealed unsafe class WaylandWindow : IDisposable
         Pump(haveWork ? 0 : -1);
         ApplyConfigure();
         if (ScaleChanged && _configure.EverConfigured) ApplySize(); // moved to an output of another scale
+        ApplyRefresh();
         into.AddRange(_queue);
         _queue.Clear();
     }
@@ -473,6 +477,25 @@ public sealed unsafe class WaylandWindow : IDisposable
         _runtime.ResizeSurface(fbW, fbH, Scale);
         if (scaleChanged) _scale.OnScaleApplied();
         return true;
+    }
+
+    // ── Refresh rate ─────────────────────────────────────────────────────────
+    // The frame callback paces the loop at the output's refresh rate, so that is
+    // the runtime's TargetHz: what a frame after a wait for input stands for.
+    // Every other frame's Dt is measured, in BeginFrame.
+
+    private float _refreshHz;
+
+    // When the last frame started (Stopwatch timestamp): what the next frame's Dt is measured from.
+    private long _lastFrame;
+
+    /// <summary>Sets the runtime's TargetHz to the refresh rate of the output the window is on, when that is known and changed.</summary>
+    private void ApplyRefresh()
+    {
+        float hz = _scale.RefreshHz;
+        if (_runtime is null || hz <= 0f || hz == _refreshHz) return;
+        _refreshHz = hz;
+        _runtime.TargetHz = hz;
     }
 
     // ── Dispatch ─────────────────────────────────────────────────────────────
@@ -659,6 +682,8 @@ public sealed unsafe class WaylandWindow : IDisposable
     /// </summary>
     public static bool BeginFrame(WaylandWindow window, BibuiRuntime runtime)
     {
+        // Nothing owed: the loop waits for input, and the wait is not frame time.
+        bool waited = !s_alwaysRender && runtime.FramesRequested == 0;
         while (true)
         {
             if (window.IsClosing) return false;
@@ -673,6 +698,9 @@ public sealed unsafe class WaylandWindow : IDisposable
             {
                 // Taken before the frame is built, so what the build asks for is still owed after it.
                 runtime.ConsumeFrame();
+                long now = Stopwatch.GetTimestamp();
+                runtime.Dt = waited || window._lastFrame == 0 ? 1f / runtime.TargetHz : (float)Stopwatch.GetElapsedTime(window._lastFrame, now).TotalSeconds;
+                window._lastFrame = now;
                 return true;
             }
         }

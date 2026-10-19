@@ -39,24 +39,36 @@ internal static class SurfaceScale
 /// <item>the largest wl_output.scale among the outputs the surface is on;</item>
 /// <item>1.</item>
 /// </list>
-/// Pure state: the listeners feed it, the host reads <see cref="Wanted120"/>.
+/// And the refresh rate of those outputs (<see cref="RefreshHz"/>), which the
+/// compositor's frame callbacks pace the window at.
+/// Pure state: the listeners feed it, the host reads <see cref="Wanted120"/>
+/// and <see cref="RefreshHz"/>.
 /// </summary>
 internal sealed class ScaleState
 {
     private uint? _fractional;
     private int? _preferredBuffer;
     private readonly Dictionary<nint, int> _outputScale = [];
+    private readonly Dictionary<nint, int> _outputRefreshMilliHz = [];
     private readonly HashSet<nint> _entered = [];
 
     public void OnFractional(uint scale120) => _fractional = scale120 > 0 ? scale120 : null;
     public void OnPreferredBufferScale(int factor) => _preferredBuffer = factor > 0 ? factor : null;
     public void OnOutputScale(nint output, int factor) => _outputScale[output] = Math.Max(1, factor);
+
+    /// <summary>wl_output.mode: only the current mode says what the output runs at.</summary>
+    public void OnOutputMode(nint output, bool current, int refreshMilliHz)
+    {
+        if (current && refreshMilliHz > 0) _outputRefreshMilliHz[output] = refreshMilliHz;
+    }
+
     public void OnEnter(nint output) => _entered.Add(output);
     public void OnLeave(nint output) => _entered.Remove(output);
 
     public void OnOutputGone(nint output)
     {
         _outputScale.Remove(output);
+        _outputRefreshMilliHz.Remove(output);
         _entered.Remove(output);
     }
 
@@ -73,6 +85,21 @@ internal sealed class ScaleState
             foreach (var o in _entered)
                 if (_outputScale.TryGetValue(o, out var s)) max = Math.Max(max, s);
             return max > 0 ? (uint)max * SurfaceScale.One : SurfaceScale.One;
+        }
+    }
+
+    /// <summary>
+    /// The fastest refresh rate among the outputs the surface is on, in Hz; 0
+    /// while none is known (not shown yet, or the compositor sent no mode).
+    /// </summary>
+    public float RefreshHz
+    {
+        get
+        {
+            int max = 0;
+            foreach (var o in _entered)
+                if (_outputRefreshMilliHz.TryGetValue(o, out var r)) max = Math.Max(max, r);
+            return max / 1000f;
         }
     }
 }
@@ -344,6 +371,9 @@ internal sealed unsafe class WaylandScaleAndCursor : IWaylandFeature, IPointerCu
     /// </summary>
     public uint Wanted120 => State.Wanted120;
 
+    /// <summary>The refresh rate of the outputs the surface is on, in Hz; 0 while unknown.</summary>
+    public float RefreshHz => State.RefreshHz;
+
     /// <summary>The cursor shape asked for last.</summary>
     public CursorShape Cursor => _cursor.Wanted;
 
@@ -523,7 +553,7 @@ internal sealed unsafe class WaylandScaleAndCursor : IWaylandFeature, IPointerCu
     private static readonly WlSurface.Listener* SurfaceListener =
         WlSurface.Listener.Create(new() { Enter = &OnSurfaceEnter, Leave = &OnSurfaceLeave, PreferredBufferScale = &OnPreferredBufferScale });
     private static readonly WlOutput.Listener* OutputListener =
-        WlOutput.Listener.Create(new() { Scale = &OnOutputScale });
+        WlOutput.Listener.Create(new() { Mode = &OnOutputMode, Scale = &OnOutputScale });
 
     [UnmanagedCallersOnly]
     private static void OnPreferredScale(void* data, WpFractionalScaleV1 self, uint scale) => Self(data).State.OnFractional(scale);
@@ -536,6 +566,10 @@ internal sealed unsafe class WaylandScaleAndCursor : IWaylandFeature, IPointerCu
 
     [UnmanagedCallersOnly]
     private static void OnSurfaceLeave(void* data, WlSurface self, WlOutput output) => Self(data).State.OnLeave(output.Handle);
+
+    [UnmanagedCallersOnly]
+    private static void OnOutputMode(void* data, WlOutput output, WlOutput.Mode flags, int width, int height, int refresh) =>
+        Self(data).State.OnOutputMode(output.Handle, (flags & WlOutput.Mode.Current) != 0, refresh);
 
     [UnmanagedCallersOnly]
     private static void OnOutputScale(void* data, WlOutput output, int factor) => Self(data).State.OnOutputScale(output.Handle, factor);
