@@ -48,7 +48,7 @@ public sealed unsafe class Font
         Weight = weight;
         _ftFace = engine.OpenFace(data);
         UnitsPerEm = FT.Read<ushort>(_ftFace, FT.Face_UnitsPerEm);
-        GlyphCount = (int)FT.Read<long>(_ftFace, FT.Face_NumGlyphs);
+        GlyphCount = (int)FT.Read<nint>(_ftFace, FT.Face_NumGlyphs);
         Ascender = FT.Read<short>(_ftFace, FT.Face_Ascender);
         Descender = FT.Read<short>(_ftFace, FT.Face_Descender);
         LineHeight = FT.Read<short>(_ftFace, FT.Face_Height);

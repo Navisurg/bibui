@@ -6,6 +6,13 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **FreeType on 32-bit processes.** The FreeType struct offsets bibui reads
+  were laid out for 64-bit (LP64) only, so on a 32-bit process, wasm32 among
+  them, glyph metrics and the face's glyph count were read from the wrong
+  fields. They are now chosen by pointer size. Nothing changes on 64-bit.
+
 ## [0.10.1] - 2026-10-19
 
 Frame pacing: windows draw at the display's refresh rate, and animation
