@@ -15,8 +15,8 @@ applications with bibui.
 
 ![Zenith, the showcase app, built with bibui](samples/showcase/screenshots/overview-dark.png)
 
-**Platforms:** the first release supports Linux on x64. Other platforms are not
-supported yet. We expect macOS, and maybe even iOS, to be supported in the near future.
+**Platforms:** Linux on x64, and the browser through .NET WebAssembly. Other
+platforms are not supported yet. We expect macOS, and maybe even iOS, to be supported in the near future.
 
 ## Install
 
@@ -44,6 +44,8 @@ Below we give the set of app platforms currently supported by bibui.
 | `Bibui.App.WaylandSkiaCpu` | Wayland | Skia on the CPU | Yes, beside `libSkiaSharp.so` |
 
 Each app platform has the same API, and you can therefore change the target platform by changing the package reference. We provide the `counter-gl` and `counter-cpu` samples in the [samples](samples/) directory. They compile the same app, [`samples/counter`](samples/counter/Program.cs), each with a different package: `counter-gl` with `Bibui.App.SilkSkiaGl` (Skia on OpenGL) and `counter-cpu` with `Bibui.App.SilkSkiaCpu` (Skia on the CPU).
+
+In the browser there is no `Bibui.App` package: a browser app references `Bibui.Platform.Browser` and a renderer, and the browser owns the loop. [`samples/counter-browser`](samples/counter-browser/Program.cs) is the counter there, and [bibui in the browser](docs/browser.md) has the details.
 
 ## Quick start
 
