@@ -143,6 +143,20 @@ public static class DrawShapes
     }
 
     /// <summary>
+    /// A rect with a radius for each corner (<see cref="CornerRadii"/>), filled and stroked: a
+    /// uniform one is <see cref="DrawRRect(DrawContext, float, float, float, float, float, Rgba?, Rgba?, float?)"/>,
+    /// any other one closed path.
+    /// </summary>
+    public static void DrawRRect(this DrawContext ctx, float x, float y, float w, float h, CornerRadii radii,
+        Rgba? fillColor, Rgba? strokeColor, float? strokeWidth)
+    {
+        if (radii.IsUniform) { ctx.DrawRRect(x, y, w, h, radii.TopLeft, fillColor, strokeColor, strokeWidth); return; }
+        var path = new VectorPath();
+        radii.Scaled(ctx.Scale).AddTo(path, ctx.Physical(x, y, w, h));
+        ctx.DrawPath(path, new Paint { Fill = fillColor, Stroke = strokeColor, StrokeWidth = (strokeWidth ?? 1f) * ctx.Scale });
+    }
+
+    /// <summary>
     /// A rounded rect filled with a gradient: <paramref name="stops"/> of theme
     /// hex colours, from <paramref name="start"/> to <paramref name="end"/> in the
     /// rect's own 0..1 space, and an optional stroke.
@@ -150,7 +164,7 @@ public static class DrawShapes
     public static void DrawRRectGradient(this DrawContext ctx, float x, float y, float w, float h, float radius,
         IReadOnlyList<(float Stop, string Color)> stops,
         (float X, float Y) start, (float X, float Y) end,
-        Rgba? strokeColor = null, float? strokeWidth = null, GradientType type = GradientType.Linear)
+        Rgba? strokeColor = null, float? strokeWidth = null, GradientType type = GradientType.Linear, CornerRadii? radii = null)
     {
         if (stops.Count == 0) return;
         float s = ctx.Scale;
@@ -171,11 +185,14 @@ public static class DrawShapes
             ? RasterShader.Radial(from, MathF.Max(0.01f, MathF.Sqrt(MathF.Pow(to.X - from.X, 2) + MathF.Pow(to.Y - from.Y, 2))), colors, positions)
             : RasterShader.Linear(from, to, colors, positions);
 
-        ctx.DrawRect(rect, radius * s, new Paint
+        var paint = new Paint { Shader = shader, Stroke = strokeColor, StrokeWidth = (strokeWidth ?? 1f) * s };
+        if (radii is { IsUniform: false } corners)
         {
-            Shader = shader,
-            Stroke = strokeColor,
-            StrokeWidth = (strokeWidth ?? 1f) * s,
-        });
+            var path = new VectorPath();
+            corners.Scaled(s).AddTo(path, rect);
+            ctx.DrawPath(path, paint);
+            return;
+        }
+        ctx.DrawRect(rect, (radii?.TopLeft ?? radius) * s, paint);
     }
 }

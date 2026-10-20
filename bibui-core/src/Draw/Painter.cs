@@ -272,7 +272,7 @@ internal sealed class Painter
         if (style.Shadow is { } shadow)
         {
             ctx.DrawShadow(
-                frame.X, frame.Y, frame.Width, frame.Height, style.CornerRadius,
+                frame.X, frame.Y, frame.Width, frame.Height, style.CornerRadii?.Fit(frame.Width, frame.Height).Max ?? style.CornerRadius,
                 shadow.OffsetX, shadow.OffsetY, shadow.Blur, shadow.Spread,
                 ResolveRgba(shadow.Color, theme));
         }
@@ -291,15 +291,18 @@ internal sealed class Painter
 
             ctx.DrawRRectGradient(
                 frame.X, frame.Y, frame.Width, frame.Height, style.CornerRadius,
-                stops, gradient.Start, gradient.End, border, strokeWidth, gradient.Type);
+                stops, gradient.Start, gradient.End, border, strokeWidth, gradient.Type, style.CornerRadii);
         }
         else if (background is not null || border is not null)
         {
-            ctx.DrawRRect(
-                frame.X, frame.Y, frame.Width, frame.Height, style.CornerRadius,
-                fillColor: background,
-                strokeColor: border,
-                strokeWidth: strokeWidth);
+            if (style.CornerRadii is { } radii)
+                ctx.DrawRRect(frame.X, frame.Y, frame.Width, frame.Height, radii, background, border, strokeWidth);
+            else
+                ctx.DrawRRect(
+                    frame.X, frame.Y, frame.Width, frame.Height, style.CornerRadius,
+                    fillColor: background,
+                    strokeColor: border,
+                    strokeWidth: strokeWidth);
         }
 
         // Per-edge borders paint on top of the uniform fill/border, e.g. a nav item's left

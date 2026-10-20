@@ -5645,6 +5645,7 @@ Run("Style.Clear: restores every property", () =>
         if (u == typeof(BoxShadow)) return new BoxShadow();
         if (u == typeof(EdgeBorder)) return new EdgeBorder();
         if (u == typeof(System.Numerics.Vector2)) return new System.Numerics.Vector2(7f, 9f);
+        if (u == typeof(CornerRadii)) return CornerRadii.All(3f);
         if (u.IsEnum)
             foreach (var v in Enum.GetValues(u))
                 if (!Equals(v, current)) return v;
@@ -8180,6 +8181,38 @@ Run("ChildAlignment.Stretch: children as tall as their row, pixel sizes kept", (
     Eq(40f, b!.Extent.Y, "the short cell stretched to it");
     Eq(row.Rect.Y, b.Rect.Y, "from the top");
     Eq(5f, px!.Extent.Y, "a number of pixels kept");
+});
+
+Run("Style.CornerRadii: each corner its own radius; a uniform one draws as CornerRadius does", () =>
+{
+    var rt = BibuiRuntime.Create();
+    CornerRadii? radii = CornerRadii.All(16f) with { BottomRight = 0f };
+    float radius = 0f;
+    rt.SetBuild(() =>
+    {
+        var root = rt.ColumnFill();
+        using (rt.PushParent(root))
+        using (rt.PushParent(rt.ColumnFit().Padded(EdgeInsets.All(10f))))
+        {
+            var box = rt.Box().Px(40f, 40f);
+            box.Style.BackgroundColor = "#ff0000";
+            box.Style.CornerRadius = radius;
+            box.Style.CornerRadii = radii;
+        }
+        return root;
+    }, new SurfaceOptions { Width = 60, Height = 60 });
+    Bibui.Core.Draw.DrawToPixels draw = new ManagedRenderer().Draw;
+    bool Red(Pixels px, int x, int y) { int i = (y * px.Width + x) * 4; return px.RawBgraBytes[i + 2] > 200 && px.RawBgraBytes[i + 1] < 60; }
+    var shaped = rt.Frame(draw);
+    IsTrue(!Red(shaped, 10, 10) && !Red(shaped, 49, 10) && !Red(shaped, 10, 49), "three round corners");
+    IsTrue(Red(shaped, 49, 49), "and the square one filled to its corner");
+    IsTrue(Red(shaped, 30, 30), "filled inside");
+
+    radii = CornerRadii.All(8f);
+    var uniform = rt.Frame(draw).RawBgraBytes;
+    (radii, radius) = (null, 8f);
+    var plain = rt.Frame(draw).RawBgraBytes;
+    IsTrue(uniform.AsSpan().SequenceEqual(plain), "CornerRadii.All(8) is CornerRadius 8, pixel for pixel");
 });
 
 Console.WriteLine($"Results: {passed} passed, {failed} failed, {skipped} skipped"

@@ -292,7 +292,17 @@ public sealed class Style
     /// Same tracking requirement as <see cref="HoverBackgroundColor"/>. Null = no hover-specific border.</summary>
     public UiColor? HoverBorderColor { get; set; }
     public float BorderWidth { get; set; } = 1f;
+    /// <summary>The radius of every corner, in logical px. 0 (default) is square. <see cref="CornerRadii"/>, when set, says each corner's instead.</summary>
     public float CornerRadius { get; set; }
+
+    /// <summary>
+    /// A radius for each corner, in logical px, in place of <see cref="CornerRadius"/>. Null
+    /// (default) leaves the corners to <see cref="CornerRadius"/>. A chat bubble's tail is three
+    /// round corners and one square: <c>CornerRadii.All(18f) with { BottomRight = 4f }</c>. The
+    /// fill, the border and the gradient take the shape, and radii too large for the box are scaled
+    /// down together, as CSS does, so adjacent corners never overlap. A clip stays the box's rect.
+    /// </summary>
+    public CornerRadii? CornerRadii { get; set; }
 
     /// <summary>Group opacity in 0..1 applied to this node and its entire subtree. 1 = fully opaque (default).</summary>
     public float Opacity { get; set; } = 1f;
@@ -424,6 +434,7 @@ public sealed class Style
         HoverBorderColor = null;
         BorderWidth = 1f;
         CornerRadius = 0f;
+        CornerRadii = null;
         Opacity = 1f;
         BackgroundGradient = null;
         Shadow = null;
@@ -529,6 +540,83 @@ public sealed class BoxShadow
     /// <summary>A colored glow/bloom centered under the node (e.g. an accent halo behind a play button).</summary>
     public static BoxShadow Glow(UiColor color, float blur = 40f, float spread = 2f)
         => new() { OffsetX = 0f, OffsetY = 0f, Blur = blur, Spread = spread, Color = color };
+}
+
+/// <summary>
+/// A radius for each corner of a box, in logical px, clockwise from the top left: what
+/// <see cref="Style.CornerRadii"/> takes. A record, so one corner changes with <c>with</c>:
+/// <c>CornerRadii.All(18f) with { BottomRight = 4f }</c>.
+/// </summary>
+public readonly record struct CornerRadii(float TopLeft, float TopRight, float BottomRight, float BottomLeft)
+{
+    /// <summary>Every corner square.</summary>
+    public static CornerRadii Zero => default;
+
+    /// <summary>Every corner the same radius.</summary>
+    public static CornerRadii All(float radius) => new(radius, radius, radius, radius);
+
+    /// <summary>The top corners one radius and the bottom corners another.</summary>
+    public static CornerRadii Vertical(float top, float bottom) => new(top, top, bottom, bottom);
+
+    /// <summary>The left corners one radius and the right corners another.</summary>
+    public static CornerRadii Horizontal(float left, float right) => new(left, right, right, left);
+
+    /// <summary>Whether all four corners have the same radius.</summary>
+    public bool IsUniform => TopLeft == TopRight && TopRight == BottomRight && BottomRight == BottomLeft;
+
+    /// <summary>Whether every corner is square.</summary>
+    public bool IsZero => TopLeft == 0f && TopRight == 0f && BottomRight == 0f && BottomLeft == 0f;
+
+    /// <summary>The largest of the four.</summary>
+    public float Max => MathF.Max(MathF.Max(TopLeft, TopRight), MathF.Max(BottomRight, BottomLeft));
+
+    /// <summary>
+    /// The radii a box of <paramref name="width"/> by <paramref name="height"/> can draw: a negative
+    /// or non-finite radius is 0, and where two corners on one side need more than the side's
+    /// length, every radius is scaled down by the same factor until they fit — the rule CSS gives
+    /// <c>border-radius</c>. For a uniform radius it is "no more than half the shorter side".
+    /// </summary>
+    public CornerRadii Fit(float width, float height)
+    {
+        width = MathF.Abs(width);
+        height = MathF.Abs(height);
+        float tl = Clean(TopLeft), tr = Clean(TopRight), br = Clean(BottomRight), bl = Clean(BottomLeft);
+        if (!(width > 0f) || !(height > 0f)) return Zero;
+        float f = 1f;
+        f = Shrink(f, width, tl + tr);
+        f = Shrink(f, width, bl + br);
+        f = Shrink(f, height, tl + bl);
+        f = Shrink(f, height, tr + br);
+        return f < 1f ? new(tl * f, tr * f, br * f, bl * f) : new(tl, tr, br, bl);
+
+        static float Clean(float r) => float.IsFinite(r) && r > 0f ? r : 0f;
+        static float Shrink(float f, float side, float sum) => sum > side ? MathF.Min(f, side / sum) : f;
+    }
+
+    /// <summary>Every radius times <paramref name="factor"/>: logical to physical px.</summary>
+    public CornerRadii Scaled(float factor) => new(TopLeft * factor, TopRight * factor, BottomRight * factor, BottomLeft * factor);
+
+    /// <summary>
+    /// Adds <paramref name="rect"/> with these corners to <paramref name="path"/> as one closed
+    /// clockwise contour, the radii first <see cref="Fit"/> to it. A round corner is a quarter
+    /// circle (four cubic arcs' worth of a circle); a square one is the rect's corner.
+    /// </summary>
+    public void AddTo(Bibui.Core.Draw.VectorPath path, RectF rect)
+    {
+        var r = Fit(rect.Width, rect.Height);
+        const float k = 0.5522848f;   // a quarter circle as one cubic
+        float l = rect.Left, t = rect.Top, ri = rect.Right, b = rect.Bottom;
+        path.MoveTo(l + r.TopLeft, t);
+        path.LineTo(ri - r.TopRight, t);
+        if (r.TopRight > 0f) path.CubicTo(ri - r.TopRight * (1f - k), t, ri, t + r.TopRight * (1f - k), ri, t + r.TopRight);
+        path.LineTo(ri, b - r.BottomRight);
+        if (r.BottomRight > 0f) path.CubicTo(ri, b - r.BottomRight * (1f - k), ri - r.BottomRight * (1f - k), b, ri - r.BottomRight, b);
+        path.LineTo(l + r.BottomLeft, b);
+        if (r.BottomLeft > 0f) path.CubicTo(l + r.BottomLeft * (1f - k), b, l, b - r.BottomLeft * (1f - k), l, b - r.BottomLeft);
+        path.LineTo(l, t + r.TopLeft);
+        if (r.TopLeft > 0f) path.CubicTo(l, t + r.TopLeft * (1f - k), l + r.TopLeft * (1f - k), t, l + r.TopLeft, t);
+        path.Close();
+    }
 }
 
 public readonly record struct EdgeInsets(float Top, float Right, float Bottom, float Left)
