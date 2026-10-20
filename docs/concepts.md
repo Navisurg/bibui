@@ -121,12 +121,43 @@ How the solver uses those sizes:
   next to `.Px(100f)` ends up 300 px wide. `.FillX(1f)` next to `.FillX(2f)`
   splits the row one third to two thirds. Every `SemanticSize` factory takes an
   optional `strictness` from 0 (gives up everything) to 1 (never shrinks).
+  **Fills give way first**: when a row holds both fills and other shrinkable
+  children (a text that may be cut), the fills give up their room before
+  anything else gives up any, so a `Spring()` beside a title closes before the
+  title is cut.
+- **A share is of the parent's final size.** A child that takes a share of a
+  parent the constraints shrank gets its share of what the parent ended up as,
+  not of what it asked for — a floating fill in a box cut to its row included.
 - **Across the layout axis**, a child larger than its parent is cut to the
   parent.
 - **Floating nodes** (`.At(x, y)`) are out of the flow. They sit at that offset
   from the parent's top-left corner, and the parent's size does not count them.
 - **The root** is always the size of the surface, whatever it asks for. Its
   children can fill it.
+
+### Arranging children
+
+A box says how its children sit, besides which axis they run along:
+
+| Property | Helper | What it does |
+|---|---|---|
+| `ChildGap` | `.Spaced(gap)` | space between children along the axis, in logical px; no `Space(8f)` between each pair |
+| `ChildAlign` | `.Aligned(ChildAlignment.Center)` | where children sit across the axis: `Start` (default), `Center`, `End`, or `Stretch` (as large as the box across it) |
+| `ChildWrap`, `LineGap` | `.Wrapping(lineGap)` | a row whose children run on onto more lines when they do not fit, `LineGap` apart (a row of buttons, of tags); each child's line is `WrapLine` |
+| `MaxSize` | | the largest a node may be on each axis: a fill or a measured text stops there (a column of text kept to a reading measure) |
+
+A leaf that knows its own size at a given width — a paragraph that wraps, an
+image that keeps its ratio — sets **`Box.Measure`**: a callback the solver
+asks for the box's size at the width it is about to have, so a text wraps at
+its final width in the same frame:
+
+```csharp
+Box para = runtime.Box();
+para.SizeX = SemanticSize.ParentPct(1f);
+para.SizeY = SemanticSize.Text();
+para.Measure = (box, width) => new Vector2(width, Lines(text, width) * lineHeight);
+para.Draw = (box, ctx) => DrawLines(ctx, text, ctx.Logical.Width);
+```
 
 ### No default size, no answer for a ring
 
@@ -698,13 +729,20 @@ nothing back for the next frame. So the picture is a pure function of the tree
 and the theme. Given the same tree, theme, surface size and scale factor, a
 frame is the same image, byte for byte, every time.
 
+Each box's corners are round by `Style.CornerRadius`, or each its own by
+**`Style.CornerRadii`** — `CornerRadii.All(18f) with { BottomRight = 4f }` for a
+chat bubble's tail, `CornerRadii.Vertical(12f, 0f)` for a band that opens a
+card. The background and border follow them.
+
 ### Custom drawing
 
 A box can paint itself: set `Box.Draw` to a callback, and the painter calls it
 with the box and a `DrawContext` after the box's decoration and children. The
 callback draws in the box's own space: (0,0) is the box's top-left, and
 anything drawn outside the box is clipped. A clip, transform or opacity the
-callback leaves pushed is popped after it, and so is a paint. `Draw` is build state like any other. Set it on the box the build
+callback leaves pushed is popped after it, and so is a paint. A callback whose
+drawing should reach past its box (a shadow, a badge over the corner) says how
+far with **`Box.InkOverflow`**, and is clipped to that instead. `Draw` is build state like any other. Set it on the box the build
 acquired, retained or pooled. The next `BoxFromId` or `Box()` clears it, so a
 box draws only for as long as its build keeps setting the callback. A chart
 that must know when it is hovered draws on its own retained box:

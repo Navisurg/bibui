@@ -28,6 +28,20 @@ All notable changes to bibui are recorded here. The format is based on
   key's down again with `BibUiEvent.Repeat` set (`WindowEvent.KeyRepeat` for
   hosts and tests), not only its text, so arrows, Backspace and Page Down
   repeat in an app's own handling too.
+- **Arranging children.** `UiNode.ChildGap` (`.Spaced(gap)`) spaces a box's
+  children along its axis; `UiNode.ChildAlign` (`.Aligned(...)`,
+  `ChildAlignment.Start | Center | End | Stretch`) sets where they sit across
+  it; `UiNode.ChildWrap` with `LineGap` (`.Wrapping(lineGap)`) makes a row
+  whose children run on onto more lines, each child's line in `WrapLine`.
+- **`UiNode.MaxSize`**: the largest a node may be on each axis, for a fill or a
+  measured text held to a measure.
+- **`Box.Measure`**: a leaf measures itself at the width it is about to have,
+  so a paragraph wraps at its final width in the same frame.
+- **`Box.InkOverflow`**: how far a `Box.Draw` callback may draw past its box
+  (a shadow, a badge over the corner) before it is clipped.
+- **`Style.CornerRadii`**: a radius for each corner (`CornerRadii.All(18f) with
+  { BottomRight = 4f }`, `Vertical`, `Horizontal`), drawn as a path for the
+  background and border. Supersedes #15.
 
 ### Changed
 
@@ -40,9 +54,19 @@ All notable changes to bibui are recorded here. The format is based on
   `PackageReference` to `Bibui` with `Bibui.Core`, and `using Bibui…;`
   with `using Bibui.Core…;`. The embedded fonts and themes are named
   `Bibui.Core.Assets.*`. The other packages keep their names.
+- **Fills give way first.** When a row or column overflows, its fills give up
+  their room before shrinkable text gives up any, so a spring beside a title
+  closes before the title is cut.
+- **A share is of the parent's final size.** A child taking a share of a parent
+  the constraints shrank gets its share of what the parent ended up as.
 
 ### Fixed
 
+- **The managed rasterizer drew far-off shapes on the screen.** Its
+  supersampled edges step in 16.16 fixed point at 4×, which wrapped past about
+  8000 device px, so a long list's far rows drew their dots over the visible
+  ones (baseline-compatible antialiasing). A path whose points all lie off the
+  clip now adds no edges, and one reaching that far is scanned in floats.
 - **FreeType on 32-bit processes.** The FreeType struct offsets bibui reads
   were laid out for 64-bit (LP64) only, so on a 32-bit process, wasm32 among
   them, glyph metrics and the face's glyph count were read from the wrong
