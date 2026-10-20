@@ -8096,6 +8096,36 @@ Run("ChildWrap: a row whose children fit is a row (a spring shares the rest); on
     Eq(row.Rect.Y + 10f, a!.Rect.Y, "centred in the line");
 });
 
+Run("Shrinking along a row: fills give way first, then what may give up, by how much it may", () =>
+{
+    var rt = BibuiRuntime.Create();
+    Box? label = null, spring = null, other = null;
+    float width = 300f;
+    rt.SetBuild(() =>
+    {
+        var root = rt.ColumnFill();
+        using (rt.PushParent(root))
+        using (rt.PushParent(rt.RowPx(width, 20f)))
+        {
+            // A label that may be cut (strictness 0), a spring, and a fixed box.
+            label = rt.Box();
+            label.SizeX = SemanticSize.Pixels(120f, strictness: 0f);
+            label.SizeY = SemanticSize.Pixels(20f);
+            spring = rt.Box().FillX().Px(height: 20f);
+            other = rt.Box().Px(100f, 20f);
+        }
+        return root;
+    }, new SurfaceOptions { Width = 400, Height = 100 });
+    rt.Step();
+    Eq(120f, label!.Extent.X, "room enough: the spring takes what is left, the label keeps its width");
+    Eq(80f, spring!.Extent.X, "300 - 120 - 100");
+    width = 180f;
+    rt.Step();
+    Eq(0f, spring!.Extent.X, "too narrow: the spring gives all it has first");
+    Eq(80f, label!.Extent.X, "then the label gives the rest (120 - 40)");
+    Eq(100f, other!.Extent.X, "the fixed box gives nothing");
+});
+
 Console.WriteLine($"Results: {passed} passed, {failed} failed, {skipped} skipped"
     + (filter is null ? "" : $" ({filteredOut} not matching '{filter}')"));
 

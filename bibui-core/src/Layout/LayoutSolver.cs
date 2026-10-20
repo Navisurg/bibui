@@ -157,27 +157,16 @@ internal static class LayoutSolver
         {
             if ((int)node.ChildLayoutAxis == a)
             {
-                // Along the layout axis the children share the room: each gives
-                // up the same fraction of what it may give up.
-                float total = Gaps(node, a), yieldable = 0f;
+                // Along the layout axis the children share the room. Fills (shares of
+                // the parent) give way first: what is left after the rest is theirs.
+                // Then, if that was not enough, the rest give up the same fraction of
+                // what each may give up.
+                float total = Gaps(node, a);
                 for (var child = node.FirstChild; child is not null; child = NextOf(child))
-                {
-                    if (Floats(child, a)) continue;
-                    float s = Get(child.FixedSize, a);
-                    total += s;
-                    yieldable += s * (1f - Sem(child, a).Strictness);
-                }
+                    if (!Floats(child, a)) total += Get(child.FixedSize, a);
                 float over = total - inner;
-                if (over > 0f && yieldable > 0f)
-                {
-                    float fraction = Math.Clamp(over / yieldable, 0f, 1f);
-                    for (var child = node.FirstChild; child is not null; child = NextOf(child))
-                    {
-                        if (Floats(child, a)) continue;
-                        float s = Get(child.FixedSize, a);
-                        child.FixedSize = With(child.FixedSize, a, s - s * (1f - Sem(child, a).Strictness) * fraction);
-                    }
-                }
+                if (over > 0f) over -= Yield(node, a, over, fills: true);
+                if (over > 0f) Yield(node, a, over, fills: false);
             }
             else
             {
@@ -248,6 +237,29 @@ internal static class LayoutSolver
         for (var child = node.FirstChild; child is not null; child = NextOf(child))
             if (!Floats(child, 1)) last = Math.Max(last, child.WrapLine);
         return last + 1;
+    }
+
+    /// <summary>
+    /// Shrinks the fills (or the other children) along <paramref name="a"/> to give up
+    /// <paramref name="over"/>, each by the same fraction of what it may give up; returns what they gave.
+    /// </summary>
+    private static float Yield(UiNode node, int a, float over, bool fills)
+    {
+        float yieldable = 0f;
+        for (var child = node.FirstChild; child is not null; child = NextOf(child))
+        {
+            if (Floats(child, a) || (Sem(child, a).Kind == SizeKind.ParentPct) != fills) continue;
+            yieldable += Get(child.FixedSize, a) * (1f - Sem(child, a).Strictness);
+        }
+        if (yieldable <= 0f) return 0f;
+        float fraction = Math.Clamp(over / yieldable, 0f, 1f);
+        for (var child = node.FirstChild; child is not null; child = NextOf(child))
+        {
+            if (Floats(child, a) || (Sem(child, a).Kind == SizeKind.ParentPct) != fills) continue;
+            float s = Get(child.FixedSize, a);
+            child.FixedSize = With(child.FixedSize, a, s - s * (1f - Sem(child, a).Strictness) * fraction);
+        }
+        return yieldable * fraction;
     }
 
     // ── 5. Positions ───────────────────────────────────────────────────────
