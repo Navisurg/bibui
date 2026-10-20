@@ -36,10 +36,8 @@ public static class Demo
         if (subscribe.Clicked) state.Subscribed = !state.Subscribed;
 
         // A press focuses the name field; Escape or Enter ends editing.
-        Box nameField = runtime.Box();
+        Box nameField = runtime.Box().FillX().Px(height: 44f);
         TextField.InputStyle(runtime, nameField, state.NameFocused);
-        nameField.SizeX = SemanticSize.ParentPct(1f);
-        nameField.SizeY = SemanticSize.Pixels(44f);
         BibuiWidget nameLine;
         using (runtime.PushParent(nameField)) nameLine = runtime.TextField("name-input", nameText, nameEdit, state.NameFocused,
             placeholder: Labels.NamePlaceholder);
@@ -106,24 +104,22 @@ public static class Demo
                 // Two panels whose widths follow the slider-driven shares.
                 using (runtime.PushParent(runtime.RowFillX(96f)))
                 {
-                    var left = runtime.ColumnFill().Styled(new Style
+                    using (runtime.PushParent(runtime.ColumnFill().Styled(new Style
                     {
                         BackgroundColor = UiColor.Accent,
                         CornerRadius = 12f,
                         Padding = EdgeInsets.All(12f),
-                    }).FillX(state.LeftWeight / 100f);
-                    using (runtime.PushParent(left))
+                    }).FillX(state.LeftWeight / 100f)))
                         Bold(runtime, $"weight {state.LeftWeight:0}", textColor: TextColor.AccentForeground);
                     runtime.Gap(12f);
-                    var right = runtime.ColumnFill().Styled(new Style
+                    using (runtime.PushParent(runtime.ColumnFill().Styled(new Style
                     {
                         BackgroundColor = UiColor.Surface,
                         BorderColor = UiColor.Border,
                         BorderWidth = 1f,
                         CornerRadius = 12f,
                         Padding = EdgeInsets.All(12f),
-                    }).FillX((100f - state.LeftWeight) / 100f);
-                    using (runtime.PushParent(right))
+                    }).FillX((100f - state.LeftWeight) / 100f)))
                         Bold(runtime, $"weight {100f - state.LeftWeight:0}", textColor: TextColor.Secondary);
                 }
                 runtime.Gap(12f);
@@ -191,14 +187,11 @@ public static class Demo
         }
         float t = Math.Clamp((value - min) / (max - min), 0f, 1f);
 
-        track.ChildLayoutAxis = LayoutAxis.X;
-        track.SizeX = SemanticSize.ParentPct(1f);
-        track.SizeY = SemanticSize.Pixels(Knob);
+        track.FillX().Px(height: Knob);
         using (runtime.PushParent(track))
         {
             RailPart(runtime, t, UiColor.Accent);
-            var knob = runtime.Box();
-            knob.SizeX = knob.SizeY = SemanticSize.Pixels(Knob);
+            var knob = runtime.Box().Px(Knob, Knob);
             knob.Style.CornerRadius = Knob / 2f;
             knob.Style.BackgroundColor = UiColor.TextPrimary;
             knob.Style.BorderColor = UiColor.Accent;
@@ -210,14 +203,11 @@ public static class Demo
         // A share of the track, the knob's height, with the rail drawn centred in it.
         static void RailPart(BibuiRuntime runtime, float share, UiColor color)
         {
-            var part = runtime.Box();
-            part.SizeX = SemanticSize.ParentPct(share);
-            part.SizeY = SemanticSize.ParentPct(1f);
+            var part = runtime.Box().FillX(share).FillY();
             part.Style.Padding = new EdgeInsets((Knob - Rail) / 2f, 0f, (Knob - Rail) / 2f, 0f);
             using (runtime.PushParent(part))
             {
-                var rail = runtime.Box();
-                rail.SizeX = rail.SizeY = SemanticSize.ParentPct(1f);
+                var rail = runtime.Box().FillX().FillY();
                 rail.Style.CornerRadius = Rail / 2f;
                 rail.Style.BackgroundColor = color;
             }

@@ -63,12 +63,11 @@ internal static class DemoTexture
     }
 
     // Nearest sampling: each texel stays a sharp square at 6x.
-    private static Box Picture(BibuiRuntime runtime, TextureHandle texture)
+    private static void Picture(BibuiRuntime runtime, TextureHandle texture)
     {
         var picture = runtime.Box().Px(Size * 6f, Size * 6f);
         picture.Draw = (_, ctx) => ctx.DrawTexture(texture, ctx.Rect,
             new Paint { Fill = Rgba.Black, Filter = FilterQuality.None, Antialias = false });
-        return picture;
     }
 
     private static TextureHandle Create(TextureFormat format, TextureKind kind, byte[] pixels)

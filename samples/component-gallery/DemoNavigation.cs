@@ -41,48 +41,22 @@ internal static class DemoNavigation
         runtime.Gap(16f);
     }
 
-    /// <summary>
-    /// A cell as tall as the row in scope and as wide as what is built into it,
-    /// with a spring above and below: push it, build one thing, and that thing
-    /// is centred down the row. The row needs a height of its own.
-    /// </summary>
-    internal static Box MidCell(BibuiRuntime runtime)
-    {
-        Box cell = runtime.Box();
-        cell.ChildLayoutAxis = LayoutAxis.Y;
-        cell.SizeX = SemanticSize.ChildrenSum();
-        cell.SizeY = SemanticSize.ParentPct(1f);
-        Arrange.Spring(cell);
-        return cell;
-    }
-
-    /// <summary>A text centred down the row in scope.</summary>
-    internal static Text MidText(BibuiRuntime runtime, string text, ComponentSize? size = null,
+    /// <summary>A text centred down the row in scope, which needs a height of its own.</summary>
+    internal static void MidText(BibuiRuntime runtime, string text, ComponentSize? size = null,
         UiColor? color = null, FontWeight weight = FontWeight.Regular)
     {
-        Box cell = MidCell(runtime);
-        Text label;
-        using (runtime.PushParent(cell))
+        using (runtime.PushParent(runtime.ColumnFillY()))
+        using (runtime.Centred())
         using (runtime.PushFontFace(weight: weight))
-        {
-            label = runtime.Text(text, size, color);
-            Arrange.Spring(cell);
-        }
-        return label;
+            runtime.Text(text, size, color);
     }
 
     /// <summary>An icon centred down the row in scope.</summary>
-    internal static Icon MidIcon(BibuiRuntime runtime, string name, float size, UiColor color)
+    internal static void MidIcon(BibuiRuntime runtime, string name, float size, UiColor color)
     {
-        Box cell = MidCell(runtime);
-        Icon icon;
-        using (runtime.PushParent(cell))
-        {
-            icon = runtime.Icon(name, size);
-            icon.Color = color;
-            Arrange.Spring(cell);
-        }
-        return icon;
+        using (runtime.PushParent(runtime.ColumnFillY()))
+        using (runtime.Centred())
+            runtime.Icon(name, size).Color = color;
     }
 
     /// <summary>
@@ -101,34 +75,9 @@ internal static class DemoNavigation
         return button;
     }
 
-    /// <summary>A row under the parent in scope, as large as what is built into it.</summary>
-    internal static Box Row(BibuiRuntime runtime)
-    {
-        Box row = runtime.Box();
-        row.ChildLayoutAxis = LayoutAxis.X;
-        row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
-        return row;
-    }
-
     /// <summary>A rule 1 px tall across the parent in scope.</summary>
-    internal static Box Rule(BibuiRuntime runtime)
-    {
-        Box rule = runtime.Box();
-        rule.SizeX = SemanticSize.ParentPct(1f);
-        rule.SizeY = SemanticSize.Pixels(1f);
-        rule.Style.BackgroundColor = UiColor.Border;
-        return rule;
-    }
-
-    /// <summary>A column <paramref name="width"/> px wide, as tall as its children, under the parent in scope.</summary>
-    private static Box FixedColumn(BibuiRuntime runtime, float width)
-    {
-        Box column = runtime.Box();
-        column.ChildLayoutAxis = LayoutAxis.Y;
-        column.SizeX = SemanticSize.Pixels(width);
-        column.SizeY = SemanticSize.ChildrenSum();
-        return column;
-    }
+    private static void Rule(BibuiRuntime runtime)
+        => runtime.Box().FillX().Px(height: 1f).Style.BackgroundColor = UiColor.Border;
 
     // ── Tabs ─────────────────────────────────────────────────────────────────
 
@@ -142,7 +91,7 @@ internal static class DemoNavigation
     private static void TabsPage(BibuiRuntime runtime, NavigationState state, Action<NavigationState> set)
     {
         Heading(runtime, "One panel at a time, chosen by its tab");
-        using (runtime.PushParent(FixedColumn(runtime, 480f)))
+        using (runtime.PushParent(runtime.ColumnWidth(480f)))
         {
             var tabs = runtime.Tabs("demo-tabs", TabItems, state.ActiveTab);
             if (tabs.Picked is { } picked && picked != state.ActiveTab) set(state with { ActiveTab = picked });
@@ -173,7 +122,7 @@ internal static class DemoNavigation
     private static void AccordionPage(BibuiRuntime runtime, NavigationState state, Action<NavigationState> set)
     {
         Heading(runtime, "Sections that open one at a time");
-        using (runtime.PushParent(FixedColumn(runtime, 480f)))
+        using (runtime.PushParent(runtime.ColumnWidth(480f)))
         {
             for (int i = 0; i < AccordionItems.Length; i++)
             {
@@ -203,7 +152,7 @@ internal static class DemoNavigation
     {
         Heading(runtime, "Press the header, or the button, to open and close it");
         bool toggled;
-        using (runtime.PushParent(FixedColumn(runtime, 360f)))
+        using (runtime.PushParent(runtime.ColumnWidth(360f)))
         {
             var expander = runtime.Expander("demo-expander", "Starred repositories", state.ExpanderOpen);
             toggled = expander.Toggled;
@@ -230,9 +179,7 @@ internal static class DemoNavigation
         Heading(runtime, "Press a link, or a button below it, to make it current");
 
         // The bar: links 36 px tall, 16 px in, centred down 60.
-        Box bar = runtime.Box();
-        bar.ChildLayoutAxis = LayoutAxis.X;
-        bar.Px(560f, 60f);
+        Box bar = runtime.RowPx(560f, 60f);
         bar.Style.Padding = new EdgeInsets(12f, 16f, 12f, 16f);
         using (runtime.PushParent(bar))
             for (int i = 0; i < NavItems.Length; i++)
@@ -254,7 +201,7 @@ internal static class DemoNavigation
             }
 
         runtime.Gap(16f);
-        using (runtime.PushParent(Row(runtime)))
+        using (runtime.PushParent(runtime.RowFit()))
         {
             (string Label, float Width)[] shortcuts = [("Overview", 120f), ("Files", 120f), ("Activity", 120f)];
             for (int i = 0; i < shortcuts.Length; i++)
@@ -289,9 +236,7 @@ internal static class DemoNavigation
         string? picked = null;
         Heading(runtime, "Press an entry to make it current");
 
-        Box panel = runtime.Box();
-        panel.ChildLayoutAxis = LayoutAxis.Y;
-        panel.Px(220f, 320f);
+        Box panel = runtime.ColumnPx(220f, 320f);
         panel.Style.BackgroundColor = UiColor.Surface;
         panel.Style.BorderColor = UiColor.Border;
         panel.Style.BorderWidth = 1f;
@@ -345,11 +290,7 @@ internal static class DemoNavigation
     // bold, a small chevron between each.
     private static void Breadcrumb(BibuiRuntime runtime, params string[] trail)
     {
-        Box row = runtime.Box();
-        row.ChildLayoutAxis = LayoutAxis.X;
-        row.SizeX = SemanticSize.ChildrenSum();
-        row.SizeY = SemanticSize.Pixels(20f);
-        using (runtime.PushParent(row))
+        using (runtime.PushParent(runtime.RowHeight(20f)))
             for (int i = 0; i < trail.Length; i++)
             {
                 bool current = i == trail.Length - 1;
@@ -373,17 +314,13 @@ internal static class DemoNavigation
         int? go = null;
         Heading(runtime, "Step through numbered pages");
 
-        Box row = runtime.Box();
-        row.ChildLayoutAxis = LayoutAxis.X;
-        row.SizeX = SemanticSize.ChildrenSum();
-        row.SizeY = SemanticSize.Pixels(40f);
-        using (runtime.PushParent(row))
+        using (runtime.PushParent(runtime.RowHeight(40f)))
         {
             // Five pages about the current one, kept inside 1..PageCount.
             int end = Math.Min(PageCount, Math.Max(1, current - 2) + 4);
             int start = Math.Max(1, end - 4);
 
-            if (PageButton(runtime, "demo-pagination-prev", 80f, current > 1, raised: true, accent: false, box =>
+            if (PageButton(runtime, "demo-pagination-prev", 80f, current > 1, raised: true, accent: false, () =>
                 {
                     MidIcon(runtime, "chevron-left", 14f, current > 1 ? UiColor.TextPrimary : UiColor.TextDisabled);
                     runtime.Gap(5f);
@@ -396,20 +333,19 @@ internal static class DemoNavigation
                 runtime.Gap(4f);
                 bool active = p == current;
                 int number = p;
-                if (PageButton(runtime, $"demo-pagination-{p}", 36f, true, raised: false, accent: active, box =>
+                if (PageButton(runtime, $"demo-pagination-{p}", 36f, true, raised: false, accent: active, () =>
                     {
-                        Arrange.Spring(box);
-                        MidText(runtime, number.ToString(), ComponentSize.Sm, active ? TextColor.AccentForeground : TextColor.Primary);
-                        Arrange.Spring(box);
+                        using (runtime.Centred())
+                            MidText(runtime, number.ToString(), ComponentSize.Sm, active ? TextColor.AccentForeground : TextColor.Primary);
                     }))
                     go = p;
             }
 
             runtime.Gap(4f);
-            if (PageButton(runtime, "demo-pagination-next", 80f, current < PageCount, raised: true, accent: false, box =>
+            if (PageButton(runtime, "demo-pagination-next", 80f, current < PageCount, raised: true, accent: false, () =>
                 {
                     MidText(runtime, "Next", ComponentSize.Sm, current < PageCount ? TextColor.Primary : TextColor.Disabled);
-                    Arrange.Spring(box);
+                    runtime.Spring();
                     MidIcon(runtime, "chevron-right", 14f, current < PageCount ? UiColor.TextPrimary : UiColor.TextDisabled);
                 }, padLeft: 4f, padRight: 9f))
                 go = current + 1;
@@ -424,7 +360,7 @@ internal static class DemoNavigation
     // which is filled with the accent; it takes the press unless it is not
     // enabled, and reports a click.
     private static bool PageButton(BibuiRuntime runtime, string id, float width, bool enabled, bool raised, bool accent,
-        Action<Box> content, float padLeft = 0f, float padRight = 0f)
+        Action content, float padLeft = 0f, float padRight = 0f)
     {
         Box box = runtime.BoxFromId(id, enabled ? InteractionKinds.LeftPress : InteractionKinds.Disabled);
         bool clicked = runtime.InteractionsFor(box).Clicked;
@@ -440,7 +376,7 @@ internal static class DemoNavigation
             box.Style.BorderColor = UiColor.Border;
             box.Style.BorderWidth = 1f;
         }
-        using (runtime.PushParent(box)) content(box);
+        using (runtime.PushParent(box)) content();
         return clicked;
     }
 
@@ -460,9 +396,7 @@ internal static class DemoNavigation
     {
         Heading(runtime, "File, Edit, View: menus along the top of a window");
 
-        Box bar = runtime.Box();
-        bar.ChildLayoutAxis = LayoutAxis.X;
-        bar.Px(560f, 36f);
+        Box bar = runtime.RowPx(560f, 36f);
         bar.Style.BackgroundColor = UiColor.Surface;
         bar.Style.BorderColor = UiColor.Border;
         bar.Style.BorderWidth = 1f;
@@ -545,7 +479,7 @@ internal static class DemoNavigation
                     else runtime.Gap(14f);
                     runtime.Gap(8f);
                     MidText(runtime, label);
-                    Arrange.Spring(row);
+                    runtime.Spring();
                     MidText(runtime, shortcut, ComponentSize.Sm, TextColor.Disabled);
                 }
             }

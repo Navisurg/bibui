@@ -26,9 +26,7 @@ internal static class DemoScrollList
             runtime.BeginScrollList("sl-list", ref _scroll, Pitch, Rows);
             for (int i = _scroll.First; i < _scroll.Last; i++)
             {
-                var row = runtime.Box();
-                (row.SizeX, row.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.Pixels(Pitch));
-                row.ChildLayoutAxis = LayoutAxis.X;
+                var row = runtime.RowFillX(Pitch);
                 row.Style.Padding = new EdgeInsets(0, 12, 0, 12);
                 row.Style.BackgroundColor = i % 2 == 0 ? (UiColor?)UiColor.Surface : null;
                 using (runtime.PushParent(row))

@@ -30,7 +30,7 @@ internal static class DemoDisplay
     // A paragraph in a dark box of the given width, around its lines: as tall
     // as they are, or the given rows tall and scrolling with the wheel to the
     // lines past them. Nothing edits it.
-    private static Box Paragraph(BibuiRuntime runtime, string id, string text, float width, int? rows = null)
+    private static void Paragraph(BibuiRuntime runtime, string id, string text, float width, int? rows = null)
     {
         Box box = runtime.Box();
         box.SizeX = SemanticSize.Pixels(width);
@@ -41,7 +41,6 @@ internal static class DemoDisplay
         using (runtime.PushParent(box))
         using (runtime.PushSizeY(rows is { } r ? TextField.Rows(runtime, r) : SemanticSize.ChildrenSum()))
             runtime.MultilineTextField(id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0);
-        return box;
     }
 
     // The editable ellipsis: what an application would hold for it.
@@ -53,7 +52,7 @@ internal static class DemoDisplay
     // A line in a dark box of the given width, ending in "…" when it is wider
     // than the box. A press edits it, and then it scrolls rather than ending
     // in "…"; Enter or Escape stops editing.
-    private static Box EllipsisField(BibuiRuntime runtime, string id, float width)
+    private static void EllipsisField(BibuiRuntime runtime, string id, float width)
     {
         Box box = runtime.Box();
         box.SizeX = SemanticSize.Pixels(width);
@@ -74,7 +73,6 @@ internal static class DemoDisplay
                     EllipsisFocused = false;
                     ev.Eat();
                 }
-        return box;
     }
 
     internal static void Build(BibuiRuntime runtime, string route, DisplayState state, Action<DisplayState> set)
@@ -106,8 +104,7 @@ internal static class DemoDisplay
 
     // ── Shared by the pages below ───────────────────────────────────────────
     // Each page builds in place, in order, into the column the gallery pushes
-    // for it. A helper that builds into a box of its own pushes that box, and
-    // hands it back.
+    // for it, and so does each helper: one with a box of its own pushes it.
 
     private static readonly UiColor Info = UiColor.Token(c => c.Info);
     private static readonly UiColor InfoBg = UiColor.Token(c => c.InfoBg);
@@ -168,24 +165,12 @@ internal static class DemoDisplay
 
         UiColor ink = disabled ? TextColor.Disabled : primary ? TextColor.AccentForeground : TextColor.Primary;
         using (runtime.PushParent(box))
-        {
-            Arrange.Spring(box);
+        using (runtime.Centred())
             if (width is null) runtime.Text(label, size, ink);
             else
-            {
-                Box row = runtime.Box();
-                row.ChildLayoutAxis = LayoutAxis.X;
-                row.SizeX = SemanticSize.ParentPct(1f);
-                row.SizeY = SemanticSize.ChildrenSum();
-                using (runtime.PushParent(row))
-                {
-                    Arrange.Spring(row);
+                using (runtime.PushParent(runtime.RowFillX()))
+                using (runtime.Centred())
                     runtime.Text(label, size, ink);
-                    Arrange.Spring(row);
-                }
-            }
-            Arrange.Spring(box);
-        }
         return new BibuiWidget(box, interaction);
     }
 
@@ -194,31 +179,10 @@ internal static class DemoDisplay
     {
         box.ChildLayoutAxis = LayoutAxis.X;
         using (runtime.PushParent(box))
-        {
-            Arrange.Spring(box);
-            Box column = runtime.Box();
-            column.ChildLayoutAxis = LayoutAxis.Y;
-            column.SizeX = SemanticSize.ChildrenSum();
-            column.SizeY = SemanticSize.ParentPct(1f);
-            using (runtime.PushParent(column))
-            {
-                Arrange.Spring(column);
-                runtime.Text(label, size, color);
-                Arrange.Spring(column);
-            }
-            Arrange.Spring(box);
-        }
-    }
-
-    // A column, under the parent in scope, as wide as what is in it and as
-    // tall as the parent: what centres an icon or a label down a row.
-    private static Box DownTheMiddle(BibuiRuntime runtime)
-    {
-        Box column = runtime.Box();
-        column.ChildLayoutAxis = LayoutAxis.Y;
-        column.SizeX = SemanticSize.ChildrenSum();
-        column.SizeY = SemanticSize.ParentPct(1f);
-        return column;
+        using (runtime.Centred())
+        using (runtime.PushParent(runtime.ColumnFillY()))
+        using (runtime.Centred())
+            runtime.Text(label, size, color);
     }
 
     // ── Text ────────────────────────────────────────────────────────────────
@@ -353,12 +317,9 @@ internal static class DemoDisplay
 
     // A raised, bordered box: a bold title, a muted description, and a body
     // that wraps, each spaced as the reference card spaced them.
-    private static Box Card(BibuiRuntime runtime, string id, string title, string description, string? body, float width)
+    private static void Card(BibuiRuntime runtime, string id, string title, string description, string? body, float width)
     {
-        Box card = runtime.Box();
-        card.ChildLayoutAxis = LayoutAxis.Y;
-        card.SizeX = SemanticSize.Pixels(width);
-        card.SizeY = SemanticSize.ChildrenSum();
+        Box card = runtime.ColumnWidth(width);
         card.Style.BackgroundColor = UiColor.SurfaceRaised;
         card.Style.BorderColor = UiColor.Border;
         card.Style.BorderWidth = 1f;
@@ -380,7 +341,6 @@ internal static class DemoDisplay
                     runtime.MultilineTextField(id, GalleryHelpers.Held(id, body), NoEdit, focused: false, events: 0);
             }
         }
-        return card;
     }
 
     private static void CardPage(BibuiRuntime runtime)
@@ -397,12 +357,9 @@ internal static class DemoDisplay
 
     // A banner 80 px tall across its parent: an icon down the middle of the
     // left edge in the variant's colour, and a bold title over a description.
-    private static Box Alert(BibuiRuntime runtime, string title, string description, UiColor accent, UiColor fill, string icon)
+    private static void Alert(BibuiRuntime runtime, string title, string description, UiColor accent, UiColor fill, string icon)
     {
-        Box alert = runtime.Box();
-        alert.ChildLayoutAxis = LayoutAxis.X;
-        alert.SizeX = SemanticSize.ParentPct(1f);
-        alert.SizeY = SemanticSize.Pixels(80f);
+        Box alert = runtime.RowFillX(80f);
         alert.Style.BackgroundColor = fill;
         alert.Style.BorderColor = accent;
         alert.Style.BorderWidth = 1f;
@@ -410,18 +367,11 @@ internal static class DemoDisplay
         alert.Style.Padding = new EdgeInsets(0f, 12f, 0f, 12f);
         using (runtime.PushParent(alert))
         {
-            Box middle = DownTheMiddle(runtime);
-            using (runtime.PushParent(middle))
-            {
-                Arrange.Spring(middle);
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
                 runtime.Icon(icon, 20f).Color = accent;
-                Arrange.Spring(middle);
-            }
             runtime.Gap(8f);
-            Box text = runtime.Box();
-            text.ChildLayoutAxis = LayoutAxis.Y;
-            text.SizeX = text.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.PushParent(text))
+            using (runtime.PushParent(runtime.ColumnFit()))
             {
                 runtime.Gap(12f);
                 using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, ComponentSize.Md);
@@ -429,7 +379,6 @@ internal static class DemoDisplay
                 runtime.Text(description, ComponentSize.Sm, TextColor.Secondary);
             }
         }
-        return alert;
     }
 
     private static void AlertPage(BibuiRuntime runtime)
@@ -497,13 +446,11 @@ internal static class DemoDisplay
 
     // ── Skeleton ────────────────────────────────────────────────────────────
 
-    private static Box Bone(BibuiRuntime runtime, float width, float height, float radius)
+    private static void Bone(BibuiRuntime runtime, float width, float height, float radius)
     {
-        Box bone = runtime.Box();
-        bone.Px(width, height);
+        Box bone = runtime.Box().Px(width, height);
         bone.Style.BackgroundColor = UiColor.SurfaceRaised;
         bone.Style.CornerRadius = radius;
-        return bone;
     }
 
     private static void SkeletonPage(BibuiRuntime runtime)
@@ -524,16 +471,14 @@ internal static class DemoDisplay
     // ── RatioBox ────────────────────────────────────────────────────────────
 
     // A raised box `width` wide and as tall as the ratio makes it, its label in the middle.
-    private static Box AspectBox(BibuiRuntime runtime, float width, float ratio, string label)
+    private static void AspectBox(BibuiRuntime runtime, float width, float ratio, string label)
     {
-        Box box = runtime.Box();
-        box.Px(width, width / ratio);
+        Box box = runtime.Box().Px(width, width / ratio);
         box.Style.BackgroundColor = UiColor.SurfaceRaised;
         box.Style.BorderColor = UiColor.Border;
         box.Style.BorderWidth = 1f;
         box.Style.CornerRadius = 6f;
         CentredLabel(runtime, box, label, ComponentSize.Sm, TextColor.Secondary);
-        return box;
     }
 
     private static void RatioBoxPage(BibuiRuntime runtime)
@@ -570,12 +515,9 @@ internal static class DemoDisplay
     // A table `width` wide in a bordered box: a raised header row of bold,
     // muted column names, then a row per entry with a rule between rows. The
     // columns share the width equally.
-    private static Box Table(BibuiRuntime runtime, string[] columns, IReadOnlyList<string[]> rows, float width)
+    private static void Table(BibuiRuntime runtime, string[] columns, IReadOnlyList<string[]> rows, float width)
     {
-        Box table = runtime.Box();
-        table.ChildLayoutAxis = LayoutAxis.Y;
-        table.SizeX = SemanticSize.Pixels(width);
-        table.SizeY = SemanticSize.ChildrenSum();
+        Box table = runtime.ColumnWidth(width);
         table.Style.BorderColor = UiColor.Border;
         table.Style.BorderWidth = 1f;
         table.Style.CornerRadius = 6f;
@@ -583,21 +525,18 @@ internal static class DemoDisplay
         using (runtime.PushParent(table))
         {
             // Squares the header's lower corners, under it: drawn first, out of the flow.
-            Box square = runtime.Box();
-            square.SizeX = SemanticSize.ParentPct(1f);
-            square.SizeY = SemanticSize.Pixels(12f);
+            Box square = runtime.Box().FillX().Px(height: 12f);
             square.Style.BackgroundColor = UiColor.SurfaceRaised;
             square.At(0f, TableRow - 6f);
 
-            Box header = TableRowBox(runtime);
+            Box header = runtime.RowFillX(TableRow);
             header.Style.BackgroundColor = UiColor.SurfaceRaised;
             header.Style.CornerRadius = 6f;
             using (runtime.PushParent(header))
                 foreach (var name in columns) Cell(runtime, name, column, TextColor.Secondary, FontWeight.Bold);
             for (int r = 0; r < rows.Count; r++)
             {
-                Box row = TableRowBox(runtime);
-                using (runtime.PushParent(row))
+                using (runtime.PushParent(runtime.RowFillX(TableRow)))
                 {
                     // The rule between rows is along this one's top edge, out of the flow.
                     if (r > 0) Separator.Build(runtime).At(0f, 0f);
@@ -605,16 +544,6 @@ internal static class DemoDisplay
                 }
             }
         }
-        return table;
-    }
-
-    private static Box TableRowBox(BibuiRuntime runtime)
-    {
-        Box row = runtime.Box();
-        row.ChildLayoutAxis = LayoutAxis.X;
-        row.SizeX = SemanticSize.ParentPct(1f);
-        row.SizeY = SemanticSize.Pixels(TableRow);
-        return row;
     }
 
     // A cell `width` wide, its text down the middle, 12 px in from its left.
@@ -626,12 +555,9 @@ internal static class DemoDisplay
         cell.SizeY = SemanticSize.ParentPct(1f);
         cell.Style.Padding = new EdgeInsets(0f, 12f, 0f, 12f);
         using (runtime.PushParent(cell))
-        {
-            Arrange.Spring(cell);
-            using (runtime.PushFontFace(weight: weight))
-                runtime.Text(text, ComponentSize.Sm, color);
-            Arrange.Spring(cell);
-        }
+        using (runtime.Centred())
+        using (runtime.PushFontFace(weight: weight))
+            runtime.Text(text, ComponentSize.Sm, color);
     }
 
     private static readonly string[][] TableRows =
@@ -714,19 +640,13 @@ internal static class DemoDisplay
 
     // A label (starred when required), a frame for the input, the field's
     // description, and its error in the destructive colour when it has one.
-    private static Box FormField(BibuiRuntime runtime, string label, string description, string? error, bool required)
+    private static void FormField(BibuiRuntime runtime, string label, string description, string? error, bool required)
     {
-        Box field = runtime.Box();
-        field.ChildLayoutAxis = LayoutAxis.Y;
-        field.SizeX = SemanticSize.ParentPct(1f);
-        field.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(field))
+        using (runtime.PushParent(runtime.ColumnFillX()))
         {
             using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(required ? label + " *" : label, ComponentSize.Sm);
             Advance(runtime, 12f * 1.4f + 4f, ComponentSize.Sm, FontWeight.Bold);
-            Box frame = runtime.Box();
-            frame.SizeX = SemanticSize.ParentPct(1f);
-            frame.SizeY = SemanticSize.Pixels(40f);
+            Box frame = runtime.Box().FillX().Px(height: 40f);
             TextField.InputStyle(runtime, frame, focused: false, error: error is not null);
             runtime.Gap(4f);
             runtime.Text(description, ComponentSize.Sm, TextColor.Secondary);
@@ -736,7 +656,6 @@ internal static class DemoDisplay
                 runtime.Text(error, ComponentSize.Sm, UiColor.Destructive);
             }
         }
-        return field;
     }
 
     private static void FormFieldPage(BibuiRuntime runtime)
@@ -771,21 +690,13 @@ internal static class DemoDisplay
         UiColor ink = disabled ? TextColor.Disabled : TextColor.Primary;
         using (runtime.PushParent(row))
         {
-            Box glyph = DownTheMiddle(runtime);
-            using (runtime.PushParent(glyph))
-            {
-                Arrange.Spring(glyph);
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
                 runtime.Icon(icon, 16f).Color = ink;
-                Arrange.Spring(glyph);
-            }
             runtime.Gap(8f);
-            Box text = DownTheMiddle(runtime);
-            using (runtime.PushParent(text))
-            {
-                Arrange.Spring(text);
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
                 runtime.Text(label, ComponentSize.Md, ink);
-                Arrange.Spring(text);
-            }
         }
         return new BibuiWidget(row, interaction);
     }
@@ -895,19 +806,12 @@ internal static class DemoDisplay
             close.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
             CentredIcon(runtime, close, "x", 14f, TextColor.Secondary);
 
-            Box bell = DownTheMiddle(runtime);
-            using (runtime.PushParent(bell))
-            {
-                Arrange.Spring(bell);
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
                 runtime.Icon("bell", 18f).Color = UiColor.Border;
-                Arrange.Spring(bell);
-            }
             runtime.Gap(8f);
 
-            Box text = runtime.Box();
-            text.ChildLayoutAxis = LayoutAxis.Y;
-            text.SizeX = text.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.PushParent(text))
+            using (runtime.PushParent(runtime.ColumnFit()))
             {
                 using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, ComponentSize.Md);
                 Advance(runtime, 14f * 1.4f + 4f, ComponentSize.Md, FontWeight.Bold);
@@ -926,16 +830,9 @@ internal static class DemoDisplay
     {
         box.ChildLayoutAxis = LayoutAxis.X;
         using (runtime.PushParent(box))
-        {
-            Arrange.Spring(box);
-            Box column = DownTheMiddle(runtime);
-            using (runtime.PushParent(column))
-            {
-                Arrange.Spring(column);
-                runtime.Icon(name, size).Color = color;
-                Arrange.Spring(column);
-            }
-            Arrange.Spring(box);
-        }
+        using (runtime.Centred())
+        using (runtime.PushParent(runtime.ColumnFillY()))
+        using (runtime.Centred())
+            runtime.Icon(name, size).Color = color;
     }
 }

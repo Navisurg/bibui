@@ -78,15 +78,13 @@ internal static class DemoLayout
             handle.ChildLayoutAxis = vertical ? LayoutAxis.X : LayoutAxis.Y;
             if (vertical) { handle.SizeX = SemanticSize.ParentPct(1f); handle.SizeY = SemanticSize.Pixels(SplitHandle); }
             else { handle.SizeX = SemanticSize.Pixels(SplitHandle); handle.SizeY = SemanticSize.ParentPct(1f); }
+            // A grip in the middle of the divider, brighter while it is hot.
             using (runtime.PushParent(handle))
+            using (runtime.Centred())
             {
-                // A grip in the middle of the divider, brighter while it is hot.
-                Arrange.Spring(handle);
-                Box grip = runtime.Box();
-                grip.Px(vertical ? 32f : 4f, vertical ? 4f : 32f);
+                Box grip = runtime.Box().Px(vertical ? 32f : 4f, vertical ? 4f : 32f);
                 grip.Style.CornerRadius = 9999f;
                 grip.Style.BackgroundColor = handle.HotT > 0.5f || drag.Dragging ? UiColor.BorderHover : UiColor.Border;
-                Arrange.Spring(handle);
             }
 
             Pane(runtime, second).Along(vertical, SemanticSize.ParentPct(1f));
@@ -111,20 +109,10 @@ internal static class DemoLayout
         pane.Style.BorderWidth = 1f;
         pane.Style.CornerRadius = 6f;
         using (runtime.PushParent(pane))
-        {
-            Arrange.Spring(pane);
-            Box row = runtime.Box();
-            row.ChildLayoutAxis = LayoutAxis.X;
-            row.SizeX = SemanticSize.ParentPct(1f);
-            row.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.PushParent(row))
-            {
-                Arrange.Spring(row);
-                runtime.Text(label, ComponentSize.Sm, TextColor.Secondary);
-                Arrange.Spring(row);
-            }
-            Arrange.Spring(pane);
-        }
+        using (runtime.Centred())
+        using (runtime.PushParent(runtime.RowFillX()))
+        using (runtime.Centred())
+            runtime.Text(label, ComponentSize.Sm, TextColor.Secondary);
         return pane;
     }
 
@@ -138,56 +126,32 @@ internal static class DemoLayout
         int go = index;
         DemoNavigation.Heading(runtime, "One slide at a time: the arrows, the dots or the buttons move between them");
 
-        Box carousel = runtime.Box();
-        carousel.ChildLayoutAxis = LayoutAxis.Y;
-        carousel.Px(480f, 200f);
-        using (runtime.PushParent(carousel))
+        using (runtime.PushParent(runtime.ColumnPx(480f, 200f)))
         {
             // The slide between its two arrows.
-            Box stage = runtime.Box();
-            stage.ChildLayoutAxis = LayoutAxis.X;
-            stage.SizeX = SemanticSize.ParentPct(1f);
-            stage.SizeY = SemanticSize.Pixels(168f);
-            using (runtime.PushParent(stage))
+            using (runtime.PushParent(runtime.RowFillX(168f)))
             {
                 if (Arrow(runtime, "demo-carousel-arrow-prev", "chevron-left", index > 0)) go = index - 1;
 
-                Box slide = runtime.Box();
-                slide.ChildLayoutAxis = LayoutAxis.Y;
-                slide.SizeX = SemanticSize.ParentPct(1f);
-                slide.SizeY = SemanticSize.ParentPct(1f);
+                Box slide = runtime.ColumnFill();
                 slide.Style.BackgroundColor = UiColor.SurfaceRaised;
                 slide.Style.BorderColor = UiColor.Border;
                 slide.Style.BorderWidth = 1f;
                 slide.Style.CornerRadius = 8f;
                 using (runtime.PushParent(slide))
-                {
-                    Arrange.Spring(slide);
-                    Box row = runtime.Box();
-                    row.ChildLayoutAxis = LayoutAxis.X;
-                    row.SizeX = SemanticSize.ParentPct(1f);
-                    row.SizeY = SemanticSize.ChildrenSum();
-                    using (runtime.PushParent(row))
-                    {
-                        Arrange.Spring(row);
-                        runtime.Text(Slides[index], textColor: TextColor.Secondary);
-                        Arrange.Spring(row);
-                    }
-                    Arrange.Spring(slide);
-                }
+                using (runtime.Centred())
+                using (runtime.PushParent(runtime.RowFillX()))
+                using (runtime.Centred())
+                    runtime.Text(Slides[index], textColor: TextColor.Secondary);
 
                 if (Arrow(runtime, "demo-carousel-arrow-next", "chevron-right", index < Slides.Length - 1)) go = index + 1;
             }
 
             // A dot per slide, the current one lit; a dot takes you to its slide.
             runtime.Gap(8f);
-            Box dots = runtime.Box();
-            dots.ChildLayoutAxis = LayoutAxis.X;
-            dots.SizeX = SemanticSize.ParentPct(1f);
-            dots.SizeY = SemanticSize.Pixels(8f);
-            using (runtime.PushParent(dots))
+            using (runtime.PushParent(runtime.RowFillX(8f)))
+            using (runtime.Centred())
             {
-                Arrange.Spring(dots);
                 for (int i = 0; i < Slides.Length; i++)
                 {
                     if (i > 0) runtime.Gap(8f);
@@ -198,12 +162,11 @@ internal static class DemoLayout
                     dot.Style.BackgroundColor = i == index ? UiColor.TextPrimary : UiColor.Border;
                     dot.Style.HoverBackgroundColor = i == index ? (UiColor?)null : UiColor.TextSecondary;
                 }
-                Arrange.Spring(dots);
             }
         }
 
         runtime.Gap(16f);
-        using (runtime.PushParent(DemoNavigation.Row(runtime)))
+        using (runtime.PushParent(runtime.RowFit()))
         {
             if (DemoNavigation.WideButton(runtime, "demo-carousel-prev", "← Prev", 88f, disabled: index == 0).Clicked) go = index - 1;
             runtime.Gap(8f);
@@ -219,12 +182,11 @@ internal static class DemoLayout
     // nothing when there is nowhere to go.
     private static bool Arrow(BibuiRuntime runtime, string id, string icon, bool enabled)
     {
-        Box cell = DemoNavigation.MidCell(runtime);
-        bool clicked;
-        using (runtime.PushParent(cell))
+        using (runtime.PushParent(runtime.ColumnFillY()))
+        using (runtime.Centred())
         {
             Box arrow = runtime.BoxFromId(id, enabled ? InteractionKinds.LeftPress : InteractionKinds.Disabled);
-            clicked = runtime.InteractionsFor(arrow).Clicked;
+            bool clicked = runtime.InteractionsFor(arrow).Clicked;
             arrow.ChildLayoutAxis = LayoutAxis.X;
             arrow.Px(36f, 36f);
             arrow.Style.CornerRadius = 9999f;
@@ -235,9 +197,8 @@ internal static class DemoLayout
             arrow.Style.Padding = EdgeInsets.Symmetric(horizontal: 10f, vertical: 0f);
             using (runtime.PushParent(arrow))
                 DemoNavigation.MidIcon(runtime, icon, 16f, enabled ? UiColor.TextPrimary : UiColor.TextDisabled);
-            Arrange.Spring(cell);
+            return clicked;
         }
-        return clicked;
     }
 
     // ── ButtonStrip ──────────────────────────────────────────────────────────
@@ -254,10 +215,7 @@ internal static class DemoLayout
     // press and lights under the pointer; the demo does nothing with them.
     private static void ButtonStrip(BibuiRuntime runtime, string id, params string[] labels)
     {
-        Box strip = runtime.Box();
-        strip.ChildLayoutAxis = LayoutAxis.X;
-        strip.SizeX = SemanticSize.ChildrenSum();
-        strip.SizeY = SemanticSize.Pixels(36f);
+        Box strip = runtime.RowHeight(36f);
         strip.Style.CornerRadius = 6f;
         strip.Style.BorderColor = UiColor.Border;
         strip.Style.BorderWidth = 1f;
@@ -267,9 +225,7 @@ internal static class DemoLayout
             {
                 if (i > 0)
                 {
-                    Box divider = runtime.Box();
-                    divider.SizeX = SemanticSize.Pixels(1f);
-                    divider.SizeY = SemanticSize.ParentPct(1f);
+                    Box divider = runtime.Box().Px(width: 1f).FillY();
                     divider.Style.BackgroundColor = UiColor.Border;
                 }
                 Box button = runtime.BoxFromId($"{id}-{labels[i].ToLowerInvariant()}", InteractionKinds.LeftPress);
@@ -291,9 +247,7 @@ internal static class DemoLayout
     {
         bool clicked = false;
         DemoNavigation.Heading(runtime, "Flow children (vertical, like Column)");
-        Box flow = runtime.Box();
-        flow.ChildLayoutAxis = LayoutAxis.Y;
-        flow.Px(560f, 80f);
+        Box flow = runtime.ColumnPx(560f, 80f);
         flow.Style.BackgroundColor = "#18181B";
         flow.Style.CornerRadius = 8f;
         using (runtime.PushParent(flow))
@@ -310,9 +264,7 @@ internal static class DemoLayout
 
         runtime.Gap(16f);
         DemoNavigation.Heading(runtime, "Positioned children (absolute offsets)");
-        Box stack = runtime.Box();
-        stack.ChildLayoutAxis = LayoutAxis.Y;
-        stack.Px(560f, 200f);
+        Box stack = runtime.ColumnPx(560f, 200f);
         stack.Style.BackgroundColor = "#18181B";
         stack.Style.CornerRadius = 8f;
         using (runtime.PushParent(stack))
@@ -362,7 +314,7 @@ internal static class DemoLayout
     {
         int clicks = 0;
         DemoNavigation.Heading(runtime, "Clickable styled containers");
-        using (runtime.PushParent(DemoNavigation.Row(runtime)))
+        using (runtime.PushParent(runtime.RowFit()))
         {
             // A box from an id that claims the press, asked what happened: no callback.
             Box first = runtime.BoxFromId("demo-ibox-1", InteractionKinds.LeftPress);
@@ -451,19 +403,15 @@ internal static class DemoLayout
                 using (runtime.PushParent(row))
                 {
                     // The swatch a little down, about level with the text beside it.
-                    Box cell = runtime.Box();
-                    cell.ChildLayoutAxis = LayoutAxis.Y;
-                    cell.SizeX = cell.SizeY = SemanticSize.ChildrenSum();
-                    using (runtime.PushParent(cell))
+                    using (runtime.PushParent(runtime.ColumnFit()))
                     {
-                        Arrange.Gap(cell, 3f);
-                        Box swatch = runtime.Box();
-                        swatch.Px(48f, 12f);
+                        runtime.Gap(3f);
+                        Box swatch = runtime.Box().Px(48f, 12f);
                         swatch.Style.CornerRadius = 3f;
                         swatch.Style.BackgroundGradient = Gradient.Horizontal(
                             [.. (Bibui.Theming.Colormaps.Get(name) ?? []).Select(s => new ColorStop(s.Stop, UiColor.Hex(s.Color)))]);
                     }
-                    Arrange.Gap(row, 8f);
+                    runtime.Gap(8f);
                     runtime.Text(name);
                 }
             }

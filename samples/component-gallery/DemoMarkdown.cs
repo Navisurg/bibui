@@ -49,11 +49,8 @@ internal static class DemoMarkdown
         runtime.Gap(16f);
 
         // Side by side where they fit, the viewer under the source where they do not.
-        Box row = runtime.Box();
         bool sideBySide = ShellLayout.PageWidth(runtime) >= FieldWidth + 24f + ViewerWidth;
-        row.ChildLayoutAxis = sideBySide ? LayoutAxis.X : LayoutAxis.Y;
-        row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(row))
+        using (runtime.PushParent(sideBySide ? runtime.RowFit() : runtime.ColumnFit()))
         {
             Box frame = runtime.Box();
             TextField.InputStyle(runtime, frame, _focused);
@@ -68,10 +65,7 @@ internal static class DemoMarkdown
 
             runtime.Gap(24f);
 
-            Box surface = runtime.Box();
-            surface.ChildLayoutAxis = LayoutAxis.Y;
-            surface.SizeX = SemanticSize.Pixels(ViewerWidth);
-            surface.SizeY = SemanticSize.ChildrenSum();
+            Box surface = runtime.ColumnWidth(ViewerWidth);
             surface.Style.Padding = EdgeInsets.All(16f);
             surface.Style.BorderColor = UiColor.Border;
             surface.Style.BorderWidth = 1f;
