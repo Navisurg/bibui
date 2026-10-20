@@ -157,124 +157,142 @@ static (string Group, string[] Routes)[] NavGroups() => new[]
 
 // Beside the page at its width, or, folded (width 0), the whole window under
 // the menu bar, which carries the title instead.
-static UiNode BuildSidebar(BibuiRuntime runtime, GalleryState state, Gallery gallery, float width)
+static void BuildSidebar(BibuiRuntime runtime, GalleryState state, Gallery gallery, float width)
 {
     var groups = NavGroups();
     bool folded = width == 0f;
 
-    UiNode? title = null, rule = null;
-    if (!folded)
+    var sidebar = runtime.BoxFromId("sidebar");
+    sidebar.ChildLayoutAxis = LayoutAxis.Y;
+    if (folded) sidebar.FillX();
+    else sidebar.Px(width: width);
+    sidebar.Styled(new Style
     {
-        // Logo / title
-        title = Arrange.Column(Bold(runtime, "Gallery", ComponentSize.Lg, TextColor.Primary))
-            .Padded(new EdgeInsets(16, 20, 12, 20));
-        rule = Separator.Build(runtime);
-    }
+        BackgroundColor = UiColor.Background,
+        BorderColor = UiColor.Border,
+        BorderWidth = 1f,
+    }).FillY();
 
-    // The list and its bar side by side. Entries are acquired under the list,
-    // so they lay out along its axis and are clipped to it; the list asks
-    // after them.
-    var nav = runtime.BoxFromId("sidebar-nav");
-    var list = runtime.BoxFromId("sidebar-scroll",
-        InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, nav);
-    list.ChildLayoutAxis = LayoutAxis.Y;
-
-    bool Entry(string id, string label, float height, bool raised)
+    using (runtime.PushParent(sidebar))
     {
-        var entry = runtime.Button(id, label, ghost: true);
-        (entry.Node.SizeX, entry.Node.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.Pixels(height));
-        var style = entry.Node.Style;
-        if (raised) style.Draw = DrawFlags.Background;
-        style.CornerRadius = 6f;
-        float padY = (height - runtime.Fonts.LineHeight(runtime.FontInScope())) / 2f;
-        style.Padding = new EdgeInsets(padY, 8, padY, 8);
-        return entry.Clicked;
-    }
-
-    using (runtime.PushParent(list))
-    {
-        foreach (var (groupLabel, components) in groups)
+        if (!folded)
         {
-            bool groupOpen = state.OpenSidebarGroup == groupLabel;
-            if (Entry($"nav-group-{GalleryHelpers.Slug(groupLabel)}",
-                    groupOpen ? $"{groupLabel} -" : $"{groupLabel} +",
-                    36f, groupOpen))
-                gallery.State = state with { OpenSidebarGroup = groupOpen ? null : groupLabel };
+            // Logo / title
+            using (runtime.PushParent(runtime.ColumnFillX().Padded(new EdgeInsets(16, 20, 12, 20))))
+                Bold(runtime, "Gallery", ComponentSize.Lg, TextColor.Primary);
+            Separator.Build(runtime).FillX();
+        }
 
-            if (!groupOpen) continue;
-            foreach (var comp in components)
+        // The list and its bar side by side. Entries are acquired under the list,
+        // so they lay out along its axis and are clipped to it; the list asks
+        // after them.
+        var nav = runtime.BoxFromId("sidebar-nav");
+        var list = runtime.BoxFromId("sidebar-scroll",
+            InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, nav);
+        list.ChildLayoutAxis = LayoutAxis.Y;
+
+        bool Entry(string id, string label, float height, bool raised)
+        {
+            var entry = runtime.Button(id, label, ghost: true);
+            (entry.Node.SizeX, entry.Node.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.Pixels(height));
+            var style = entry.Node.Style;
+            if (raised) style.Draw = DrawFlags.Background;
+            style.CornerRadius = 6f;
+            float padY = (height - runtime.Fonts.LineHeight(runtime.FontInScope())) / 2f;
+            style.Padding = new EdgeInsets(padY, 8, padY, 8);
+            return entry.Clicked;
+        }
+
+        using (runtime.PushParent(list))
+        {
+            foreach (var (groupLabel, components) in groups)
             {
-                if (Entry($"nav-{comp}", comp, 32f, state.Route == comp))
-                    gallery.State = state with { Route = comp, OpenSidebarGroup = groupLabel, MenuOpen = false };
+                bool groupOpen = state.OpenSidebarGroup == groupLabel;
+                if (Entry($"nav-group-{GalleryHelpers.Slug(groupLabel)}",
+                        groupOpen ? $"{groupLabel} -" : $"{groupLabel} +",
+                        36f, groupOpen))
+                    gallery.State = state with { OpenSidebarGroup = groupOpen ? null : groupLabel };
+
+                if (!groupOpen) continue;
+                foreach (var comp in components)
+                {
+                    if (Entry($"nav-{comp}", comp, 32f, state.Route == comp))
+                        gallery.State = state with { Route = comp, OpenSidebarGroup = groupLabel, MenuOpen = false };
+                }
             }
         }
+
+        using (runtime.PushParent(nav))
+            runtime.Scrollbar("sidebar-bar", list);
+
+        runtime.InteractionsFor(list);
+        (list.SizeX, list.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
+        list.AllowOverflowY = true;
+        list.Style.Padding = folded ? new EdgeInsets(8, 0, 12, 8) : new EdgeInsets(0, 0, 12, 12);
+        nav.FillX().FillY();
     }
-
-    using (runtime.PushParent(nav))
-        runtime.Scrollbar("sidebar-bar", list);
-
-    runtime.InteractionsFor(list);
-    (list.SizeX, list.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
-    list.AllowOverflowY = true;
-    list.Style.Padding = folded ? new EdgeInsets(8, 0, 12, 8) : new EdgeInsets(0, 0, 12, 12);
-
-    var sidebar = folded
-        ? Arrange.Column("sidebar", nav.FillX().FillY()).FillX()
-        : Arrange.Column("sidebar", title!.FillX(), rule!.FillX(), nav.FillX().FillY()).Px(width: width);
-    return sidebar
-        .Styled(new Style
-        {
-            BackgroundColor = UiColor.Background,
-            BorderColor = UiColor.Border,
-            BorderWidth = 1f,
-        }).FillY();
 }
 
 // The bar across the top of a window too narrow for the sidebar: the title, and
 // the button that shows the sidebar in place of the page, or the page again.
-static UiNode BuildMenuBar(BibuiRuntime runtime, GalleryState state, Gallery gallery)
+static void BuildMenuBar(BibuiRuntime runtime, GalleryState state, Gallery gallery)
 {
-    var toggle = runtime.Button("nav-menu",
-        state.MenuOpen ? "Close" : "Components", ghost: true, size: ComponentSize.Sm);
-    if (toggle.Clicked) gallery.State = state with { MenuOpen = !state.MenuOpen };
+    var bar = runtime.BoxFromId("menu-bar");
+    bar.ChildLayoutAxis = LayoutAxis.X;
+    bar.Styled(new Style
+    {
+        Padding = new EdgeInsets(10, 12, 10, 16),
+        BackgroundColor = UiColor.Background,
+        BorderColor = UiColor.Border,
+        BorderWidth = 1f,
+    }).FillX().Px(height: ShellLayout.BarHeight);
 
-    return Arrange.Row("menu-bar",
-            Arrange.CentredY(Bold(runtime, "Gallery", ComponentSize.Lg, TextColor.Primary)),
-            Arrange.Spring(),
-            Arrange.CentredY(toggle.Node))
-        .Styled(new Style
+    using (runtime.PushParent(bar))
+    {
+        using (runtime.PushParent(runtime.ColumnFillY()))
+        using (runtime.Centred())
+            Bold(runtime, "Gallery", ComponentSize.Lg, TextColor.Primary);
+        runtime.Spring();
+        using (runtime.PushParent(runtime.ColumnFillY()))
+        using (runtime.Centred())
         {
-            Padding = new EdgeInsets(10, 12, 10, 16),
-            BackgroundColor = UiColor.Background,
-            BorderColor = UiColor.Border,
-            BorderWidth = 1f,
-        }).FillX().Px(height: ShellLayout.BarHeight);
+            var toggle = runtime.Button("nav-menu",
+                state.MenuOpen ? "Close" : "Components", ghost: true, size: ComponentSize.Sm);
+            if (toggle.Clicked) gallery.State = state with { MenuOpen = !state.MenuOpen };
+        }
+    }
 }
 
 // ── Content panel ─────────────────────────────────────────────────────────────
 // The page scrolls in a view with its bar beside it, so a page taller than the
 // window is all there; its text wraps at the width the window leaves it.
 
-static UiNode BuildContentPanel(BibuiRuntime runtime, GalleryState state, Gallery gallery, ShellLayout shell)
+static void BuildContentPanel(BibuiRuntime runtime, GalleryState state, Gallery gallery, ShellLayout shell)
 {
     var panel = runtime.BoxFromId("content");
     var view = runtime.BoxFromId("content-scroll",
         InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, panel);
 
-    var demoNode = BuildDemo(runtime, state, gallery);
     float width = ShellLayout.PageWidth(runtime);
 
-    var page = Arrange.Column(
+    using (runtime.PushParent(view))
+    using (runtime.PushParent(runtime.ColumnFillX()))
+    {
         // Page title
-        Arrange.Row("page-title", Bold(runtime, state.Route, ComponentSize.Xxl, TextColor.Primary)).FillX(),
-        Arrange.Space(24f),
-        Wrapped(runtime, GalleryHelpers.ComponentDescription(state.Route), width, ComponentSize.Sm, TextColor.Secondary),
-        Arrange.Space(24f),
-        Separator.Build(runtime),
-        Arrange.Space(24f),
-        // Demo content
-        demoNode.FillX()).FillX();
-    UiNode.PushIntoParent(view, page);
+        var title = runtime.BoxFromId("page-title");
+        title.ChildLayoutAxis = LayoutAxis.X;
+        (title.SizeX, title.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ChildrenSum());
+        using (runtime.PushParent(title))
+            Bold(runtime, state.Route, ComponentSize.Xxl, TextColor.Primary);
+        runtime.Gap(24f);
+        Wrapped(runtime, GalleryHelpers.ComponentDescription(state.Route), width, ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(24f);
+        Separator.Build(runtime);
+        runtime.Gap(24f);
+        // Demo content: each page builds into a column the panel's width
+        using (runtime.PushParent(runtime.ColumnFillX()))
+            BuildDemo(runtime, state, gallery);
+    }
 
     using (runtime.PushParent(panel))
         runtime.Scrollbar("content-bar", view);
@@ -286,46 +304,50 @@ static UiNode BuildContentPanel(BibuiRuntime runtime, GalleryState state, Galler
     var p = shell.Padding;
     view.Style.Padding = new EdgeInsets(p.Top, p.Right, p.Bottom, p.Left);
     panel.Style.BackgroundColor = UiColor.Background;
-    return panel.FillX().FillY();
+    panel.FillX().FillY();
 }
 
 // Text in lines no wider than width, broken between words.
-static UiNode Wrapped(BibuiRuntime runtime, string text, float width, ComponentSize size, TextColor color)
+static void Wrapped(BibuiRuntime runtime, string text, float width, ComponentSize size, TextColor color)
 {
-    var lines = Arrange.Column().FillX();
-    var line = runtime.Fonts.Wrap(text, runtime.FontInScope(size), width);
-    if (line is null)   // nothing to say still takes its line
-        UiNode.PushIntoParent(lines, runtime.Text(text, size, color));
-    for (; line is not null; line = line.Next)
-        UiNode.PushIntoParent(lines, runtime.Text(text.AsSpan(line.Start, line.End - line.Start), size, color));
-    return lines;
+    using (runtime.PushParent(runtime.ColumnFillX()))
+    {
+        var line = runtime.Fonts.Wrap(text, runtime.FontInScope(size), width);
+        if (line is null)   // nothing to say still takes its line
+            runtime.Text(text, size, color);
+        for (; line is not null; line = line.Next)
+            runtime.Text(text.AsSpan(line.Start, line.End - line.Start), size, color);
+    }
 }
 
 // ── Per-component demos (delegated to per-category classes) ──────────────────
 
-static UiNode BuildDemo(BibuiRuntime runtime, GalleryState state, Gallery gallery) => state.Route switch
+static void BuildDemo(BibuiRuntime runtime, GalleryState state, Gallery gallery)
 {
-    "Button" or "Input" or "Textarea" or "TextField" or "Checkbox" or "Switch" or "RadioGroup"
-        or "Select" or "Slider" or "Toggle" or "ToggleGroup" or "DatePicker" or "Calendar"
-        or "TimePicker" or "ColorPicker"
-            => DemoInputs.Build(runtime, state.Route, state.Inputs, s => gallery.State = state with { Inputs = s }),
-    "Text" or "Badge" or "Avatar" or "Card" or "Alert" or "Separator" or "Label"
-        or "Progress" or "Skeleton" or "Spinner" or "RatioBox"
-        or "KeyboardShortcut" or "Table" or "Markdown" or "Texture" or "PagedTable" or "FormField" or "ListItem" or "EmptyState"
-        or "Toast"
-            => DemoDisplay.Build(runtime, state.Route, state.Display, s => gallery.State = state with { Display = s }),
-    "Dialog" or "AlertDialog" or "Popover" or "HoverPreview" or "Tooltip"
-        or "Drawer" or "DropdownMenu" or "ContextMenu" or "CommandPalette"
-            => DemoOverlays.Build(runtime, state.Route, state.Overlays, s => gallery.State = state with { Overlays = s }),
-    "Tabs" or "Accordion" or "Expander" or "NavBar" or "Sidebar"
-        or "Breadcrumb" or "Pagination" or "MenuBar"
-            => DemoNavigation.Build(runtime, state.Route, state.Navigation, s => gallery.State = state with { Navigation = s }),
-    "Scrollbar" => DemoScrollbar.Build(runtime),
-    "ScrollList" => DemoScrollList.Build(runtime),
-    "SplitPane" or "Carousel" or "ButtonStrip" or "Stack" or "InteractiveBox" or "Section"
-            => DemoLayout.Build(runtime, state.Route, state.Layout, s => gallery.State = state with { Layout = s }),
-    _ => runtime.Text("Select a component from the sidebar.", textColor: TextColor.Secondary),
-};
+    switch (state.Route)
+    {
+        case "Button" or "Input" or "Textarea" or "TextField" or "Checkbox" or "Switch" or "RadioGroup"
+            or "Select" or "Slider" or "Toggle" or "ToggleGroup" or "DatePicker" or "Calendar"
+            or "TimePicker" or "ColorPicker":
+            DemoInputs.Build(runtime, state.Route, state.Inputs, s => gallery.State = state with { Inputs = s }); break;
+        case "Text" or "Badge" or "Avatar" or "Card" or "Alert" or "Separator" or "Label"
+            or "Progress" or "Skeleton" or "Spinner" or "RatioBox"
+            or "KeyboardShortcut" or "Table" or "Markdown" or "Texture" or "PagedTable" or "FormField" or "ListItem" or "EmptyState"
+            or "Toast":
+            DemoDisplay.Build(runtime, state.Route, state.Display, s => gallery.State = state with { Display = s }); break;
+        case "Dialog" or "AlertDialog" or "Popover" or "HoverPreview" or "Tooltip"
+            or "Drawer" or "DropdownMenu" or "ContextMenu" or "CommandPalette":
+            DemoOverlays.Build(runtime, state.Route, state.Overlays, s => gallery.State = state with { Overlays = s }); break;
+        case "Tabs" or "Accordion" or "Expander" or "NavBar" or "Sidebar"
+            or "Breadcrumb" or "Pagination" or "MenuBar":
+            DemoNavigation.Build(runtime, state.Route, state.Navigation, s => gallery.State = state with { Navigation = s }); break;
+        case "Scrollbar": DemoScrollbar.Build(runtime); break;
+        case "ScrollList": DemoScrollList.Build(runtime); break;
+        case "SplitPane" or "Carousel" or "ButtonStrip" or "Stack" or "InteractiveBox" or "Section":
+            DemoLayout.Build(runtime, state.Route, state.Layout, s => gallery.State = state with { Layout = s }); break;
+        default: runtime.Text("Select a component from the sidebar.", textColor: TextColor.Secondary); break;
+    }
+}
 
 // ── The whole window ──────────────────────────────────────────────────────────
 
@@ -339,24 +361,25 @@ static void BuildGallery(BibuiRuntime runtime, Gallery gallery)
 {
     var state = gallery.State;
     var shell = ShellLayout.For(runtime.SurfaceWidth);
-    var style = new Style { BackgroundColor = UiColor.Background };
-    UiNode page;
-    if (!shell.Folded)
+    // Under the frame's root: the sidebar beside the page, or the bar over one
+    // of them.
+    var page = runtime.BoxFromId("gallery");
+    page.ChildLayoutAxis = shell.Folded ? LayoutAxis.Y : LayoutAxis.X;
+    page.FillX().FillY().Styled(new Style { BackgroundColor = UiColor.Background });
+    using (runtime.PushParent(page))
     {
-        var sidebar = BuildSidebar(runtime, state, gallery, shell.SidebarWidth);
-        var content = BuildContentPanel(runtime, state, gallery, shell);
-        page = Arrange.Row("gallery", sidebar.FillY(), content.FillY()).FillX().FillY().Styled(style);
+        if (!shell.Folded)
+        {
+            BuildSidebar(runtime, state, gallery, shell.SidebarWidth);
+            BuildContentPanel(runtime, state, gallery, shell);
+        }
+        else
+        {
+            BuildMenuBar(runtime, state, gallery);
+            if (state.MenuOpen) BuildSidebar(runtime, state, gallery, 0f);
+            else BuildContentPanel(runtime, state, gallery, shell);
+        }
     }
-    else
-    {
-        var bar = BuildMenuBar(runtime, state, gallery);
-        var body = state.MenuOpen
-            ? BuildSidebar(runtime, state, gallery, 0f)
-            : BuildContentPanel(runtime, state, gallery, shell);
-        page = Arrange.Column("gallery", bar, body.FillY()).FillX().FillY().Styled(style);
-    }
-    // Built with Arrange, so linked here: under the frame's root.
-    UiNode.PushIntoParent(runtime.ParentInScope, page);
 }
 
 static GalleryState InitialState() => new(Route: "Button", OpenSidebarGroup: "Inputs & Forms");

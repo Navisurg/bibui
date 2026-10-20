@@ -2,7 +2,6 @@ using Bibui;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 using Bibui.Theming;
-using static Bibui.Arrange;
 using static Showcase.Ui;
 
 namespace Showcase;
@@ -29,13 +28,11 @@ internal sealed partial class App
         // A control asks while it is built, so it is built with the dialog's
         // panel (or something under it) as the parent in scope: that is how
         // the dialog knows the press is its own. Where it is pushed afterwards,
-        // by Row, Column or CentredY, is free, so long as it stays inside.
+        // by PushIntoParent or CentredY, is free, so long as it stays inside.
         var sheet = Dialog.Begin(rt, "settings", shown, DialogSide.Right, width);
 
         // The sheet scrolls when the window is shorter than what is in it.
-        var body = rt.Box();
-        body.ChildLayoutAxis = LayoutAxis.X;
-        body.FillX().FillY();
+        var body = rt.RowFill();
         Box view = rt.BoxFromId("settings-view", InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, body);
         view.ChildLayoutAxis = LayoutAxis.Y;
         view.FillX().FillY();
@@ -43,13 +40,18 @@ internal sealed partial class App
         var inView = rt.PushParent(view);
 
         var close = IconButton(rt, "settings-close", "x", 30f);
-        UiNode.PushIntoParent(view, Row(
-            CentredY(Column(
-                Bold(rt, "Appearance", ComponentSize.Lg, UiColor.TextPrimary),
-                Space(2f),
-                T(rt, "One seed colour, the whole theme, live", ComponentSize.Sm, UiColor.TextSecondary))),
-            Spring(),
-            CentredY(close.Node)).Px(inner, 44f));
+        using (rt.PushParent(rt.RowPx(inner, 44f)))
+        {
+            using (rt.PushParent(rt.ColumnFillY()))
+            using (rt.Centred())
+            {
+                Bold(rt, "Appearance", ComponentSize.Lg, UiColor.TextPrimary);
+                rt.Gap(2f);
+                T(rt, "One seed colour, the whole theme, live", ComponentSize.Sm, UiColor.TextSecondary);
+            }
+            rt.Spring();
+            CentredY(rt, close.Node);
+        }
         rt.Gap(22f);
 
         // Mode
@@ -60,10 +62,7 @@ internal sealed partial class App
 
         // Accent swatches: the seed every colour of the theme is generated from.
         Section(rt, "Accent");
-        var swatches = rt.Box();
-        swatches.ChildLayoutAxis = LayoutAxis.X;
-        swatches.SizeX = SemanticSize.ChildrenSum();
-        swatches.SizeY = SemanticSize.Pixels(34f);
+        var swatches = rt.RowHeight(34f);
         using (rt.PushParent(swatches))
         {
             foreach (var (hex, name) in Accents)
@@ -94,11 +93,7 @@ internal sealed partial class App
 
         // Shape and rhythm
         Section(rt, "Corner radius");
-        var slot = rt.Box();
-        slot.ChildLayoutAxis = LayoutAxis.Y;
-        slot.SizeX = SemanticSize.Pixels(inner);
-        slot.SizeY = SemanticSize.ChildrenSum();
-        using (rt.PushParent(slot))
+        using (rt.PushParent(rt.ColumnWidth(inner)))
         {
             var radius = rt.Slider("settings-radius", Radius, 0f, 16f, step: 1f);
             if (MathF.Abs(radius.Value - Radius) > 0.01f) { Radius = radius.Value; ThemeFileName = null; }
@@ -134,10 +129,12 @@ internal sealed partial class App
 
         Section(rt, "Keyboard");
         foreach (var (keys, what) in Shortcuts)
-            UiNode.PushIntoParent(view, Row(
-                CentredY(T(rt, what, ComponentSize.Sm, UiColor.TextSecondary)),
-                Spring(),
-                CentredY(KeyboardShortcut.Build(rt, keys))).Px(inner, 30f));
+            using (rt.PushParent(rt.RowPx(inner, 30f)))
+            {
+                CentredY(rt, T(rt, what, ComponentSize.Sm, UiColor.TextSecondary));
+                rt.Spring();
+                CentredY(rt, KeyboardShortcut.Build(rt, keys));
+            }
 
         rt.Gap(8f);
         inView.Dispose();
@@ -172,7 +169,6 @@ internal sealed partial class App
     {
         Box b = rt.BoxFromId(id, InteractionKinds.LeftPress);
         Interaction i = rt.InteractionsFor(b);
-        b.ChildLayoutAxis = LayoutAxis.X;
         b.Px(34f, 34f);
         b.Style.CornerRadius = 17f;
         b.Style.BorderWidth = chosen ? 2f : 1.5f * b.HotT;
@@ -180,12 +176,14 @@ internal sealed partial class App
         b.Style.Padding = EdgeInsets.All(3.5f);
         using (rt.PushParent(b))
         {
-            var dot = rt.Box().FillX().FillY();
+            var dot = rt.RowFill();
             dot.Style.CornerRadius = 13.5f;
             dot.Style.BackgroundColor = hex;
             dot.Style.Shadow = BoxShadow.Glow(hex, blur: 4f + 10f * b.HotT, spread: 0f);
-            dot.ChildLayoutAxis = LayoutAxis.X;
-            if (chosen) Centred(dot, CentredY(Icon(rt, "check", 15f, "#0B0D17")));
+            if (chosen)
+                using (rt.PushParent(dot))
+                using (rt.Centred())
+                    CentredY(rt, Icon(rt, "check", 15f, "#0B0D17"));
         }
         if (i.Hovering) Tooltip.Build(rt, name + "  " + hex, b);
         return new BibuiWidget(b, i);
@@ -215,46 +213,66 @@ internal sealed partial class App
 
     // ── Targets ──────────────────────────────────────────────────────────────
 
-    private Box TargetsPage(BibuiRuntime rt, float cw, float ch)
+    private void TargetsPage(BibuiRuntime rt, float cw, float ch)
     {
         float h = MathF.Max(ch, 520f);
         if (cw < 900f)
-            return Column(QueueCard(rt, cw, 480f), Space(Gutter), SkyCard(rt, cw, StackedSkyHeight(cw)), Space(Gutter), LogCard(rt, cw, 460f));
+        {
+            QueueCard(rt, cw, 480f);
+            rt.Gap(Gutter);
+            SkyCard(rt, cw, StackedSkyHeight(cw));
+            rt.Gap(Gutter);
+            LogCard(rt, cw, 460f);
+            return;
+        }
         float qW = MathF.Round((cw - Gutter) * 0.62f), sideW = cw - Gutter - qW;
         float skyH = MathF.Round(h * 0.52f);
-        return Row(
-            QueueCard(rt, qW, h),
-            Space(Gutter),
-            Column(SkyCard(rt, sideW, skyH, glass: false), Space(Gutter), LogCard(rt, sideW, h - skyH - Gutter)));
+        using (rt.PushParent(rt.RowFit()))
+        {
+            QueueCard(rt, qW, h);
+            rt.Gap(Gutter);
+            using (rt.PushParent(rt.ColumnFit()))
+            {
+                SkyCard(rt, sideW, skyH, glass: false);
+                rt.Gap(Gutter);
+                LogCard(rt, sideW, h - skyH - Gutter);
+            }
+        }
     }
 
     // ── Telemetry ────────────────────────────────────────────────────────────
 
-    private Box TelemetryPage(BibuiRuntime rt, float cw, float ch)
+    private void TelemetryPage(BibuiRuntime rt, float cw, float ch)
     {
         bool wide = cw >= 940f;
         float kpiH = 132f;
         float chartsH = MathF.Max(ch - kpiH - Gutter, 560f);
-        var page = Column(KpiRow(rt, cw, kpiH, wide ? 4 : 2), Space(Gutter));
+        KpiRow(rt, cw, kpiH, wide ? 4 : 2);
+        rt.Gap(Gutter);
         if (wide)
         {
             float leftW = MathF.Round((cw - Gutter) * 0.62f), rightW = cw - Gutter - leftW;
             float half = (chartsH - Gutter) / 2f;
-            UiNode.PushIntoParent(page, Row(
-                TelemetryCard(rt, "tel-seeing", leftW, chartsH, Metric.Seeing, false),
-                Space(Gutter),
-                Column(TelemetryCard(rt, "tel-temp", rightW, half, Metric.Temperature, false), Space(Gutter),
-                    TelemetryCard(rt, "tel-data", rightW, half, Metric.Throughput, false))));
+            using (rt.PushParent(rt.RowFit()))
+            {
+                TelemetryCard(rt, "tel-seeing", leftW, chartsH, Metric.Seeing, false);
+                rt.Gap(Gutter);
+                using (rt.PushParent(rt.ColumnFit()))
+                {
+                    TelemetryCard(rt, "tel-temp", rightW, half, Metric.Temperature, false);
+                    rt.Gap(Gutter);
+                    TelemetryCard(rt, "tel-data", rightW, half, Metric.Throughput, false);
+                }
+            }
         }
         else
         {
             foreach (var (id, metric) in new[] { ("tel-seeing", Metric.Seeing), ("tel-temp", Metric.Temperature), ("tel-data", Metric.Throughput) })
             {
-                UiNode.PushIntoParent(page, TelemetryCard(rt, id, cw, 320f, metric, false));
-                Gap(page, Gutter);
+                TelemetryCard(rt, id, cw, 320f, metric, false);
+                rt.Gap(Gutter);
             }
         }
-        return page;
     }
 
     // ── Journal ──────────────────────────────────────────────────────────────
@@ -271,7 +289,7 @@ internal sealed partial class App
     public readonly TextEditState NoteEdit = new();
     public bool NoteFocused;
 
-    private Box JournalPage(BibuiRuntime rt, float cw, float ch)
+    private void JournalPage(BibuiRuntime rt, float cw, float ch)
     {
         float h = MathF.Max(ch, 560f);
         bool wide = cw >= 900f;
@@ -280,22 +298,20 @@ internal sealed partial class App
 
         // The night card: a checklist, a rating, and a collapsible summary.
         float inner = sideW - 36f;
-        var items = Column();
-        for (int k = 0; k < ChecklistItems.Length; k++)
-        {
-            var cb = rt.Checkbox("check-" + k, Checklist[k], label: ChecklistItems[k]);
-            if (cb.Clicked) Checklist[k] = !Checklist[k];
-            if (k > 0) Gap(items, 12f);
-            UiNode.PushIntoParent(items, cb.Node);
-        }
+        var items = rt.ColumnFit();
+        using (rt.PushParent(items))
+            for (int k = 0; k < ChecklistItems.Length; k++)
+            {
+                if (k > 0) rt.Gap(12f);
+                var cb = rt.Checkbox("check-" + k, Checklist[k], label: ChecklistItems[k]);
+                if (cb.Clicked) Checklist[k] = !Checklist[k];
+            }
         var rating = rt.RadioGroup("rating", Ratings, Rating);
         if (rating.Picked is { } r) Rating = r;
         var summary = rt.Expander("night-summary", "Night summary", NightOpen);
         if (summary.Toggled) NightOpen = !NightOpen;
         if (summary.Body is { } body)
-        {
             using (rt.PushParent(body))
-            {
                 foreach (var line in new[]
                 {
                     $"{Data.Targets.Count(t => t.DoneMin > 0)} targets exposed, {Data.Targets.Sum(t => t.DoneMin) / 60.0:0.0} h of data",
@@ -306,13 +322,9 @@ internal sealed partial class App
                     rt.Text("·  " + line, ComponentSize.Sm, UiColor.TextSecondary);
                     rt.Gap(6f);
                 }
-            }
-        }
         // A hand-over note: a multi-line field, four rows tall, that a press gives the keyboard.
-        Box noteBox = rt.Box();
+        var noteBox = rt.ColumnWidth(inner);
         TextField.InputStyle(rt, noteBox, NoteFocused);
-        noteBox.SizeX = SemanticSize.Pixels(inner);
-        noteBox.SizeY = SemanticSize.ChildrenSum();
         BibuiWidget note;
         using (rt.PushParent(noteBox))
         using (rt.PushFontSize(ComponentSize.Sm))
@@ -320,26 +332,32 @@ internal sealed partial class App
             note = rt.MultilineTextField("note", Note, NoteEdit, NoteFocused, placeholder: "Hand-over note for the morning crew");
         if (note.Pressed) { NoteFocused = true; SearchFocused = false; }
 
-        int ticked = Checklist.Count(c => c);
-        var night = Column(
-            CardHeader(rt, "check-square", "Tonight", $"{ticked} of {Checklist.Length} done"),
-            Space(14f),
-            items,
-            Space(22f),
-            Eyebrow(rt, "Conditions"),
-            Space(10f),
-            rating.Node,
-            Space(20f),
-            Eyebrow(rt, "Hand-over"),
-            Space(10f),
-            noteBox,
-            Space(18f),
-            Separator.Build(rt),
-            Space(6f),
-            summary.Node);
-        night.Px(sideW, wide ? h : 520f).Style = CardStyle(rt);
+        var night = rt.ColumnPx(sideW, wide ? h : 520f).Styled(CardStyle(rt));
+        using (rt.PushParent(night))
+        {
+            CardHeader(rt, "check-square", "Tonight", $"{Checklist.Count(c => c)} of {Checklist.Length} done");
+            rt.Gap(14f);
+            Place(rt, items);
+            rt.Gap(22f);
+            Eyebrow(rt, "Conditions");
+            rt.Gap(10f);
+            Place(rt, rating.Node);
+            rt.Gap(20f);
+            Eyebrow(rt, "Hand-over");
+            rt.Gap(10f);
+            Place(rt, noteBox);
+            rt.Gap(18f);
+            Separator.Build(rt);
+            rt.Gap(6f);
+            Place(rt, summary.Node);
+        }
 
-        var log = LogCard(rt, logW, wide ? h : 640f, ComponentSize.Md, night: true);
-        return wide ? Row(log, Space(Gutter), night) : Column(log, Space(Gutter), night);
+        // Wide, the two cards side by side; narrow, stacked in the page's column.
+        using (wide ? rt.PushParent(rt.RowFit()) : default)
+        {
+            LogCard(rt, logW, wide ? h : 640f, ComponentSize.Md, night: true);
+            rt.Gap(Gutter);
+            Place(rt, night);
+        }
     }
 }

@@ -68,7 +68,7 @@ static class AppIconTests
         runtime.SetBuild(
             () =>
             {
-                var row = Arrange.Row().Px(40f, 40f);
+                var row = runtime.RowPx(40f, 40f);
                 using (runtime.PushParent(row))
                 {
                     runtime.Gap(8f);

@@ -8,16 +8,18 @@ namespace ComponentGallery;
 // lane beside the view rather than covering it.
 internal static class DemoScrollbar
 {
-    internal static UiNode Build(BibuiRuntime runtime) => Arrange.Column(
-        Caption(runtime, "Vertical: 40 rows in a 200px view. Wheel, drag the thumb, or press the track to page."),
-        Arrange.Space(16f),
-        Vertical(runtime),
-        Arrange.Space(16f),
-        Caption(runtime, "Horizontal: 24 cards in a 360px strip. Shift+wheel, drag the thumb, or press the track to page."),
-        Arrange.Space(16f),
-        Horizontal(runtime));
+    internal static void Build(BibuiRuntime runtime)
+    {
+        Caption(runtime, "Vertical: 40 rows in a 200px view. Wheel, drag the thumb, or press the track to page.");
+        runtime.Gap(16f);
+        Vertical(runtime);
+        runtime.Gap(16f);
+        Caption(runtime, "Horizontal: 24 cards in a 360px strip. Shift+wheel, drag the thumb, or press the track to page.");
+        runtime.Gap(16f);
+        Horizontal(runtime);
+    }
 
-    private static UiNode Vertical(BibuiRuntime runtime)
+    private static void Vertical(BibuiRuntime runtime)
     {
         var panel = runtime.BoxFromId("sb-v-panel");
         var view = runtime.BoxFromId("sb-v-view",
@@ -39,10 +41,9 @@ internal static class DemoScrollbar
         (view.SizeX, view.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
         view.AllowOverflowY = true;
         Frame(panel, 360f, 200f);
-        return panel;
     }
 
-    private static UiNode Horizontal(BibuiRuntime runtime)
+    private static void Horizontal(BibuiRuntime runtime)
     {
         var panel = runtime.BoxFromId("sb-h-panel");
         panel.ChildLayoutAxis = LayoutAxis.Y;
@@ -66,7 +67,6 @@ internal static class DemoScrollbar
         view.AllowOverflowX = true;
         view.Style.Padding = new EdgeInsets(8, 4, 8, 4);
         Frame(panel, 360f, 74f + Scrollbar.Lane);
-        return panel;
     }
 
     private static void Frame(Box panel, float width, float height)

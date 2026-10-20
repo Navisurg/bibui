@@ -2,7 +2,6 @@ using Bibui;
 using Bibui.Runtime;
 using Bibui.TextEdit;
 using Bibui.Theming;
-using static Bibui.Arrange;
 using static Showcase.Ui;
 
 namespace Showcase;
@@ -121,13 +120,11 @@ internal sealed partial class App
         // Overlays ask first: they are on top.
         BuildSettings(rt);
 
-        var sidebar = Sidebar(rt, open, h);
-        var main = Main(rt, w - SidebarWidth(open), h);
-
-        var page = Row(sidebar, main)
-            .Px(w, h)
-            .Styled(new Style { BackgroundColor = UiColor.Background });
-        UiNode.PushIntoParent(rt.ParentInScope, page);   // built with Arrange: linked under the frame's root
+        using (rt.PushParent(rt.RowPx(w, h).Styled(new Style { BackgroundColor = UiColor.Background })))
+        {
+            Sidebar(rt, open, h);
+            Main(rt, w - SidebarWidth(open), h);
+        }
     }
 
     /// <summary>One whole frame: BeginBuild with the frame's input (none, headless), the app, EndBuild.</summary>

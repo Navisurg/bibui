@@ -445,13 +445,12 @@ runtime.Surface = new SurfaceOptions { Width = 360, Height = 80, ScaleFactor = 1
 const string save = "Save", sync = "Sync";
 
 runtime.BeginBuild();
-UiNode.PushIntoParent(runtime.ParentInScope,
-    Arrange.Row(
-        runtime.Button("save", save),
-        Arrange.Space(12f),
-        runtime.Switch("sync", on: true, label: sync))
-    .Px(360f, 80f)
-    .Padded(EdgeInsets.All(24f)));
+using (runtime.PushParent(runtime.RowPx(360f, 80f).Padded(EdgeInsets.All(24f))))
+{
+    runtime.Button("save", save);
+    runtime.Gap(12f);
+    runtime.Switch("sync", on: true, label: sync);
+}
 runtime.EndBuild();
 
 using var skia = new SkiaCpuRenderer();

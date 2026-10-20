@@ -132,29 +132,30 @@ internal static class DamageOracle
     private static (float X, float Y) Wander(int f, int w, int h) =>
         ((f * 37 + 11) % (w - 4) + 2, (f * 23 + 7) % (h - 4) + 2);
 
-    // A text at the bold weight, where a PushFontFace scope cannot go: inside an expression.
+    // A text at the bold weight.
     private static Text Bold(BibuiRuntime runtime, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null)
     {
         using (runtime.PushFontFace(weight: FontWeight.Bold))
             return runtime.Text(text, fontSize, textColor);
     }
 
-    /// <summary>Lays <paramref name="nodes"/> out <paramref name="perRow"/> to a row, <paramref name="gap"/> px apart.</summary>
-    private static Box Grid(IReadOnlyList<UiNode> nodes, int perRow, float gap)
+    /// <summary>
+    /// Lays <paramref name="nodes"/>, built already, out <paramref name="perRow"/>
+    /// to a row, <paramref name="gap"/> px apart, down the column in scope.
+    /// </summary>
+    private static void Grid(BibuiRuntime rt, IReadOnlyList<UiNode> nodes, int perRow, float gap)
     {
-        var rows = new List<Arrange.Item>();
         for (int i = 0; i < nodes.Count; i += perRow)
         {
-            var cells = new List<Arrange.Item>();
-            for (int j = i; j < Math.Min(nodes.Count, i + perRow); j++)
-            {
-                if (j > i) cells.Add(Arrange.Space(gap));
-                cells.Add(nodes[j]);
-            }
-            if (i > 0) rows.Add(Arrange.Space(gap));
-            rows.Add(Arrange.Row([.. cells]));
+            if (i > 0) rt.Gap(gap);
+            var row = rt.RowFit();
+            using (rt.PushParent(row))
+                for (int j = i; j < Math.Min(nodes.Count, i + perRow); j++)
+                {
+                    if (j > i) rt.Gap(gap);
+                    UiNode.PushIntoParent(row, nodes[j]);
+                }
         }
-        return Arrange.Column([.. rows]);
     }
 
     /// <summary>A <paramref name="n"/>-pixel square checkerboard, straight-alpha RGBA.</summary>
@@ -171,8 +172,13 @@ internal static class DamageOracle
         return px;
     }
 
-    private static Box Page(Box content, float pad = 8f) =>
-        Arrange.Column(content).FillX().FillY().Padded(EdgeInsets.All(pad));
+    /// <summary>A scene's page: a column the size of the surface, padded, holding what <paramref name="build"/> makes.</summary>
+    private static Box Page(BibuiRuntime rt, float pad, Action build)
+    {
+        var page = rt.ColumnFill().Padded(EdgeInsets.All(pad));
+        using (rt.PushParent(page)) build();
+        return page;
+    }
 
     // ── Scenes ───────────────────────────────────────────────────────────────
 
@@ -185,7 +191,7 @@ internal static class DamageOracle
                 var kids = new UiNode[100];
                 for (int i = 0; i < kids.Length; i++)
                     kids[i] = rt.Button($"b{i}", $"Item {i}", ghost: i % 3 == 1, disabled: i % 17 == 16, size: ComponentSize.Sm).Node;
-                return Page(Grid(kids, 10, 4f));
+                return Page(rt, 8f, () => Grid(rt, kids, 10, 4f));
             }
             return (Build, f =>
             {
@@ -202,7 +208,7 @@ internal static class DamageOracle
             {
                 var kids = new UiNode[30];
                 for (int i = 0; i < kids.Length; i++) kids[i] = rt.Button($"b{i}", $"B{i}", ghost: i % 2 == 0, size: ComponentSize.Sm).Node;
-                return Page(Grid(kids, 6, 3f), 6f);
+                return Page(rt, 6f, () => Grid(rt, kids, 6, 3f));
             }
             return (Build, f => { var (x, y) = Wander(f, 450, 300); Move(rt, x, y); });
         });
@@ -220,7 +226,7 @@ internal static class DamageOracle
                     if (b.Clicked) clicks[i]++;
                     kids[i] = b.Node;
                 }
-                return Page(Grid(kids, 8, 6f), 10f);
+                return Page(rt, 10f, () => Grid(rt, kids, 8, 6f));
             }
             return (Build, f =>
             {
@@ -236,15 +242,15 @@ internal static class DamageOracle
             var on = new bool[6];
             UiNode Build()
             {
-                var items = new List<Arrange.Item>();
-                for (int i = 0; i < 6; i++)
+                return Page(rt, 20f, () =>
                 {
-                    var s = rt.Switch($"sw{i}", on[i], label: on[i] ? $"Option {i} on" : $"Option {i}", disabled: i == 5 && !on[0]);
-                    if (s.Clicked) on[i] = !on[i];
-                    if (i > 0) items.Add(Arrange.Space(14f));
-                    items.Add(s.Node);
-                }
-                return Page(Arrange.Column([.. items]), 20f);
+                    for (int i = 0; i < 6; i++)
+                    {
+                        if (i > 0) rt.Gap(14f);
+                        var s = rt.Switch($"sw{i}", on[i], label: on[i] ? $"Option {i} on" : $"Option {i}", disabled: i == 5 && !on[0]);
+                        if (s.Clicked) on[i] = !on[i];
+                    }
+                });
             }
             return (Build, f =>
             {
@@ -276,12 +282,16 @@ internal static class DamageOracle
             }
             UiNode Build()
             {
-                var a = Field("name", name, nameEdit, 0, "Full name");
-                var b = Field("other", other, otherEdit, 1, "Account ID");
-                return Page(Arrange.Column(
-                    Bold(rt, "Account details"), Arrange.Space(16f),
-                    a, Arrange.Space(16f), b, Arrange.Space(16f),
-                    rt.Text($"{name.Length} chars typed", ComponentSize.Sm, TextColor.Secondary)).FillX(), 24f);
+                return Page(rt, 24f, () =>
+                {
+                    Bold(rt, "Account details");
+                    rt.Gap(16f);
+                    Field("name", name, nameEdit, 0, "Full name");
+                    rt.Gap(16f);
+                    Field("other", other, otherEdit, 1, "Account ID");
+                    rt.Gap(16f);
+                    rt.Text($"{name.Length} chars typed", ComponentSize.Sm, TextColor.Secondary);
+                });
             }
             return (Build, f =>
             {
@@ -302,29 +312,29 @@ internal static class DamageOracle
             UiNode Build()
             {
                 int f = frame;
-                var swatches = new List<Arrange.Item>();
-                for (int i = 0; i < 6; i++)
+                return Page(rt, 16f, () =>
                 {
-                    if (i > 0) swatches.Add(Arrange.Space(8f));
-                    var sw = rt.Box().Px(60f, 40f);
-                    sw.Style.CornerRadius = 8f;
-                    sw.Style.BackgroundColor = UiColor.Hex(palette[(f / (i + 1) + i) % palette.Length]);
-                    sw.Style.BorderColor = UiColor.Hex(i == f % 6 ? "#ffffff" : "#00000000");
-                    sw.Style.BorderWidth = 2f;
-                    swatches.Add(sw);
-                }
-                var rows = new List<Arrange.Item>
-                {
-                    f % 2 == 0 ? Bold(rt, $"Tick {f}") : rt.Text($"Tick {f}"), Arrange.Space(10f),
-                    Arrange.Row([.. swatches]), Arrange.Space(10f),
-                };
-                if (f % 14 < 7) { rows.Add(Badge.Build(rt, "Notice")); rows.Add(Arrange.Space(10f)); }
-                // A list that gains an entry every ten frames, sometimes with one pinned in front.
-                var items = new List<Arrange.Item>();
-                if ((f / 10) % 2 == 1) items.Add(rt.Text("Pinned"));
-                for (int i = 0; i < 2 + f / 10; i++) items.Add(rt.Text($"Entry {i}"));
-                rows.Add(Arrange.Column([.. items]));
-                return Page(Arrange.Column([.. rows]), 16f);
+                    if (f % 2 == 0) Bold(rt, $"Tick {f}"); else rt.Text($"Tick {f}");
+                    rt.Gap(10f);
+                    using (rt.PushParent(rt.RowFit()))
+                        for (int i = 0; i < 6; i++)
+                        {
+                            if (i > 0) rt.Gap(8f);
+                            var sw = rt.Box().Px(60f, 40f);
+                            sw.Style.CornerRadius = 8f;
+                            sw.Style.BackgroundColor = UiColor.Hex(palette[(f / (i + 1) + i) % palette.Length]);
+                            sw.Style.BorderColor = UiColor.Hex(i == f % 6 ? "#ffffff" : "#00000000");
+                            sw.Style.BorderWidth = 2f;
+                        }
+                    rt.Gap(10f);
+                    if (f % 14 < 7) { Badge.Build(rt, "Notice"); rt.Gap(10f); }
+                    // A list that gains an entry every ten frames, sometimes with one pinned in front.
+                    using (rt.PushParent(rt.ColumnFit()))
+                    {
+                        if ((f / 10) % 2 == 1) rt.Text("Pinned");
+                        for (int i = 0; i < 2 + f / 10; i++) rt.Text($"Entry {i}");
+                    }
+                });
             }
             return (Build, f => frame = f);
         });
@@ -336,14 +346,22 @@ internal static class DamageOracle
             {
                 float w = rt.Animate("bar", "width", (frame / 25) % 2 == 0 ? 60f : 420f, rt.Rate(8f));
                 float a = rt.Animate("bar", "alpha", (frame / 30) % 2 == 0 ? 1f : 0.3f, rt.Rate(6f));
-                var bar = rt.Box().Px(w, 30f);
-                bar.Style.CornerRadius = 6f;
-                bar.Style.BackgroundColor = UiColor.Hex(new Rgba(59, 130, 246, (byte)Math.Clamp((int)(a * 255f), 0, 255)).ToString());
-                var dot = rt.Box().Px(40f, 40f);
-                dot.Style.CornerRadius = 20f;
-                dot.Style.BackgroundColor = UiColor.Hex("#22c55e");
-                return Page(Arrange.Column(bar, Arrange.Space(12f), Arrange.Row(Arrange.Space(w / 2f), dot), Arrange.Space(12f),
-                    rt.Text("Animated by runtime.Animate")), 20f);
+                return Page(rt, 20f, () =>
+                {
+                    var bar = rt.Box().Px(w, 30f);
+                    bar.Style.CornerRadius = 6f;
+                    bar.Style.BackgroundColor = UiColor.Hex(new Rgba(59, 130, 246, (byte)Math.Clamp((int)(a * 255f), 0, 255)).ToString());
+                    rt.Gap(12f);
+                    using (rt.PushParent(rt.RowFit()))
+                    {
+                        rt.Gap(w / 2f);
+                        var dot = rt.Box().Px(40f, 40f);
+                        dot.Style.CornerRadius = 20f;
+                        dot.Style.BackgroundColor = UiColor.Hex("#22c55e");
+                    }
+                    rt.Gap(12f);
+                    rt.Text("Animated by runtime.Animate");
+                });
             }
             return (Build, f => frame = f);
         });
@@ -376,7 +394,17 @@ internal static class DamageOracle
                 }
                 var grid = new UiNode[16];
                 for (int i = 0; i < grid.Length; i++) grid[i] = rt.Button($"u{i}", $"Under {i}").Node;
-                return Page(Arrange.Column(Arrange.Row(trigger.Node, Arrange.Space(12f), tipped.Node), Arrange.Space(10f), Grid(grid, 4, 6f)), 16f);
+                return Page(rt, 16f, () =>
+                {
+                    using (rt.PushParent(rt.RowFit()))
+                    {
+                        UiNode.PushIntoParent(rt.ParentInScope, trigger.Node);
+                        rt.Gap(12f);
+                        UiNode.PushIntoParent(rt.ParentInScope, tipped.Node);
+                    }
+                    rt.Gap(10f);
+                    Grid(rt, grid, 4, 6f);
+                });
             }
             return (Build, f => { frame = f; var (x, y) = Wander(f, 640, 420); Move(rt, x, y); });
         });
@@ -395,7 +423,7 @@ internal static class DamageOracle
                     var row = rt.Button($"row{i}", $"Row {i}", ghost: i % 2 == 1);
                     UiNode.PushIntoParent(view, row.Node);
                 }
-                return Page(view);
+                return Page(rt, 8f, () => UiNode.PushIntoParent(rt.ParentInScope, view));
             }
             return (Build, f =>
             {
@@ -411,7 +439,7 @@ internal static class DamageOracle
             {
                 var kids = new UiNode[36];
                 for (int i = 0; i < kids.Length; i++) kids[i] = rt.Button($"z{i}", $"Z{i}").Node;
-                return Page(Grid(kids, 6, 4f));
+                return Page(rt, 8f, () => Grid(rt, kids, 6, 4f));
             }
             return (Build, f =>
             {
@@ -426,9 +454,13 @@ internal static class DamageOracle
         {
             UiNode Card(int i)
             {
-                var a = rt.Button($"c{i}a", "Open");
-                var b = rt.Button($"c{i}b", "Share", ghost: true);
-                var card = Arrange.Column(a.Node, Arrange.Space(6f), b.Node).Px(190f, 150f);
+                var card = rt.ColumnPx(190f, 150f);
+                using (rt.PushParent(card))
+                {
+                    rt.Button($"c{i}a", "Open");
+                    rt.Gap(6f);
+                    rt.Button($"c{i}b", "Share", ghost: true);
+                }
                 card.Style = new Style
                 {
                     CornerRadius = 14f, Padding = EdgeInsets.All(12f),
@@ -443,13 +475,14 @@ internal static class DamageOracle
             {
                 var cards = new UiNode[6];
                 for (int i = 0; i < 6; i++) cards[i] = Card(i);
-                var glass = rt.Box().Px(220f, 90f).At(230f, 150f);
-                glass.Style.CornerRadius = 10f;
-                glass.Style.BackdropBlur = 8f;
-                glass.Style.BackgroundColor = UiColor.Hex("#ffffff22");
-                var page = Page(Grid(cards, 3, 24f), 24f);
-                UiNode.PushIntoParent(page, glass);
-                return page;
+                return Page(rt, 24f, () =>
+                {
+                    Grid(rt, cards, 3, 24f);
+                    var glass = rt.Box().Px(220f, 90f).At(230f, 150f);
+                    glass.Style.CornerRadius = 10f;
+                    glass.Style.BackdropBlur = 8f;
+                    glass.Style.BackgroundColor = UiColor.Hex("#ffffff22");
+                });
             }
             return (Build, f =>
             {
@@ -479,10 +512,19 @@ internal static class DamageOracle
                         ctx.DrawEdge(r.Left, r.Bottom, r.Right, r.Bottom, 1f, DrawContext.Color("#3f3f46"), dashed: true);
                     },
                 }.Px(300f, 120f);
-                return Page(Arrange.Column(
-                    Arrange.Row(rt.Spinner(), Arrange.Space(16f), Progress.Build(rt, frame % 100).Px(width: 200f),
-                        Arrange.Space(16f), rt.Icon(frame % 20 < 10 ? "check" : "x", 20f)),
-                    Arrange.Space(12f), chart), 16f);
+                return Page(rt, 16f, () =>
+                {
+                    using (rt.PushParent(rt.RowFit()))
+                    {
+                        rt.Spinner();
+                        rt.Gap(16f);
+                        Progress.Build(rt, frame % 100).Px(width: 200f);
+                        rt.Gap(16f);
+                        rt.Icon(frame % 20 < 10 ? "check" : "x", 20f);
+                    }
+                    rt.Gap(12f);
+                    UiNode.PushIntoParent(rt.ParentInScope, chart);
+                });
             }
             return (Build, f => frame = f);
         });
@@ -493,15 +535,17 @@ internal static class DamageOracle
             UiNode Build()
             {
                 float o = rt.Animate("fade", "o", (frame / 20) % 2 == 0 ? 1f : 0.25f, rt.Rate(8f));
-                var kids = new List<Arrange.Item>();
-                for (int i = 0; i < 4; i++)
+                return Page(rt, 12f, () =>
                 {
-                    if (i > 0) kids.Add(Arrange.Space(6f));
-                    kids.Add(rt.Button($"o{i}", $"Faded {i}").Node);
-                }
-                var panel = Arrange.Row([.. kids]);
-                panel.Style = new Style { Opacity = o, Padding = EdgeInsets.All(8f), BackgroundColor = UiColor.Hex("#27272a"), CornerRadius = 8f };
-                return Page(Arrange.Column(panel), 12f);
+                    var panel = rt.RowFit();
+                    panel.Style = new Style { Opacity = o, Padding = EdgeInsets.All(8f), BackgroundColor = UiColor.Hex("#27272a"), CornerRadius = 8f };
+                    using (rt.PushParent(panel))
+                        for (int i = 0; i < 4; i++)
+                        {
+                            if (i > 0) rt.Gap(6f);
+                            rt.Button($"o{i}", $"Faded {i}");
+                        }
+                });
             }
             return (Build, f => { frame = f; var (x, y) = Wander(f, 600, 300); Move(rt, x, y); });
         });
@@ -532,7 +576,12 @@ internal static class DamageOracle
                         }
                     },
                 }.FillX().Px(height: 120f);
-                return Page(Arrange.Column(canvas, Arrange.Space(8f), rt.Button("cd", "Hover me").Node).FillX(), 12f);
+                return Page(rt, 12f, () =>
+                {
+                    UiNode.PushIntoParent(rt.ParentInScope, canvas);
+                    rt.Gap(8f);
+                    rt.Button("cd", "Hover me");
+                });
             }
             return (Build, f => { frame = f; Move(rt, 60 + (f * 5) % 120, 150); });
         });
@@ -592,7 +641,12 @@ internal static class DamageOracle
                         ctx.PopPaint();
                     },
                 }.Px(520f, 240f);
-                return Page(Arrange.Column(canvas, Arrange.Space(8f), rt.Button("cc", "Hover me").Node), 0f);
+                return Page(rt, 0f, () =>
+                {
+                    UiNode.PushIntoParent(rt.ParentInScope, canvas);
+                    rt.Gap(8f);
+                    rt.Button("cc", "Hover me");
+                });
             }
             return (Build, f => { frame = f; Move(rt, 40 + (f * 7) % 200, 270); });
         });
@@ -641,7 +695,12 @@ internal static class DamageOracle
                         ctx.PopColorMatrix();
                     },
                 }.Px(560f, 200f);
-                return Page(Arrange.Column(canvas, Arrange.Space(8f), rt.Button("gb", "Hover me").Node), 0f);
+                return Page(rt, 0f, () =>
+                {
+                    UiNode.PushIntoParent(rt.ParentInScope, canvas);
+                    rt.Gap(8f);
+                    rt.Button("gb", "Hover me");
+                });
             }
             return (Build, f => { frame = f; Move(rt, 40 + (f * 7) % 200, 225); });
         });

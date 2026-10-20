@@ -1,7 +1,6 @@
 using Bibui;
 using Bibui.Runtime;
 using Bibui.TextEdit;
-using static Bibui.Arrange;
 
 namespace BibuiApp;
 
@@ -37,10 +36,8 @@ public static class Demo
         if (subscribe.Clicked) state.Subscribed = !state.Subscribed;
 
         // A press focuses the name field; Escape or Enter ends editing.
-        Box nameField = runtime.Box();
+        Box nameField = runtime.Box().FillX().Px(height: 44f);
         TextField.InputStyle(runtime, nameField, state.NameFocused);
-        nameField.SizeX = SemanticSize.ParentPct(1f);
-        nameField.SizeY = SemanticSize.Pixels(44f);
         BibuiWidget nameLine;
         using (runtime.PushParent(nameField)) nameLine = runtime.TextField("name-input", nameText, nameEdit, state.NameFocused,
             placeholder: Labels.NamePlaceholder);
@@ -63,94 +60,109 @@ public static class Demo
         // Typed text is not worth keeping once it changes, so the greeting is encoded each frame.
         string greeting = string.IsNullOrEmpty(name) ? "…" : $"Hello, {name}!";
 
-        var page = Column(
-            // ── Header ────────────────────────────────────────────────────
-            Bold(runtime, "bibui interactive demo", ComponentSize.Xxl, TextColor.Primary),
-            Space(20f),
-
-            // ── Counter ───────────────────────────────────────────────────
-            Column(
-                Bold(runtime, "Counter", ComponentSize.Lg),
-                Space(12f),
-                Row(
-                    CentredY(decrement.Node),
-                    Space(8f),
-                    CentredY(Bold(runtime, state.Counter.ToString(), ComponentSize.Xl, TextColor.Accent, id: "counter-label")),
-                    Space(8f),
-                    CentredY(increment.Node)
-                ).FillX().Px(height: 40f)   // centring needs a row with a height of its own
-            ).FillX().Styled(Card()),
-            Space(20f),
-
-            // ── Proportional layout (shares of a row) ─────────────────────
-            Column(
-                Bold(runtime, "Proportional Layout (shares of a row)", ComponentSize.Lg),
-                Space(12f),
-
-                // Two panels whose widths follow the slider-driven shares.
-                Row(
-                    Column(Bold(runtime, $"weight {state.LeftWeight:0}", textColor: TextColor.AccentForeground))
-                        .Styled(new Style
-                        {
-                            BackgroundColor = UiColor.Accent,
-                            CornerRadius = 12f,
-                            Padding = EdgeInsets.All(12f),
-                        }).FillX(state.LeftWeight / 100f).FillY(),
-                    Space(12f),
-                    Column(Bold(runtime, $"weight {100f - state.LeftWeight:0}", textColor: TextColor.Secondary))
-                        .Styled(new Style
-                        {
-                            BackgroundColor = UiColor.Surface,
-                            BorderColor = UiColor.Border,
-                            BorderWidth = 1f,
-                            CornerRadius = 12f,
-                            Padding = EdgeInsets.All(12f),
-                        }).FillX((100f - state.LeftWeight) / 100f).FillY()
-                ).FillX().Px(height: 96f),
-                Space(12f),
-
-                Row(
-                    runtime.Text("Left share", ComponentSize.Sm, TextColor.Secondary),
-                    Spring(),
-                    runtime.Text($"{state.LeftWeight:0}", ComponentSize.Sm, TextColor.Primary)
-                ).FillX(),
-                Space(8f),
-                weight.Node.FillX(),
-                Space(12f),
-                runtime.Text($"Split {state.LeftWeight:0} : {100f - state.LeftWeight:0}  — drag to resize", ComponentSize.Sm, TextColor.Secondary)
-            ).FillX().Styled(Card()),
-            Space(20f),
-
-            // ── Input + checkbox row ──────────────────────────────────────
-            Row(
-                Column(
-                    Bold(runtime, "Input", ComponentSize.Lg),
-                    Space(10f),
-                    nameField,
-                    Space(10f),
-                    runtime.TextFromId("greeting", greeting, ComponentSize.Sm, string.IsNullOrEmpty(name) ? TextColor.Secondary : TextColor.Accent)
-                ).FillX().Styled(Card()),
-                Space(16f),
-                Column(
-                    Bold(runtime, "Checkbox", ComponentSize.Lg),
-                    Space(12f),
-                    subscribe.Node,
-                    Space(12f),
-                    Badge.Build(runtime, state.Subscribed ? Labels.Subscribed : Labels.Unsubscribed,
-                        state.Subscribed ? BadgeVariant.Primary : BadgeVariant.Default)
-                ).Px(width: 220f).Styled(Card())
-            ).FillX()
-        ).FillX().FillY().Styled(new Style
+        // The widgets above are built first, so what they change this frame is
+        // what the page shows; they are linked into their places here.
+        var page = runtime.ColumnFill().Styled(new Style
         {
             Padding = EdgeInsets.All(28f),
             BackgroundColor = UiColor.Background,
         });
-        // Built with Arrange, so linked here: under the frame's root.
-        UiNode.PushIntoParent(runtime.ParentInScope, page);
+        using (runtime.PushParent(page))
+        {
+            // ── Header ────────────────────────────────────────────────────
+            Bold(runtime, "bibui interactive demo", ComponentSize.Xxl, TextColor.Primary);
+            runtime.Gap(20f);
+
+            // ── Counter ───────────────────────────────────────────────────
+            using (runtime.PushParent(runtime.ColumnFillX().Styled(Card())))
+            {
+                Bold(runtime, "Counter", ComponentSize.Lg);
+                runtime.Gap(12f);
+                using (runtime.PushParent(runtime.RowFillX(40f)))   // centring needs a row with a height of its own
+                {
+                    using (runtime.PushParent(runtime.ColumnFillY()))
+                    using (runtime.Centred())
+                        UiNode.PushIntoParent(runtime.ParentInScope, decrement.Node);
+                    runtime.Gap(8f);
+                    using (runtime.PushParent(runtime.ColumnFillY()))
+                    using (runtime.Centred())
+                        Bold(runtime, state.Counter.ToString(), ComponentSize.Xl, TextColor.Accent, id: "counter-label");
+                    runtime.Gap(8f);
+                    using (runtime.PushParent(runtime.ColumnFillY()))
+                    using (runtime.Centred())
+                        UiNode.PushIntoParent(runtime.ParentInScope, increment.Node);
+                }
+            }
+            runtime.Gap(20f);
+
+            // ── Proportional layout (shares of a row) ─────────────────────
+            using (runtime.PushParent(runtime.ColumnFillX().Styled(Card())))
+            {
+                Bold(runtime, "Proportional Layout (shares of a row)", ComponentSize.Lg);
+                runtime.Gap(12f);
+
+                // Two panels whose widths follow the slider-driven shares.
+                using (runtime.PushParent(runtime.RowFillX(96f)))
+                {
+                    using (runtime.PushParent(runtime.ColumnFill().Styled(new Style
+                    {
+                        BackgroundColor = UiColor.Accent,
+                        CornerRadius = 12f,
+                        Padding = EdgeInsets.All(12f),
+                    }).FillX(state.LeftWeight / 100f)))
+                        Bold(runtime, $"weight {state.LeftWeight:0}", textColor: TextColor.AccentForeground);
+                    runtime.Gap(12f);
+                    using (runtime.PushParent(runtime.ColumnFill().Styled(new Style
+                    {
+                        BackgroundColor = UiColor.Surface,
+                        BorderColor = UiColor.Border,
+                        BorderWidth = 1f,
+                        CornerRadius = 12f,
+                        Padding = EdgeInsets.All(12f),
+                    }).FillX((100f - state.LeftWeight) / 100f)))
+                        Bold(runtime, $"weight {100f - state.LeftWeight:0}", textColor: TextColor.Secondary);
+                }
+                runtime.Gap(12f);
+
+                using (runtime.PushParent(runtime.RowFillX()))
+                {
+                    runtime.Text("Left share", ComponentSize.Sm, TextColor.Secondary);
+                    runtime.Spring();
+                    runtime.Text($"{state.LeftWeight:0}", ComponentSize.Sm, TextColor.Primary);
+                }
+                runtime.Gap(8f);
+                UiNode.PushIntoParent(runtime.ParentInScope, weight.Node.FillX());
+                runtime.Gap(12f);
+                runtime.Text($"Split {state.LeftWeight:0} : {100f - state.LeftWeight:0}  — drag to resize", ComponentSize.Sm, TextColor.Secondary);
+            }
+            runtime.Gap(20f);
+
+            // ── Input + checkbox row ──────────────────────────────────────
+            using (runtime.PushParent(runtime.RowFillX()))
+            {
+                using (runtime.PushParent(runtime.ColumnFillX().Styled(Card())))
+                {
+                    Bold(runtime, "Input", ComponentSize.Lg);
+                    runtime.Gap(10f);
+                    UiNode.PushIntoParent(runtime.ParentInScope, nameField);
+                    runtime.Gap(10f);
+                    runtime.TextFromId("greeting", greeting, ComponentSize.Sm, string.IsNullOrEmpty(name) ? TextColor.Secondary : TextColor.Accent);
+                }
+                runtime.Gap(16f);
+                using (runtime.PushParent(runtime.ColumnWidth(220f).Styled(Card())))
+                {
+                    Bold(runtime, "Checkbox", ComponentSize.Lg);
+                    runtime.Gap(12f);
+                    UiNode.PushIntoParent(runtime.ParentInScope, subscribe.Node);
+                    runtime.Gap(12f);
+                    Badge.Build(runtime, state.Subscribed ? Labels.Subscribed : Labels.Unsubscribed,
+                        state.Subscribed ? BadgeVariant.Primary : BadgeVariant.Default);
+                }
+            }
+        }
     }
 
-    // A text at the bold weight, where a PushFontFace scope cannot go: inside an
-    // expression. With an id, it is retained under it, so it can be found.
+    // A text at the bold weight. With an id, it is retained under it, so it can be found.
     private static Text Bold(BibuiRuntime runtime, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null,
         string? id = null)
     {
@@ -175,14 +187,11 @@ public static class Demo
         }
         float t = Math.Clamp((value - min) / (max - min), 0f, 1f);
 
-        track.ChildLayoutAxis = LayoutAxis.X;
-        track.SizeX = SemanticSize.ParentPct(1f);
-        track.SizeY = SemanticSize.Pixels(Knob);
+        track.FillX().Px(height: Knob);
         using (runtime.PushParent(track))
         {
             RailPart(runtime, t, UiColor.Accent);
-            var knob = runtime.Box();
-            knob.SizeX = knob.SizeY = SemanticSize.Pixels(Knob);
+            var knob = runtime.Box().Px(Knob, Knob);
             knob.Style.CornerRadius = Knob / 2f;
             knob.Style.BackgroundColor = UiColor.TextPrimary;
             knob.Style.BorderColor = UiColor.Accent;
@@ -194,14 +203,11 @@ public static class Demo
         // A share of the track, the knob's height, with the rail drawn centred in it.
         static void RailPart(BibuiRuntime runtime, float share, UiColor color)
         {
-            var part = runtime.Box();
-            part.SizeX = SemanticSize.ParentPct(share);
-            part.SizeY = SemanticSize.ParentPct(1f);
+            var part = runtime.Box().FillX(share).FillY();
             part.Style.Padding = new EdgeInsets((Knob - Rail) / 2f, 0f, (Knob - Rail) / 2f, 0f);
             using (runtime.PushParent(part))
             {
-                var rail = runtime.Box();
-                rail.SizeX = rail.SizeY = SemanticSize.ParentPct(1f);
+                var rail = runtime.Box().FillX().FillY();
                 rail.Style.CornerRadius = Rail / 2f;
                 rail.Style.BackgroundColor = color;
             }

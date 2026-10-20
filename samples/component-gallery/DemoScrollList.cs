@@ -13,7 +13,7 @@ internal static class DemoScrollList
 
     private static ScrollPt _scroll;   // the page's, between frames
 
-    internal static UiNode Build(BibuiRuntime runtime)
+    internal static void Build(BibuiRuntime runtime)
     {
         var panel = runtime.BoxFromId("sl-panel");
         (panel.SizeX, panel.SizeY) = (SemanticSize.Pixels(420f), SemanticSize.Pixels(320f));
@@ -26,9 +26,7 @@ internal static class DemoScrollList
             runtime.BeginScrollList("sl-list", ref _scroll, Pitch, Rows);
             for (int i = _scroll.First; i < _scroll.Last; i++)
             {
-                var row = runtime.Box();
-                (row.SizeX, row.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.Pixels(Pitch));
-                row.ChildLayoutAxis = LayoutAxis.X;
+                var row = runtime.RowFillX(Pitch);
                 row.Style.Padding = new EdgeInsets(0, 12, 0, 12);
                 row.Style.BackgroundColor = i % 2 == 0 ? (UiColor?)UiColor.Surface : null;
                 using (runtime.PushParent(row))
@@ -37,11 +35,12 @@ internal static class DemoScrollList
             runtime.EndScrollList(ref _scroll);
         }
 
-        return Arrange.Column(
-            Bold(runtime, $"{Rows:N0} rows of {Pitch}px, about {_scroll.Last - _scroll.First} built. Wheel, drag the thumb, or press the track to page.",
-                ComponentSize.Sm, TextColor.Secondary),
-            Arrange.Space(16f),
-            panel);
+        // The caption counts the rows the list built, so it is built after the
+        // list, and the panel is moved after it.
+        Bold(runtime, $"{Rows:N0} rows of {Pitch}px, about {_scroll.Last - _scroll.First} built. Wheel, drag the thumb, or press the track to page.",
+            ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(16f);
+        UiNode.PushIntoParent(runtime.ParentInScope, panel);
     }
 
     // A row's label, made once per row rather than once a frame.

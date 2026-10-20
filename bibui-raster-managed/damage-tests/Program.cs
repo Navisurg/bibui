@@ -61,19 +61,19 @@ static (BibuiRuntime Rt, ManagedRenderer Backend, Surface Target) Rig()
     rt.TargetHz = 60f;
     rt.SetBuild(() =>
     {
-        var rows = new List<Arrange.Item>();
-        for (int r = 0; r < 3; r++)
-        {
-            var cells = new List<Arrange.Item>();
-            for (int c = 0; c < 4; c++)
+        var page = rt.ColumnFill().Padded(EdgeInsets.All(8f));
+        using (rt.PushParent(page))
+            for (int r = 0; r < 3; r++)
             {
-                if (c > 0) cells.Add(Arrange.Space(6f));
-                cells.Add(rt.Button($"d{r * 4 + c}", $"Item {r * 4 + c}").Node);
+                if (r > 0) rt.Gap(6f);
+                using (rt.PushParent(rt.RowFit()))
+                    for (int c = 0; c < 4; c++)
+                    {
+                        if (c > 0) rt.Gap(6f);
+                        rt.Button($"d{r * 4 + c}", $"Item {r * 4 + c}");
+                    }
             }
-            if (r > 0) rows.Add(Arrange.Space(6f));
-            rows.Add(Arrange.Row([.. cells]));
-        }
-        return Arrange.Column([.. rows]).FillX().FillY().Padded(EdgeInsets.All(8f));
+        return page;
     }, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = 400, Height = 160, ScaleFactor = 1f });
     return (rt, backend, new Surface(400, 160));
 }
@@ -121,6 +121,8 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
         rt.TargetHz = 60f;
         rt.SetBuild(() =>
         {
+            var page = rt.ColumnFill().Padded(EdgeInsets.All(8f));
+            using var inPage = rt.PushParent(page);
             var chart = rt.BoxFromId("chart", InteractionKinds.LeftPress);
             chart.Px(120f, 60f);
             chart.Draw = (_, ctx) =>
@@ -129,7 +131,7 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
                 ctx.DrawRRect(r.Left, r.Top, r.Width, r.Height, 6f, ctx.Resolve(UiColor.Surface), ctx.Resolve(UiColor.Border), 1f);
                 ctx.DrawEdge(r.Left + 8f, r.MidY, r.Right - 8f, r.MidY, 2f, ctx.Resolve(UiColor.Accent));
             };
-            return Arrange.Column(chart).FillX().FillY().Padded(EdgeInsets.All(8f));
+            return page;
         }, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = 160, Height = 80, ScaleFactor = 1f });
         var target = new Surface(160, 80);
         return (() => Frame(rt, backend, target), rt.SetTheme, () => { var px = new uint[160 * 80]; target.CopyTo(px); return px; });
