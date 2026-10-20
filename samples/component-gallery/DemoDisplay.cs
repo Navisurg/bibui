@@ -77,54 +77,37 @@ internal static class DemoDisplay
         return box;
     }
 
-    internal static UiNode Build(BibuiRuntime runtime, string route, DisplayState state, Action<DisplayState> set) => route switch
+    internal static void Build(BibuiRuntime runtime, string route, DisplayState state, Action<DisplayState> set)
     {
-    "Text" => TextPage(runtime),
-
-    "Badge" => BadgePage(runtime),
-
-    "Avatar" => AvatarPage(runtime),
-
-    "Card" => CardPage(runtime),
-
-    "Alert" => AlertPage(runtime),
-
-    "Separator" => SeparatorPage(runtime),
-    "Texture" => DemoTexture.Build(runtime),
-
-    "Label" => LabelPage(runtime),
-
-    "Progress" => ProgressPage(runtime, state, set),
-
-    "Skeleton" => SkeletonPage(runtime),
-
-    "Spinner" => SpinnerPage(runtime),
-
-    "RatioBox" => RatioBoxPage(runtime),
-
-    "KeyboardShortcut" => KeyboardShortcutPage(runtime),
-
-    "Table" => TablePage(runtime),
-
-    "Markdown" => DemoMarkdown.Page(runtime),
-
-    "PagedTable" => PagedTablePage(runtime, state, set),
-
-    "FormField" => FormFieldPage(runtime),
-
-    "ListItem" => ListItemPage(runtime, state, set),
-
-    "EmptyState" => EmptyStatePage(runtime),
-
-    "Toast" => ToastPage(runtime, state, set),
-
-        _ => runtime.Text("Select a component from the sidebar.", textColor: TextColor.Secondary),
-    };
+        switch (route)
+        {
+            case "Text": TextPage(runtime); break;
+            case "Badge": BadgePage(runtime); break;
+            case "Avatar": AvatarPage(runtime); break;
+            case "Card": CardPage(runtime); break;
+            case "Alert": AlertPage(runtime); break;
+            case "Separator": SeparatorPage(runtime); break;
+            case "Texture": DemoTexture.Build(runtime); break;
+            case "Label": LabelPage(runtime); break;
+            case "Progress": ProgressPage(runtime, state, set); break;
+            case "Skeleton": SkeletonPage(runtime); break;
+            case "Spinner": SpinnerPage(runtime); break;
+            case "RatioBox": RatioBoxPage(runtime); break;
+            case "KeyboardShortcut": KeyboardShortcutPage(runtime); break;
+            case "Table": TablePage(runtime); break;
+            case "Markdown": DemoMarkdown.Page(runtime); break;
+            case "PagedTable": PagedTablePage(runtime, state, set); break;
+            case "FormField": FormFieldPage(runtime); break;
+            case "ListItem": ListItemPage(runtime, state, set); break;
+            case "EmptyState": EmptyStatePage(runtime); break;
+            case "Toast": ToastPage(runtime, state, set); break;
+        }
+    }
 
     // ── Shared by the pages below ───────────────────────────────────────────
-    // Each page is a column built in place, under the parent in scope, and
-    // what it holds is built into it in order. A helper that builds into a box
-    // of its own pushes that box, and hands it back.
+    // Each page builds in place, in order, into the column the gallery pushes
+    // for it. A helper that builds into a box of its own pushes that box, and
+    // hands it back.
 
     private static readonly UiColor Info = UiColor.Token(c => c.Info);
     private static readonly UiColor InfoBg = UiColor.Token(c => c.InfoBg);
@@ -240,123 +223,103 @@ internal static class DemoDisplay
 
     // ── Text ────────────────────────────────────────────────────────────────
 
-    private static UiNode TextPage(BibuiRuntime runtime)
+    private static void TextPage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
-        {
-            Bold(runtime, "Heading (Xxl, Bold)", ComponentSize.Xxl);
-            runtime.Gap(10f);
-            runtime.Text("Large text (Xl)", ComponentSize.Xl);
-            runtime.Gap(10f);
-            runtime.Text("Body text (Md) — the default", ComponentSize.Md);
-            runtime.Gap(10f);
-            runtime.Text("Small text (Sm)", ComponentSize.Sm);
-            runtime.Gap(10f);
-            runtime.Text("Secondary color", textColor: TextColor.Secondary);
-            runtime.Gap(10f);
-            runtime.Text("Accent / brand color", textColor: TextColor.Accent);
-            runtime.Gap(10f);
-            runtime.Text("Disabled / muted", textColor: TextColor.Disabled);
-            runtime.Gap(18f);
-            Bold(runtime, "Ellipsis overflow: press to edit, Enter or Escape to stop", ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(10f);
-            EllipsisField(runtime, "demo-text-ellipsis", 220f);
-            runtime.Gap(10f);
-            Bold(runtime, "Two lines tall, scrolling to the rest", ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(10f);
-            Paragraph(runtime, "demo-text-two-rows", "This paragraph wraps to multiple lines. The box is two lines tall, and the lines past the second are below its edge: scroll the wheel over it to bring them into view.", 280f, rows: 2);
-            runtime.Gap(22f);
-            Bold(runtime, "Hugging its text, or scrolling past a height", ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(10f);
-            Paragraph(runtime, "demo-text-hug-short", "Hi!", 320f);
-            runtime.Gap(10f);
-            Paragraph(runtime, "demo-text-hug-medium", "A medium-length message that wraps to a few lines. Notice the box hugs the text: it is as tall as its lines.", 320f);
-            runtime.Gap(10f);
-            Paragraph(runtime, "demo-text-six-rows", LongFiller, 320f, rows: 6);
-        }
-        return page;
+        Bold(runtime, "Heading (Xxl, Bold)", ComponentSize.Xxl);
+        runtime.Gap(10f);
+        runtime.Text("Large text (Xl)", ComponentSize.Xl);
+        runtime.Gap(10f);
+        runtime.Text("Body text (Md) — the default", ComponentSize.Md);
+        runtime.Gap(10f);
+        runtime.Text("Small text (Sm)", ComponentSize.Sm);
+        runtime.Gap(10f);
+        runtime.Text("Secondary color", textColor: TextColor.Secondary);
+        runtime.Gap(10f);
+        runtime.Text("Accent / brand color", textColor: TextColor.Accent);
+        runtime.Gap(10f);
+        runtime.Text("Disabled / muted", textColor: TextColor.Disabled);
+        runtime.Gap(18f);
+        Bold(runtime, "Ellipsis overflow: press to edit, Enter or Escape to stop", ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(10f);
+        EllipsisField(runtime, "demo-text-ellipsis", 220f);
+        runtime.Gap(10f);
+        Bold(runtime, "Two lines tall, scrolling to the rest", ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(10f);
+        Paragraph(runtime, "demo-text-two-rows", "This paragraph wraps to multiple lines. The box is two lines tall, and the lines past the second are below its edge: scroll the wheel over it to bring them into view.", 280f, rows: 2);
+        runtime.Gap(22f);
+        Bold(runtime, "Hugging its text, or scrolling past a height", ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(10f);
+        Paragraph(runtime, "demo-text-hug-short", "Hi!", 320f);
+        runtime.Gap(10f);
+        Paragraph(runtime, "demo-text-hug-medium", "A medium-length message that wraps to a few lines. Notice the box hugs the text: it is as tall as its lines.", 320f);
+        runtime.Gap(10f);
+        Paragraph(runtime, "demo-text-six-rows", LongFiller, 320f, rows: 6);
     }
 
     // ── Badge ───────────────────────────────────────────────────────────────
 
-    private static UiNode BadgePage(BibuiRuntime runtime)
+    private static void BadgePage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
+        Bold(runtime, "Status indicators", ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(16f);
+        using (runtime.PushParent(runtime.RowFit()))
         {
-            Bold(runtime, "Status indicators", ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(16f);
-            using (runtime.PushParent(runtime.RowFit()))
-            {
-                Badge.Build(runtime, "Default");
-                runtime.Gap(8f);
-                Badge.Build(runtime, "Primary", BadgeVariant.Primary);
-                runtime.Gap(8f);
-                Badge.Build(runtime, "Success", BadgeVariant.Success);
-                runtime.Gap(8f);
-                Badge.Build(runtime, "Destructive", BadgeVariant.Destructive);
-            }
+            Badge.Build(runtime, "Default");
+            runtime.Gap(8f);
+            Badge.Build(runtime, "Primary", BadgeVariant.Primary);
+            runtime.Gap(8f);
+            Badge.Build(runtime, "Success", BadgeVariant.Success);
+            runtime.Gap(8f);
+            Badge.Build(runtime, "Destructive", BadgeVariant.Destructive);
         }
-        return page;
     }
 
     // ── Label ───────────────────────────────────────────────────────────────
 
-    private static UiNode LabelPage(BibuiRuntime runtime)
+    private static void LabelPage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
-        {
-            Bold(runtime, "Form labels paired with inputs", ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(12f);
-            DemoInputs.FieldLabel(runtime, "Email address");
-            runtime.Gap(12f);
-            DemoInputs.StaticInput(runtime, "demo-label-email", "you@example.com", 280f);
-            runtime.Gap(12f);
-            DemoInputs.FieldLabel(runtime, "Password");
-            runtime.Gap(12f);
-            DemoInputs.StaticInput(runtime, "demo-label-password", "••••••••", 280f);
-        }
-        return page;
+        Bold(runtime, "Form labels paired with inputs", ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(12f);
+        DemoInputs.FieldLabel(runtime, "Email address");
+        runtime.Gap(12f);
+        DemoInputs.StaticInput(runtime, "demo-label-email", "you@example.com", 280f);
+        runtime.Gap(12f);
+        DemoInputs.FieldLabel(runtime, "Password");
+        runtime.Gap(12f);
+        DemoInputs.StaticInput(runtime, "demo-label-password", "••••••••", 280f);
     }
 
     // ── Spinner ─────────────────────────────────────────────────────────────
 
-    private static UiNode SpinnerPage(BibuiRuntime runtime)
+    private static void SpinnerPage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
+        Bold(runtime, "Loading spinner", ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(20f);
+        using (runtime.PushParent(runtime.RowHeight(40f)))
         {
-            Bold(runtime, "Loading spinner", ComponentSize.Sm, TextColor.Secondary);
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
+                StepSpinner(runtime, ComponentSize.Sm, 16f);
             runtime.Gap(20f);
-            using (runtime.PushParent(runtime.RowHeight(40f)))
-            {
-                using (runtime.PushParent(runtime.ColumnFillY()))
-                using (runtime.Centred())
-                    StepSpinner(runtime, ComponentSize.Sm, 16f);
-                runtime.Gap(20f);
-                using (runtime.PushParent(runtime.ColumnFillY()))
-                using (runtime.Centred())
-                    StepSpinner(runtime, ComponentSize.Md, 24f);
-                runtime.Gap(20f);
-                using (runtime.PushParent(runtime.ColumnFillY()))
-                using (runtime.Centred())
-                    StepSpinner(runtime, ComponentSize.Lg, 32f);
-            }
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
+                StepSpinner(runtime, ComponentSize.Md, 24f);
             runtime.Gap(20f);
-            using (runtime.PushParent(runtime.RowHeight(40f)))
-            {
-                using (runtime.PushParent(runtime.ColumnFillY()))
-                using (runtime.Centred())
-                    StepSpinner(runtime, ComponentSize.Sm, 16f);
-                runtime.Gap(8f);
-                using (runtime.PushParent(runtime.ColumnFillY()))
-                using (runtime.Centred())
-                    runtime.Text("Loading data…", ComponentSize.Sm, TextColor.Secondary);
-            }
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
+                StepSpinner(runtime, ComponentSize.Lg, 32f);
         }
-        return page;
+        runtime.Gap(20f);
+        using (runtime.PushParent(runtime.RowHeight(40f)))
+        {
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
+                StepSpinner(runtime, ComponentSize.Sm, 16f);
+            runtime.Gap(8f);
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
+                runtime.Text("Loading data…", ComponentSize.Sm, TextColor.Secondary);
+        }
     }
 
     // A spinner at one of the size steps, `diameter` across: drawn with the
@@ -370,25 +333,20 @@ internal static class DemoDisplay
 
     // ── Avatar ──────────────────────────────────────────────────────────────
 
-    private static UiNode AvatarPage(BibuiRuntime runtime)
+    private static void AvatarPage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
+        Caption(runtime, "User avatars with initials fallback");
+        runtime.Gap(20f);
+        using (runtime.PushParent(runtime.RowFit()))
         {
-            Caption(runtime, "User avatars with initials fallback");
-            runtime.Gap(20f);
-            using (runtime.PushParent(runtime.RowFit()))
-            {
-                Avatar.Build(runtime, "JD", 56f);
-                runtime.Gap(12f);
-                Avatar.Build(runtime, "AB", 56f);
-                runtime.Gap(12f);
-                Avatar.Build(runtime, "MK", 56f);
-                runtime.Gap(12f);
-                Avatar.Build(runtime, "TC", 56f);
-            }
+            Avatar.Build(runtime, "JD", 56f);
+            runtime.Gap(12f);
+            Avatar.Build(runtime, "AB", 56f);
+            runtime.Gap(12f);
+            Avatar.Build(runtime, "MK", 56f);
+            runtime.Gap(12f);
+            Avatar.Build(runtime, "TC", 56f);
         }
-        return page;
     }
 
     // ── Card ────────────────────────────────────────────────────────────────
@@ -425,19 +383,14 @@ internal static class DemoDisplay
         return card;
     }
 
-    private static UiNode CardPage(BibuiRuntime runtime)
+    private static void CardPage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
-        {
-            Caption(runtime, "Content container with title and description");
-            runtime.Gap(16f);
-            Card(runtime, "demo-card-workspace", "New workspace", "A place for one team's files and settings.",
-                "Give it a name and choose who can see it. Both can be changed later.", 420f);
-            runtime.Gap(16f);
-            Card(runtime, "demo-card-inbox", "Inbox", "3 messages since you last looked.", null, 420f);
-        }
-        return page;
+        Caption(runtime, "Content container with title and description");
+        runtime.Gap(16f);
+        Card(runtime, "demo-card-workspace", "New workspace", "A place for one team's files and settings.",
+            "Give it a name and choose who can see it. Both can be changed later.", 420f);
+        runtime.Gap(16f);
+        Card(runtime, "demo-card-inbox", "Inbox", "3 messages since you last looked.", null, 420f);
     }
 
     // ── Alert ───────────────────────────────────────────────────────────────
@@ -479,82 +432,67 @@ internal static class DemoDisplay
         return alert;
     }
 
-    private static UiNode AlertPage(BibuiRuntime runtime)
+    private static void AlertPage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFillX();
-        using (runtime.PushParent(page))
-        {
-            Alert(runtime, "Sync paused", "Files will sync again when the connection is back.", UiColor.Border, UiColor.Surface, "info");
-            runtime.Gap(12f);
-            Alert(runtime, "New version", "Restart to finish updating.", Info, InfoBg, "info");
-            runtime.Gap(12f);
-            Alert(runtime, "Storage almost full", "92% of the workspace's space is in use.", Warning, WarningBg, "alert-circle");
-            runtime.Gap(12f);
-            Alert(runtime, "Upload failed", "summary.png could not be sent. Try again.", UiColor.Destructive, UiColor.Surface, "alert-circle");
-        }
-        return page;
+        Alert(runtime, "Sync paused", "Files will sync again when the connection is back.", UiColor.Border, UiColor.Surface, "info");
+        runtime.Gap(12f);
+        Alert(runtime, "New version", "Restart to finish updating.", Info, InfoBg, "info");
+        runtime.Gap(12f);
+        Alert(runtime, "Storage almost full", "92% of the workspace's space is in use.", Warning, WarningBg, "alert-circle");
+        runtime.Gap(12f);
+        Alert(runtime, "Upload failed", "summary.png could not be sent. Try again.", UiColor.Destructive, UiColor.Surface, "alert-circle");
     }
 
     // ── Separator ───────────────────────────────────────────────────────────
 
-    private static UiNode SeparatorPage(BibuiRuntime runtime)
+    private static void SeparatorPage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFillX();
-        using (runtime.PushParent(page))
+        Caption(runtime, "Horizontal separator");
+        runtime.Gap(16f);
+        runtime.Text("Content above");
+        runtime.Gap(16f);
+        Separator.Build(runtime);
+        runtime.Gap(16f);
+        runtime.Text("Content below");
+        runtime.Gap(16f);
+        Caption(runtime, "Vertical separator (inline)");
+        runtime.Gap(16f);
+        using (runtime.PushParent(runtime.RowHeight(24f)))
         {
-            Caption(runtime, "Horizontal separator");
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
+                runtime.Text("Left");
             runtime.Gap(16f);
-            runtime.Text("Content above");
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
+                Separator.Build(runtime, vertical: true).Px(height: 20f);
             runtime.Gap(16f);
-            Separator.Build(runtime);
-            runtime.Gap(16f);
-            runtime.Text("Content below");
-            runtime.Gap(16f);
-            Caption(runtime, "Vertical separator (inline)");
-            runtime.Gap(16f);
-            using (runtime.PushParent(runtime.RowHeight(24f)))
-            {
-                using (runtime.PushParent(runtime.ColumnFillY()))
-                using (runtime.Centred())
-                    runtime.Text("Left");
-                runtime.Gap(16f);
-                using (runtime.PushParent(runtime.ColumnFillY()))
-                using (runtime.Centred())
-                    Separator.Build(runtime, vertical: true).Px(height: 20f);
-                runtime.Gap(16f);
-                using (runtime.PushParent(runtime.ColumnFillY()))
-                using (runtime.Centred())
-                    runtime.Text("Right");
-            }
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
+                runtime.Text("Right");
         }
-        return page;
     }
 
     // ── Progress ────────────────────────────────────────────────────────────
 
-    private static UiNode ProgressPage(BibuiRuntime runtime, DisplayState state, Action<DisplayState> set)
+    private static void ProgressPage(BibuiRuntime runtime, DisplayState state, Action<DisplayState> set)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
+        Caption(runtime, "Task completion indicator");
+        runtime.Gap(16f);
+        Progress.Build(runtime, state.ProgressValue, 100f, "Upload progress").Px(width: 400f);
+        runtime.Gap(16f);
+        runtime.Text($"{state.ProgressValue:0}% complete", ComponentSize.Sm, TextColor.Accent);
+        runtime.Gap(16f);
+        using (runtime.PushParent(runtime.RowFit()))
         {
-            Caption(runtime, "Task completion indicator");
-            runtime.Gap(16f);
-            Progress.Build(runtime, state.ProgressValue, 100f, "Upload progress").Px(width: 400f);
-            runtime.Gap(16f);
-            runtime.Text($"{state.ProgressValue:0}% complete", ComponentSize.Sm, TextColor.Accent);
-            runtime.Gap(16f);
-            using (runtime.PushParent(runtime.RowFit()))
-            {
-                var minus = PageButton(runtime, "demo-progress-minus", "-10", primary: false, width: 60f);
-                runtime.Gap(8f);
-                var plus = PageButton(runtime, "demo-progress-plus", "+10", primary: true, width: 60f);
-                if (minus.Clicked) set(state with { ProgressValue = Math.Max(0f, state.ProgressValue - 10f) });
-                if (plus.Clicked) set(state with { ProgressValue = Math.Min(100f, state.ProgressValue + 10f) });
-            }
-            runtime.Gap(16f);
-            Progress.Build(runtime, 100f, 100f, "Completed").Px(width: 400f);
+            var minus = PageButton(runtime, "demo-progress-minus", "-10", primary: false, width: 60f);
+            runtime.Gap(8f);
+            var plus = PageButton(runtime, "demo-progress-plus", "+10", primary: true, width: 60f);
+            if (minus.Clicked) set(state with { ProgressValue = Math.Max(0f, state.ProgressValue - 10f) });
+            if (plus.Clicked) set(state with { ProgressValue = Math.Min(100f, state.ProgressValue + 10f) });
         }
-        return page;
+        runtime.Gap(16f);
+        Progress.Build(runtime, 100f, 100f, "Completed").Px(width: 400f);
     }
 
     // ── Skeleton ────────────────────────────────────────────────────────────
@@ -568,24 +506,19 @@ internal static class DemoDisplay
         return bone;
     }
 
-    private static UiNode SkeletonPage(BibuiRuntime runtime)
+    private static void SkeletonPage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
-        {
-            Caption(runtime, "Loading placeholder");
-            runtime.Gap(16f);
-            Bone(runtime, 400f, 16f, 4f);
-            runtime.Gap(8f);
-            Bone(runtime, 400f, 16f, 4f);
-            runtime.Gap(8f);
-            Bone(runtime, 280f, 16f, 4f);
-            runtime.Gap(16f);
-            Caption(runtime, "With circle avatar");
-            runtime.Gap(16f);
-            Bone(runtime, 80f, 80f, 40f);
-        }
-        return page;
+        Caption(runtime, "Loading placeholder");
+        runtime.Gap(16f);
+        Bone(runtime, 400f, 16f, 4f);
+        runtime.Gap(8f);
+        Bone(runtime, 400f, 16f, 4f);
+        runtime.Gap(8f);
+        Bone(runtime, 280f, 16f, 4f);
+        runtime.Gap(16f);
+        Caption(runtime, "With circle avatar");
+        runtime.Gap(16f);
+        Bone(runtime, 80f, 80f, 40f);
     }
 
     // ── RatioBox ────────────────────────────────────────────────────────────
@@ -603,41 +536,31 @@ internal static class DemoDisplay
         return box;
     }
 
-    private static UiNode RatioBoxPage(BibuiRuntime runtime)
+    private static void RatioBoxPage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
-        {
-            Caption(runtime, "A width, and the height the ratio gives it");
-            runtime.Gap(16f);
-            AspectBox(runtime, 400f, 16f / 9f, "16:9, 400 wide");
-            runtime.Gap(16f);
-            AspectBox(runtime, 200f, 1f, "1:1, 200 wide");
-        }
-        return page;
+        Caption(runtime, "A width, and the height the ratio gives it");
+        runtime.Gap(16f);
+        AspectBox(runtime, 400f, 16f / 9f, "16:9, 400 wide");
+        runtime.Gap(16f);
+        AspectBox(runtime, 200f, 1f, "1:1, 200 wide");
     }
 
     // ── KeyboardShortcut ────────────────────────────────────────────────────
 
-    private static UiNode KeyboardShortcutPage(BibuiRuntime runtime)
+    private static void KeyboardShortcutPage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
+        Caption(runtime, "One key cap per key, in the order they are pressed");
+        runtime.Gap(20f);
+        using (runtime.PushParent(runtime.RowFit()))
         {
-            Caption(runtime, "One key cap per key, in the order they are pressed");
-            runtime.Gap(20f);
-            using (runtime.PushParent(runtime.RowFit()))
-            {
-                KeyboardShortcut.Build(runtime, "⌘", "K");
-                runtime.Gap(12f);
-                KeyboardShortcut.Build(runtime, "Ctrl", "Shift", "P");
-                runtime.Gap(12f);
-                KeyboardShortcut.Build(runtime, "Escape");
-                runtime.Gap(12f);
-                KeyboardShortcut.Build(runtime, "↑", "↓");
-            }
+            KeyboardShortcut.Build(runtime, "⌘", "K");
+            runtime.Gap(12f);
+            KeyboardShortcut.Build(runtime, "Ctrl", "Shift", "P");
+            runtime.Gap(12f);
+            KeyboardShortcut.Build(runtime, "Escape");
+            runtime.Gap(12f);
+            KeyboardShortcut.Build(runtime, "↑", "↓");
         }
-        return page;
     }
 
     // ── Table and PagedTable ────────────────────────────────────────────────
@@ -719,16 +642,11 @@ internal static class DemoDisplay
         ["Dave Brown", "Pending", "$720.00"],
     ];
 
-    private static UiNode TablePage(BibuiRuntime runtime)
+    private static void TablePage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
-        {
-            Caption(runtime, "Rows of values under named columns");
-            runtime.Gap(16f);
-            Table(runtime, ["Name", "Status", "Amount"], TableRows, 560f);
-        }
-        return page;
+        Caption(runtime, "Rows of values under named columns");
+        runtime.Gap(16f);
+        Table(runtime, ["Name", "Status", "Amount"], TableRows, 560f);
     }
 
     private static readonly string[][] People =
@@ -765,36 +683,31 @@ internal static class DemoDisplay
 
     // Five people a page, sorted by name, and a footer that reads the page
     // and pages with Previous and Next — each disabled at its end.
-    private static UiNode PagedTablePage(BibuiRuntime runtime, DisplayState state, Action<DisplayState> set)
+    private static void PagedTablePage(BibuiRuntime runtime, DisplayState state, Action<DisplayState> set)
     {
         int page = Math.Clamp(state.PagedTablePage, 1, PageCount);
         var rows = People.OrderBy(p => p[0], StringComparer.Ordinal).Skip((page - 1) * PageSize).Take(PageSize).ToArray();
         float width = MathF.Min(660f, ShellLayout.PageWidth(runtime));   // narrower in a narrow window
 
-        var column = runtime.ColumnFit();
-        using (runtime.PushParent(column))
+        Caption(runtime, "25 people sorted by name, five to a page");
+        runtime.Gap(16f);
+        Table(runtime, ["Name", "Email", "Role", "Status"], rows, width);
+        runtime.Gap(10f);
+        using (runtime.PushParent(runtime.RowPx(width, 32f)))
         {
-            Caption(runtime, "25 people sorted by name, five to a page");
-            runtime.Gap(16f);
-            Table(runtime, ["Name", "Email", "Role", "Status"], rows, width);
-            runtime.Gap(10f);
-            using (runtime.PushParent(runtime.RowPx(width, 32f)))
-            {
-                using (runtime.PushParent(runtime.ColumnFillY()))
-                using (runtime.Centred())
-                    runtime.Text($"Page {page} of {PageCount}", ComponentSize.Sm, TextColor.Secondary);
-                runtime.Spring();
-                var previous = PageButton(runtime, "demo-pagedtable-prev", "Previous", primary: false, width: 72f, height: 32f,
-                    size: ComponentSize.Sm, radius: 4f, disabled: page <= 1);
-                runtime.Gap(4f);
-                var next = PageButton(runtime, "demo-pagedtable-next", "Next", primary: false, width: 56f, height: 32f,
-                    size: ComponentSize.Sm, radius: 4f, disabled: page >= PageCount);
-                runtime.Gap(4f);
-                if (previous.Clicked) set(state with { PagedTablePage = page - 1 });
-                if (next.Clicked) set(state with { PagedTablePage = page + 1 });
-            }
+            using (runtime.PushParent(runtime.ColumnFillY()))
+            using (runtime.Centred())
+                runtime.Text($"Page {page} of {PageCount}", ComponentSize.Sm, TextColor.Secondary);
+            runtime.Spring();
+            var previous = PageButton(runtime, "demo-pagedtable-prev", "Previous", primary: false, width: 72f, height: 32f,
+                size: ComponentSize.Sm, radius: 4f, disabled: page <= 1);
+            runtime.Gap(4f);
+            var next = PageButton(runtime, "demo-pagedtable-next", "Next", primary: false, width: 56f, height: 32f,
+                size: ComponentSize.Sm, radius: 4f, disabled: page >= PageCount);
+            runtime.Gap(4f);
+            if (previous.Clicked) set(state with { PagedTablePage = page - 1 });
+            if (next.Clicked) set(state with { PagedTablePage = page + 1 });
         }
-        return column;
     }
 
     // ── FormField ───────────────────────────────────────────────────────────
@@ -826,22 +739,17 @@ internal static class DemoDisplay
         return field;
     }
 
-    private static UiNode FormFieldPage(BibuiRuntime runtime)
+    private static void FormFieldPage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFillX();
-        using (runtime.PushParent(page))
-        {
-            Caption(runtime, "A label, the input, a hint, and an error when there is one");
-            runtime.Gap(24f);
-            FormField(runtime, "Display name", "Shown to the others in the workspace.", null, required: true);
-            runtime.Gap(6f);
-            DemoInputs.StaticInput(runtime, "demo-field-username", "Robin", 280f);
-            runtime.Gap(24f);
-            FormField(runtime, "Email", "Used to sign in and to reset the password.", "Another account uses this address.", required: true);
-            runtime.Gap(6f);
-            DemoInputs.StaticInput(runtime, "demo-field-email", "you@example.com", 280f);
-        }
-        return page;
+        Caption(runtime, "A label, the input, a hint, and an error when there is one");
+        runtime.Gap(24f);
+        FormField(runtime, "Display name", "Shown to the others in the workspace.", null, required: true);
+        runtime.Gap(6f);
+        DemoInputs.StaticInput(runtime, "demo-field-username", "Robin", 280f);
+        runtime.Gap(24f);
+        FormField(runtime, "Email", "Used to sign in and to reset the password.", "Another account uses this address.", required: true);
+        runtime.Gap(6f);
+        DemoInputs.StaticInput(runtime, "demo-field-email", "you@example.com", 280f);
     }
 
     // ── ListItem ────────────────────────────────────────────────────────────
@@ -882,66 +790,55 @@ internal static class DemoDisplay
         return new BibuiWidget(row, interaction);
     }
 
-    private static UiNode ListItemPage(BibuiRuntime runtime, DisplayState state, Action<DisplayState> set)
+    private static void ListItemPage(BibuiRuntime runtime, DisplayState state, Action<DisplayState> set)
     {
         string? picked = null;
-        UiNode Entry(string name, string icon)
+        void Entry(string name, string icon)
         {
-            var item = ListItem(runtime, $"demo-item-{name.ToLowerInvariant()}", name, icon, state.ActiveItem == name);
-            if (item.Clicked) picked = name;
-            return item.Node;
+            if (ListItem(runtime, $"demo-item-{name.ToLowerInvariant()}", name, icon, state.ActiveItem == name).Clicked)
+                picked = name;
         }
 
-        var page = runtime.ColumnFillX();
-        using (runtime.PushParent(page))
-        {
-            Caption(runtime, "Rows with an icon and a label; one is selected");
-            runtime.Gap(8f);
-            Entry("Dashboard", "home");
-            runtime.Gap(8f);
-            Entry("Settings", "settings");
-            runtime.Gap(8f);
-            Entry("Profile", "user");
-            runtime.Gap(8f);
-            ListItem(runtime, "demo-item-billing", "Billing (disabled)", "file-text", active: false, disabled: true);
-            runtime.Gap(8f);
-            runtime.TextFromId("demo-item-state", $"Active: {state.ActiveItem ?? "none"}", ComponentSize.Sm, TextColor.Secondary);
-        }
+        Caption(runtime, "Rows with an icon and a label; one is selected");
+        runtime.Gap(8f);
+        Entry("Dashboard", "home");
+        runtime.Gap(8f);
+        Entry("Settings", "settings");
+        runtime.Gap(8f);
+        Entry("Profile", "user");
+        runtime.Gap(8f);
+        ListItem(runtime, "demo-item-billing", "Billing (disabled)", "file-text", active: false, disabled: true);
+        runtime.Gap(8f);
+        runtime.TextFromId("demo-item-state", $"Active: {state.ActiveItem ?? "none"}", ComponentSize.Sm, TextColor.Secondary);
         if (picked is not null) set(state with { ActiveItem = picked });
-        return page;
     }
 
     // ── EmptyState ──────────────────────────────────────────────────────────
 
-    private static UiNode EmptyStatePage(BibuiRuntime runtime)
+    private static void EmptyStatePage(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
+        Caption(runtime, "What a list shows before it has anything in it");
+        runtime.Gap(16f);
+        using (runtime.PushParent(runtime.ColumnPx(400f, 160f)))
         {
-            Caption(runtime, "What a list shows before it has anything in it");
-            runtime.Gap(16f);
-            using (runtime.PushParent(runtime.ColumnPx(400f, 160f)))
-            {
-                runtime.Spring();
-                using (runtime.PushParent(runtime.RowFillX()))
-                using (runtime.Centred())
-                    runtime.Icon("folder", 48f).Color = TextColor.Disabled;
-                runtime.Gap(12f);
-                using (runtime.PushParent(runtime.RowFillX()))
-                using (runtime.Centred())
-                    Bold(runtime, "No workspaces yet", ComponentSize.Lg);
-                runtime.Gap(4f);
-                using (runtime.PushParent(runtime.RowFillX()))
-                using (runtime.Centred())
-                    runtime.Text("Make one to start adding files.", ComponentSize.Sm, TextColor.Secondary);
-                runtime.Gap(12f);
-                using (runtime.PushParent(runtime.RowFillX()))
-                using (runtime.Centred())
-                    PageButton(runtime, "demo-empty-create", "New workspace", primary: true, height: 36f);
-                runtime.Spring();
-            }
+            runtime.Spring();
+            using (runtime.PushParent(runtime.RowFillX()))
+            using (runtime.Centred())
+                runtime.Icon("folder", 48f).Color = TextColor.Disabled;
+            runtime.Gap(12f);
+            using (runtime.PushParent(runtime.RowFillX()))
+            using (runtime.Centred())
+                Bold(runtime, "No workspaces yet", ComponentSize.Lg);
+            runtime.Gap(4f);
+            using (runtime.PushParent(runtime.RowFillX()))
+            using (runtime.Centred())
+                runtime.Text("Make one to start adding files.", ComponentSize.Sm, TextColor.Secondary);
+            runtime.Gap(12f);
+            using (runtime.PushParent(runtime.RowFillX()))
+            using (runtime.Centred())
+                PageButton(runtime, "demo-empty-create", "New workspace", primary: true, height: 36f);
+            runtime.Spring();
         }
-        return page;
     }
 
     // ── Toast ───────────────────────────────────────────────────────────────
@@ -953,7 +850,7 @@ internal static class DemoDisplay
     // A button that shows and hides the notification, what it is, and — while
     // it shows — the notification itself, floated over the page in the
     // window's lower-right corner.
-    private static UiNode ToastPage(BibuiRuntime runtime, DisplayState state, Action<DisplayState> set)
+    private static void ToastPage(BibuiRuntime runtime, DisplayState state, Action<DisplayState> set)
     {
         bool visible = state.ToastVisible;
 
@@ -961,17 +858,12 @@ internal static class DemoDisplay
         bool dismissed = visible && Notification(runtime, "demo-toast",
             "Workspace renamed", "It is now called fernway-design.", "Undo");
 
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
-        {
-            Caption(runtime, "Show it, then press Undo or the cross to close it");
-            runtime.Gap(12f);
-            var trigger = PageButton(runtime, "demo-toast-trigger", visible ? "Hide toast" : "Show toast", primary: true);
-            if (trigger.Clicked || dismissed) set(state with { ToastVisible = !visible });
-            runtime.Gap(12f);
-            runtime.Text($"Toast: {(visible ? "visible" : "hidden")}", ComponentSize.Sm, TextColor.Secondary);
-        }
-        return page;
+        Caption(runtime, "Show it, then press Undo or the cross to close it");
+        runtime.Gap(12f);
+        var trigger = PageButton(runtime, "demo-toast-trigger", visible ? "Hide toast" : "Show toast", primary: true);
+        if (trigger.Clicked || dismissed) set(state with { ToastVisible = !visible });
+        runtime.Gap(12f);
+        runtime.Text($"Toast: {(visible ? "visible" : "hidden")}", ComponentSize.Sm, TextColor.Secondary);
     }
 
     // A notification panel in a root of its own, drawn over everything: a

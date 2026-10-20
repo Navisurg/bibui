@@ -42,55 +42,51 @@ internal static class DemoMarkdown
     private static bool _focused;
     private static string? _lastLink;
 
-    internal static UiNode Page(BibuiRuntime runtime)
+    internal static void Page(BibuiRuntime runtime)
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
+        Bold(runtime, "Edit the source on the left; the viewer draws it as you type. Escape stops editing.",
+            ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(16f);
+
+        // Side by side where they fit, the viewer under the source where they do not.
+        Box row = runtime.Box();
+        bool sideBySide = ShellLayout.PageWidth(runtime) >= FieldWidth + 24f + ViewerWidth;
+        row.ChildLayoutAxis = sideBySide ? LayoutAxis.X : LayoutAxis.Y;
+        row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
+        using (runtime.PushParent(row))
         {
-            Bold(runtime, "Edit the source on the left; the viewer draws it as you type. Escape stops editing.",
-                ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(16f);
+            Box frame = runtime.Box();
+            TextField.InputStyle(runtime, frame, _focused);
+            frame.SizeX = SemanticSize.Pixels(FieldWidth);
+            frame.SizeY = SemanticSize.ChildrenSum();
+            BibuiWidget field;
+            using (runtime.PushParent(frame))
+            using (runtime.PushSizeY(TextField.Rows(runtime, 26)))
+            using (runtime.PushFontSize(ComponentSize.Sm))
+                field = runtime.MultilineTextField("demo-markdown-source", Source, Edit, _focused);
+            if (field.Pressed) _focused = true;
 
-            // Side by side where they fit, the viewer under the source where they do not.
-            Box row = runtime.Box();
-            bool sideBySide = ShellLayout.PageWidth(runtime) >= FieldWidth + 24f + ViewerWidth;
-            row.ChildLayoutAxis = sideBySide ? LayoutAxis.X : LayoutAxis.Y;
-            row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.PushParent(row))
+            runtime.Gap(24f);
+
+            Box surface = runtime.Box();
+            surface.ChildLayoutAxis = LayoutAxis.Y;
+            surface.SizeX = SemanticSize.Pixels(ViewerWidth);
+            surface.SizeY = SemanticSize.ChildrenSum();
+            surface.Style.Padding = EdgeInsets.All(16f);
+            surface.Style.BorderColor = UiColor.Border;
+            surface.Style.BorderWidth = 1f;
+            surface.Style.CornerRadius = 8f;
+            using (runtime.PushParent(surface))
             {
-                Box frame = runtime.Box();
-                TextField.InputStyle(runtime, frame, _focused);
-                frame.SizeX = SemanticSize.Pixels(FieldWidth);
-                frame.SizeY = SemanticSize.ChildrenSum();
-                BibuiWidget field;
-                using (runtime.PushParent(frame))
-                using (runtime.PushSizeY(TextField.Rows(runtime, 26)))
-                using (runtime.PushFontSize(ComponentSize.Sm))
-                    field = runtime.MultilineTextField("demo-markdown-source", Source, Edit, _focused);
-                if (field.Pressed) _focused = true;
-
-                runtime.Gap(24f);
-
-                Box surface = runtime.Box();
-                surface.ChildLayoutAxis = LayoutAxis.Y;
-                surface.SizeX = SemanticSize.Pixels(ViewerWidth);
-                surface.SizeY = SemanticSize.ChildrenSum();
-                surface.Style.Padding = EdgeInsets.All(16f);
-                surface.Style.BorderColor = UiColor.Border;
-                surface.Style.BorderWidth = 1f;
-                surface.Style.CornerRadius = 8f;
-                using (runtime.PushParent(surface))
-                {
-                    var viewer = runtime.Markdown("demo-markdown", Source, width: ViewerWidth - 32f);
-                    if (viewer.LinkClicked) _lastLink = viewer.ClickedLink;
-                    if (viewer.TaskClicked) Markdown.ToggleTask(Source, viewer.ToggledTask);
-                }
+                var viewer = runtime.Markdown("demo-markdown", Source, width: ViewerWidth - 32f);
+                if (viewer.LinkClicked) _lastLink = viewer.ClickedLink;
+                if (viewer.TaskClicked) Markdown.ToggleTask(Source, viewer.ToggledTask);
             }
-
-            runtime.Gap(16f);
-            runtime.Text(_lastLink is null ? "Click a link in the viewer." : $"Clicked: {_lastLink}",
-                ComponentSize.Sm, TextColor.Secondary);
         }
+
+        runtime.Gap(16f);
+        runtime.Text(_lastLink is null ? "Click a link in the viewer." : $"Clicked: {_lastLink}",
+            ComponentSize.Sm, TextColor.Secondary);
 
         if (_focused)
             foreach (var ev in runtime.UnconsumedEvents)
@@ -99,6 +95,5 @@ internal static class DemoMarkdown
                     _focused = false;
                     ev.Eat();
                 }
-        return page;
     }
 }

@@ -30,7 +30,7 @@ internal static class DemoTexture
     private static readonly byte[] s_grey8 = new byte[Size * Size];
     private static float s_time;
 
-    internal static UiNode Build(BibuiRuntime runtime)
+    internal static void Build(BibuiRuntime runtime)
     {
         if (s_still.IsNone)
         {
@@ -49,22 +49,17 @@ internal static class DemoTexture
         Update(s_grey, s_grey8);
         runtime.RequestFrame();
 
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
-        {
-            Bold(runtime, "Made once, drawn scaled up", ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(10f);
-            Picture(runtime, s_still);
-            runtime.Gap(22f);
-            Bold(runtime, "One Stream texture, its pixels updated every frame", ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(10f);
-            Picture(runtime, s_moving);
-            runtime.Gap(22f);
-            Bold(runtime, "An R8 Stream texture: one byte a pixel, drawn grey", ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(10f);
-            Picture(runtime, s_grey);
-        }
-        return page;
+        Bold(runtime, "Made once, drawn scaled up", ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(10f);
+        Picture(runtime, s_still);
+        runtime.Gap(22f);
+        Bold(runtime, "One Stream texture, its pixels updated every frame", ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(10f);
+        Picture(runtime, s_moving);
+        runtime.Gap(22f);
+        Bold(runtime, "An R8 Stream texture: one byte a pixel, drawn grey", ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(10f);
+        Picture(runtime, s_grey);
     }
 
     // Nearest sampling: each texel stays a sharp square at 6x.
