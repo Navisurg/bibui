@@ -115,6 +115,8 @@ public sealed partial class BibuiRuntime
         node.FixedPosition = default;
         node.ChildGap = 0f;
         node.ChildAlign = ChildAlignment.Start;
+        node.ChildWrap = false;
+        node.LineGap = 0f;
     }
 
     /// <summary>Links <paramref name="node"/> last under <paramref name="parent"/>, or under the parent in scope.</summary>

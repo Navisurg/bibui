@@ -142,7 +142,18 @@ internal static class LayoutSolver
     {
         float inner = MathF.Max(0f, Get(node.FixedSize, a) - PadStart(node, a) - PadEnd(node, a));
 
-        if (!AllowsOverflow(node, a))
+        if (Wraps(node) && a == 0)
+        {
+            // A wrapping row: one line while what is not a fill fits, else lines, and fills take nothing.
+            node.Wrapped = !FitsOnOneLine(node, inner);
+            if (node.Wrapped) BreakLines(node, inner);
+            else for (var child = node.FirstChild; child is not null; child = NextOf(child)) child.WrapLine = 0;
+        }
+        if (Wraps(node) && node.Wrapped && a == 0)
+        {
+            // Its lines are broken: nothing more to share along them.
+        }
+        else if (!AllowsOverflow(node, a))
         {
             if ((int)node.ChildLayoutAxis == a)
             {
@@ -189,10 +200,62 @@ internal static class LayoutSolver
             Constrain(child, a);
     }
 
+    private static bool Wraps(UiNode node) => node.ChildWrap && node.ChildLayoutAxis == LayoutAxis.X;
+
+    /// <summary>Whether a wrapping row's children, fills left out, fit on one line of <paramref name="inner"/>.</summary>
+    private static bool FitsOnOneLine(UiNode node, float inner)
+    {
+        float total = Gaps(node, 0);
+        for (var child = node.FirstChild; child is not null; child = NextOf(child))
+            if (!Floats(child, 0) && Sem(child, 0).Kind != SizeKind.ParentPct) total += child.FixedSize.X;
+        return total <= inner + 0.01f;
+    }
+
+    /// <summary>
+    /// The lines of a wrapping row too narrow for its children: fills get nothing, a child wider than
+    /// the row is cut to it, and each child that would run past the end starts the next line.
+    /// </summary>
+    private static void BreakLines(UiNode node, float inner)
+    {
+        float cursor = 0f;
+        int line = 0;
+        bool any = false;
+        for (var child = node.FirstChild; child is not null; child = NextOf(child))
+        {
+            if (Floats(child, 0)) continue;
+            float s = Sem(child, 0).Kind == SizeKind.ParentPct ? 0f : MathF.Min(child.FixedSize.X, inner);
+            child.FixedSize = child.FixedSize with { X = s };
+            if (s == 0f) { child.WrapLine = line; continue; }
+            if (any && cursor + s > inner + 0.01f) { line++; cursor = 0f; }
+            child.WrapLine = line;
+            cursor += s + node.ChildGap;
+            any = true;
+        }
+    }
+
+    /// <summary>The height of each line of a wrapped row, in order.</summary>
+    private static float LineHeight(UiNode node, int line)
+    {
+        float h = 0f;
+        for (var child = node.FirstChild; child is not null; child = NextOf(child))
+            if (!Floats(child, 1) && child.WrapLine == line) h = MathF.Max(h, child.FixedSize.Y);
+        return h;
+    }
+
+    private static int Lines(UiNode node)
+    {
+        int last = 0;
+        for (var child = node.FirstChild; child is not null; child = NextOf(child))
+            if (!Floats(child, 1)) last = Math.Max(last, child.WrapLine);
+        return last + 1;
+    }
+
     // ── 5. Positions ───────────────────────────────────────────────────────
 
     private static void Position(UiNode node, int a)
     {
+        if (Wraps(node) && node.Wrapped) { PositionWrapped(node, a); return; }
+
         float start = Get(node.Rect, a) + PadStart(node, a) - Get(node.ViewOffset, a);
         float cursor = 0f;
         bool along = (int)node.ChildLayoutAxis == a;
@@ -224,6 +287,44 @@ internal static class LayoutSolver
         throw LayoutException.NoSize(node, a);
     }
 
+    /// <summary>A wrapped row's children: along X from each line's start, down Y line by line, placed in their line by <see cref="UiNode.ChildAlign"/>.</summary>
+    private static void PositionWrapped(UiNode node, int a)
+    {
+        float start = Get(node.Rect, a) + PadStart(node, a) - Get(node.ViewOffset, a);
+        float across = node.ChildAlign switch { ChildAlignment.Center => 0.5f, ChildAlignment.End => 1f, _ => 0f };
+        int lines = a == 1 ? Lines(node) : 0;
+        Span<float> tops = a == 1 ? stackalloc float[Math.Min(lines, 256)] : default;
+        Span<float> heights = a == 1 ? stackalloc float[Math.Min(lines, 256)] : default;
+        if (a == 1)
+        {
+            float y = 0f;
+            for (int i = 0; i < tops.Length; i++) { heights[i] = LineHeight(node, i); tops[i] = y; y += heights[i] + node.LineGap; }
+        }
+        float cursor = 0f;
+        int current = 0;
+        for (var child = node.FirstChild; child is not null; child = NextOf(child))
+        {
+            float s = Get(child.FixedSize, a);
+            float at;
+            if (Floats(child, a)) at = Get(node.Rect, a) + Get(child.FixedPosition, a) - Get(node.ViewOffset, a);
+            else if (a == 0)
+            {
+                if (child.WrapLine != current) { current = child.WrapLine; cursor = 0f; }
+                at = start + cursor;
+                if (s > 0f) cursor += s + node.ChildGap;
+            }
+            else
+            {
+                int line = Math.Min(child.WrapLine, tops.Length - 1);
+                at = start + tops[line] + MathF.Max(0f, heights[line] - s) * across;
+            }
+            child.Rect = With(child.Rect, a, at);
+            child.Extent = With(child.Extent, a, s);
+            Position(child, a);
+        }
+        node.ContentSize = With(node.ContentSize, a, Extent(node, a) + PadStart(node, a) + PadEnd(node, a));
+    }
+
     /// <summary>The space <see cref="UiNode.ChildGap"/> puts between the in-flow children along <paramref name="a"/>.</summary>
     private static float Gaps(UiNode node, int a)
     {
@@ -237,6 +338,14 @@ internal static class LayoutSolver
     /// <summary>The children's extent along <paramref name="a"/>: summed with the gaps between them if it is the layout axis, the largest if not.</summary>
     private static float Extent(UiNode node, int a)
     {
+        if (Wraps(node) && node.Wrapped && a == 1)
+        {
+            // A wrapped row is as tall as its lines and the gaps between them.
+            int lines = Lines(node);
+            float h = node.LineGap * (lines - 1);
+            for (int i = 0; i < lines; i++) h += LineHeight(node, i);
+            return h;
+        }
         bool along = (int)node.ChildLayoutAxis == a;
         float extent = along ? Gaps(node, a) : 0f;
         for (var child = node.FirstChild; child is not null; child = NextOf(child))

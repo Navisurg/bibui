@@ -149,6 +149,14 @@ public static class Arrange
         return node;
     }
 
+    /// <summary>A row whose children run on onto more lines, <paramref name="lineGap"/> apart, when they do not fit (<see cref="UiNode.ChildWrap"/>).</summary>
+    public static T Wrapping<T>(this T node, float lineGap = 0f) where T : UiNode
+    {
+        node.ChildWrap = true;
+        node.LineGap = lineGap;
+        return node;
+    }
+
     /// <summary>Where its children sit across its axis (<see cref="UiNode.ChildAlign"/>).</summary>
     public static T Aligned<T>(this T node, ChildAlignment align) where T : UiNode
     {

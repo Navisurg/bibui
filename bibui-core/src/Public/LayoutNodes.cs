@@ -105,6 +105,24 @@ public abstract class UiNode
     /// </summary>
     public ChildAlignment ChildAlign { get; set; }
 
+    /// <summary>
+    /// A row (<see cref="ChildLayoutAxis"/> X) whose children run on onto more lines when they do not
+    /// fit on one, as CSS <c>flex-wrap</c>: a row of buttons in a narrow pane. While they fit it is an
+    /// ordinary row, and fills (springs) share what is left; once they do not, the fills take nothing
+    /// and each child that would run past the end starts a line, <see cref="LineGap"/> under the one
+    /// before. The row is as tall as its lines; <see cref="ChildAlign"/> places a child in its line.
+    /// </summary>
+    public bool ChildWrap { get; set; }
+
+    /// <summary>Space between the lines of a <see cref="ChildWrap"/> row, in logical px.</summary>
+    public float LineGap { get; set; }
+
+    /// <summary>The line of its <see cref="ChildWrap"/> parent this node was put on, from 0; set by layout.</summary>
+    public int WrapLine { get; internal set; }
+
+    // Whether this ChildWrap row's children ran onto more than one line in the last layout.
+    internal bool Wrapped;
+
     /// <summary>The size this node asks for along X. See <see cref="SemanticSize"/>.</summary>
     public SemanticSize SizeX { get; set; }
 

@@ -8054,6 +8054,48 @@ Run("Box.InkOverflow: a callback's drawing reaches past its box as far as it say
     IsTrue(Red(part, 19, 19) && !Red(part, 16, 16), "and no further than it says");
 });
 
+Run("ChildWrap: a row whose children fit is a row (a spring shares the rest); one too narrow runs onto lines", () =>
+{
+    var rt = BibuiRuntime.Create();
+    float width = 200f;
+    Box? row = null, a = null, b = null, c = null, spring = null, tall = null;
+    rt.SetBuild(() =>
+    {
+        var root = rt.ColumnFill();
+        using (rt.PushParent(root))
+        using (rt.PushParent(rt.ColumnWidth(width)))
+        {
+            row = rt.RowFillX().Spaced(10f).Wrapping(lineGap: 6f).Aligned(ChildAlignment.Center);
+            using (rt.PushParent(row))
+            {
+                a = rt.Box().Px(50f, 20f);
+                b = rt.Box().Px(50f, 20f);
+                spring = rt.Box().FillX().Px(height: 0f);
+                c = rt.Box().Px(50f, 20f);
+                tall = rt.Box().Px(30f, 40f);
+            }
+        }
+        return root;
+    }, new SurfaceOptions { Width = 400, Height = 400 });
+
+    rt.Step();
+    // 50+50+50+30 and four gaps = 220: too wide for 200.
+    Eq(0f, spring!.Extent.X, "wrapped: the spring takes nothing");
+    Eq(0, a!.WrapLine);
+    Eq(0f, c!.Rect.X - a.Rect.X - 120f, "the third fits on the first line (50+10+50+10)");
+    Eq(1, tall!.WrapLine, "the fourth starts the next line");
+    Eq(a.Rect.X, tall.Rect.X, "at the line's start");
+    Eq(20f + 6f + 40f, row!.Extent.Y, "as tall as its lines and the gap between them");
+    Eq(row.Rect.Y + 26f, tall.Rect.Y, "the second line under the first and the gap");
+
+    width = 300f;
+    rt.Step();
+    Eq(0, tall!.WrapLine, "room enough: one line");
+    Eq(40f, row!.Extent.Y, "as tall as its tallest");
+    IsTrue(spring!.Extent.X > 0f && MathF.Abs(tall.Rect.X + 30f - (row.Rect.X + 300f)) < 0.01f, "the spring pushes what follows to the end");
+    Eq(row.Rect.Y + 10f, a!.Rect.Y, "centred in the line");
+});
+
 Console.WriteLine($"Results: {passed} passed, {failed} failed, {skipped} skipped"
     + (filter is null ? "" : $" ({filteredOut} not matching '{filter}')"));
 
