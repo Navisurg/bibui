@@ -544,4 +544,44 @@ static class Tests
         c.DrawRoundRect(new Rect(3.3f, 2.3f, 43.3f, 26.3f), 6, 6, Paint.Fill(White));
         Assert(Cov(s, 3, 12) == 192 && Cov(s, 14, 2) == 191, $"{Cov(s, 3, 12)} {Cov(s, 14, 2)}");
     }
+
+    // ── Far outside the surface ──────────────────────────────────────────
+
+    /// <summary>
+    /// A shape far below (or above) the surface draws nothing on it, in both antialiasing modes. The
+    /// supersampled edges step in 16.16 fixed point at 4×, so a coordinate past a few thousand device
+    /// px wrapped round: a long list's far rows drew their dots over the visible ones.
+    /// </summary>
+    public static void ShapesFarOutsideTheSurfaceDrawNothing()
+    {
+        foreach (var mode in new[] { Antialiasing.Exact, Antialiasing.BaselineCompatible })
+        foreach (float y in new[] { 8192f + 20f, 16384f + 20f, 30000f, 32768f + 20f, 65536f + 20f, 1e6f, -16384f - 20f, -1e6f })
+        {
+            var (s, c) = Black8();
+            c.Antialiasing = mode;
+            c.DrawOval(new Rect(10, y, 16, y + 6), Paint.Fill(White));
+            c.DrawRoundRect(new Rect(20, y, 40, y + 20), 3, 3, Paint.Fill(White));
+            c.DrawRoundRect(new Rect(20, y, 40, y + 20), 3, 3, new Paint { Color = White, Style = PaintStyle.Stroke, StrokeWidth = 2 });
+            c.DrawRect(new Rect(44, y, 60, y + 10), Paint.Fill(White));
+            var xy = Star(30, y + 10, 9);
+            var star = new Path();
+            star.AddPolygon([.. Enumerable.Range(0, xy.Length / 2).Select(i => new Vector2(xy[2 * i], xy[2 * i + 1]))]);
+            c.DrawPath(star, Paint.Fill(White));
+            for (int py = 0; py < s.Height; py++)
+            for (int px = 0; px < s.Width; px++)
+                Assert(Cov(s, px, py) == 0, $"{mode}, shapes at y {y}: pixel ({px},{py}) is {Cov(s, px, py)}");
+        }
+    }
+
+    /// <summary>A shape that starts far above the surface and runs onto it is drawn where it lies on it.</summary>
+    public static void AShapeReachingFarOffTheSurfaceDrawsItsVisiblePart()
+    {
+        foreach (var mode in new[] { Antialiasing.Exact, Antialiasing.BaselineCompatible })
+        {
+            var (s, c) = Black8();
+            c.Antialiasing = mode;
+            c.DrawRoundRect(new Rect(10, -40000, 30, 20), 4, 4, Paint.Fill(White));
+            Assert(Cov(s, 20, 10) == 255 && Cov(s, 20, 30) == 0 && Cov(s, 40, 10) == 0, $"{mode}: {Cov(s, 20, 10)} {Cov(s, 20, 30)} {Cov(s, 40, 10)}");
+        }
+    }
 }
