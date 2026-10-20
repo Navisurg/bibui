@@ -103,17 +103,15 @@ internal static class Charts
     }
 
     /// <summary>The axis beside an area chart: its tick values, top to bottom, spread over the plot's height.</summary>
-    public static Box Axis(BibuiRuntime rt, Series s)
+    public static void Axis(BibuiRuntime rt, Series s)
     {
-        var col = rt.ColumnFillY().Px(width: 44f);
-        using (rt.PushParent(col))
+        using (rt.PushParent(rt.ColumnFillY().Px(width: 44f)))
             for (int t = 0; t <= s.Ticks; t++)
             {
                 if (t > 0) rt.Spring();
                 float v = s.Max - (s.Max - s.Min) * t / s.Ticks;
                 Ui.T(rt, v.ToString(s.Format, System.Globalization.CultureInfo.InvariantCulture), FontSize.Px(11f), UiColor.TextSecondary);
             }
-        return col;
     }
 
     /// <summary>A ring gauge: a track, an arc of <paramref name="value"/> 0..1, and nothing else.</summary>

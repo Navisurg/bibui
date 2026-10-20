@@ -18,7 +18,7 @@ internal sealed partial class App
 
     // ── Sidebar ──────────────────────────────────────────────────────────────
 
-    private Box Sidebar(BibuiRuntime rt, float open, float h)
+    private void Sidebar(BibuiRuntime rt, float open, float h)
     {
         // Ask first: the items and buttons inside, then nothing else claims here.
         var items = new List<Box>();
@@ -52,28 +52,23 @@ internal sealed partial class App
                 if (fade > 0f)
                 {
                     rt.Gap(12f);
-                    var words = rt.ColumnFit();
-                    using (rt.PushParent(words))
+                    using (rt.PushParent(rt.ColumnFillY()))
+                    using (rt.Centred())
+                    using (rt.PushParent(rt.ColumnFit().Styled(new Style { Opacity = fade })))
                     {
                         Bold(rt, "Zenith", ComponentSize.Lg, UiColor.TextPrimary);
                         T(rt, Data.SiteName + " observatory", FontSize.Px(11.5f), UiColor.TextSecondary);
                     }
-                    words.Style.Opacity = fade;
-                    CentredY(rt, words);
                 }
             }
             rt.Gap(26f);
 
             if (fade > 0f)
-            {
-                var eyebrow = rt.RowFit();
-                using (rt.PushParent(eyebrow))
+                using (rt.PushParent(rt.RowFit().Styled(new Style { Opacity = fade })))
                 {
                     rt.Gap(12f);
                     Eyebrow(rt, "Observe");
                 }
-                eyebrow.Style.Opacity = fade;
-            }
             else rt.Box().Px(1f, 13f);
             rt.Gap(10f);
             foreach (var item in items)
@@ -84,11 +79,7 @@ internal sealed partial class App
 
             rt.Spring();
 
-            if (fade > 0.6f)
-            {
-                var site = SiteCard(rt, live.Node);
-                site.Style.Opacity = (fade - 0.6f) / 0.4f;
-            }
+            if (fade > 0.6f) SiteCard(rt, live.Node).Style.Opacity = (fade - 0.6f) / 0.4f;
             else CentredX(rt, live.Node);
             rt.Gap(14f);
             Rule(rt);
@@ -101,14 +92,13 @@ internal sealed partial class App
                 if (fade > 0f)
                 {
                     rt.Gap(10f);
-                    var who = rt.ColumnFit();
-                    using (rt.PushParent(who))
+                    using (rt.PushParent(rt.ColumnFillY()))
+                    using (rt.Centred())
+                    using (rt.PushParent(rt.ColumnFit().Styled(new Style { Opacity = fade })))
                     {
                         Bold(rt, "Ines Rowe", ComponentSize.Sm, UiColor.TextPrimary);
                         T(rt, "Night lead", FontSize.Px(11.5f), UiColor.TextSecondary);
                     }
-                    who.Style.Opacity = fade;
-                    CentredY(rt, who);
                     rt.Spring();
                     CentredY(rt, fold.Node);
                 }
@@ -119,14 +109,12 @@ internal sealed partial class App
                 CentredX(rt, fold.Node);
             }
         }
-        return side;
     }
 
     private static BibuiWidget NavItem(BibuiRuntime rt, string id, string icon, string label, string key, bool selected, float open)
     {
         Box item = rt.BoxFromId(id, InteractionKinds.LeftPress);
         Interaction i = rt.InteractionsFor(item);
-        item.ChildLayoutAxis = LayoutAxis.X;
         item.FillX().Px(height: rt.Theme.Density.Of(40f));
         item.Style.Padding = EdgeInsets.Symmetric(horizontal: 13f, vertical: 0f);
         item.Style.CornerRadius = rt.Theme.Radii.Md + 2f;
@@ -141,20 +129,15 @@ internal sealed partial class App
             if (fade > 0f)
             {
                 rt.Gap(12f);
-                var words = rt.RowFill();
-                using (rt.PushParent(words))
+                using (rt.PushParent(rt.RowFill().Styled(new Style { Opacity = fade })))
                 {
                     CentredY(rt, Bold(rt, label, ComponentSize.Sm, selected ? UiColor.TextPrimary : UiColor.TextSecondary));
                     rt.Spring();
                     CentredY(rt, T(rt, key, FontSize.Px(11f), UiColor.TextDisabled));
                 }
-                words.Style.Opacity = fade;
             }
         }
-        if (fade <= 0f && i.Hovering)
-        {
-            Tooltip.Build(rt, label + "  ·  " + key, item);
-        }
+        if (fade <= 0f && i.Hovering) Tooltip.Build(rt, label + "  ·  " + key, item);
         return new BibuiWidget(item, i);
     }
 
@@ -163,15 +146,14 @@ internal sealed partial class App
     {
         double m = Minutes;
         float wind = Data.Wind(m), hum = Data.Humidity(m);
-        var card = rt.ColumnFillX();
-        card.Style = new Style
+        var card = rt.ColumnFillX().Styled(new Style
         {
             Padding = EdgeInsets.All(14f),
             CornerRadius = rt.Theme.Radii.Lg + 2f,
             BackgroundColor = UiColor.SurfaceRaised,
             BorderWidth = rt.Theme.Borders.Width,
             BorderColor = UiColor.Border,
-        };
+        });
         using (rt.PushParent(card))
         {
             using (rt.PushParent(rt.RowFillX()))
@@ -190,21 +172,17 @@ internal sealed partial class App
         return card;
     }
 
-    private static Box Meter(BibuiRuntime rt, string label, string value, float share, UiColor color)
+    /// <summary>A labelled bar, built into the column in scope.</summary>
+    private static void Meter(BibuiRuntime rt, string label, string value, float share, UiColor color)
     {
-        var meter = rt.ColumnFillX();
-        using (rt.PushParent(meter))
+        using (rt.PushParent(rt.RowFillX()))
         {
-            using (rt.PushParent(rt.RowFillX()))
-            {
-                T(rt, label, FontSize.Px(12f), UiColor.TextSecondary);
-                rt.Spring();
-                Bold(rt, value, FontSize.Px(12f), UiColor.TextPrimary);
-            }
-            rt.Gap(6f);
-            Progress.Build(rt, Math.Clamp(share, 0f, 1f) * 100f, thickness: 4f, fill: color);
+            T(rt, label, FontSize.Px(12f), UiColor.TextSecondary);
+            rt.Spring();
+            Bold(rt, value, FontSize.Px(12f), UiColor.TextPrimary);
         }
-        return meter;
+        rt.Gap(6f);
+        Progress.Build(rt, Math.Clamp(share, 0f, 1f) * 100f, thickness: 4f, fill: color);
     }
 
     /// <summary>The brand mark: an orb lit from the upper left, in the accent.</summary>
@@ -239,7 +217,6 @@ internal sealed partial class App
     {
         Box b = rt.BoxFromId(id, InteractionKinds.LeftPress);
         Interaction i = rt.InteractionsFor(b);
-        b.ChildLayoutAxis = LayoutAxis.X;
         b.Px(size, size);
         b.Style.CornerRadius = rt.Theme.Radii.Md + 2f;
         b.Style.BorderWidth = rt.Theme.Borders.Width;
@@ -264,14 +241,14 @@ internal sealed partial class App
         "Notes from the night, kept as Markdown",
     ];
 
-    private Box Main(BibuiRuntime rt, float w, float h)
+    private void Main(BibuiRuntime rt, float w, float h)
     {
         const float barH = 68f;
-        var bar = TopBar(rt, w, barH);
+        using var main = rt.PushParent(rt.ColumnPx(w, h));
+        TopBar(rt, w, barH);
 
         // The page scrolls inside a fixed frame; the bar beside it is the runtime's.
         Box wrap = rt.BoxFromId("page-wrap");
-        wrap.ChildLayoutAxis = LayoutAxis.X;
         wrap.Px(w, h - barH);
         Box view = rt.BoxFromId("page", InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, wrap);
         view.ChildLayoutAxis = LayoutAxis.Y;
@@ -281,28 +258,22 @@ internal sealed partial class App
         const float pad = 28f;
         float cw = w - 2 * pad - Scrollbar.Lane;
         float ch = h - barH - 2 * pad;
-        var page = Page switch
+        var page = rt.ColumnFillX().Padded(new EdgeInsets(pad - 4f, pad - Scrollbar.Lane, pad, pad));
+        using (rt.PushParent(page))
         {
-            Page.Targets => TargetsPage(rt, cw, ch),
-            Page.Telemetry => TelemetryPage(rt, cw, ch),
-            Page.Journal => JournalPage(rt, cw, ch),
-            _ => OverviewPage(rt, cw, ch),
-        };
-        page.Style.Padding = new EdgeInsets(pad - 4f, pad - Scrollbar.Lane, pad, pad);
-        page.FillX();
+            if (Page == Page.Targets) TargetsPage(rt, cw, ch);
+            else if (Page == Page.Telemetry) TelemetryPage(rt, cw, ch);
+            else if (Page == Page.Journal) JournalPage(rt, cw, ch);
+            else OverviewPage(rt, cw, ch);
+        }
         UiNode.PushIntoParent(view, page);
 
         using (rt.PushParent(wrap))
             rt.Scrollbar("page-bar", view);
         rt.InteractionsFor(view);   // after everything inside it
-
-        var main = rt.ColumnPx(w, h);
-        UiNode.PushIntoParent(main, bar);
-        UiNode.PushIntoParent(main, wrap);
-        return main;
     }
 
-    private Box TopBar(BibuiRuntime rt, float w, float barH)
+    private void TopBar(BibuiRuntime rt, float w, float barH)
     {
         // Ask, front to back.
         bool showSearch = w > 980f && Page is Page.Overview or Page.Targets;
@@ -314,23 +285,20 @@ internal sealed partial class App
         var look = IconButton(rt, "appearance", "sliders", on: SettingsOpen, tip: "Appearance  ·  ,");
         if (look.Clicked) SettingsOpen = !SettingsOpen;
 
-        var bar = rt.RowPx(w, barH);
-        bar.Style = new Style
+        using (rt.PushParent(rt.RowPx(w, barH).Styled(new Style
         {
             Padding = EdgeInsets.Symmetric(horizontal: 28f, vertical: 0f),
             BorderBottom = new EdgeBorder(rt.Theme.Borders.Width, UiColor.Border),
             BackgroundColor = UiColor.Background,
-        };
-        using (rt.PushParent(bar))
+        })))
         {
-            var title = rt.ColumnFit();
-            using (rt.PushParent(title))
+            using (rt.PushParent(rt.ColumnFillY()))
+            using (rt.Centred())
             {
                 Bold(rt, Nav[(int)Page].Label, ComponentSize.Xl, UiColor.TextPrimary);
                 rt.Gap(2f);
                 T(rt, Subtitles[(int)Page], ComponentSize.Sm, UiColor.TextSecondary);
             }
-            CentredY(rt, title);
             rt.Spring();
             if (field is not null)
             {
@@ -345,7 +313,6 @@ internal sealed partial class App
             rt.Gap(8f);
             CentredY(rt, look.Node);
         }
-        return bar;
     }
 
     /// <summary>The clock: UTC and sidereal time, in a quiet chip.</summary>
@@ -353,15 +320,14 @@ internal sealed partial class App
     {
         double lst = Data.Lst(Clock);
         int lh = (int)lst, lm = (int)((lst - lh) * 60);
-        var chip = rt.RowHeight(36f);
-        chip.Style = new Style
+        var chip = rt.RowHeight(36f).Styled(new Style
         {
             Padding = EdgeInsets.Symmetric(horizontal: 8f, vertical: 0f),
             CornerRadius = rt.Theme.Radii.Md + 2f,
             BorderWidth = rt.Theme.Borders.Width,
             BorderColor = UiColor.Border,
             BackgroundColor = UiColor.Surface,
-        };
+        });
         using (rt.PushParent(chip))
         {
             CentredY(rt, Pill(rt, Live ? "LIVE" : "PAUSED", Live ? UiColor.Success : UiColor.TextSecondary, dot: true, height: 20f));
@@ -380,7 +346,6 @@ internal sealed partial class App
     {
         Box field = rt.BoxFromId("search-box");
         TextField.InputStyle(rt, field, SearchFocused);
-        field.ChildLayoutAxis = LayoutAxis.X;
         field.Px(width, 36f);
         var line = rt.TextField("search", Search, SearchEdit, SearchFocused, placeholder: "Search targets");
         if (line.Pressed) { SearchFocused = true; NoteFocused = false; }
@@ -389,11 +354,8 @@ internal sealed partial class App
             CentredY(rt, Icon(rt, "search", 15f, UiColor.TextSecondary));
             rt.Gap(8f);
             using (rt.PushParent(rt.ColumnFill()))
-            {
-                rt.Spring();
+            using (rt.Centred())
                 Place(rt, line.Node.FillX());
-                rt.Spring();
-            }
             rt.Gap(8f);
             CentredY(rt, KeyboardShortcut.Build(rt, "/"));
         }

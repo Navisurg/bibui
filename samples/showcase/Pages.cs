@@ -4,9 +4,9 @@ using static Showcase.Ui;
 
 namespace Showcase;
 
-// The four pages. Each is given the width and height it has, and sizes its
-// cards from them: wide windows lay the cards side by side, narrow ones stack
-// them and let the page scroll.
+// The four pages, each built into the page's column. Each is given the width
+// and height it has, and sizes its cards from them: wide windows lay the cards
+// side by side, narrow ones stack them and let the page scroll.
 internal sealed partial class App
 {
     private const float Gutter = 16f;
@@ -15,51 +15,47 @@ internal sealed partial class App
 
     // ── Overview ─────────────────────────────────────────────────────────────
 
-    private Box OverviewPage(BibuiRuntime rt, float cw, float ch)
+    private void OverviewPage(BibuiRuntime rt, float cw, float ch)
     {
         bool wide = cw >= 940f;
         float kpiH = 132f;
-        var page = rt.ColumnFit();
-        using (rt.PushParent(page))
+        KpiRow(rt, cw, kpiH, wide ? 4 : 2);
+        rt.Gap(Gutter);
+        if (wide)
         {
-            KpiRow(rt, cw, kpiH, wide ? 4 : 2);
-            rt.Gap(Gutter);
-            if (wide)
+            float rest = MathF.Max(ch - kpiH - 2 * Gutter, 640f);
+            float bottomH = MathF.Max(290f, MathF.Round(rest * 0.40f));
+            float midH = rest - bottomH;
+            float skyW = MathF.Round((cw - Gutter) * 0.62f), telW = cw - Gutter - skyW;
+            using (rt.PushParent(rt.RowFit()))
             {
-                float rest = MathF.Max(ch - kpiH - 2 * Gutter, 640f);
-                float bottomH = MathF.Max(290f, MathF.Round(rest * 0.40f));
-                float midH = rest - bottomH;
-                float skyW = MathF.Round((cw - Gutter) * 0.62f), telW = cw - Gutter - skyW;
-                using (rt.PushParent(rt.RowFit()))
-                {
-                    SkyCard(rt, skyW, midH);
-                    rt.Gap(Gutter);
-                    TelemetryCard(rt, "tel-main", telW, midH, Metric, true);
-                }
+                SkyCard(rt, skyW, midH);
                 rt.Gap(Gutter);
-                float qW = MathF.Round((cw - Gutter) * 0.6f), logW = cw - Gutter - qW;
-                using (rt.PushParent(rt.RowFit()))
-                {
-                    QueueCard(rt, qW, bottomH);
-                    rt.Gap(Gutter);
-                    LogCard(rt, logW, bottomH);
-                }
+                TelemetryCard(rt, "tel-main", telW, midH, Metric, true);
             }
-            else
+            rt.Gap(Gutter);
+            float qW = MathF.Round((cw - Gutter) * 0.6f), logW = cw - Gutter - qW;
+            using (rt.PushParent(rt.RowFit()))
             {
-                SkyCard(rt, cw, cw >= 2f * 150f + GlassW + 40f ? 440f : StackedSkyHeight(cw));
+                QueueCard(rt, qW, bottomH);
                 rt.Gap(Gutter);
-                TelemetryCard(rt, "tel-main", cw, 330f, Metric, true);
-                rt.Gap(Gutter);
-                QueueCard(rt, cw, 440f);
-                rt.Gap(Gutter);
-                LogCard(rt, cw, 460f);
+                LogCard(rt, logW, bottomH);
             }
         }
-        return page;
+        else
+        {
+            SkyCard(rt, cw, cw >= 2f * 150f + GlassW + 40f ? 440f : StackedSkyHeight(cw));
+            rt.Gap(Gutter);
+            TelemetryCard(rt, "tel-main", cw, 330f, Metric, true);
+            rt.Gap(Gutter);
+            QueueCard(rt, cw, 440f);
+            rt.Gap(Gutter);
+            LogCard(rt, cw, 460f);
+        }
     }
 
-    private Box KpiRow(BibuiRuntime rt, float cw, float h, int perRow)
+    /// <summary>The KPI tiles, <paramref name="perRow"/> to a row, built into the column in scope.</summary>
+    private void KpiRow(BibuiRuntime rt, float cw, float h, int perRow)
     {
         double m = Minutes;
         float[] Window(Func<double, float> f, int n = 32, double step = 2.0)
@@ -74,11 +70,6 @@ internal sealed partial class App
         int done = Data.Targets.Count(t => t.Status == TargetStatus.Done);
         int planned = Data.Targets.Sum(t => t.PlannedMin), exposed = Data.Targets.Sum(t => t.DoneMin);
 
-        // The last tile's foot is built where the expression built it: after the
-        // tiles before it, before its own tile.
-        var t0 = Kpi(rt, "eye", "Seeing", $"{seeing[^1]:0.00}", "arcsec", Delta(seeing, "0.00", lowerIsBetter: true), Charts.Sparkline(rt, seeing, UiColor.Accent));
-        var t1 = Kpi(rt, "moon", "Sky darkness", $"{sky[^1]:0.00}", "mag/arcsec²", Delta(sky, "0.00", lowerIsBetter: false), Charts.Sparkline(rt, sky, UiColor.Token(c => c.Info)));
-        var t2 = Kpi(rt, "download", "Throughput", $"{tput[^1]:0.0}", "GB/h", Delta(tput, "0.0", lowerIsBetter: false), Charts.Sparkline(rt, tput, UiColor.Success));
         var exposure = rt.RowHeight(34f);
         using (rt.PushParent(exposure))
         {
@@ -86,27 +77,25 @@ internal sealed partial class App
             rt.Gap(10f);
             CentredY(rt, T(rt, $"{100.0 * exposed / planned:0}% of the plan exposed", FontSize.Px(12f), UiColor.TextSecondary));
         }
+        float w = (cw - Gutter * (perRow - 1)) / perRow;
         Box[] tiles =
         [
-            t0, t1, t2,
-            Kpi(rt, "list-checks", "Exposure tonight", $"{exposed / 60.0:0.0}", $"of {planned / 60.0:0} h",
+            Kpi(rt, w, h, "eye", "Seeing", $"{seeing[^1]:0.00}", "arcsec", Delta(seeing, "0.00", lowerIsBetter: true), Charts.Sparkline(rt, seeing, UiColor.Accent)),
+            Kpi(rt, w, h, "moon", "Sky darkness", $"{sky[^1]:0.00}", "mag/arcsec²", Delta(sky, "0.00", lowerIsBetter: false), Charts.Sparkline(rt, sky, UiColor.Token(c => c.Info))),
+            Kpi(rt, w, h, "download", "Throughput", $"{tput[^1]:0.0}", "GB/h", Delta(tput, "0.0", lowerIsBetter: false), Charts.Sparkline(rt, tput, UiColor.Success)),
+            Kpi(rt, w, h, "list-checks", "Exposure tonight", $"{exposed / 60.0:0.0}", $"of {planned / 60.0:0} h",
                 ($"{done} done", UiColor.Success), exposure),
         ];
-        int rows = (tiles.Length + perRow - 1) / perRow;
-        float tileW = (cw - Gutter * (perRow - 1)) / perRow;
-        var grid = rt.ColumnFit();
-        using (rt.PushParent(grid))
-            for (int r = 0; r < rows; r++)
-            {
-                if (r > 0) rt.Gap(Gutter);
-                using (rt.PushParent(rt.RowFit()))
-                    for (int c = 0; c < perRow && r * perRow + c < tiles.Length; c++)
-                    {
-                        if (c > 0) rt.Gap(Gutter);
-                        Place(rt, tiles[r * perRow + c].Px(tileW, h));
-                    }
-            }
-        return grid;
+        for (int r = 0; r < tiles.Length; r += perRow)
+        {
+            if (r > 0) rt.Gap(Gutter);
+            using (rt.PushParent(rt.RowFit()))
+                for (int c = r; c < r + perRow && c < tiles.Length; c++)
+                {
+                    if (c > r) rt.Gap(Gutter);
+                    Place(rt, tiles[c]);
+                }
+        }
     }
 
     private static (string Text, UiColor Color) Delta(float[] v, string format, bool lowerIsBetter)
@@ -118,22 +107,19 @@ internal sealed partial class App
             MathF.Abs(d) < 0.005f ? UiColor.TextSecondary : better ? UiColor.Success : UiColor.Token(c => c.Warning));
     }
 
-    private static Box Kpi(BibuiRuntime rt, string icon, string label, string value, string unit,
+    private static Box Kpi(BibuiRuntime rt, float w, float h, string icon, string label, string value, string unit,
         (string Text, UiColor Color) delta, Box foot)
     {
-        var tile = rt.ColumnFit();
-        tile.Style = CardStyle(rt, 16f);
+        var tile = rt.ColumnPx(w, h).Styled(CardStyle(rt, 16f));
         using (rt.PushParent(tile))
         {
             using (rt.PushParent(rt.RowFillX(28f)))
             {
-                var badge = rt.RowPx(28f, 28f);
-                badge.Style = new Style
+                using (rt.PushParent(rt.RowPx(28f, 28f).Styled(new Style
                 {
                     CornerRadius = rt.Theme.Radii.Md + 1f,
                     BackgroundColor = UiColor.Accent.WithAlpha(0.14f),
-                };
-                using (rt.PushParent(badge))
+                })))
                 using (rt.Centred())
                     CentredY(rt, Icon(rt, icon, 15f, UiColor.Accent));
                 rt.Gap(10f);
@@ -146,12 +132,7 @@ internal sealed partial class App
             {
                 Bold(rt, value, FontSize.Px(28f), UiColor.TextPrimary);
                 rt.Gap(6f);
-                using (rt.PushParent(rt.ColumnFillY()))
-                {
-                    rt.Spring();
-                    T(rt, unit, ComponentSize.Sm, UiColor.TextSecondary);
-                    rt.Gap(4f);
-                }
+                BottomY(rt, T(rt, unit, ComponentSize.Sm, UiColor.TextSecondary), 4f);
             }
             rt.Spring();
             Place(rt, foot.FillX().Px(height: foot.SizeY.Kind == SizeKind.Pixels ? foot.SizeY.Value : 30f));
@@ -168,7 +149,7 @@ internal sealed partial class App
     /// selected target on frosted glass. Wide, the glass sits beside the dome;
     /// narrow, under it; with <paramref name="glass"/> off, the dome has the card.
     /// </summary>
-    private Box SkyCard(BibuiRuntime rt, float w, float h, bool glass = true)
+    private void SkyCard(BibuiRuntime rt, float w, float h, bool glass = true)
     {
         double lst = Data.Lst(Clock);
         var sel = SelectedTarget;
@@ -230,15 +211,14 @@ internal sealed partial class App
             if (i.Hovering) Tooltip.Build(rt, $"{t.Name}  ·  alt {alt:0}°  ·  {Data.StatusName(t.Status)}", hit);
             if (Labels && (chosen || t.Status == TargetStatus.Imaging))
             {
-                var tag = rt.RowFit();
-                using (rt.PushParent(tag))
-                    Bold(rt, t.Name, FontSize.Px(11.5f), chosen ? UiColor.AccentForeground : "#DCE3FA");
-                tag.Style = new Style
+                var tag = rt.RowFit().Styled(new Style
                 {
                     Padding = EdgeInsets.Symmetric(horizontal: 7f, vertical: 3f),
                     CornerRadius = 6f,
                     BackgroundColor = chosen ? UiColor.Accent : "#0B1030CC",
-                };
+                });
+                using (rt.PushParent(tag))
+                    Bold(rt, t.Name, FontSize.Px(11.5f), chosen ? UiColor.AccentForeground : "#DCE3FA");
                 // Beside the mark, on whichever side has room.
                 float tagW = 16f + 6.6f * t.Name.Length;
                 bool left = dome.Cx + x + 22f + tagW > w - 12f;
@@ -270,17 +250,13 @@ internal sealed partial class App
         string lstText = $"LST {(int)lst:00}:{(int)((lst % 1) * 60):00}";
         using (rt.PushParent(card))
         {
-            var head = rt.RowHeight(32f);
-            head.Style = Glass(10f, padX: 8f, padY: 0f);
-            using (rt.PushParent(head))
+            using (rt.PushParent(rt.RowHeight(32f).Styled(Glass(10f, padX: 8f, padY: 0f)).At(16f, 16f)))
             {
                 CentredY(rt, Pill(rt, "ALL-SKY", UiColor.Accent, dot: true, height: 20f));
                 rt.Gap(10f);
                 CentredY(rt, T(rt, w > 520f ? "Fisheye · north up · " + lstText : lstText, FontSize.Px(12f), "#AEB8DE"));
             }
-            head.At(16f, 16f);
-            var shows = rt.RowFit().At(w - 16f - 2 * 36f - 6f, 16f);
-            using (rt.PushParent(shows))
+            using (rt.PushParent(rt.RowFit().At(w - 16f - 2 * 36f - 6f, 16f)))
             {
                 Place(rt, grid.Node);
                 rt.Gap(6f);
@@ -289,10 +265,8 @@ internal sealed partial class App
 
             // The legend, bottom right, where the dome leaves room for it.
             if (w - (dome.Cx + R) > 170f)
-            {
-                var legend = rt.ColumnFit();
-                legend.Style = Glass(10f, padX: 12f, padY: 10f);
-                using (rt.PushParent(legend))
+                using (rt.PushParent(rt.ColumnFit().Styled(Glass(10f, padX: 12f, padY: 10f))
+                    .At(w - 16f - 128f, glass && !beside ? 64f : h - 16f - 106f)))
                 {
                     LegendRow(rt, "Imaging", UiColor.Accent);
                     rt.Gap(6f);
@@ -302,8 +276,6 @@ internal sealed partial class App
                     rt.Gap(6f);
                     LegendRow(rt, "Weather hold", UiColor.Token(c => c.Warning));
                 }
-                legend.At(w - 16f - 128f, glass && !beside ? 64f : h - 16f - 106f);
-            }
         }
 
         if (frost is { } g)
@@ -353,7 +325,6 @@ internal sealed partial class App
             float gy = beside ? MathF.Max(60f, 24f + (h - gh) / 2f) : h - 16f - gh;
             UiNode.PushIntoParent(card, g.At(16f, MathF.Min(gy, h - 16f - gh)));
         }
-        return card;
     }
 
     /// <summary>The height a sky card with the glass under the dome needs at this width.</summary>
@@ -376,28 +347,24 @@ internal sealed partial class App
         BorderColor = frosted ? UiColor.Border.WithAlpha(0.8f) : "#FFFFFF1F",
     };
 
-    private static Box LegendRow(BibuiRuntime rt, string label, UiColor color)
+    private static void LegendRow(BibuiRuntime rt, string label, UiColor color)
     {
-        var row = rt.RowHeight(16f);
-        using (rt.PushParent(row))
+        using (rt.PushParent(rt.RowHeight(16f)))
         {
             CentredY(rt, rt.Box().Px(8f, 8f).Styled(new Style { CornerRadius = 4f, BorderWidth = 2f, BorderColor = color }));
             rt.Gap(8f);
             CentredY(rt, T(rt, label, FontSize.Px(11.5f), "#C3CCEB"));
         }
-        return row;
     }
 
-    private static Box Stat(BibuiRuntime rt, string label, string value)
+    private static void Stat(BibuiRuntime rt, string label, string value)
     {
-        var stat = rt.ColumnFit();
-        using (rt.PushParent(stat))
+        using (rt.PushParent(rt.ColumnFit()))
         {
             T(rt, label, FontSize.Px(11f), UiColor.TextSecondary);
             rt.Gap(2f);
             Bold(rt, value, ComponentSize.Md, UiColor.TextPrimary);
         }
-        return stat;
     }
 
     public static Box StatusPill(BibuiRuntime rt, TargetStatus s) => Pill(rt, Data.StatusName(s), s switch
@@ -434,7 +401,7 @@ internal sealed partial class App
     private static readonly ToggleOption[] MetricOptions =
         [new("Seeing", "seeing"), new("Sensor", "temp"), new("Data", "data")];
 
-    private Box TelemetryCard(BibuiRuntime rt, string id, float w, float h, Metric metric, bool picker)
+    private void TelemetryCard(BibuiRuntime rt, string id, float w, float h, Metric metric, bool picker)
     {
         var chart = SeriesFor(metric);
         UiNode? pick = null;
@@ -453,37 +420,20 @@ internal sealed partial class App
         string when = minsAgo == 0 ? "now" : $"{minsAgo} min ago";
         float avg = v.Average();
 
-        var card = rt.ColumnPx(w, h);
-        card.Style = CardStyle(rt);
-        using (rt.PushParent(card))
+        using (rt.PushParent(rt.ColumnPx(w, h).Styled(CardStyle(rt))))
         {
             CardHeader(rt, metric switch { Metric.Temperature => "thermometer", Metric.Throughput => "download", _ => "eye" },
-                chart.Title, null, pick is null ? Array.Empty<UiNode>() : new UiNode[] { CentredY(rt, pick) });
+                chart.Title, null, pick is null ? [] : [CentredY(rt, pick)]);
             rt.Gap(10f);
             using (rt.PushParent(rt.RowFillX(40f)))
             {
                 Bold(rt, v[at].ToString(chart.Format, System.Globalization.CultureInfo.InvariantCulture), FontSize.Px(30f), UiColor.TextPrimary);
                 rt.Gap(6f);
-                using (rt.PushParent(rt.ColumnFillY()))
-                {
-                    rt.Spring();
-                    T(rt, chart.Unit, ComponentSize.Md, UiColor.TextSecondary);
-                    rt.Gap(5f);
-                }
+                BottomY(rt, T(rt, chart.Unit, ComponentSize.Md, UiColor.TextSecondary), 5f);
                 rt.Gap(14f);
-                using (rt.PushParent(rt.ColumnFillY()))
-                {
-                    rt.Spring();
-                    T(rt, when, ComponentSize.Sm, hover is null ? UiColor.TextSecondary : UiColor.Accent);
-                    rt.Gap(7f);
-                }
+                BottomY(rt, T(rt, when, ComponentSize.Sm, hover is null ? UiColor.TextSecondary : UiColor.Accent), 7f);
                 rt.Spring();
-                using (rt.PushParent(rt.ColumnFillY()))
-                {
-                    rt.Spring();
-                    T(rt, $"90 min avg {avg.ToString(chart.Format, System.Globalization.CultureInfo.InvariantCulture)} {chart.Unit}", ComponentSize.Sm, UiColor.TextSecondary);
-                    rt.Gap(7f);
-                }
+                BottomY(rt, T(rt, $"90 min avg {avg.ToString(chart.Format, System.Globalization.CultureInfo.InvariantCulture)} {chart.Unit}", ComponentSize.Sm, UiColor.TextSecondary), 7f);
             }
             rt.Gap(12f);
             using (rt.PushParent(rt.RowFill()))
@@ -503,7 +453,6 @@ internal sealed partial class App
                 T(rt, "now", FontSize.Px(11f), UiColor.TextSecondary);
             }
         }
-        return card;
     }
 
     // ── Target queue ─────────────────────────────────────────────────────────
@@ -517,7 +466,7 @@ internal sealed partial class App
     private static readonly (string Value, string Label)[] Filters =
         [("all", "All targets"), ("imaging", "Imaging"), ("queued", "Queued"), ("hold", "On hold"), ("done", "Complete")];
 
-    private Box QueueCard(BibuiRuntime rt, float w, float h)
+    private void QueueCard(BibuiRuntime rt, float w, float h)
     {
         // The filter's dropdown and the header cells ask before the rows.
         string filterLabel = Array.Find(Filters, f => f.Value == Filter).Label ?? "All targets";
@@ -535,9 +484,8 @@ internal sealed partial class App
         float fixedW = Columns.Sum(c => c.Width);
         float nameW = inner - fixedW - Scrollbar.Lane - 16f;
 
-        var head = rt.RowFillX();
+        var head = rt.RowFillX().Padded(new EdgeInsets(0f, 0f, 0f, 16f));
         head.Style.BorderBottom = new EdgeBorder(rt.Theme.Borders.Width, UiColor.Border);
-        head.Style.Padding = new EdgeInsets(0f, 0f, 0f, 16f);
         using (rt.PushParent(head))
         {
             foreach (var (key, label, width) in Columns)
@@ -549,7 +497,6 @@ internal sealed partial class App
                     if (Sort == key) SortDescending = !SortDescending;
                     else { Sort = key; SortDescending = false; }
                 }
-                cell.ChildLayoutAxis = LayoutAxis.X;
                 cell.Px(width > 0 ? width : nameW, 30f);
                 bool sorted = Sort == key;
                 using (rt.PushParent(cell))
@@ -576,20 +523,14 @@ internal sealed partial class App
             _ => true,
         }).ToList();
         double lst = Data.Lst(Clock);
-        Box frame = rt.BoxFromId("queue-frame");
-        frame.ChildLayoutAxis = LayoutAxis.X;
-        frame.FillX().FillY();
+        Box frame = rt.BoxFromId("queue-frame").FillX().FillY();
         Box list = rt.BoxFromId("queue-list", InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, frame);
         list.ChildLayoutAxis = LayoutAxis.Y;
         list.FillX().FillY();
         list.AllowOverflowY = true;
-        foreach (var t in rows)
-        {
-            UiNode.PushIntoParent(list, QueueRow(rt, t, lst, nameW));
-        }
+        foreach (var t in rows) UiNode.PushIntoParent(list, QueueRow(rt, t, lst, nameW));
         if (rows.Count == 0)
             using (rt.PushParent(list))
-            using (rt.PushParent(rt.ColumnFillX()))
             {
                 rt.Gap(32f);
                 CentredX(rt, T(rt, "Nothing matches. Try another filter or search.", ComponentSize.Sm, UiColor.TextSecondary));
@@ -599,16 +540,13 @@ internal sealed partial class App
         rt.InteractionsFor(list);
 
         int imaging = Data.Targets.Count(t => t.Status == TargetStatus.Imaging);
-        var card = rt.ColumnPx(w, h);
-        card.Style = CardStyle(rt);
-        using (rt.PushParent(card))
+        using (rt.PushParent(rt.ColumnPx(w, h).Styled(CardStyle(rt))))
         {
             CardHeader(rt, "list-checks", "Target queue", $"{rows.Count} of {Data.Targets.Length} · {imaging} imaging", filterNode);
             rt.Gap(10f);
             Place(rt, head);
             Place(rt, frame);
         }
-        return card;
     }
 
     private Box QueueRow(BibuiRuntime rt, Target t, double lst, float nameW)
@@ -620,7 +558,6 @@ internal sealed partial class App
         if (i.RightPressed) { Selected = t.Id; MenuFor = t.Id; MenuX = i.X; MenuY = i.Y; rt.OpenDropDown("row-menu"); }
 
         bool chosen = t.Id == Selected;
-        row.ChildLayoutAxis = LayoutAxis.X;
         row.FillX().Px(height: rt.Theme.Density.Of(50f));
         row.Style.CornerRadius = rt.Theme.Radii.Md;
         row.Style.Padding = new EdgeInsets(0f, 0f, 0f, 13f);
@@ -639,7 +576,6 @@ internal sealed partial class App
         {
             using (rt.PushParent(Cell(nameW)))
             using (rt.Centred())
-            using (rt.PushParent(rt.ColumnFit()))
             {
                 Bold(rt, t.Name, ComponentSize.Sm, UiColor.TextPrimary);
                 rt.Gap(2f);
@@ -658,7 +594,7 @@ internal sealed partial class App
             using (rt.Centred())
             using (rt.PushParent(rt.RowHeight(20f)))
             {
-                using (rt.PushParent(rt.ColumnFillY().Px(width: 76f)))
+                using (rt.PushParent(Cell(76f)))
                 using (rt.Centred())
                     Progress.Build(rt, pct * 100f, thickness: 5f,
                         fill: t.Status == TargetStatus.Done ? UiColor.Success : UiColor.Accent);
@@ -674,14 +610,12 @@ internal sealed partial class App
 
     // ── Observing log ────────────────────────────────────────────────────────
 
-    private Box LogCard(BibuiRuntime rt, float w, float h, ComponentSize textSize = ComponentSize.Sm, bool night = false)
+    private void LogCard(BibuiRuntime rt, float w, float h, ComponentSize textSize = ComponentSize.Sm, bool night = false)
     {
         var t = SelectedTarget;
         var source = LogFor(t, night);
 
-        Box frame = rt.BoxFromId("log-frame");
-        frame.ChildLayoutAxis = LayoutAxis.X;
-        frame.FillX().FillY();
+        Box frame = rt.BoxFromId("log-frame").FillX().FillY();
         Box view = rt.BoxFromId("log-view", InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, frame);
         view.ChildLayoutAxis = LayoutAxis.Y;
         view.FillX().FillY();
@@ -694,14 +628,11 @@ internal sealed partial class App
             rt.Scrollbar("log-bar", view);
         rt.InteractionsFor(view);
 
-        var card = rt.ColumnPx(w, h);
-        card.Style = CardStyle(rt);
-        using (rt.PushParent(card))
+        using (rt.PushParent(rt.ColumnPx(w, h).Styled(CardStyle(rt))))
         {
             CardHeader(rt, "file-text", "Observing log", "Markdown", Badge.Build(rt, t.Code, BadgeVariant.Outline));
             rt.Gap(6f);
             Place(rt, frame);
         }
-        return card;
     }
 }

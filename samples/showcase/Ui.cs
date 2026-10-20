@@ -73,6 +73,23 @@ internal static class Ui
         return row;
     }
 
+    /// <summary>
+    /// <paramref name="node"/>, built already, at the foot of a full-height column
+    /// across the row in scope, <paramref name="lift"/> px up: a small text set
+    /// by eye on the baseline of a large one beside it.
+    /// </summary>
+    public static Box BottomY(BibuiRuntime rt, UiNode node, float lift)
+    {
+        var column = rt.ColumnFillY();
+        using (rt.PushParent(column))
+        {
+            rt.Spring();
+            Place(rt, node);
+            rt.Gap(lift);
+        }
+        return column;
+    }
+
     /// <summary><paramref name="node"/>, built already, linked last under the parent in scope.</summary>
     public static void Place(BibuiRuntime rt, UiNode node) => UiNode.PushIntoParent(rt.ParentInScope, node);
 
@@ -99,13 +116,12 @@ internal static class Ui
     /// <summary>A rounded pill of tinted colour with a label: a status, a delta, a tag.</summary>
     public static Box Pill(BibuiRuntime rt, string label, UiColor tint, bool dot = false, float height = 22f)
     {
-        var pill = rt.RowHeight(height);
-        pill.Style = new Style
+        var pill = rt.RowHeight(height).Styled(new Style
         {
             Padding = EdgeInsets.Symmetric(horizontal: 9f, vertical: 0f),
             CornerRadius = height / 2f,
             BackgroundColor = tint.WithAlpha(0.16f),
-        };
+        });
         using (rt.PushParent(pill))
         {
             if (dot)
