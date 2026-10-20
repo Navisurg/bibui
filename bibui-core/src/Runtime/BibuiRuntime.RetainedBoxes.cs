@@ -117,6 +117,7 @@ public sealed partial class BibuiRuntime
         node.ChildAlign = ChildAlignment.Start;
         node.ChildWrap = false;
         node.LineGap = 0f;
+        node.MaxSize = new System.Numerics.Vector2(float.PositiveInfinity, float.PositiveInfinity);
     }
 
     /// <summary>Links <paramref name="node"/> last under <paramref name="parent"/>, or under the parent in scope.</summary>

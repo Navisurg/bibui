@@ -8126,6 +8126,62 @@ Run("Shrinking along a row: fills give way first, then what may give up, by how 
     Eq(100f, other!.Extent.X, "the fixed box gives nothing");
 });
 
+Run("MaxSize: a fill held to a width, centred by its column; a size from children held too", () =>
+{
+    var rt = BibuiRuntime.Create();
+    float width = 1000f;
+    Box? measure = null, fit = null;
+    rt.SetBuild(() =>
+    {
+        var root = rt.ColumnFill();
+        using (rt.PushParent(root))
+        using (rt.PushParent(rt.ColumnWidth(width).Aligned(ChildAlignment.Center)))
+        {
+            measure = rt.Box().FillX().Px(height: 10f);
+            measure.MaxSize = new System.Numerics.Vector2(720f, float.PositiveInfinity);
+            fit = rt.RowFit();
+            fit.MaxSize = new System.Numerics.Vector2(50f, 15f);
+            using (rt.PushParent(fit)) rt.Box().Px(80f, 30f);
+        }
+        return root;
+    }, new SurfaceOptions { Width = 1200, Height = 200 });
+    rt.Step();
+    Eq(720f, measure!.Extent.X, "held to its maximum");
+    Eq(140f, measure.Rect.X, "in the middle of 1000");
+    Eq(new System.Numerics.Vector2(50f, 15f), fit!.Extent, "a size from its children, held both ways");
+    width = 500f;
+    rt.Step();
+    Eq(500f, measure!.Extent.X, "narrower than its maximum: its share");
+});
+
+Run("ChildAlignment.Stretch: children as tall as their row, pixel sizes kept", () =>
+{
+    var rt = BibuiRuntime.Create();
+    Box? row = null, a = null, b = null, px = null;
+    rt.SetBuild(() =>
+    {
+        var root = rt.ColumnFill();
+        using (rt.PushParent(root))
+        {
+            row = rt.RowFillX().Aligned(ChildAlignment.Stretch);
+            using (rt.PushParent(row))
+            {
+                a = rt.ColumnFit();
+                using (rt.PushParent(a)) rt.Box().Px(20f, 40f);
+                b = rt.ColumnFit();
+                using (rt.PushParent(b)) rt.Box().Px(20f, 10f);
+                px = rt.Box().Px(10f, 5f);
+            }
+        }
+        return root;
+    }, new SurfaceOptions { Width = 300, Height = 200 });
+    rt.Step();
+    Eq(40f, row!.Extent.Y, "as tall as its tallest");
+    Eq(40f, b!.Extent.Y, "the short cell stretched to it");
+    Eq(row.Rect.Y, b.Rect.Y, "from the top");
+    Eq(5f, px!.Extent.Y, "a number of pixels kept");
+});
+
 Console.WriteLine($"Results: {passed} passed, {failed} failed, {skipped} skipped"
     + (filter is null ? "" : $" ({filteredOut} not matching '{filter}')"));
 

@@ -83,7 +83,7 @@ internal static class LayoutSolver
     {
         var size = Sem(node, a);
         if (size.Kind == SizeKind.Pixels)
-            node.FixedSize = With(node.FixedSize, a, size.Value);
+            node.FixedSize = With(node.FixedSize, a, Capped(node, a, size.Value));
         else if (size.Kind == SizeKind.Text)
         {
             // TODO: fragile. Y measures a leaf at the width X settled on, so a text
@@ -92,7 +92,7 @@ internal static class LayoutSolver
             // its height, or a constraint that changes the width after it was
             // measured on Y, gets a height for a width it does not have.
             var measured = leaf(node, a == 0 ? float.PositiveInfinity : node.FixedSize.X);
-            node.FixedSize = With(node.FixedSize, a, Get(measured, a) + size.Value);
+            node.FixedSize = With(node.FixedSize, a, Capped(node, a, Get(measured, a) + size.Value));
         }
 
         for (var child = node.FirstChild; child is not null; child = NextOf(child))
@@ -119,7 +119,7 @@ internal static class LayoutSolver
             if (size.Kind == SizeKind.ParentPct)
             {
                 if (!parentKnown) throw LayoutException.Ring(child, a);
-                child.FixedSize = With(child.FixedSize, a, MathF.Max(0f, inner) * size.Value);
+                child.FixedSize = With(child.FixedSize, a, Capped(child, a, MathF.Max(0f, inner) * size.Value));
             }
             Upward(child, a, known);
         }
@@ -133,8 +133,11 @@ internal static class LayoutSolver
             Downward(child, a, includeSelf: true);
 
         if (!includeSelf || Sem(node, a).Kind != SizeKind.ChildrenSum) return;
-        node.FixedSize = With(node.FixedSize, a, Extent(node, a) + PadStart(node, a) + PadEnd(node, a));
+        node.FixedSize = With(node.FixedSize, a, Capped(node, a, Extent(node, a) + PadStart(node, a) + PadEnd(node, a)));
     }
+
+    /// <summary><paramref name="size"/>, held to the node's <see cref="UiNode.MaxSize"/> along <paramref name="a"/>.</summary>
+    private static float Capped(UiNode node, int a, float size) => MathF.Min(size, Get(node.MaxSize, a));
 
     // ── 4. Constraints ─────────────────────────────────────────────────────
 
@@ -170,10 +173,17 @@ internal static class LayoutSolver
             }
             else
             {
-                // Across it, each child is cut to the parent.
+                // Across it, each child is cut to the parent; stretched, each that is not a number
+                // of pixels is made as large as the parent (as far as its own maximum lets it).
+                bool stretch = node.ChildAlign == ChildAlignment.Stretch;
                 for (var child = node.FirstChild; child is not null; child = NextOf(child))
-                    if (!Floats(child, a) && Get(child.FixedSize, a) > inner)
+                {
+                    if (Floats(child, a)) continue;
+                    if (stretch && Sem(child, a).Kind != SizeKind.Pixels)
+                        child.FixedSize = With(child.FixedSize, a, Capped(child, a, inner));
+                    else if (Get(child.FixedSize, a) > inner)
                         child.FixedSize = With(child.FixedSize, a, inner);
+                }
             }
         }
         else

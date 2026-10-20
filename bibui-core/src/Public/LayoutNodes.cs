@@ -106,6 +106,15 @@ public abstract class UiNode
     public ChildAlignment ChildAlign { get; set; }
 
     /// <summary>
+    /// The largest this node may be on each axis, in logical px, as CSS <c>max-width</c> and
+    /// <c>max-height</c>: whatever its size says — a share of its parent, its children, its text —
+    /// it is held to this. Unbounded by default. A share of its parent across the parent's axis,
+    /// held to a width and placed by the parent's <see cref="ChildAlign"/>, is a column of text set
+    /// to a reading measure in the middle of a wide pane.
+    /// </summary>
+    public System.Numerics.Vector2 MaxSize { get; set; } = new(float.PositiveInfinity, float.PositiveInfinity);
+
+    /// <summary>
     /// A row (<see cref="ChildLayoutAxis"/> X) whose children run on onto more lines when they do not
     /// fit on one, as CSS <c>flex-wrap</c>: a row of buttons in a narrow pane. While they fit it is an
     /// ordinary row, and fills (springs) share what is left; once they do not, the fills take nothing
@@ -175,8 +184,12 @@ public abstract class UiNode
     public Vector2 TargetViewOffset { get; set; }
 }
 
-/// <summary>Where children sit across their parent's layout axis (<see cref="UiNode.ChildAlign"/>).</summary>
-public enum ChildAlignment { Start, Center, End }
+/// <summary>
+/// Where children sit across their parent's layout axis (<see cref="UiNode.ChildAlign"/>). Stretch
+/// makes each child that is not a fixed number of pixels as large as the parent across it — table
+/// cells as tall as their row — and sits it at the start.
+/// </summary>
+public enum ChildAlignment { Start, Center, End, Stretch }
 
 public sealed class Box : UiNode
 {
