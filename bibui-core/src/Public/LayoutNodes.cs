@@ -204,6 +204,16 @@ public sealed class Box : UiNode
     public MeasureCallback? Measure { get; set; }
 
     /// <summary>
+    /// How far past its edges what <see cref="Draw"/> draws may reach: its ink
+    /// overflow. A callback is clipped to its box, grown by this — zero by
+    /// default, so to the box itself. Text a box draws needs some, as a
+    /// <see cref="Text"/> has: a glyph's overhang, a highlight padded around a
+    /// word, the soft end of a rule. Layout does not see it. Build state like
+    /// <see cref="Draw"/>: cleared when the box is acquired again.
+    /// </summary>
+    public EdgeInsets InkOverflow { get; set; }
+
+    /// <summary>
     /// How hovered this box is, eased 0..1. Only means
     /// anything on a box that outlives the frame, i.e. one obtained from
     /// <c>BibuiRuntime.BoxFromId</c>; a box the build function constructed

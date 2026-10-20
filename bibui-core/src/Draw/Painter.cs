@@ -132,7 +132,11 @@ internal sealed class Painter
             float s = ctx.Scale;
             ctx.PushTransform(Matrix3x2.CreateTranslation(frame.X * s, frame.Y * s));
             var local = ctx.For(frame.Width, frame.Height);
-            ctx.PushClip(local.Rect);
+            var ink = box.InkOverflow;
+            var clip = local.Rect;
+            if (ink != EdgeInsets.Zero)
+                clip = new RectF(clip.Left - ink.Left * s, clip.Top - ink.Top * s, clip.Right + ink.Right * s, clip.Bottom + ink.Bottom * s);
+            ctx.PushClip(clip);
             int paints = _drawing.PaintDepth, floor = _drawing.StateFloor;
             _drawing.StateFloor = _drawing.StateDepth;
             draw(box, local);

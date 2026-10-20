@@ -96,6 +96,7 @@ public sealed partial class BibuiRuntime
         ResetNode(box);
         box.Draw = null;
         box.Measure = null;
+        box.InkOverflow = EdgeInsets.Zero;
     }
 
     /// <summary>What every node a build describes again starts from: no style, no links, no size.</summary>

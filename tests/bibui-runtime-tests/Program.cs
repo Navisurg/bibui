@@ -8026,6 +8026,34 @@ Run("ChildAlign: children across the axis at the start, the middle or the end of
     Eq(30f, small!.Rect.Y, "end");
 });
 
+Run("Box.InkOverflow: a callback's drawing reaches past its box as far as it says, and no further", () =>
+{
+    var rt = BibuiRuntime.Create();
+    var ink = EdgeInsets.Zero;
+    rt.SetBuild(() =>
+    {
+        var root = rt.ColumnFill();
+        using (rt.PushParent(root))
+        using (rt.PushParent(rt.ColumnFit().Padded(EdgeInsets.All(20f))))
+        {
+            var box = rt.Box().Px(10f, 10f);
+            box.InkOverflow = ink;
+            // A square from 5 px before the box to 5 px past it.
+            box.Draw = (_, ctx) => ctx.DrawRRect(-5f, -5f, 20f, 20f, 0f, new Rgba(255, 0, 0, 255), null, null);
+        }
+        return root;
+    }, new SurfaceOptions { Width = 60, Height = 60 });
+    bool Red(Pixels px, int x, int y) { int i = (y * px.Width + x) * 4; return px.RawBgraBytes[i + 2] > 200 && px.RawBgraBytes[i + 1] < 50; }
+    var clipped = rt.Frame(new ManagedRenderer().Draw);
+    IsTrue(Red(clipped, 25, 25) && !Red(clipped, 17, 17), "clipped to the box by default");
+    ink = EdgeInsets.All(5f);
+    var reached = rt.Frame(new ManagedRenderer().Draw);
+    IsTrue(Red(reached, 17, 17) && Red(reached, 33, 33), "drawn 5 px past it with an ink overflow of 5");
+    ink = EdgeInsets.All(2f);
+    var part = rt.Frame(new ManagedRenderer().Draw);
+    IsTrue(Red(part, 19, 19) && !Red(part, 16, 16), "and no further than it says");
+});
+
 Console.WriteLine($"Results: {passed} passed, {failed} failed, {skipped} skipped"
     + (filter is null ? "" : $" ({filteredOut} not matching '{filter}')"));
 
