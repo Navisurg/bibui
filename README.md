@@ -16,11 +16,11 @@ applications with bibui.
 ![Zenith, the showcase app, built with bibui](samples/showcase/screenshots/overview-dark.png)
 
 **Platforms:** the first release supports Linux on x64. Other platforms are not
-supported yet. We expect macOS and, and maybe even iOS, to be supported in the near feature.
+supported yet. We expect macOS, and maybe even iOS, to be supported in the near future.
 
 ## Install
 
-**Prerequisites** 
+**Prerequisites**
 - .NET 10.
 
 **Getting started with a bibui app**
@@ -32,8 +32,8 @@ dotnet new console -n Counter && cd Counter
 dotnet add package Bibui.App.SilkSkiaGl
 ```
 
-This creates a bibui app that runs in a Silk.NET window and renders using the Skia OpenGL backend. 
-Below we give the set of app platforms currently supported by bibui
+This creates a bibui app that runs in a Silk.NET window and renders using the Skia OpenGL backend.
+Below we give the set of app platforms currently supported by bibui.
 
 | Package | Window | Renderer | Native AOT |
 |---|---|---|---|
@@ -100,11 +100,11 @@ Each node is built where it goes: the text, then the button, in the order
 they appear in the column.
 
 `runtime.Button` is itself a composition: a `Box` that claims left presses,
-with a `Text` inside. `button.Clicked` reports a [Interaction](bibui/src/Public/Interaction.cs) as a struct with all the interactions the `Box` took.
+with a `Text` inside. `button.Clicked` reports an [Interaction](bibui/src/Public/Interaction.cs) as a struct with all the interactions the `Box` took.
 
 ## bibui app from scratch
 
-A `Bibui.App` package is a fast path for gluing together a window package and a renderer package. 
+A `Bibui.App` package is a fast path for gluing together a window package and a renderer package.
 
 You may instead reference directly `Bibui.Core`, `Bibui.Platform.Silk`,
 `Bibui.Raster.Skia`, and then you will have to write the main app loop as:
@@ -125,12 +125,15 @@ while (SilkWindow.BeginFrame(window, runtime))  // window:   wait for a frame; S
 }
 ```
 
-Each layer sends data only to layers below it, and each layer is then free to interpret the data however it likes. This enables us to easily have different combinations of platform layers to handle inputs, and renderers.
+Each layer sends data only to layers below it, and each layer is free to interpret that data however it likes.
+With this design, you may target a new platform, by writing a new platform layer that produces `WindowEvent`s. 
+You may be able to reuse any of the renderers, or write a new one for the platform that renders using the draw operations issued to a `DrawList`.
 
-Adding your own platform requires you to write a platform layer that produces `WindowEvent`s. You maybe be able to reuse any of the renderers, or write a new one for the platform that renders using the draw operations issued to a `DrawList`,
-[Bibui.Platform.Wayland](bibui-platform-wayland) and the managed rasterizer are both built this way.
+[Bibui.Platform.Wayland](bibui-platform-wayland/) and the managed rasterizer are both built this way.
 
-### The test server
+This design enables us to have different combinations of platform layers for handling input and renderers, for rendering the bibui `DrawList`.
+
+## The test server
 
 The test server lets a test or an agent drive a running app: click, type,
 read the tree, take a screenshot. A `BibuiApp` starts it when asked,
@@ -165,7 +168,7 @@ decides which other dependencies it needs. In every case the dependency tree is 
 | `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`) | none beyond `Bibui.Core`'s |
 
 The Wayland + managed route has no third-party NuGet dependencies at all, and
-it is the route that publishes with Native AOT; Silk.NET keeps the other on the
+it is the route that publishes with Native AOT; Silk.NET keeps the others on the
 JIT for now.
 
 ## Documentation
