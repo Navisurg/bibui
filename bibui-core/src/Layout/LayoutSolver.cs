@@ -145,6 +145,12 @@ internal static class LayoutSolver
     {
         float inner = MathF.Max(0f, Get(node.FixedSize, a) - PadStart(node, a) - PadEnd(node, a));
 
+        // A share of this node is a share of its size as it is now: its own parent may have shrunk
+        // or stretched it since the shares were taken (Upward). Floating children included.
+        for (var child = node.FirstChild; child is not null; child = NextOf(child))
+            if (Sem(child, a) is { Kind: SizeKind.ParentPct } share)
+                child.FixedSize = With(child.FixedSize, a, Capped(child, a, inner * share.Value));
+
         if (Wraps(node) && a == 0)
         {
             // A wrapping row: one line while what is not a fill fits, else lines, and fills take nothing.
@@ -186,14 +192,7 @@ internal static class LayoutSolver
                 }
             }
         }
-        else
-        {
-            // Children that run past keep their size, but a share of the parent
-            // is a share of its size as it now is.
-            for (var child = node.FirstChild; child is not null; child = NextOf(child))
-                if (Sem(child, a) is { Kind: SizeKind.ParentPct } pct)
-                    child.FixedSize = With(child.FixedSize, a, inner * pct.Value);
-        }
+        // Children that run past a parent that allows it keep their size (their shares were taken above).
 
         for (var child = node.FirstChild; child is not null; child = NextOf(child))
             Constrain(child, a);

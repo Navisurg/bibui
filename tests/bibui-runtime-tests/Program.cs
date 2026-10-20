@@ -8215,6 +8215,29 @@ Run("Style.CornerRadii: each corner its own radius; a uniform one draws as Corne
     IsTrue(uniform.AsSpan().SequenceEqual(plain), "CornerRadii.All(8) is CornerRadius 8, pixel for pixel");
 });
 
+Run("A share of a parent is a share of its final size: a floating fill in a box cut to its row", () =>
+{
+    var rt = BibuiRuntime.Create();
+    Box? leaf = null, overlay = null;
+    rt.SetBuild(() =>
+    {
+        var root = rt.ColumnFill();
+        using (rt.PushParent(root))
+        using (rt.PushParent(rt.RowPx(100f, 50f)))
+        {
+            // 300 px wide by its content, may give it all up: cut to the 100 px row.
+            leaf = rt.Box();
+            leaf.SizeX = SemanticSize.Pixels(300f, strictness: 0f);
+            leaf.SizeY = SemanticSize.Pixels(50f);
+            using (rt.PushParent(leaf)) overlay = rt.Box().FillX().FillY().At(0f, 0f);
+        }
+        return root;
+    }, new SurfaceOptions { Width = 200, Height = 100 });
+    rt.Step();
+    Eq(100f, leaf!.Extent.X, "the box is cut to its row");
+    Eq(100f, overlay!.Extent.X, "and its floating fill with it");
+});
+
 Console.WriteLine($"Results: {passed} passed, {failed} failed, {skipped} skipped"
     + (filter is null ? "" : $" ({filteredOut} not matching '{filter}')"));
 
