@@ -33,7 +33,7 @@ var runtime = BibuiRuntime.Create();
 runtime.Surface = new SurfaceOptions { Width = 760, Height = 560, ScaleFactor = 1f };
 long frame = 0;
 
-// One frame of the app, built from the state above.
+// One frame of the app, built from the state above, top to bottom.
 void Build()
 {
     frame++;
@@ -42,12 +42,23 @@ void Build()
     if (animate) runtime.RequestFrame();
     float t = (MathF.Sin(frame / 40f) + 1f) / 2f;
 
-    // ── Ask, innermost and topmost first ────────────────────────────────────
+    var page = runtime.ColumnFill()
+        .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(28f) });
+    using var inPage = runtime.PushParent(page);
+    using (runtime.PushFontFace(weight: FontWeight.Bold))
+        runtime.Text("Hello from raw Wayland", ComponentSize.Xxl, TextColor.Primary);
+    runtime.Gap(16f);
+    runtime.Text("wl_shm buffers, CPU raster, frame-callback pacing, xkbcommon input. No GLFW, no GL.",
+        textColor: TextColor.Secondary);
+    runtime.Gap(16f);
+
     var toggle = runtime.Switch("anim", animate, label: animate ? "Animating (click to stop)" : "Still (click to animate)");
     if (toggle.Clicked) { animate = !animate; runtime.RequestFrame(); }
+    runtime.Gap(16f);
 
     var hello = runtime.Button("hello", clicks == 0 ? "Click me" : $"Clicked {clicks}×");
     if (hello.Clicked) clicks++;
+    runtime.Gap(16f);
 
     // A press focuses the field; Escape or Enter lets it go.
     Box field = runtime.Box();
@@ -64,6 +75,21 @@ void Build()
             typing = false;
             ev.Eat();
         }
+    runtime.Gap(16f);
+
+    // The bar a frame moves: a groove and a fill inside it.
+    Box groove = runtime.Box().FillX().Px(height: 14f);
+    groove.Style.CornerRadius = 7f;
+    groove.Style.BackgroundColor = UiColor.SurfaceRaised;
+    groove.Style.BorderColor = UiColor.Border;
+    groove.Style.Padding = EdgeInsets.All(1f);
+    using (runtime.PushParent(groove))
+    {
+        Box fill = runtime.Box().Px(24f + t * 420f, 12f);
+        fill.Style.CornerRadius = 6f;
+        fill.Style.BackgroundColor = UiColor.Accent;
+    }
+    runtime.Gap(16f);
 
     // The pad takes every button and the wheel, and shows what arrived.
     Box pad = runtime.BoxFromId("pad", InteractionKinds.All);
@@ -75,7 +101,6 @@ void Build()
     else if (p.MiddlePressed) lastButton = "middle";
     if (p.Hovering) lastModifiers = p.Modifiers;
 
-    // ── Describe ────────────────────────────────────────────────────────────
     pad.FillX().Px(height: 96f);
     pad.ChildLayoutAxis = LayoutAxis.Y;
     pad.Style.CornerRadius = 10f;
@@ -93,43 +118,10 @@ void Build()
         runtime.Gap(6f);
         runtime.Text($"modifiers with the last event: {lastModifiers}", ComponentSize.Sm, TextColor.Secondary);
     }
+    runtime.Gap(16f);
 
-    // The bar a frame moves: a groove and a fill inside it.
-    Box groove = runtime.Box().FillX().Px(height: 14f);
-    groove.Style.CornerRadius = 7f;
-    groove.Style.BackgroundColor = UiColor.SurfaceRaised;
-    groove.Style.BorderColor = UiColor.Border;
-    groove.Style.Padding = EdgeInsets.All(1f);
-    using (runtime.PushParent(groove))
-    {
-        Box fill = runtime.Box().Px(24f + t * 420f, 12f);
-        fill.Style.CornerRadius = 6f;
-        fill.Style.BackgroundColor = UiColor.Accent;
-    }
-
-    // The widgets asked above are linked into their places here.
-    var page = runtime.ColumnFill()
-        .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(28f) });
-    using (runtime.PushParent(page))
-    {
-        Bold(runtime, "Hello from raw Wayland", ComponentSize.Xxl, TextColor.Primary);
-        runtime.Gap(16f);
-        runtime.Text("wl_shm buffers, CPU raster, frame-callback pacing, xkbcommon input. No GLFW, no GL.",
-            textColor: TextColor.Secondary);
-        runtime.Gap(16f);
-        UiNode.PushIntoParent(page, toggle.Node);
-        runtime.Gap(16f);
-        UiNode.PushIntoParent(page, hello.Node);
-        runtime.Gap(16f);
-        UiNode.PushIntoParent(page, field);
-        runtime.Gap(16f);
-        UiNode.PushIntoParent(page, groove);
-        runtime.Gap(16f);
-        UiNode.PushIntoParent(page, pad);
-        runtime.Gap(16f);
-        runtime.Text($"frame {frame} · {runtime.SurfaceWidth}×{runtime.SurfaceHeight} at {runtime.ScaleFactor:0.###}×",
-            ComponentSize.Sm, TextColor.Secondary);
-    }
+    runtime.Text($"frame {frame} · {runtime.SurfaceWidth}×{runtime.SurfaceHeight} at {runtime.ScaleFactor:0.###}×",
+        ComponentSize.Sm, TextColor.Secondary);
 }
 
 // CI's start-up check: one frame built and drawn headless, then exit.
@@ -164,10 +156,3 @@ while (WaylandWindow.BeginFrame(window, runtime))
     WaylandWindow.EndFrame(window, runtime);
 }
 return 0;
-
-// A text at the bold weight.
-static Text Bold(BibuiRuntime runtime, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null)
-{
-    using (runtime.PushFontFace(weight: FontWeight.Bold))
-        return runtime.Text(text, fontSize, textColor);
-}

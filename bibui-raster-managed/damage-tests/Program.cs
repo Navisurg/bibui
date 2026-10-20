@@ -50,7 +50,8 @@ static void Eq(string expected, string? actual)
 static void Frame(BibuiRuntime rt, ManagedRenderer renderer, Surface target)
 {
     rt.Step();
-    renderer.Draw(rt.DrawList, target);}
+    renderer.Draw(rt.DrawList, target);
+}
 
 // A grid of buttons, a tracking managed renderer, and a surface to draw it into.
 static (BibuiRuntime Rt, ManagedRenderer Backend, Surface Target) Rig()
