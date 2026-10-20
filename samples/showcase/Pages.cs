@@ -1,5 +1,5 @@
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 using static Showcase.Ui;
 
 namespace Showcase;
@@ -228,7 +228,7 @@ internal sealed partial class App
 
         var pal = new Sky.Palette(UiColor.Accent, UiColor.Success, UiColor.Token(c => c.Warning), UiColor.Rgba(205, 214, 245, 230));
         float radius = rt.Theme.Radii.Lg + 4f;
-        bool reduced = rt.Theme.Motion.Easing == Bibui.Theming.MotionEasing.None;
+        bool reduced = rt.Theme.Motion.Easing == Bibui.Core.Theming.MotionEasing.None;
 
         Box card = rt.BoxFromId("sky", InteractionKinds.Clip);
         card.Px(w, h);
@@ -286,7 +286,7 @@ internal sealed partial class App
             g.SizeX = SemanticSize.Pixels(beside ? gw : w - 32f);
             g.SizeY = SemanticSize.ChildrenSum();
             g.Style = Glass(rt.Theme.Radii.Lg + 4f, padX: 16f, padY: 14f, blur: 18f, frosted: true,
-                dark: rt.Theme.Colors.Mode == Bibui.Theming.ThemeMode.Dark);
+                dark: rt.Theme.Colors.Mode == Bibui.Core.Theming.ThemeMode.Dark);
             using (rt.PushParent(g))
             {
                 using (rt.PushParent(rt.RowFillX(22f)))

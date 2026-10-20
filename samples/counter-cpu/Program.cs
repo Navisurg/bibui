@@ -1,7 +1,7 @@
 // The counter drawn on the CPU: the same code as samples/counter, with the
 // Bibui.App.SilkSkiaCpu package in place of Bibui.App.SilkSkiaGl.
 using Bibui.App;
-using Bibui.Runtime;
+using Bibui.Core.Runtime;
 
 var runtime = BibuiRuntime.Create();
 using var app = BibuiApp.Open(runtime, new("Counter (CPU)", 360, 160));

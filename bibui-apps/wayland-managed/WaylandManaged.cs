@@ -1,8 +1,8 @@
-using Bibui.Draw;
+using Bibui.Core.Draw;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 
 namespace Bibui.App;
 

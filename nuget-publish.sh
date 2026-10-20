@@ -27,7 +27,7 @@ if [[ -z "$VERSION" ]]; then
 fi
 
 PROJECTS=(
-  "bibui/bibui.csproj"
+  "bibui-core/bibui-core.csproj"
   "bibui-gl/bibui-gl.csproj"
   "bibui-raster-skia/bibui-raster-skia.csproj"
   "bibui-platform-silk/bibui-platform-silk.csproj"

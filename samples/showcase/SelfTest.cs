@@ -1,7 +1,7 @@
-using Bibui;
-using Bibui.Draw;
-using Bibui.Runtime;
-using Bibui.TextEdit;
+using Bibui.Core;
+using Bibui.Core.Draw;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
 
 namespace Showcase;
 
@@ -45,13 +45,13 @@ internal static class SelfTest
             Click(app, rt, "nav-targets");
             Check(app.Page == Page.Targets, "a click on the sidebar opens Targets");
 
-            Key(app, rt, Bibui.Key.Number1);
+            Key(app, rt, Bibui.Core.Key.Number1);
             Check(app.Page == Page.Overview, "the 1 key goes back to the overview");
 
             string before = app.Selected;
-            Key(app, rt, Bibui.Key.Down);
+            Key(app, rt, Bibui.Core.Key.Down);
             Check(app.Selected != before, "the down arrow moves the selection");
-            Key(app, rt, Bibui.Key.Enter);
+            Key(app, rt, Bibui.Core.Key.Enter);
             Check(app.Pointing == app.Selected && app.SlewCount == 1, "Enter slews to the selected target");
 
             Click(app, rt, "col-mag");
@@ -59,21 +59,21 @@ internal static class SelfTest
             Click(app, rt, "col-mag");
             Check(app.SortDescending, "a second click reverses it");
 
-            Key(app, rt, Bibui.Key.Slash);
+            Key(app, rt, Bibui.Core.Key.Slash);
             Check(app.SearchFocused, "/ gives the search field the keyboard");
             Type(app, rt, "kes");
             Check(app.Search.ToString() == "kes", "typing goes into the search field, and the slash does not");
             Check(app.VisibleTargets().Count == 1, "the search filters the queue to one target");
-            Key(app, rt, Bibui.Key.L);
+            Key(app, rt, Bibui.Core.Key.L);
             Check(app.Dark, "a letter typed into the field is not a shortcut");
-            Key(app, rt, Bibui.Key.Escape);
+            Key(app, rt, Bibui.Core.Key.Escape);
             Check(!app.SearchFocused, "Escape gives the keyboard back");
 
-            Key(app, rt, Bibui.Key.L);
+            Key(app, rt, Bibui.Core.Key.L);
             Frames(app, rt, 2);
-            Check(!app.Dark && rt.Theme.Colors.Mode == Bibui.Theming.ThemeMode.Light, "L switches to light, and the runtime's theme follows");
+            Check(!app.Dark && rt.Theme.Colors.Mode == Bibui.Core.Theming.ThemeMode.Light, "L switches to light, and the runtime's theme follows");
 
-            Key(app, rt, Bibui.Key.Comma);
+            Key(app, rt, Bibui.Core.Key.Comma);
             Frames(app, rt, 30);
             Check(app.SettingsOpen, ", opens the Appearance sheet");
             Click(app, rt, "swatch-coral");
@@ -83,12 +83,12 @@ internal static class SelfTest
             Click(app, rt, "settings-reduce");
             Check(app.ReducedMotion, "the reduce-motion switch turns on");
             Frames(app, rt, 2);
-            Check(rt.Theme.Motion.Easing == Bibui.Theming.MotionEasing.None, "and the theme's motion snaps");
-            Key(app, rt, Bibui.Key.Escape);
+            Check(rt.Theme.Motion.Easing == Bibui.Core.Theming.MotionEasing.None, "and the theme's motion snaps");
+            Key(app, rt, Bibui.Core.Key.Escape);
             Frames(app, rt, 2);
             Check(!app.SettingsOpen, "Escape closes the sheet");
 
-            Key(app, rt, Bibui.Key.LeftBracket);
+            Key(app, rt, Bibui.Core.Key.LeftBracket);
             Frames(app, rt, 2);
             Check(!app.SidebarWanted, "[ folds the sidebar");
         }
@@ -106,7 +106,7 @@ internal static class SelfTest
             Check(rt.IsDropDownOpen("row-menu") && app.MenuFor == app.Selected, "a right press on a row opens its menu");
             RightClick(app, rt, "row-" + other, across: 0.02f);   // left of the open menu, which opened mid-row
             Check(rt.IsDropDownOpen("row-menu") && app.MenuFor == other, "a right press on another row moves it there");
-            Key(app, rt, Bibui.Key.Escape);
+            Key(app, rt, Bibui.Core.Key.Escape);
             Check(!rt.IsDropDownOpen("row-menu"), "Escape closes the menu");
         }
 
@@ -145,10 +145,10 @@ internal static class SelfTest
         // The window sends the character a printable key types as well.
         char? ch = key switch
         {
-            Bibui.Key.Slash => '/', Bibui.Key.Comma => ',', Bibui.Key.LeftBracket => '[', Bibui.Key.L => 'l',
-            Bibui.Key.Number1 => '1', _ => null,
+            Bibui.Core.Key.Slash => '/', Bibui.Core.Key.Comma => ',', Bibui.Core.Key.LeftBracket => '[', Bibui.Core.Key.L => 'l',
+            Bibui.Core.Key.Number1 => '1', _ => null,
         };
-        if (ch is { } c) rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.Text, Key = Bibui.Key.Unknown, Char = c, CodePoint = c });
+        if (ch is { } c) rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.Text, Key = Bibui.Core.Key.Unknown, Char = c, CodePoint = c });
         Frames(app, rt, 2);
     }
 
@@ -156,7 +156,7 @@ internal static class SelfTest
     {
         foreach (char c in text)
         {
-            rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.Text, Key = Bibui.Key.Unknown, Char = c, CodePoint = c });
+            rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.Text, Key = Bibui.Core.Key.Unknown, Char = c, CodePoint = c });
             Frames(app, rt, 1);
         }
     }

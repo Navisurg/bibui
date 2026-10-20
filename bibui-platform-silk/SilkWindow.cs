@@ -1,14 +1,14 @@
 using System.Diagnostics;
-using Bibui.Draw;
+using Bibui.Core.Draw;
 using Bibui.Gl;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 // Silk's key enum, for asking its keyboard what is held. What reaches the
-// runtime is Bibui.Key / Bibui.MouseButton: the same values, by a cast.
+// runtime is Bibui.Core.Key / Bibui.Core.MouseButton: the same values, by a cast.
 using SilkKey = Silk.NET.Input.Key;
 
-namespace Bibui.Runtime.Platform;
+namespace Bibui.Core.Runtime.Platform;
 
 /// <summary>
 /// A window on GLFW through Silk.NET, presenting with OpenGL: what
@@ -104,15 +104,15 @@ public sealed class SilkWindow : IDisposable
         var events = Events;
         foreach (var mouse in input.Mice)
         {
-            mouse.MouseDown += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseDown, m.Position.X, m.Position.Y, (Bibui.MouseButton)b, HeldModifiers));
-            mouse.MouseUp   += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseUp,   m.Position.X, m.Position.Y, (Bibui.MouseButton)b, HeldModifiers));
-            mouse.MouseMove += (_, p) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseMove, p.X, p.Y, Bibui.MouseButton.Unknown, HeldModifiers));
+            mouse.MouseDown += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseDown, m.Position.X, m.Position.Y, (Bibui.Core.MouseButton)b, HeldModifiers));
+            mouse.MouseUp   += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseUp,   m.Position.X, m.Position.Y, (Bibui.Core.MouseButton)b, HeldModifiers));
+            mouse.MouseMove += (_, p) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseMove, p.X, p.Y, Bibui.Core.MouseButton.Unknown, HeldModifiers));
             mouse.Scroll    += (m, w) => events.Add(WindowEvent.Wheel(m.Position.X, m.Position.Y, w.X, w.Y, HeldModifiers));
         }
         foreach (var keyboard in input.Keyboards)
         {
-            keyboard.KeyDown += (_, y, _) => events.Add(WindowEvent.KeyPress((Bibui.Key)y, HeldModifiers));
-            keyboard.KeyUp   += (_, y, _) => events.Add(WindowEvent.KeyRelease((Bibui.Key)y, HeldModifiers));
+            keyboard.KeyDown += (_, y, _) => events.Add(WindowEvent.KeyPress((Bibui.Core.Key)y, HeldModifiers));
+            keyboard.KeyUp   += (_, y, _) => events.Add(WindowEvent.KeyRelease((Bibui.Core.Key)y, HeldModifiers));
         }
         // Text straight from GLFW, not Silk.NET's KeyChar: that casts GLFW's code
         // point to a char, which turns 😀 (U+1F600) into U+F600. Taking the window's

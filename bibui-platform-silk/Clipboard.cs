@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Bibui.Runtime;
+namespace Bibui.Core.Runtime;
 
 /// <summary>
 /// Crash-safe clipboard wrapper. TextCopy 6.x shells out to xsel on Linux and throws

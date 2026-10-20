@@ -10,9 +10,9 @@ result.
 
 | Route | Packages | Native AOT |
 |---|---|---|
-| Wayland + managed raster | `Bibui`, `Bibui.Platform.Wayland`, `Bibui.Raster.Managed.Backend` | **Yes.** Tested in CI with warnings as errors |
-| Silk + Skia | `Bibui`, `Bibui.Platform.Silk`, `Bibui.Raster.Skia` | **No, JIT only for now** |
-| Browser + managed raster | `Bibui`, `Bibui.Platform.Browser`, `Bibui.Raster.Managed.Backend` | Not Native AOT: WebAssembly, interpreted or ahead-of-time compiled ([bibui in the browser](browser.md)) |
+| Wayland + managed raster | `Bibui.Core`, `Bibui.Platform.Wayland`, `Bibui.Raster.Managed.Backend` | **Yes.** Tested in CI with warnings as errors |
+| Silk + Skia | `Bibui.Core`, `Bibui.Platform.Silk`, `Bibui.Raster.Skia` | **No, JIT only for now** |
+| Browser + managed raster | `Bibui.Core`, `Bibui.Platform.Browser`, `Bibui.Raster.Managed.Backend` | Not Native AOT: WebAssembly, interpreted or ahead-of-time compiled ([bibui in the browser](browser.md)) |
 
 The Silk + Skia route is JIT-only for now. bibui's own Silk window and Skia
 renderer are AOT compatible, but Silk.NET itself is not trim-safe: it finds its
@@ -68,12 +68,12 @@ Open the window and construct the renderer yourself, bound to the window's
 memory:
 
 ```csharp
-using Bibui;
+using Bibui.Core;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
-using static Bibui.Arrange;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
+using static Bibui.Core.Arrange;
 
 var runtime = BibuiRuntime.Create();
 int count = 0;
@@ -150,7 +150,7 @@ and Skia out of the AOT binary, so only the managed route ships:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Bibui" Version="0.10.1" />
+  <PackageReference Include="Bibui.Core" Version="0.10.1" />
   <PackageReference Include="Bibui.Platform.Wayland" Version="0.10.1" />
   <PackageReference Include="Bibui.Raster.Managed.Backend" Version="0.10.1" />
 </ItemGroup>

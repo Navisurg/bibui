@@ -1,5 +1,5 @@
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 
 namespace Bibui.App;
 
@@ -124,6 +124,6 @@ public sealed partial class BibuiApp : IDisposable
     private partial bool BeginWindowFrame();
     private partial void Present();
     private partial void EndWindowFrame();
-    private partial Bibui.Draw.DrawToPixels ScreenshotDraw();
+    private partial Bibui.Core.Draw.DrawToPixels ScreenshotDraw();
     private partial void DisposeRenderer();
 }

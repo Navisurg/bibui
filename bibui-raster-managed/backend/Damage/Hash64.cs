@@ -2,6 +2,7 @@ using System.IO.Hashing;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Bibui.Core;
 
 namespace Bibui.Raster.Managed.Backend.Damage;
 

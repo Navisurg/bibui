@@ -22,7 +22,7 @@ You need the .NET 10 SDK. On Linux, bibui's text and the Wayland host load
 system libraries at run time:
 
 - FreeType and HarfBuzz (`libfreetype6`, `libharfbuzz0b` on Debian/Ubuntu)
-  for `Bibui`, which measures and shapes all text with them;
+  for `Bibui.Core`, which measures and shapes all text with them;
 - `libwayland-client` and `libxkbcommon` for `Bibui.Platform.Wayland`.
 
 Each library is its own project: `bibui` holds the core, the runtime
@@ -31,7 +31,7 @@ renderers and text engine are projects beside it. Build the ones you
 touch, in Release, as CI does:
 
 ```bash
-dotnet build bibui/bibui.csproj -c Release
+dotnet build bibui-core/bibui-core.csproj -c Release
 dotnet build samples/component-gallery/component-gallery.csproj -c Release
 ```
 
@@ -107,7 +107,7 @@ lays nothing out, and the solver draws nothing.
 
 A component is a plain static function, not a renderer or a class with
 state, written as an extension method on the runtime so it is called as
-`runtime.Switch(...)`. `SwitchExtensions.Switch` (`bibui/src/Runtime/Switch.cs`)
+`runtime.Switch(...)`. `SwitchExtensions.Switch` (`bibui-core/src/Runtime/Switch.cs`)
 is the pattern:
 
 ```csharp

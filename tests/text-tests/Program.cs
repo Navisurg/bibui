@@ -8,8 +8,8 @@
 //   2. BibuiStr.ReplaceRange performs the splice. The last section applies the op
 //      against the buffer and checks the resulting text.
 
-using Bibui;
-using Bibui.TextEdit;
+using Bibui.Core;
+using Bibui.Core.TextEdit;
 
 int passed = 0, failed = 0;
 char[] charBuf = new char[TextOp.MaxCharsPerCodePoint];
@@ -333,7 +333,7 @@ Run("Submit puts a line break at the cursor and lets go of the selection", () =>
     // "hello world", "o w" selected with the cursor at its end.
     var str   = BibuiStr.FromStrLit("hello world");
     var state = new TextEditState { Cursor = 7, Mark = 4 };
-    var ev = new BibUiEvent { Kind = BibUiEventKind.Submit, Key = Bibui.Key.Enter };
+    var ev = new BibUiEvent { Kind = BibUiEventKind.Submit, Key = Bibui.Core.Key.Enter };
     var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
     str.ReplaceRange(op.Range, op.ReplaceString);
     Eq("hello w\norld", str.ToString(), "the selected text stays");
@@ -351,7 +351,7 @@ Run("A move between lines changes nothing, not even the selection", () =>
 
 Run("Ctrl+Backspace deletes back to the start of the word", () =>
 {
-    var ev = Bibui.TextEdit.BibUiEvent.FromKey(Bibui.Key.Backspace, ctrl: true, shift: false);
+    var ev = Bibui.Core.TextEdit.BibUiEvent.FromKey(Bibui.Core.Key.Backspace, ctrl: true, shift: false);
     ApplyAndCheck(BibuiStr.FromStrLit("hello world"),
         new TextEditState { Cursor = 11, Mark = 11 }, ev, "hello ", 6, 6);
     // From inside a word, only its part before the cursor.
@@ -364,21 +364,21 @@ Run("Ctrl+Backspace deletes back to the start of the word", () =>
 
 Run("Ctrl+Delete deletes on to the end of the word", () =>
 {
-    var ev = Bibui.TextEdit.BibUiEvent.FromKey(Bibui.Key.Delete, ctrl: true, shift: false);
+    var ev = Bibui.Core.TextEdit.BibUiEvent.FromKey(Bibui.Core.Key.Delete, ctrl: true, shift: false);
     ApplyAndCheck(BibuiStr.FromStrLit("hello world"),
         new TextEditState { Cursor = 5, Mark = 5 }, ev, "hello", 5, 5);
 });
 
 Run("Ctrl+Backspace with a selection deletes only the selection", () =>
 {
-    var ev = Bibui.TextEdit.BibUiEvent.FromKey(Bibui.Key.Backspace, ctrl: true, shift: false);
+    var ev = Bibui.Core.TextEdit.BibUiEvent.FromKey(Bibui.Core.Key.Backspace, ctrl: true, shift: false);
     ApplyAndCheck(BibuiStr.FromStrLit("hello world"),
         new TextEditState { Cursor = 8, Mark = 6 }, ev, "hello rld", 6, 6);
 });
 
 Run("Ctrl+C is a Copy, which leaves the text alone; Ctrl+X is an Edit", () =>
 {
-    var copy = Bibui.TextEdit.BibUiEvent.FromKey(Bibui.Key.C, ctrl: true, shift: false);
+    var copy = Bibui.Core.TextEdit.BibUiEvent.FromKey(Bibui.Core.Key.C, ctrl: true, shift: false);
     Eq(BibUiEventKind.Copy, copy.Kind);
     var str   = BibuiStr.FromStrLit("hello world");
     var op = TextOp.FromStateAndEvent(str, new TextEditState { Cursor = 11, Mark = 6 }, copy, charBuf);
@@ -386,7 +386,7 @@ Run("Ctrl+C is a Copy, which leaves the text alone; Ctrl+X is an Edit", () =>
     Eq(op.Range.Item1, op.Range.Item2, "nothing replaced");
     Eq(11, op.NewCursor); Eq(6, op.NewMark);
 
-    var cut = Bibui.TextEdit.BibUiEvent.FromKey(Bibui.Key.X, ctrl: true, shift: false);
+    var cut = Bibui.Core.TextEdit.BibUiEvent.FromKey(Bibui.Core.Key.X, ctrl: true, shift: false);
     Eq(BibUiEventKind.Edit, cut.Kind, "cut deletes, so it is an edit");
     ApplyAndCheck(BibuiStr.FromStrLit("hello world"),
         new TextEditState { Cursor = 11, Mark = 6 }, cut, "hello ", 6, 6);

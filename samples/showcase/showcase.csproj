@@ -20,7 +20,7 @@
     <DefineConstants>$(DefineConstants);WAYLAND_ONLY</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
     <!-- Linux, pure managed: raw Wayland host + managed raster. -->
     <ProjectReference Include="../../bibui-platform-wayland/bibui-platform-wayland.csproj" />
     <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />

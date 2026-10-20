@@ -79,8 +79,8 @@ open a link, act on `ClickedLink` yourself.
 ## Example
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 sealed class ReleaseNotes
 {

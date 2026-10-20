@@ -4,7 +4,7 @@ namespace Bibui.Gl;
 /// A GL framebuffer a platform presents: what a renderer bound to it draws into.
 /// The platform owns it and keeps it current (the size on a resize); the
 /// renderer reads it on every draw, on the loop's thread. What
-/// <see cref="Bibui.Draw.RasterPixels"/> is to CPU memory.
+/// <see cref="Bibui.Core.Draw.RasterPixels"/> is to CPU memory.
 /// </summary>
 public sealed class GlTarget
 {

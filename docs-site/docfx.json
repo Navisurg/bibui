@@ -6,7 +6,7 @@
         {
           "src": "..",
           "files": [
-            "bibui/bibui.csproj",
+            "bibui-core/bibui-core.csproj",
             "bibui-raster-skia/bibui-raster-skia.csproj",
             "bibui-platform-silk/bibui-platform-silk.csproj",
             "bibui-testing/bibui-testing.csproj"

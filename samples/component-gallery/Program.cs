@@ -1,10 +1,10 @@
-using Bibui;
-using Bibui.Runtime;
-using Bibui.TextEdit;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
 using ComponentGallery;
-using Bibui.Draw;
+using Bibui.Core.Draw;
 using Bibui.Raster.Skia;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime.Platform;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 
@@ -426,7 +426,7 @@ static IEnumerable<(string Name, GalleryState State, string? DropDown)> Pages()
 // A page that cannot be rendered — a layout ring, say — leaves what it threw
 // instead of a picture, and the rest go on.
 static void WriteReference(string outDir, string name, GalleryState state, string? dropDown,
-    Bibui.Theming.ThemeTokens theme, SurfaceOptions surface, SkiaCpuRenderer skia)
+    Bibui.Core.Theming.ThemeTokens theme, SurfaceOptions surface, SkiaCpuRenderer skia)
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetTheme(theme);

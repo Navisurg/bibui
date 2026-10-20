@@ -1,14 +1,14 @@
-using Bibui;
-using Bibui.Draw;
+using Bibui.Core;
+using Bibui.Core.Draw;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Raster.Skia;
-using Bibui.Runtime;
+using Bibui.Core.Runtime;
 
 /// <summary>
 /// Textures: pixels the gallery makes itself, drawn by bibui as a handle. bibui
 /// has no image component; an app that shows an image knows which renderer it
 /// chose, gets the pixels into memory its own way (decoded with
-/// <c>Bibui.Imaging.Png</c>, from a video decoder, or made, as here), and makes
+/// <c>Bibui.Core.Imaging.Png</c>, from a video decoder, or made, as here), and makes
 /// a texture there. It owns the texture: this page keeps its three for the life
 /// of the app. A Static texture is made once; a Stream one is one texture whose
 /// pixels are overwritten, as a video's frames are. Any format draws as it is:

@@ -3,7 +3,7 @@
 //   dotnet run --project tests/png-tests -c Release
 
 using System.IO.Compression;
-using Bibui.Imaging;
+using Bibui.Core.Imaging;
 using SkiaSharp;
 
 var root = FindRepoRoot();

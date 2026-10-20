@@ -81,8 +81,8 @@ Which value is chosen. The runtime keeps whether the list is open: call
 ## Example
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 sealed class FruitPicker
 {

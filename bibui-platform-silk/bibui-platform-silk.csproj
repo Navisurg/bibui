@@ -10,7 +10,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Bibui.Platform.Silk</AssemblyName>
-    <RootNamespace>Bibui.Runtime.Platform</RootNamespace>
+    <RootNamespace>Bibui.Core.Runtime.Platform</RootNamespace>
     <Nullable>enable</Nullable>
     <!-- GLFW's char callback takes the window's handle as a pointer. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -24,7 +24,7 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../bibui/bibui.csproj" />
+    <ProjectReference Include="../bibui-core/bibui-core.csproj" />
     <!-- GlTarget: what the window's GL framebuffer is, for a renderer on it. -->
     <ProjectReference Include="../bibui-gl/bibui-gl.csproj" />
   </ItemGroup>

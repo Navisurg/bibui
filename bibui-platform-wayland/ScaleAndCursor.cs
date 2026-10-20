@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
+using Bibui.Core;
 using Bibui.Platform.Wayland.Protocol;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime.Platform;
 
 namespace Bibui.Platform.Wayland;
 

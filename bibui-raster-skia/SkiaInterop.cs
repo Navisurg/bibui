@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Bibui.Draw;
+using Bibui.Core;
+using Bibui.Core.Draw;
 using SkiaSharp;
 
 namespace Bibui.Raster.Skia;

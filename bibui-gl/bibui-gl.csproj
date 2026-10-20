@@ -23,7 +23,7 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../bibui/bibui.csproj" />
+    <ProjectReference Include="../bibui-core/bibui-core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />

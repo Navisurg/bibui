@@ -11,7 +11,7 @@ texts that must travel with the material follow at the end of this file.
 1. Lucide icons (and the Feather icons Lucide derives from)
 -------------------------------------------------------------------------------
 What:     SVG path data for a subset of the Lucide icon set.
-Where:    bibui/src/Renderer/IconRegistry.cs (compiled into Bibui), and the
+Where:    bibui-core/src/Renderer/IconRegistry.cs (compiled into Bibui.Core), and the
           app icons the showcase registers (moon, sun, telescope,
           thermometer, activity) in samples/showcase/AppIcons.cs.
 Licence:  ISC (Lucide); MIT for the icons Lucide derives from Feather.
@@ -23,9 +23,9 @@ Source:   https://lucide.dev
 2. Inter typeface
 -------------------------------------------------------------------------------
 What:     Inter-Regular.ttf and Inter-SemiBold.ttf, embedded as resources.
-Where:    bibui/Assets/Fonts/ (embedded in Bibui and Bibui.Text.FreeType).
+Where:    bibui-core/Assets/Fonts/ (embedded in Bibui.Core and Bibui.Text.FreeType).
 Licence:  SIL Open Font License 1.1. The full licence is in
-          bibui/Assets/Fonts/Inter-LICENSE.txt and is packed into the
+          bibui-core/Assets/Fonts/Inter-LICENSE.txt and is packed into the
           licenses/ folder of each package that embeds the fonts.
           Copyright (c) 2016 The Inter Project Authors
 Source:   https://github.com/rsms/inter
@@ -71,9 +71,9 @@ What:     Colour values. ColorRamp's default ramps and the ramps pinned by
           The OKLCH lightness of each step a seeded theme's ramps are
           drawn at (Theme.cs) follows Tailwind's: the neutral steps are
           zinc's, and the lighter accent steps match its palette.
-Where:    bibui/src/Theming/ColorRamp.cs, bibui/src/Theming/ThemeTokens.cs,
-          bibui/src/Theming/Theme.cs, bibui/Assets/Themes/*.json (compiled
-          into or embedded in Bibui).
+Where:    bibui-core/src/Theming/ColorRamp.cs, bibui-core/src/Theming/ThemeTokens.cs,
+          bibui-core/src/Theming/Theme.cs, bibui-core/Assets/Themes/*.json (compiled
+          into or embedded in Bibui.Core).
 Licence:  MIT.
           Copyright (c) Tailwind Labs, Inc.
           Copyright (c) 2023 shadcn
@@ -105,7 +105,7 @@ Source:   https://gitlab.freedesktop.org/wayland
 -------------------------------------------------------------------------------
 What:     The sRGB to OKLab conversion matrices, as published by Björn
           Ottosson, used to draw theme ramps from seed colours.
-Where:    bibui/src/Theming/Oklch.cs (compiled into Bibui).
+Where:    bibui-core/src/Theming/Oklch.cs (compiled into Bibui.Core).
 Licence:  The published reference implementation is public domain, or MIT
           where that is not recognised; credited here as a courtesy.
           Copyright (c) 2020 Björn Ottosson
@@ -116,7 +116,7 @@ Source:   https://bottosson.github.io/posts/oklab/
 -------------------------------------------------------------------------------
 What:     Five colour stops sampled from each colormap, for gradient
           previews.
-Where:    bibui/src/Theming/Colormaps.cs (compiled into Bibui).
+Where:    bibui-core/src/Theming/Colormaps.cs (compiled into Bibui.Core).
 Licence:  viridis, inferno, magma and plasma: CC0 1.0 (public domain
           dedication), by Nathaniel J. Smith, Stefan van der Walt and
           (viridis) Eric Firing, as published in matplotlib; credited here
@@ -134,7 +134,7 @@ What:     The Key and MouseButton enums take their member names from
           Silk.NET.Input and their values from GLFW's key and button codes;
           the Wayland host's evdev-to-key table is GLFW's table for Wayland,
           so both hosts report the same key.
-Where:    bibui/src/Public/InputCodes.cs (Bibui);
+Where:    bibui-core/src/Public/InputCodes.cs (Bibui.Core);
           bibui-platform-wayland/KeyTable.cs (Bibui.Platform.Wayland).
 Licence:  Silk.NET: MIT.
           Copyright (c) .NET Foundation and Contributors
@@ -183,9 +183,9 @@ with their own licences:
   Bibui.Raster.Skia as NuGet packages.
 - Silk.NET (MIT) and GLFW (zlib), referenced by Bibui.Platform.Silk.
 - TextCopy (MIT), referenced by Bibui.Platform.Silk.
-- System.IO.Hashing (MIT), referenced by Bibui.
+- System.IO.Hashing (MIT), referenced by Bibui.Core.
 - FreeType (FTL or GPLv2) and HarfBuzz (MIT-style "Old MIT"), loaded from
-  the system by Bibui on Linux (in the browser they are redistributed, 10.
+  the system by Bibui.Core on Linux (in the browser they are redistributed, 10.
   above); libwayland-client and libxkbcommon
   (MIT), loaded from the system by Bibui.Platform.Wayland.
 

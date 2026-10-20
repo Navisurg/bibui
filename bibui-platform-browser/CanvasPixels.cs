@@ -4,7 +4,7 @@ namespace Bibui.Platform.Browser;
 
 /// <summary>
 /// A frame's pixels as a canvas takes them. Renderers draw BGRA with
-/// premultiplied alpha (<see cref="Bibui.Draw.RasterPixels"/>);
+/// premultiplied alpha (<see cref="Bibui.Core.Draw.RasterPixels"/>);
 /// <c>ImageData</c> is RGBA with straight alpha.
 /// </summary>
 internal static class CanvasPixels

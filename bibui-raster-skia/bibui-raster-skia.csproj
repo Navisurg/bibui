@@ -23,7 +23,7 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../bibui/bibui.csproj" />
+    <ProjectReference Include="../bibui-core/bibui-core.csproj" />
     <!-- GlTarget and the GL texture calls SkiaGlRenderer makes its textures with. -->
     <ProjectReference Include="../bibui-gl/bibui-gl.csproj" />
   </ItemGroup>

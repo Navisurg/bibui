@@ -15,7 +15,7 @@ Report them privately, in either of these ways:
 
 Tell us what you can of:
 
-- the package and version affected (`Bibui`, `Bibui.Platform.Wayland`, ...);
+- the package and version affected (`Bibui.Core`, `Bibui.Platform.Wayland`, ...);
 - what the problem is and what an attacker could do with it;
 - how to reproduce it: a small program, input file or steps;
 - any fix or mitigation you have in mind.

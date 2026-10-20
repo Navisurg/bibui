@@ -1,8 +1,9 @@
 using System.Runtime.InteropServices;
+using Bibui.Core;
 using Bibui.Platform.Wayland;
 using Bibui.Platform.Wayland.Protocol;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 using Bibui.Raster.Skia;
 
 namespace Bibui.WaylandTests;
@@ -72,8 +73,8 @@ internal static unsafe class ScaleTests
         t.Run("scale: ResizeSurface at 1.25 keeps an odd logical size, and the frame is the buffer's size", () =>
         {
             var runtime = BibuiRuntime.Create();
-            runtime.SetBuild(() => Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box())),
-                new Bibui.SurfaceOptions { Width = 100, Height = 100, ScaleFactor = 1f });
+            runtime.SetBuild(() => Bibui.Core.Arrange.FillY(Bibui.Core.Arrange.FillX(runtime.Box())),
+                new Bibui.Core.SurfaceOptions { Width = 100, Height = 100, ScaleFactor = 1f });
             var (w, h) = WaylandWindow.FramebufferSize(1001, 202, 150);
             runtime.ResizeSurface(w, h, SurfaceScale.ToFactor(150));
             Assert.Eq((1001, 202), (runtime.SurfaceWidth, runtime.SurfaceHeight), "logical, not truncated to 1000");
@@ -266,18 +267,18 @@ internal static unsafe class ScaleTests
             using var skia = new SkiaCpuRenderer();
             runtime.SetBuild(() =>
             {
-                var box = Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box())).Styled(new Bibui.Style
+                var box = Bibui.Core.Arrange.FillY(Bibui.Core.Arrange.FillX(runtime.Box())).Styled(new Bibui.Core.Style
                 {
-                    BackgroundColor = Bibui.UiColor.Accent, CornerRadius = 8f, Padding = new Bibui.EdgeInsets(6f, 6f, 6f, 6f),
+                    BackgroundColor = Bibui.Core.UiColor.Accent, CornerRadius = 8f, Padding = new Bibui.Core.EdgeInsets(6f, 6f, 6f, 6f),
                 });
-                box.ChildLayoutAxis = Bibui.LayoutAxis.Y;
+                box.ChildLayoutAxis = Bibui.Core.LayoutAxis.Y;
                 using (runtime.PushParent(box))
                 {
                     runtime.Text("Sharp at 1.25×");
                     runtime.Text("ÆØÅ fig. 0123");
                 }
                 return box;
-            }, new Bibui.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });
+            }, new Bibui.Core.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });
             runtime.ResizeSurface(physW, physH, SurfaceScale.ToFactor(scale120)); // as the host does
 
             pool = new BufferPool<ShmBuffer>(new ShmAllocator(_shm, bufferListener, null), depth: 2);
@@ -288,7 +289,7 @@ internal static unsafe class ScaleTests
             Assert.Eq((physW, physH), (SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor),
                 SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor)), "the frame at the buffer's physical size");
             var reference = new byte[physW * physH * 4];
-            fixed (byte* p = reference) skia.Draw(runtime.DrawList, new Bibui.Draw.RasterPixels((nint)p, physW, physH, physW * 4));
+            fixed (byte* p = reference) skia.Draw(runtime.DrawList, new Bibui.Core.Draw.RasterPixels((nint)p, physW, physH, physW * 4));
             Assert.True(shmPixels.AsSpan().SequenceEqual(reference), "shm pixels equal the frame drawn packed, byte for byte");
             Assert.True(shmPixels.Any(b => b != shmPixels[0]), "something was drawn");
             Assert.True(WaylandNative.wl_display_roundtrip(display) >= 0, "the compositor accepted pool and buffer");

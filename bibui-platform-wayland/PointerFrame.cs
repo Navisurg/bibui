@@ -1,4 +1,5 @@
-using Bibui.Runtime.Platform;
+using Bibui.Core;
+using Bibui.Core.Runtime.Platform;
 
 namespace Bibui.Platform.Wayland;
 

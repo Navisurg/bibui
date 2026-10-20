@@ -4,10 +4,10 @@
 //   dotnet run --project samples/bibui-app
 //   dotnet run --project samples/bibui-app -- --first-frame   # one frame headless, then exit (CI)
 
-using Bibui;
+using Bibui.Core;
 using Bibui.Raster.Skia;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 using BibuiApp;
 
 var runtime = BibuiRuntime.Create();

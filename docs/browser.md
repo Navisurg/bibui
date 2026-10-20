@@ -64,7 +64,7 @@ python3 -m http.server 8000 -d out/counter-browser/wwwroot
 ```csharp
 using Bibui.Platform.Browser;
 using Bibui.Raster.Managed.Backend;
-using Bibui.Runtime;
+using Bibui.Core.Runtime;
 
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("browser")]
 

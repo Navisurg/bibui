@@ -52,8 +52,8 @@ The `on` value. The switch keeps only the knob's position mid-travel, in
 ## Example
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 sealed class AirplaneMode
 {

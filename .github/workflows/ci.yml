@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           for proj in \
-            bibui/bibui.csproj \
+            bibui-core/bibui-core.csproj \
             bibui-gl/bibui-gl.csproj \
             bibui-testing/bibui-testing.csproj \
             bibui-raster-skia/bibui-raster-skia.csproj \

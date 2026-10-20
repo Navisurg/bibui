@@ -1,7 +1,7 @@
-using Bibui;
-using Bibui.Draw;
-using Bibui.Runtime;
-using Bibui.TextEdit;
+using Bibui.Core;
+using Bibui.Core.Draw;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
 
 namespace Showcase;
 

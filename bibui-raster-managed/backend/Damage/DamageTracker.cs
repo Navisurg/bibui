@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
-using Bibui.Draw;
+using Bibui.Core;
+using Bibui.Core.Draw;
 
 namespace Bibui.Raster.Managed.Backend.Damage;
 

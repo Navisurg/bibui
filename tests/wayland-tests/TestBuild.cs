@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
-using Bibui;
-using Bibui.Runtime;
-using Bibui.Theming;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.Theming;
 
 /// <summary>
 /// A test's app: its build, kept per runtime, and the frames it runs. An app

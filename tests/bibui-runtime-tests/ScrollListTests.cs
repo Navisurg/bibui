@@ -1,7 +1,7 @@
-using Bibui;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
-using Bibui.Theming;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
+using Bibui.Core.Theming;
 
 /// <summary>The scroll list's arithmetic: what a ScrollPt shows, and how the wheel, the bar and Target move it.</summary>
 static class ScrollListTests

@@ -1,8 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Bibui.Core;
 using Bibui.Platform.Wayland.Protocol;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 
 namespace Bibui.Platform.Wayland;
 
@@ -98,7 +99,7 @@ public sealed unsafe class WaylandWindow : IDisposable
     /// to <see cref="EndDraw"/>: for a renderer bound to it. Buffers are
     /// in rotation, so it holds a different one from frame to frame.
     /// </summary>
-    public Bibui.Draw.CpuTarget Cpu { get; } = new();
+    public Bibui.Core.Draw.CpuTarget Cpu { get; } = new();
 
     // The buffer Cpu points at, between BeginDraw and EndDraw.
     private ShmBuffer? _buffer;
@@ -397,11 +398,11 @@ public sealed unsafe class WaylandWindow : IDisposable
     // Memory the size of a frame that is drawn into and not shown: what a renderer
     // gets when no buffer is free. Made the first time it is needed.
     private byte[] _unshown = [];
-    private Bibui.Draw.RasterPixels Unshown(int w, int h)
+    private Bibui.Core.Draw.RasterPixels Unshown(int w, int h)
     {
         w = Math.Max(1, w); h = Math.Max(1, h);
         if (_unshown.Length != w * h * 4) _unshown = GC.AllocateArray<byte>(w * h * 4, pinned: true);
-        return new Bibui.Draw.RasterPixels(Marshal.UnsafeAddrOfPinnedArrayElement(_unshown, 0), w, h, w * 4);
+        return new Bibui.Core.Draw.RasterPixels(Marshal.UnsafeAddrOfPinnedArrayElement(_unshown, 0), w, h, w * 4);
     }
 
 

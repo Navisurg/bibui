@@ -10,9 +10,9 @@ and how to check that text stays readable. It assumes the model in
 The samples assume these usings:
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
-using Bibui.Theming;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.Theming;
 ```
 
 ## Using a theme

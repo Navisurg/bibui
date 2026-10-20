@@ -1,6 +1,6 @@
-using Bibui;
-using Bibui.Runtime;
-using Bibui.TextEdit;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
 
 namespace ComponentGallery;
 
@@ -84,7 +84,7 @@ internal static class DemoMarkdown
 
         if (_focused)
             foreach (var ev in runtime.UnconsumedEvents)
-                if (ev is { IsKeyDown: true, Key: Bibui.Key.Escape })
+                if (ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape })
                 {
                     _focused = false;
                     ev.Eat();

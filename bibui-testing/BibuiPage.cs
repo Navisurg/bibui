@@ -1,9 +1,10 @@
-using Bibui.Draw;
+using Bibui.Core;
+using Bibui.Core.Draw;
 using Bibui.Raster.Skia;
-using Bibui.TextEdit;
-using Bibui.Theming;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+using Bibui.Core.TextEdit;
+using Bibui.Core.Theming;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 
 namespace Bibui.Testing;
 

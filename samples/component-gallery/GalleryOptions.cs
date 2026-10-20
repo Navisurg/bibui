@@ -1,4 +1,4 @@
-using Bibui.Theming;
+using Bibui.Core.Theming;
 
 namespace ComponentGallery;
 
@@ -197,7 +197,7 @@ public sealed record GalleryOptions(
 
     /// <summary>The theme the gallery is drawn in: generated from <see cref="Accent"/>, or neutral-dark.</summary>
     public ThemeTokens Theme() =>
-        Accent is { } seed ? Bibui.Theming.Theme.FromSeed(seed, mode: Mode) : ThemeLoader.Load("bibui-dark");
+        Accent is { } seed ? Bibui.Core.Theming.Theme.FromSeed(seed, mode: Mode) : ThemeLoader.Load("bibui-dark");
 
     private static bool IsColour(string s) =>
         s.Length == 7 && s[0] == '#' && s.AsSpan(1).IndexOfAnyExcept("0123456789abcdefABCDEF") < 0;

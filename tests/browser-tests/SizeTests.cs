@@ -1,5 +1,5 @@
 using Bibui.Platform.Browser;
-using Bibui.Runtime;
+using Bibui.Core.Runtime;
 
 namespace Bibui.BrowserTests;
 

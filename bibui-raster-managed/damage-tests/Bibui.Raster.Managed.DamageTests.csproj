@@ -14,7 +14,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
     <ProjectReference Include="../backend/Bibui.Raster.Managed.Backend.csproj" />
   </ItemGroup>
 </Project>

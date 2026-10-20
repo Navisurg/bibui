@@ -1,4 +1,4 @@
-using Bibui.Runtime;
+using Bibui.Core.Runtime;
 
 namespace Bibui.Platform.Browser;
 
