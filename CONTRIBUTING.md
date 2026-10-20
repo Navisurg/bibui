@@ -57,8 +57,20 @@ dotnet run --project tests/bibui-runtime-tests -c Release       # runtime, compo
 dotnet run --project tests/text-tests -c Release
 dotnet run --project tests/png-tests -c Release
 dotnet run --project tests/wayland-tests -c Release             # headless; skips what needs a compositor
+dotnet run --project tests/browser-tests -c Release             # the browser host's logic, no browser
 dotnet run --project bibui-raster-managed/tests -c Release
 dotnet run --project bibui-raster-managed/damage-tests -c Release  # damage tracking, byte for byte
+```
+
+The browser route (`bibui-platform-browser`, `samples/counter-browser`)
+needs the `wasm-tools` workload and FreeType and HarfBuzz built for the
+browser, once; the smoke test drives the sample in headless Chromium:
+
+```bash
+dotnet workload install wasm-tools
+bibui-platform-browser/native/build.sh
+dotnet publish samples/counter-browser -c Release -o out/counter-browser
+node tests/browser-smoke/smoke.mjs out/counter-browser/wwwroot
 ```
 
 Layout is asserted over the laid-out nodes, not over pixels: build the tree,

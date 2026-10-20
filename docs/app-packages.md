@@ -73,6 +73,12 @@ Where they differ:
   dependency beyond libwayland-client, `WaylandSkiaCpu` beside Skia's
   `libSkiaSharp.so`. The Silk packages run on the JIT: Silk.NET is not
   trim-safe.
+- **There is no `Bibui.App` package for the browser.** `BibuiApp` is a loop
+  the app owns (`while (app.BeginFrame())`), and a page may not block: in the
+  browser the frame is handed to `BrowserWindow.Run` and called on
+  `requestAnimationFrame` instead. A browser app references
+  `Bibui.Platform.Browser` and a renderer, as [bibui in the
+  browser](https://github.com/Navisurg/bibui/blob/main/docs/browser.md) shows.
 - **Test-server screenshots** are drawn by the app's own renderer, so they hold
   its textures, except on `SilkSkiaGl`, where the GPU draws into the window
   and a separate CPU renderer draws the screenshots.

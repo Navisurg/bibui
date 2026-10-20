@@ -6,6 +6,25 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **bibui in the browser: `Bibui.Platform.Browser`.** `BrowserWindow` is a
+  window on a `<canvas>` in a .NET WebAssembly app
+  (`Microsoft.NET.Sdk.WebAssembly`, no Blazor), with `window.Events` and a
+  `Cpu` target that `ManagedRenderer` (or `SkiaCpuRenderer`) draws into.
+  `BrowserWindow.OpenAsync(runtime, "canvas-id")` opens one, by element id or
+  on a canvas element; a page may not block, so `BrowserWindow.Run(window,
+  runtime, frame)` hands the frame's body to the browser, which calls it on
+  `requestAnimationFrame` when the window has input, owes frames or was
+  resized, and its canvas is in view. Several windows share one loop. Frames
+  are drawn at the canvas's size in device pixels, with devicePixelRatio as
+  the scale. Pointer, wheel, keys (by physical key, with the typed
+  character), copy and paste, and the cursor. The package carries FreeType
+  and HarfBuzz built for the browser and links them into the app; it needs
+  the `wasm-tools` workload. Dead keys, IME and on-screen keyboards do not
+  type yet. See [bibui in the browser](docs/browser.md) and
+  `samples/counter-browser`.
+
 ### Fixed
 
 - **FreeType on 32-bit processes.** The FreeType struct offsets bibui reads

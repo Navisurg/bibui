@@ -13,5 +13,7 @@ items:
   href: theming.md
 - name: Native AOT
   href: aot.md
+- name: bibui in the browser
+  href: browser.md
 - name: Versions and compatibility
   href: versioning.md

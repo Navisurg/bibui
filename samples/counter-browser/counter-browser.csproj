@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+  <!-- The counter in the browser: a .NET WebAssembly app (no Blazor) with
+       Bibui.Platform.Browser, a <canvas>, and the managed rasterizer.
+       Needs the wasm-tools workload and the browser's FreeType and HarfBuzz
+       (bibui-platform-browser/native/build.sh); docs/browser.md says how. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>counter-browser</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The counter's strings are all there is: no culture data to download. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui-platform-browser/bibui-platform-browser.csproj" />
+    <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
+  </ItemGroup>
+  <!-- What a package reference to Bibui.Platform.Browser imports by itself:
+       FreeType and HarfBuzz linked into the app, here from the repository's build. -->
+  <PropertyGroup>
+    <BibuiBrowserNativeDir>$(MSBuildThisFileDirectory)../../bibui-platform-browser/native/lib/</BibuiBrowserNativeDir>
+  </PropertyGroup>
+  <Import Project="../../bibui-platform-browser/buildTransitive/Bibui.Platform.Browser.targets" />
+</Project>

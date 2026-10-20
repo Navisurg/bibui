@@ -15,8 +15,8 @@ applications with bibui.
 
 ![Zenith, the showcase app, built with bibui](samples/showcase/screenshots/overview-dark.png)
 
-**Platforms:** the first release supports Linux on x64. Other platforms are not
-supported yet.
+**Platforms:** Linux on x64, and the browser through .NET WebAssembly. Other
+platforms are not supported yet.
 
 ## Install
 
@@ -39,7 +39,9 @@ dotnet add package Bibui.App.SilkSkiaGl
 Each has the same `BibuiApp` type with the same calls, so changing the package
 changes how your app is drawn and nothing in its code. [Bibui.App
 packages](docs/app-packages.md) says where they differ. Headless tests use
-`Bibui.Testing`.
+`Bibui.Testing`. In the browser there is no `Bibui.App` package: a browser app
+references `Bibui.Platform.Browser` and a renderer ([bibui in the
+browser](docs/browser.md)).
 
 ## Quick start
 
@@ -155,7 +157,7 @@ Markdown viewer and more. Below, a multiline text field holds Markdown source,
 
 Every component, with pictures, is in [Components](docs/components/index.md).
 
-## Two routes
+## Three routes
 
 The runtime records each frame into a draw list; a renderer draws that list,
 into a window a platform provides. You pick both explicitly, and nothing is
@@ -175,8 +177,16 @@ discovered at run time.
   dotnet publish -c Release -r linux-x64 -p:PublishAot=true
   ```
 
-Your build code is the same on both routes. [Publishing with Native
-AOT](docs/aot.md) has the details.
+- **Browser + managed raster.** `BrowserWindow` is a `<canvas>` in a .NET
+  WebAssembly app, and `ManagedRenderer` draws each frame on the CPU, with
+  FreeType and HarfBuzz built for the browser. A page may not block, so the
+  browser owns the loop: the frame is handed to `BrowserWindow.Run` and drawn
+  on `requestAnimationFrame` when there is something to draw. Several apps can
+  share one page. The counter is about 1.7 MB to download with Brotli:
+  [`samples/counter-browser`](samples/counter-browser/Program.cs).
+
+Your build code is the same on every route. [Publishing with Native
+AOT](docs/aot.md) and [bibui in the browser](docs/browser.md) have the details.
 
 ## Dependencies
 
@@ -190,6 +200,7 @@ decides which other dependencies it needs. In every case the dependency tree is 
 | `Bibui.Gl` | `Silk.NET.OpenGL` (the GL binding only) | an OpenGL driver |
 | `Bibui.Platform.Silk` | `Silk.NET` windowing, input and OpenGL (GLFW), `Bibui.Gl`, `TextCopy` | an OpenGL driver; GLFW itself ships with Silk.NET |
 | `Bibui.Platform.Wayland` | none | `libwayland-client`, `libwayland-cursor`, `libxkbcommon` |
+| `Bibui.Platform.Browser` | none | none: FreeType and HarfBuzz ship inside it, built for the browser; building an app needs the `wasm-tools` workload |
 | `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`) | none beyond `Bibui`'s |
 
 The Wayland + managed route has no third-party NuGet dependencies at all, and
@@ -206,10 +217,13 @@ JIT for now.
 - [Components](docs/components/index.md): every component, with pictures.
 - [Native AOT](docs/aot.md): publishing one native binary, and the trimming
   rules for app code.
+- [bibui in the browser](docs/browser.md): a bibui app on a canvas, with .NET
+  WebAssembly, and what does not work there yet.
 - Samples: [`samples/showcase`](samples/showcase) is an observatory console
   that uses most of bibui, [`samples/bibui-app`](samples/bibui-app) is a short
   interactive app, and [`samples/component-gallery`](samples/component-gallery)
-  has a page per component.
+  has a page per component. [`samples/counter-browser`](samples/counter-browser)
+  is the counter in the browser.
 
 ## Building from source
 
