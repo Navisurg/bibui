@@ -24,7 +24,7 @@ All notable changes to bibui are recorded here. The format is based on
   the `wasm-tools` workload. Dead keys, IME and on-screen keyboards do not
   type yet. See [bibui in the browser](docs/browser.md) and
   `samples/counter-browser`.
-- **Key repeat for every key.** The Wayland and Silk windows report a held
+- **Key repeat for every key.** The Wayland, Silk and browser windows report a held
   key's down again with `BibUiEvent.Repeat` set (`WindowEvent.KeyRepeat` for
   hosts and tests), not only its text, so arrows, Backspace and Page Down
   repeat in an app's own handling too.

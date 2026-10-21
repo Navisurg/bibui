@@ -122,6 +122,23 @@ internal static class InputTests
             Assert.Eq(WindowEventKind.KeyUp, events[10].Kind);
         });
 
+        t.Run("records: a key-down the browser repeats is a KeyRepeat, and types again", () =>
+        {
+            var (data, strings) = Records(
+                (BrowserInput.KeyDown, [0, 1, 0, 0, 0], ["Backspace", "Backspace"]),
+                (BrowserInput.KeyDown, [0, 1, 0, 0, 1], ["Backspace", "Backspace"]),
+                (BrowserInput.KeyDown, [0, 1, 0, 0, 1], ["KeyA", "a"]));
+            var events = new List<WindowEvent>();
+            string? pasted = null;
+            BrowserInput.Decode(data, strings, events, ref pasted);
+
+            Assert.Eq(4, events.Count, "events");
+            Assert.True(!events[0].Repeat, "the press is no repeat");
+            Assert.True(events[1].Repeat && events[1].Key == Key.Backspace, "held: repeated");
+            Assert.True(events[2].Repeat && events[2].Key == Key.A, "a held letter repeats");
+            Assert.Eq(new Rune('a'), events[3].CodePoint, "and types again");
+        });
+
         t.Run("records: the header says the canvas's size, ratio and whether it is in view", () =>
         {
             var state = BrowserInput.ReadHeader([1, 792, 400, 1.25, 0]);
