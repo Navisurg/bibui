@@ -97,9 +97,7 @@ public sealed class SilkWindow : IDisposable
     private CursorShape _cursor;
     // Held so the GC keeps it while GLFW holds its function pointer.
     private global::Silk.NET.GLFW.GlfwCallbacks.CharCallback? _onChar;
-    private global::Silk.NET.GLFW.GlfwCallbacks.KeyCallback? _onKey, _silkKey;
-    // A held key's repeat is being passed to Silk.NET as a press: KeyDown reports it as a repeat.
-    private bool _repeating;
+    private global::Silk.NET.GLFW.GlfwCallbacks.KeyCallback? _onKey;
 
     internal unsafe void WireInput()
     {
@@ -112,11 +110,6 @@ public sealed class SilkWindow : IDisposable
             mouse.MouseMove += (_, p) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseMove, p.X, p.Y, Bibui.Core.MouseButton.Unknown, HeldModifiers));
             mouse.Scroll    += (m, w) => events.Add(WindowEvent.Wheel(m.Position.X, m.Position.Y, w.X, w.Y, HeldModifiers));
         }
-        foreach (var keyboard in input.Keyboards)
-        {
-            keyboard.KeyDown += (_, y, _) => events.Add(_repeating ? WindowEvent.KeyRepeat((Bibui.Core.Key)y, HeldModifiers) : WindowEvent.KeyPress((Bibui.Core.Key)y, HeldModifiers));
-            keyboard.KeyUp   += (_, y, _) => events.Add(WindowEvent.KeyRelease((Bibui.Core.Key)y, HeldModifiers));
-        }
         // Text straight from GLFW, not Silk.NET's KeyChar: that casts GLFW's code
         // point to a char, which turns 😀 (U+1F600) into U+F600. Taking the window's
         // char callback replaces Silk.NET's, whose only listener was KeyChar.
@@ -126,19 +119,17 @@ public sealed class SilkWindow : IDisposable
         };
         global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetCharCallback(
             (global::Silk.NET.GLFW.WindowHandle*)Native.Native!.Glfw!.Value, _onChar);
-        // Silk.NET's keyboard drops GLFW's repeats (it reports press and release
-        // only), so a held Backspace deleted one character. The window's key
-        // callback is taken over in front of Silk.NET's: a repeat goes on to it as
-        // a press, with _repeating set, and comes out of KeyDown as a KeyRepeat;
-        // everything else goes on as it came.
-        _onKey = (window, key, scanCode, action, mods) =>
+        // Keys straight from GLFW too: Silk.NET's KeyDown drops GLFW's repeats, so
+        // a held Backspace deleted one character. bibui's Key values are GLFW's
+        // key codes, so a key converts with a cast. Taking the key callback
+        // replaces Silk.NET's, whose only listeners were KeyDown and KeyUp.
+        _onKey = (_, key, _, action, _) => events.Add(action switch
         {
-            if (action != global::Silk.NET.GLFW.InputAction.Repeat) { _silkKey?.Invoke(window, key, scanCode, action, mods); return; }
-            _repeating = true;
-            try { _silkKey?.Invoke(window, key, scanCode, global::Silk.NET.GLFW.InputAction.Press, mods); }
-            finally { _repeating = false; }
-        };
-        _silkKey = global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetKeyCallback(
+            global::Silk.NET.GLFW.InputAction.Press  => WindowEvent.KeyPress((Bibui.Core.Key)key, HeldModifiers),
+            global::Silk.NET.GLFW.InputAction.Repeat => WindowEvent.KeyRepeat((Bibui.Core.Key)key, HeldModifiers),
+            _                                        => WindowEvent.KeyRelease((Bibui.Core.Key)key, HeldModifiers),
+        });
+        global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetKeyCallback(
             (global::Silk.NET.GLFW.WindowHandle*)Native.Native!.Glfw!.Value, _onKey);
         _keyboard = input.Keyboards.FirstOrDefault();
         _mouse = input.Mice.FirstOrDefault();
