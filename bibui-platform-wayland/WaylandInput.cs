@@ -26,9 +26,9 @@ namespace Bibui.Platform.Wayland;
 /// keyboard.</item>
 /// <item><b>Repeat</b> is the client's on Wayland. Timed by
 /// <see cref="KeyRepeat"/> on a timerfd that the host polls beside the display
-/// (<see cref="RepeatFd"/>), so it runs on the loop thread. A repeat types the
-/// key's text again and sends no KeyDown — what the Silk host does, since the
-/// runtime repeats Backspace, Delete and the arrows itself.</item>
+/// (<see cref="RepeatFd"/>), so it runs on the loop thread. A repeat sends the
+/// key down again, marked <see cref="WindowEvent.Repeat"/>, and types its text
+/// again — as GLFW reports one, and as the Silk window passes it on.</item>
 /// <item><b>Focus</b>: on wl_keyboard.leave every held key and button is
 /// released, the repeat stops, and FocusLost follows — GLFW's order.</item>
 /// </list>
@@ -281,8 +281,11 @@ internal sealed unsafe class WaylandInput : IWaylandFeature
 
     /// <summary>
     /// The repeat timer fired: the host saw <see cref="RepeatFd"/> readable.
-    /// Types the held key's text for each repeat due — its text now, so Shift
-    /// pressed mid-repeat changes case — and arms the timer for the next.
+    /// For each repeat due, the held key goes down again (a
+    /// <see cref="WindowEvent.KeyRepeat"/>, so a held Backspace or arrow
+    /// repeats) and types its text again — its text now, so Shift pressed
+    /// mid-repeat changes case — as GLFW reports a repeat; then it arms the
+    /// timer for the next.
     /// </summary>
     public void OnRepeatTimer()
     {
@@ -292,7 +295,11 @@ internal sealed unsafe class WaylandInput : IWaylandFeature
         if (_repeat.Key is uint code && _keyboardFocused)
         {
             int n = _repeat.Take(NowMs());
-            for (int i = 0; i < n; i++) EmitText(_xkb?.Text(code));
+            for (int i = 0; i < n; i++)
+            {
+                _emit(WindowEvent.KeyRepeat(KeyFor(code), HeldModifiers));
+                EmitText(_xkb?.Text(code));
+            }
         }
         ArmRepeat();
     }

@@ -226,7 +226,7 @@ internal static unsafe class InputTests
             finally { input.Destroy(); }
         });
 
-        t.Run("input: a repeat types the held key's text again, on the timerfd", () =>
+        t.Run("input: a repeat sends the held key down again and types its text again, on the timerfd", () =>
         {
             var events = new List<WindowEvent>();
             var input = new WaylandInput(events.Add);
@@ -243,12 +243,39 @@ internal static unsafe class InputTests
                 fds[0] = new Libc.PollFd { Fd = input.RepeatFd, Events = Libc.POLLIN };
                 Assert.Eq(1, Libc.poll(fds, 1, 1000), "timer fired");
                 input.OnRepeatTimer();
-                Assert.True(events.Count >= 1, "a repeat");
-                Assert.True(events.All(e => e.Kind == WindowEventKind.KeyChar && e.CodePoint.Value == 'a'), $"only text: {Describe(events)}");
+                Assert.True(events.Count >= 2, "a repeat");
+                Assert.True(Describe(events).StartsWith("KeyDown A; KeyChar a", StringComparison.Ordinal), $"the key, then its text: {Describe(events)}");
+                Assert.True(events.Where(e => e.Kind == WindowEventKind.KeyDown).All(e => e.Repeat), "each key down a repeat");
+                Assert.True(events.All(e => e.Kind != WindowEventKind.KeyChar || e.CodePoint.Value == 'a'), $"only a typed: {Describe(events)}");
 
                 input.OnKey(KEY_A, WlKeyboard.KeyState.Released);
                 Assert.Eq(null, input.Repeat.NextDue, "released: no repeat due");
                 Assert.Eq(0, Libc.poll(fds, 1, 60), "disarmed");
+            }
+            finally { input.Destroy(); }
+        });
+
+        t.Run("input: a held Backspace repeats as key downs, with no text", () =>
+        {
+            var events = new List<WindowEvent>();
+            var input = new WaylandInput(events.Add);
+            try
+            {
+                input.UseKeyboard(Layout("us"));
+                input.Repeat.SetInfo(rate: 200, delay: 20);
+                input.OnKeyboardEnter();
+                input.OnKey(KEY_BACKSPACE, WlKeyboard.KeyState.Pressed);
+                Assert.Eq("KeyDown Backspace", Describe(events), "the press, no text");
+                Assert.True(!events[0].Repeat, "the press is no repeat");
+                events.Clear();
+
+                var fds = stackalloc Libc.PollFd[1];
+                fds[0] = new Libc.PollFd { Fd = input.RepeatFd, Events = Libc.POLLIN };
+                Assert.Eq(1, Libc.poll(fds, 1, 1000), "timer fired");
+                input.OnRepeatTimer();
+                Assert.True(events.Count >= 1, "a repeat");
+                Assert.True(events.All(e => e.Kind == WindowEventKind.KeyDown && e.Key == Key.Backspace && e.Repeat), $"Backspace again: {Describe(events)}");
+                input.OnKey(KEY_BACKSPACE, WlKeyboard.KeyState.Released);
             }
             finally { input.Destroy(); }
         });

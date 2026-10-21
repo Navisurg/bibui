@@ -97,6 +97,9 @@ public sealed class SilkWindow : IDisposable
     private CursorShape _cursor;
     // Held so the GC keeps it while GLFW holds its function pointer.
     private global::Silk.NET.GLFW.GlfwCallbacks.CharCallback? _onChar;
+    private global::Silk.NET.GLFW.GlfwCallbacks.KeyCallback? _onKey, _silkKey;
+    // A held key's repeat is being passed to Silk.NET as a press: KeyDown reports it as a repeat.
+    private bool _repeating;
 
     internal unsafe void WireInput()
     {
@@ -111,7 +114,7 @@ public sealed class SilkWindow : IDisposable
         }
         foreach (var keyboard in input.Keyboards)
         {
-            keyboard.KeyDown += (_, y, _) => events.Add(WindowEvent.KeyPress((Bibui.Core.Key)y, HeldModifiers));
+            keyboard.KeyDown += (_, y, _) => events.Add(_repeating ? WindowEvent.KeyRepeat((Bibui.Core.Key)y, HeldModifiers) : WindowEvent.KeyPress((Bibui.Core.Key)y, HeldModifiers));
             keyboard.KeyUp   += (_, y, _) => events.Add(WindowEvent.KeyRelease((Bibui.Core.Key)y, HeldModifiers));
         }
         // Text straight from GLFW, not Silk.NET's KeyChar: that casts GLFW's code
@@ -123,6 +126,20 @@ public sealed class SilkWindow : IDisposable
         };
         global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetCharCallback(
             (global::Silk.NET.GLFW.WindowHandle*)Native.Native!.Glfw!.Value, _onChar);
+        // Silk.NET's keyboard drops GLFW's repeats (it reports press and release
+        // only), so a held Backspace deleted one character. The window's key
+        // callback is taken over in front of Silk.NET's: a repeat goes on to it as
+        // a press, with _repeating set, and comes out of KeyDown as a KeyRepeat;
+        // everything else goes on as it came.
+        _onKey = (window, key, scanCode, action, mods) =>
+        {
+            if (action != global::Silk.NET.GLFW.InputAction.Repeat) { _silkKey?.Invoke(window, key, scanCode, action, mods); return; }
+            _repeating = true;
+            try { _silkKey?.Invoke(window, key, scanCode, global::Silk.NET.GLFW.InputAction.Press, mods); }
+            finally { _repeating = false; }
+        };
+        _silkKey = global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetKeyCallback(
+            (global::Silk.NET.GLFW.WindowHandle*)Native.Native!.Glfw!.Value, _onKey);
         _keyboard = input.Keyboards.FirstOrDefault();
         _mouse = input.Mice.FirstOrDefault();
         if (_cursor != CursorShape.Default) ApplyCursor();

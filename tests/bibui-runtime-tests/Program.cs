@@ -7856,6 +7856,40 @@ Console.WriteLine();
 Console.WriteLine("Scroll list");
 ScrollListTests.Register(Run);
 
+// ── Key repeat ──────────────────────────────────────────────────────────────
+
+Run("BeginBuild: a key the window repeats is a key down marked Repeat; a press is not", () =>
+{
+    var (rt, _) = MountButton();
+    rt.Step();
+    bool? Repeated(List<WindowEvent> events)
+    {
+        rt.BeginBuild(events);
+        bool? seen = null;
+        foreach (var ev in rt.UnconsumedEvents)
+            if (ev.IsKeyDown) seen = ev.Repeat;
+        rt.BuildTree();
+        rt.EndBuild();
+        return seen;
+    }
+    Eq<bool?>(false, Repeated([WindowEvent.KeyPress(Key.Backspace)]), "the first press");
+    Eq<bool?>(true, Repeated([WindowEvent.KeyRepeat(Key.Backspace)]), "held: repeated");
+    Eq<bool?>(false, Repeated([WindowEvent.KeyPress(Key.Backspace)]), "a pooled event comes back unmarked");
+});
+
+Run("A held Backspace keeps deleting in a text field", () =>
+{
+    var rt = BibuiRuntime.Create();
+    var text = BibuiStr.FromStrLit("abcd");
+    var edit = new TextEditState { Cursor = 4, Mark = 4 };
+    rt.SetBuild(() => rt.TextField("field", text, edit, focused: true).Node, new SurfaceOptions { Width = 300, Height = 60 });
+    rt.Step();
+    rt.Step([WindowEvent.KeyPress(Key.Backspace)]);
+    rt.Step([WindowEvent.KeyRepeat(Key.Backspace)]);
+    rt.Step([WindowEvent.KeyRepeat(Key.Backspace)]);
+    Eq("a", text.ToString(), "one press and two repeats delete three characters");
+});
+
 Console.WriteLine($"Results: {passed} passed, {failed} failed, {skipped} skipped"
     + (filter is null ? "" : $" ({filteredOut} not matching '{filter}')"));
 

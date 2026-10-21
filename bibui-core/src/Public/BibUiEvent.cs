@@ -110,6 +110,14 @@ public sealed class BibUiEvent
 
     public char? Char { get; set; }
 
+    /// <summary>
+    /// A key down the keyboard repeated because the key is held, not a new press
+    /// (<see cref="Bibui.Core.Runtime.Platform.WindowEvent.Repeat"/>). A text field takes
+    /// repeats like presses, so a held Backspace keeps deleting; a shortcut that
+    /// toggles something should skip them, and one that moves should not.
+    /// </summary>
+    public bool Repeat { get; set; }
+
     // ── Mouse ────────────────────────────────────────────────────────────────
     // Where a press or a wheel notch happened, in logical pixels. Set for the
     // mouse kinds only; a key event has no position and leaves them at zero.
@@ -162,7 +170,7 @@ public sealed class BibUiEvent
     internal void Reset()
     {
         Kind = BibUiEventKind.Null; Next = null; Consumed = false;
-        Key = Key.Unknown; Modifiers = KeyModifiers.None; Char = null;
+        Key = Key.Unknown; Modifiers = KeyModifiers.None; Char = null; Repeat = false;
         Button = MouseButton.Unknown; X = Y = ScrollX = ScrollY = 0f; ClickCount = 1; TargetId = null;
         Flags = 0; Delta = DeltaY = 0; CodePoint = 0; PasteData = null;
     }
@@ -171,7 +179,7 @@ public sealed class BibUiEvent
     internal void CopyFrom(BibUiEvent from)
     {
         Kind = from.Kind;
-        Key = from.Key; Modifiers = from.Modifiers; Char = from.Char;
+        Key = from.Key; Modifiers = from.Modifiers; Char = from.Char; Repeat = from.Repeat;
         Button = from.Button; X = from.X; Y = from.Y; ScrollX = from.ScrollX; ScrollY = from.ScrollY;
         ClickCount = from.ClickCount; TargetId = from.TargetId;
         Flags = from.Flags; Delta = from.Delta; DeltaY = from.DeltaY; CodePoint = from.CodePoint; PasteData = from.PasteData;
