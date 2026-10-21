@@ -98,20 +98,21 @@ internal static class Charts
                 ctx.DrawRRect(cx - 5f, cy - 5f, 10f, 10f, 5f, surface, line, 2.5f);
             }
         };
-        host.FillX().FillY();
+        host.Sized(Size.Fill, Size.Fill);
         return (host, hover);
     }
 
     /// <summary>The axis beside an area chart: its tick values, top to bottom, spread over the plot's height.</summary>
     public static void Axis(BibuiRuntime rt, Series s)
     {
-        using (rt.PushParent(rt.ColumnFillY().Px(width: 44f)))
-            for (int t = 0; t <= s.Ticks; t++)
-            {
-                if (t > 0) rt.Spring();
-                float v = s.Max - (s.Max - s.Min) * t / s.Ticks;
-                Ui.T(rt, v.ToString(s.Format, System.Globalization.CultureInfo.InvariantCulture), FontSize.Px(11f), UiColor.TextSecondary);
-            }
+        var ticks = rt.BeginParent(rt.Column().Sized(Size.Px(44f), Size.Fill));
+        for (int t = 0; t <= s.Ticks; t++)
+        {
+            if (t > 0) rt.Spacer(Size.Fill);
+            float v = s.Max - (s.Max - s.Min) * t / s.Ticks;
+            Ui.T(rt, v.ToString(s.Format, System.Globalization.CultureInfo.InvariantCulture), FontSize.Px(11f), UiColor.TextSecondary);
+        }
+        rt.EndParent(ticks);
     }
 
     /// <summary>A ring gauge: a track, an arc of <paramref name="value"/> 0..1, and nothing else.</summary>
@@ -127,7 +128,7 @@ internal static class Charts
                 ctx.DrawArc(cx, cy, rad, 5f, track, 0f, 360f);
                 ctx.DrawArc(cx, cy, rad, 5f, c, -90f, 360f * Math.Clamp(value, 0f, 1f));
             },
-        }.Px(size, size);
+        }.Sized(Size.Px(size), Size.Px(size));
     }
 
     private static (float Min, float Max) Range(ReadOnlySpan<float> values, float pad)

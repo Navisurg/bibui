@@ -69,19 +69,17 @@ sealed class StarredRepositories
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        Box column = runtime.Box();
-        column.ChildLayoutAxis = LayoutAxis.Y;
-        column.SizeX = SemanticSize.Pixels(320f);
-        column.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(column))
+        var column = runtime.BeginParent(runtime.Column().Sized(Size.Px(320f)));
+        var section = runtime.Expander("starred", Title, _open);
+        if (section.Toggled) _open = !_open;
+        if (section.Body is { } body)
         {
-            var section = runtime.Expander("starred", Title, _open);
-            if (section.Toggled) _open = !_open;
-            if (section.Body is { } body)
-                using (runtime.PushParent(body))
-                    foreach (var line in Lines)
-                        runtime.Text(line, ComponentSize.Sm, TextColor.Secondary);
+            runtime.BeginParent(body);
+            foreach (var line in Lines)
+                runtime.Text(line, ComponentSize.Sm, TextColor.Secondary);
+            runtime.EndParent(body);
         }
+        runtime.EndParent(column);
         return column;
     }
 }

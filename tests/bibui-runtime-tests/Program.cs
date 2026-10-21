@@ -203,7 +203,7 @@ Run("Create: runtime.Button built while a column is pushed is inserted into it",
     IsTrue(ReferenceEquals(column!.LastChild, button), "after the text, in the order built");
 });
 
-Run("runtime.ColumnFit: a box linked where it is made, and built into once pushed", () =>
+Run("runtime.Column: a box linked where it is made, and built into once begun", () =>
 {
     var runtime = BibuiRuntime.Create();
     Box? column = null, row = null, unpushed = null;
@@ -234,8 +234,8 @@ Run("runtime.ColumnFit: a box linked where it is made, and built into once pushe
     IsTrue(ReferenceEquals(unpushed!.Parent, column) && unpushed.FirstChild is null,
         "a row that is never pushed is in the column, and empty");
     IsTrue(ReferenceEquals(column.LastChild, runtime.FindById("add")), "after the row's scope, building goes back into the column");
-    Eq(SemanticSize.ChildrenSum(), column.SizeX, "ColumnFit: as wide as its children");
-    Eq(SemanticSize.ChildrenSum(), column.SizeY, "ColumnFit: as tall as its children");
+    Eq(SemanticSize.ChildrenSum(), column.SizeX, "Column(): as wide as its children");
+    Eq(SemanticSize.ChildrenSum(), column.SizeY, "Column(): as tall as its children");
     IsTrue(column.Extent.Y > row.Extent.Y, "laid out: the column holds the text, the row and a button");
 });
 

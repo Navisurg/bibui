@@ -57,10 +57,12 @@ internal static class DemoOverlays
     // Wrapped text in the parent in scope, as wide as it: small and quiet.
     private static void Paragraph(BibuiRuntime runtime, string id, string text)
     {
-        using (runtime.PushFontSize(ComponentSize.Sm))
-        using (runtime.PushSizeY(SemanticSize.ChildrenSum()))
-            runtime.MultilineTextField(id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0,
-                textColor: TextColor.Secondary);
+        runtime.BeginFontSize(ComponentSize.Sm);
+        runtime.BeginSizeY(SemanticSize.ChildrenSum());
+        runtime.MultilineTextField(id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0,
+            textColor: TextColor.Secondary);
+        runtime.EndSizeY();
+        runtime.EndFontSize();
     }
 
     // ── Popover ──────────────────────────────────────────────────────────────
@@ -71,24 +73,22 @@ internal static class DemoOverlays
     {
         const string id = "demo-popover-content";
         Heading(runtime, "Its button opens and closes it, and a press elsewhere closes it");
-        using (runtime.PushParent(runtime.ColumnPx(340f, 140f)))
-        {
-            runtime.Gap(16f);
-            using (runtime.PushParent(runtime.RowFillX()))
-            {
-                runtime.Spring();
-                var trigger = runtime.Button("demo-popover", "Open popover");
-                if (trigger.Clicked)
-                    if (runtime.IsDropDownOpen(id)) runtime.CloseDropDown(id); else runtime.OpenDropDown(id, trigger.Node);
-                runtime.Spring();
+        var area = runtime.BeginParent(runtime.Column().Sized(Size.Px(340f), Size.Px(140f)));
+        runtime.Gap(16f);
+        var row = runtime.BeginParent(runtime.Row().Sized(Size.Fill));
+        runtime.Spacer(Size.Fill);
+        var trigger = runtime.Button("demo-popover", "Open popover");
+        if (trigger.Clicked)
+            if (runtime.IsDropDownOpen(id)) runtime.CloseDropDown(id); else runtime.OpenDropDown(id, trigger.Node);
+        runtime.Spacer(Size.Fill);
 
-                if (Popover.Begin(runtime, id, trigger.Node, width: 280f) is { } popover)
-                {
-                    Paragraph(runtime, "demo-popover-text", "Anything built between Popover.Begin and End shows here, under its trigger.");
-                    popover.End();
-                }
-            }
+        if (Popover.Begin(runtime, id, trigger.Node, width: 280f) is { } popover)
+        {
+            Paragraph(runtime, "demo-popover-text", "Anything built between Popover.Begin and End shows here, under its trigger.");
+            popover.End();
         }
+        runtime.EndParent(row);
+        runtime.EndParent(area);
 
         runtime.Gap(16f);
         runtime.TextFromId("demo-popover-state", $"Popover: {(runtime.IsDropDownOpen(id) ? "open" : "closed")}", ComponentSize.Sm, TextColor.Secondary);
@@ -104,33 +104,30 @@ internal static class DemoOverlays
     {
         const string id = "demo-hover-preview-content";
         Heading(runtime, "Point at @fernway, or click it to pin the preview open");
-        Box trigger;
-        bool clicked, hovering;
-        using (runtime.PushParent(runtime.ColumnPx(340f, 120f)))
-        {
-            runtime.Gap(16f);
-            using (runtime.PushParent(runtime.RowFillX()))
-            {
-                runtime.Spring();
-                // A name, not a button: a box that takes the press so the
-                // pointer can be over it.
-                trigger = runtime.BoxFromId("demo-hover-preview", InteractionKinds.LeftPress);
-                Interaction over = runtime.InteractionsFor(trigger);
-                clicked = over.Clicked;
-                hovering = over.Hovering;
-                trigger.ChildLayoutAxis = LayoutAxis.X;
-                trigger.SizeX = trigger.SizeY = SemanticSize.ChildrenSum();
-                using (runtime.PushParent(trigger))
-                    using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text("@fernway", textColor: TextColor.Accent);
-                runtime.Spring();
+        var area = runtime.BeginParent(runtime.Column().Sized(Size.Px(340f), Size.Px(120f)));
+        runtime.Gap(16f);
+        var row = runtime.BeginParent(runtime.Row().Sized(Size.Fill));
+        runtime.Spacer(Size.Fill);
+        // A name, not a button: a box that takes the press so the
+        // pointer can be over it.
+        Box trigger = runtime.BoxFromId("demo-hover-preview", InteractionKinds.LeftPress);
+        Interaction over = runtime.InteractionsFor(trigger);
+        bool clicked = over.Clicked;
+        bool hovering = over.Hovering;
+        trigger.ChildLayoutAxis = LayoutAxis.X;
+        trigger.SizeX = trigger.SizeY = SemanticSize.ChildrenSum();
+        runtime.BeginParent(trigger);
+        Bold(runtime, "@fernway", textColor: TextColor.Accent);
+        runtime.EndParent(trigger);
+        runtime.Spacer(Size.Fill);
 
-                if (Popover.Begin(runtime, id, trigger, width: 280f) is { } card)
-                {
-                    Paragraph(runtime, "demo-hover-preview-text", "The team behind fernway/ui. Building design systems that ship.");
-                    hovering |= card.End().Hovering;
-                }
-            }
+        if (Popover.Begin(runtime, id, trigger, width: 280f) is { } card)
+        {
+            Paragraph(runtime, "demo-hover-preview-text", "The team behind fernway/ui. Building design systems that ship.");
+            hovering |= card.End().Hovering;
         }
+        runtime.EndParent(row);
+        runtime.EndParent(area);
 
         bool open = runtime.IsDropDownOpen(id);
         runtime.Gap(16f);
@@ -170,13 +167,11 @@ internal static class DemoOverlays
         runtime.TextFromId("demo-tooltip-state", shown ? "Tooltip: open" : "Tooltip: closed", ComponentSize.Sm, TextColor.Secondary);
         runtime.Gap(16f);
 
-        BibuiWidget copy, share;
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            copy = TooltipTrigger(runtime, "demo-tooltip-copy", "Copy", 180f, 80f);
-            runtime.Gap(12f);
-            share = TooltipTrigger(runtime, "demo-tooltip-share", "Share", 180f, 80f);
-        }
+        var row = runtime.BeginParent(runtime.Row());
+        BibuiWidget copy = TooltipTrigger(runtime, "demo-tooltip-copy", "Copy", 180f, 80f);
+        runtime.Gap(12f);
+        BibuiWidget share = TooltipTrigger(runtime, "demo-tooltip-share", "Share", 180f, 80f);
+        runtime.EndParent(row);
 
         if (copy.Hovering) Tooltip.Build(runtime, "Copy to clipboard", (Box)copy.Node);
         else if (share.Hovering) Tooltip.Build(runtime, "Share a link to this page", (Box)share.Node);
@@ -187,11 +182,14 @@ internal static class DemoOverlays
     // sat in the size it was given.
     private static BibuiWidget TooltipTrigger(BibuiRuntime runtime, string id, string label, float width, float height)
     {
-        using (runtime.PushParent(runtime.ColumnPx(width, height)))
-        using (runtime.Centred())
-        using (runtime.PushParent(runtime.RowFillX()))
-        using (runtime.Centred())
-            return runtime.Button(id, label);
+        var area = runtime.BeginParent(runtime.Column().Sized(Size.Px(width), Size.Px(height)));
+        runtime.BeginCenterY();
+        runtime.BeginCenterX();
+        var button = runtime.Button(id, label);
+        runtime.EndCenterX();
+        runtime.EndCenterY();
+        runtime.EndParent(area);
+        return button;
     }
 
     // ── DropdownMenu and ContextMenu: one menu, opened two ways ─────────────
@@ -204,46 +202,42 @@ internal static class DemoOverlays
         const string id = "demo-dropdown-menu-list";
         Heading(runtime, "A menu that opens under its button");
         string? picked = null;
-        using (runtime.PushParent(runtime.ColumnPx(280f, 200f)))
-        {
-            runtime.Gap(2f);
-            using (runtime.PushParent(runtime.RowFillX()))
-            {
-                runtime.Spring();
-                Box trigger = runtime.BoxFromId("demo-dropdown-menu", InteractionKinds.LeftPress);
-                if (runtime.InteractionsFor(trigger).Clicked)
-                    if (runtime.IsDropDownOpen(id)) runtime.CloseDropDown(id); else runtime.OpenDropDown(id, trigger);
-                trigger.ChildLayoutAxis = LayoutAxis.X;
-                trigger.SizeX = trigger.SizeY = SemanticSize.ChildrenSum();
-                trigger.Style.Padding = EdgeInsets.Symmetric(horizontal: 12f, vertical: 8f);
-                trigger.Style.CornerRadius = 8f;
-                trigger.Style.Draw = DrawFlags.Border | DrawFlags.Background | DrawFlags.HotEffects | DrawFlags.ActiveEffects;
-                using (runtime.PushParent(trigger))
-                {
-                    runtime.Text("My Account");
-                    runtime.Gap(8f);
-                    using (runtime.PushParent(runtime.ColumnFit()))
-                    {
-                        runtime.Gap(3f);
-                        runtime.Icon(runtime.IsDropDownOpen(id) ? "chevron-up" : "chevron-down", 14f).Color = UiColor.TextSecondary;
-                    }
-                }
-                runtime.Spring();
+        var area = runtime.BeginParent(runtime.Column().Sized(Size.Px(280f), Size.Px(200f)));
+        runtime.Gap(2f);
+        var row = runtime.BeginParent(runtime.Row().Sized(Size.Fill));
+        runtime.Spacer(Size.Fill);
+        Box trigger = runtime.BoxFromId("demo-dropdown-menu", InteractionKinds.LeftPress);
+        if (runtime.InteractionsFor(trigger).Clicked)
+            if (runtime.IsDropDownOpen(id)) runtime.CloseDropDown(id); else runtime.OpenDropDown(id, trigger);
+        trigger.ChildLayoutAxis = LayoutAxis.X;
+        trigger.SizeX = trigger.SizeY = SemanticSize.ChildrenSum();
+        trigger.Style.Padding = EdgeInsets.Symmetric(horizontal: 12f, vertical: 8f);
+        trigger.Style.CornerRadius = 8f;
+        trigger.Style.Draw = DrawFlags.Border | DrawFlags.Background | DrawFlags.HotEffects | DrawFlags.ActiveEffects;
+        runtime.BeginParent(trigger);
+        runtime.Text("My Account");
+        runtime.Gap(8f);
+        var lowered = runtime.BeginParent(runtime.Column());
+        runtime.Gap(3f);
+        runtime.Icon(runtime.IsDropDownOpen(id) ? "chevron-up" : "chevron-down", 14f).Color = UiColor.TextSecondary;
+        runtime.EndParent(lowered);
+        runtime.EndParent(trigger);
+        runtime.Spacer(Size.Fill);
 
-                if (Menu.BeginBelow(runtime, id, trigger) is { } menu)
-                {
-                    for (int i = 0; i < AccountItems.Length; i++)
-                    {
-                        var (label, icon, shortcut) = AccountItems[i];
-                        if (label.Length == 0) { Menu.Separator(runtime); continue; }
-                        if (runtime.MenuItem($"demo-dropdown-menu-item-{i}", label, icon,
-                                shortcut is null ? null : shortcut).Clicked)
-                            picked = label;
-                    }
-                    menu.End();
-                }
+        if (Menu.BeginBelow(runtime, id, trigger) is { } menu)
+        {
+            for (int i = 0; i < AccountItems.Length; i++)
+            {
+                var (label, icon, shortcut) = AccountItems[i];
+                if (label.Length == 0) { Menu.Separator(runtime); continue; }
+                if (runtime.MenuItem($"demo-dropdown-menu-item-{i}", label, icon,
+                        shortcut is null ? null : shortcut).Clicked)
+                    picked = label;
             }
+            menu.End();
         }
+        runtime.EndParent(row);
+        runtime.EndParent(area);
 
         runtime.Gap(16f);
         runtime.TextFromId("demo-dropdown-state", runtime.IsDropDownOpen(id) ? "Dropdown: open" : $"Dropdown: closed — selected: {state.DropdownLastSelected ?? "none"}", ComponentSize.Sm, TextColor.Secondary);
@@ -278,7 +272,7 @@ internal static class DemoOverlays
             runtime.OpenDropDown(id);
         }
         area.ChildLayoutAxis = LayoutAxis.Y;
-        area.Px(280f, 200f);
+        area.Sized(Size.Px(280f), Size.Px(200f));
 
         string? picked = null;
         var at = ContextAt ?? area.Rect + new System.Numerics.Vector2(16f, 16f);
@@ -330,64 +324,63 @@ internal static class DemoOverlays
 
         // In the 480 by 360 the reference palette was given, so the page
         // below it stays put however few commands match.
-        var inArea = runtime.PushParent(runtime.ColumnPx(480f, 360f));
-        Box palette = runtime.ColumnWidth(480f);
+        var area = runtime.BeginParent(runtime.Column().Sized(Size.Px(480f), Size.Px(360f)));
+        Box palette = runtime.Column().Sized(Size.Px(480f));
         palette.Style.CornerRadius = 8f;
         palette.Style.BorderColor = UiColor.Border;
         palette.Style.BackgroundColor = UiColor.SurfaceRaised;
 
         bool focus = false;
         string? ran = null;
-        using (runtime.PushParent(palette))
+        runtime.BeginParent(palette);
+        Box search = runtime.Row().Sized(Size.Fill);
+        search.Style.Padding = EdgeInsets.Symmetric(horizontal: 12f, vertical: 12f);
+        runtime.BeginParent(search);
+        var lowered = runtime.BeginParent(runtime.Column());
+        runtime.Gap(2f);
+        runtime.Icon("search", 16f).Color = UiColor.TextSecondary;
+        runtime.EndParent(lowered);
+        runtime.Gap(12f);
+        var field = runtime.BeginParent(runtime.Row().Sized(Size.Fill));
+        focus = runtime.TextField("demo-command-search", CommandQuery, CommandEdit, state.CommandPaletteOpen,
+            textColor: TextColor.Primary, placeholder: "Type a command…").Pressed;
+        runtime.EndParent(field);
+        runtime.EndParent(search);
+        Box rule = runtime.Box().Sized(Size.Fill, Size.Px(1f));
+        rule.Style.BackgroundColor = UiColor.Border;
+
+        Box list = runtime.Column().Sized(Size.Fill);
+        list.Style.Padding = EdgeInsets.All(4f);
+        runtime.BeginParent(list);
+        string query = CommandQuery.ToString();
+        string? group = null;
+        bool any = false;
+        for (int i = 0; i < Commands.Length; i++)
         {
-            Box search = runtime.RowFillX();
-            search.Style.Padding = EdgeInsets.Symmetric(horizontal: 12f, vertical: 12f);
-            using (runtime.PushParent(search))
+            var (label, icon, itemGroup) = Commands[i];
+            if (!label.Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
+            if (itemGroup != group)
             {
-                using (runtime.PushParent(runtime.ColumnFit()))
-                {
-                    runtime.Gap(2f);
-                    runtime.Icon("search", 16f).Color = UiColor.TextSecondary;
-                }
-                runtime.Gap(12f);
-                using (runtime.PushParent(runtime.RowFillX()))
-                    focus = runtime.TextField("demo-command-search", CommandQuery, CommandEdit, state.CommandPaletteOpen,
-                        textColor: TextColor.Primary, placeholder: "Type a command…").Pressed;
+                Menu.Label(runtime, itemGroup);
+                group = itemGroup;
             }
-            Box rule = runtime.Box().FillX().Px(height: 1f);
-            rule.Style.BackgroundColor = UiColor.Border;
-
-            Box list = runtime.ColumnFillX();
-            list.Style.Padding = EdgeInsets.All(4f);
-            using (runtime.PushParent(list))
-            {
-                string query = CommandQuery.ToString();
-                string? group = null;
-                bool any = false;
-                for (int i = 0; i < Commands.Length; i++)
-                {
-                    var (label, icon, itemGroup) = Commands[i];
-                    if (!label.Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
-                    if (itemGroup != group)
-                    {
-                        Menu.Label(runtime, itemGroup);
-                        group = itemGroup;
-                    }
-                    if (runtime.MenuItem($"demo-command-item-{i}", label, icon).Clicked) ran = label;
-                    any = true;
-                }
-                if (!any)
-                {
-                    Box empty = runtime.RowFillX();
-                    empty.Style.Padding = EdgeInsets.Symmetric(horizontal: 0f, vertical: 24f);
-                    using (runtime.PushParent(empty))
-                    using (runtime.Centred())
-                        runtime.Text("No command matches.", ComponentSize.Sm, TextColor.Secondary);
-                }
-            }
+            if (runtime.MenuItem($"demo-command-item-{i}", label, icon).Clicked) ran = label;
+            any = true;
         }
+        if (!any)
+        {
+            Box empty = runtime.Row().Sized(Size.Fill);
+            empty.Style.Padding = EdgeInsets.Symmetric(horizontal: 0f, vertical: 24f);
+            runtime.BeginParent(empty);
+            runtime.BeginCenter();
+            runtime.Text("No command matches.", ComponentSize.Sm, TextColor.Secondary);
+            runtime.EndCenter();
+            runtime.EndParent(empty);
+        }
+        runtime.EndParent(list);
+        runtime.EndParent(palette);
 
-        inArea.Dispose();
+        runtime.EndParent(area);
         runtime.Gap(16f);
         runtime.TextFromId("demo-command-state", (state.CommandPaletteOpen ? "Command palette: open" : "Command palette: closed")
             + (CommandRan is null ? "" : $" — ran: {CommandRan}"), ComponentSize.Sm, TextColor.Secondary);
@@ -434,17 +427,18 @@ internal static class DemoOverlays
     // A dialog's title and the words under it.
     private static void DialogHeader(BibuiRuntime runtime, string id, string title, string description)
     {
-        using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, ComponentSize.Lg);
+        Bold(runtime, title, ComponentSize.Lg);
         runtime.Gap(6f);
         Paragraph(runtime, id + "-description", description);
     }
 
-    // The action row at a dialog's foot, its buttons to the right.
-    private static Box Actions(BibuiRuntime runtime)
+    // Begins the action row at a dialog's foot, its buttons to the right; the
+    // caller ends it.
+    private static Box BeginActions(BibuiRuntime runtime)
     {
         runtime.Gap(24f);
-        var row = runtime.RowFillX();
-        Arrange.Spring(row);
+        var row = runtime.BeginParent(runtime.Row().Sized(Size.Fill));
+        runtime.Spacer(Size.Fill);
         return row;
     }
 
@@ -458,13 +452,11 @@ internal static class DemoOverlays
         {
             var dialog = Dialog.Begin(runtime, "demo-dialog", shown, width: 460f);
             DialogHeader(runtime, "demo-dialog", "Rename workspace", "The new name shows in the sidebar and in links you share.");
-            bool close;
-            using (runtime.PushParent(Actions(runtime)))
-            {
-                close = runtime.Button("demo-dialog-cancel", "Cancel").Clicked;
-                runtime.Gap(8f);
-                close |= PrimaryButton(runtime, "demo-dialog-save", "Rename").Clicked;
-            }
+            var actions = BeginActions(runtime);
+            bool close = runtime.Button("demo-dialog-cancel", "Cancel").Clicked;
+            runtime.Gap(8f);
+            close |= PrimaryButton(runtime, "demo-dialog-save", "Rename").Clicked;
+            runtime.EndParent(actions);
             if (dialog.End().Dismissed | close && state.DialogOpen) set(state with { DialogOpen = false });
         }
     }
@@ -480,13 +472,11 @@ internal static class DemoOverlays
             var dialog = Dialog.Begin(runtime, "demo-alert-dialog", shown, width: 480f);
             DialogHeader(runtime, "demo-alert-dialog", "Delete this workspace?",
                 "Its files and settings are deleted with it, for everyone in it. This cannot be undone.");
-            bool close;
-            using (runtime.PushParent(Actions(runtime)))
-            {
-                close = runtime.Button("demo-alert-dialog-cancel", "Cancel").Clicked;
-                runtime.Gap(8f);
-                close |= DestructiveButton(runtime, "demo-alert-dialog-confirm", "Delete workspace").Clicked;
-            }
+            var actions = BeginActions(runtime);
+            bool close = runtime.Button("demo-alert-dialog-cancel", "Cancel").Clicked;
+            runtime.Gap(8f);
+            close |= DestructiveButton(runtime, "demo-alert-dialog-confirm", "Delete workspace").Clicked;
+            runtime.EndParent(actions);
             // Blocking: a press beside it is not an answer, so only its buttons close it.
             dialog.End();
             if (close && state.AlertDialogOpen) set(state with { AlertDialogOpen = false });
@@ -498,14 +488,13 @@ internal static class DemoOverlays
     private static void DrawerPage(BibuiRuntime runtime, OverlaysState state, Action<OverlaysState> set)
     {
         Heading(runtime, "Open either one; the cross or a press beside it closes it");
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            if (PrimaryButton(runtime, "demo-drawer-right-toggle", state.DrawerRightOpen ? "Close right drawer" : "Open from the right").Clicked)
-                set(state with { DrawerRightOpen = !state.DrawerRightOpen });
-            runtime.Gap(8f);
-            if (PrimaryButton(runtime, "demo-drawer-bottom-toggle", state.DrawerBottomOpen ? "Close bottom drawer" : "Open from the bottom").Clicked)
-                set(state with { DrawerBottomOpen = !state.DrawerBottomOpen });
-        }
+        var buttons = runtime.BeginParent(runtime.Row());
+        if (PrimaryButton(runtime, "demo-drawer-right-toggle", state.DrawerRightOpen ? "Close right drawer" : "Open from the right").Clicked)
+            set(state with { DrawerRightOpen = !state.DrawerRightOpen });
+        runtime.Gap(8f);
+        if (PrimaryButton(runtime, "demo-drawer-bottom-toggle", state.DrawerBottomOpen ? "Close bottom drawer" : "Open from the bottom").Clicked)
+            set(state with { DrawerBottomOpen = !state.DrawerBottomOpen });
+        runtime.EndParent(buttons);
         runtime.Gap(16f);
         runtime.Text($"Right: {(state.DrawerRightOpen ? "open" : "closed")}    Bottom: {(state.DrawerBottomOpen ? "open" : "closed")}",
             ComponentSize.Sm, TextColor.Secondary);
@@ -526,13 +515,11 @@ internal static class DemoOverlays
         {
             var drawer = Dialog.Begin(runtime, "demo-drawer-bottom", bottom, DialogSide.Bottom);
             // The grab handle, centred along the top.
-            using (runtime.PushParent(runtime.RowFillX()))
-            using (runtime.Centred())
-            {
-                var bar = runtime.Box().Px(48f, 4f);
-                bar.Style.BackgroundColor = UiColor.Border;
-                bar.Style.CornerRadius = 2f;
-            }
+            runtime.BeginCenterAcross();
+            var bar = runtime.Box().Sized(Size.Px(48f), Size.Px(4f));
+            bar.Style.BackgroundColor = UiColor.Border;
+            bar.Style.CornerRadius = 2f;
+            runtime.EndCenterAcross();
             runtime.Gap(12f);
             bool close = CloseMark(runtime, "demo-drawer-bottom-close");
             DialogHeader(runtime, "demo-drawer-bottom", "Export", "Choose a format, and where to save the file.");
@@ -548,11 +535,13 @@ internal static class DemoOverlays
         var panel = runtime.ParentInScope;
         Box mark = runtime.BoxFromId(id, InteractionKinds.LeftPress);
         bool clicked = runtime.InteractionsFor(mark).Clicked;
-        mark.Px(24f, 24f).At(panel.Extent.X - 24f - 12f, 12f);
+        mark.Sized(Size.Px(24f), Size.Px(24f)).At(panel.Extent.X - 24f - 12f, 12f);
         mark.Style.CornerRadius = 4f;
         mark.Style.HoverBackgroundColor = UiColor.SurfaceRaised;
         mark.Style.Padding = EdgeInsets.All(4f);
-        using (runtime.PushParent(mark)) runtime.Icon("x", 16f);
+        runtime.BeginParent(mark);
+        runtime.Icon("x", 16f);
+        runtime.EndParent(mark);
         return clicked;
     }
 
@@ -566,8 +555,9 @@ internal static class DemoOverlays
         box.Style.Padding = EdgeInsets.Symmetric(horizontal: 16f, vertical: 8f);
         box.Style.CornerRadius = 8f;
         box.Style.BackgroundColor = UiColor.Destructive;
-        using (runtime.PushParent(box))
-            runtime.Text(label);
+        runtime.BeginParent(box);
+        runtime.Text(label);
+        runtime.EndParent(box);
         return new BibuiWidget(box, interaction);
     }
 
@@ -582,8 +572,9 @@ internal static class DemoOverlays
         box.Style.CornerRadius = 8f;
         box.Style.BackgroundColor = UiColor.Accent;
         box.Style.HoverBackgroundColor = UiColor.AccentHover;
-        using (runtime.PushParent(box))
-            runtime.Text(label, textColor: TextColor.AccentForeground);
+        runtime.BeginParent(box);
+        runtime.Text(label, textColor: TextColor.AccentForeground);
+        runtime.EndParent(box);
         return new BibuiWidget(box, interaction);
     }
 }

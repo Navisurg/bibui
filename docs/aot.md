@@ -73,7 +73,6 @@ using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
-using static Bibui.Core.Arrange;
 
 var runtime = BibuiRuntime.Create();
 int count = 0;
@@ -82,9 +81,12 @@ void Build()
 {
     var add = runtime.Button("add", "Add one");
     if (add.Clicked) count++;
-    var text = runtime.Text($"Clicked {count} times");
-    UiNode.PushIntoParent(runtime.ParentInScope,
-        Column(text, Space(12f), add).FillX().FillY().Padded(EdgeInsets.All(24f)));
+    var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+    page.Style.Padding = EdgeInsets.All(24f);
+    runtime.Text($"Clicked {count} times");
+    runtime.Gap(12f);
+    UiNode.PushIntoParent(runtime.ParentInScope, add.Node);   // built first, so the count shows its click
+    runtime.EndParent(page);
 }
 
 if (!WaylandWindow.IsSupported)

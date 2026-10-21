@@ -24,22 +24,27 @@ Fixtures: `text-label`, `text-align-right`, `text-centered-accent`,
 public Text Text(ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null, FontSlot? family = null)
 public Text TextFromId(string id, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null, FontSlot? family = null)
 
-public FontSizeScope PushFontSize(FontSize size)
-public FontFaceScope PushFontFace(FontSlot? family = null, FontWeight? weight = null)
+public void BeginFontSize(FontSize size)
+public void EndFontSize()
+public void BeginFontFace(FontSlot? family = null, FontWeight? weight = null)
+public void EndFontFace()
 ```
+
+`PushFontSize` and `PushFontFace` are the same Begins, handing back a scope
+whose `Dispose` is the End.
 
 - `text` is copied into the node, so a `string`, a slice of a `BibuiStr` or
   text formatted into a stack buffer will all do, and may change as soon as the
   call returns.
 - `fontSize` is a `ComponentSize` step (`Sm`, `Md`, `Lg`, `Xl`, `Xxl`) or
-  `FontSize.Px(n)`. Without one, the text uses the size pushed with
-  `PushFontSize`, or `Md`.
+  `FontSize.Px(n)`. Without one, the text uses the size begun with
+  `BeginFontSize`, or `Md`.
 - `textColor` is a token (`UiColor.TextSecondary`, or a `TextColor` such as
   `TextColor.Secondary`). Without one, it is `TextPrimary`.
-- The weight comes from `PushFontFace(weight: FontWeight.Bold)`. The family
-  comes from `family`, or the one pushed, or the body family.
-- A text is as large as what it holds, unless a size is pushed with
-  `PushSizeX` or `PushSizeY`. One line, no wrapping: for wrapped text use
+- The weight comes from `BeginFontFace(weight: FontWeight.Bold)`. The family
+  comes from `family`, or the one begun, or the body family.
+- A text is as large as what it holds, unless a size is begun with
+  `BeginSizeX` or `BeginSizeY`. One line, no wrapping: for wrapped text use
   `runtime.MultilineTextField` with `events: 0`.
 - `Text` is keyless and pooled. Use `TextFromId` when the text must be found
   again, by a test or an animation.
@@ -132,26 +137,19 @@ sealed class SearchStatus
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        Box column = runtime.Box();
-        column.ChildLayoutAxis = LayoutAxis.Y;
-        column.SizeX = column.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(column))
-        {
-            using (runtime.PushFontFace(weight: FontWeight.Bold))
-                runtime.Text(Heading, ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(8f);
+        var column = runtime.BeginParent(runtime.Column());
+        runtime.BeginFontFace(weight: FontWeight.Bold);
+        runtime.Text(Heading, ComponentSize.Sm, TextColor.Secondary);
+        runtime.EndFontFace();
+        runtime.Gap(8f);
 
-            Box row = runtime.Box();
-            row.ChildLayoutAxis = LayoutAxis.X;
-            row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.PushParent(row))
-            {
-                if (Busy) runtime.Spinner(16f);
-                else runtime.Icon("search", 16f).Color = UiColor.Accent;
-                runtime.Gap(8f);
-                runtime.Text(Searching, ComponentSize.Sm);
-            }
-        }
+        var row = runtime.BeginParent(runtime.Row());
+        if (Busy) runtime.Spinner(16f);
+        else runtime.Icon("search", 16f).Color = UiColor.Accent;
+        runtime.Gap(8f);
+        runtime.Text(Searching, ComponentSize.Sm);
+        runtime.EndParent(row);
+        runtime.EndParent(column);
         return column;
     }
 }

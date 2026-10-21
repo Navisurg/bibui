@@ -12,7 +12,6 @@ The samples on this page assume these usings:
 using Bibui.Core;
 using Bibui.Core.Runtime;
 using Bibui.Core.Theming;
-using static Bibui.Core.Arrange;
 ```
 
 ## The frame: build, layout, paint
@@ -46,13 +45,12 @@ const string hello = "Hello, bibui";
 const string ok = "OK";
 
 runtime.BeginBuild();
-UiNode.PushIntoParent(runtime.ParentInScope,
-    Column(
-        runtime.Text(hello),
-        Space(12f),
-        runtime.Button("ok", ok))
-    .FillX().FillY()
-    .Padded(EdgeInsets.All(24f)));
+var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+page.Style.Padding = EdgeInsets.All(24f);
+runtime.Text(hello);
+runtime.Gap(12f);
+runtime.Button("ok", ok);
+runtime.EndParent(page);
 runtime.EndBuild();
 
 using var skia = new SkiaCpuRenderer();
@@ -62,9 +60,8 @@ File.WriteAllBytes("hello.png", FramePixels.Png(runtime, skia.Draw));
 This one also needs `using Bibui.Raster.Skia;`.
 
 `BeginBuild()` opens a frame and `EndBuild()` closes it. What is built between
-them is the frame: the runtime owns its root, what is built with nothing pushed
-lands under it, and a tree made with `Arrange` is linked there with
-`UiNode.PushIntoParent(runtime.ParentInScope, ...)`. `EndBuild()` lays the tree
+them is the frame: the runtime owns its root, and what is built with no parent
+begun lands under it. `EndBuild()` lays the tree
 out and records it into `runtime.DrawList`, and draws nothing. The app's state
 is its own fields: the build reads them, a click writes them, and the next
 frame sees the change. `FramePixels.Png` has the renderer you name draw the
@@ -91,25 +88,31 @@ Two timing rules follow from the three passes:
 A node says its size on each axis as a `SemanticSize`, that is, by what the
 size depends on:
 
-| Size | Helper | Depends on |
+| Size | Short name | Depends on |
 |---|---|---|
-| `SemanticSize.Pixels(n)` | `.Px(width, height)` | nothing: exactly *n* logical pixels |
-| `SemanticSize.Text()` | (what `runtime.Text` and `runtime.Icon` set) | what the node holds: a text's measured lines, an icon's side |
-| `SemanticSize.ParentPct(f)` | `.FillX(f)`, `.FillY(f)` | the parent: a share of the space inside its padding |
-| `SemanticSize.ChildrenSum()` | (what `Row` and `Column` set) | the children: summed along the layout axis, the largest across it, plus padding |
+| `SemanticSize.Pixels(n)` | `Size.Px(n)` | nothing: exactly *n* logical pixels |
+| `SemanticSize.Text()` | `Size.Text` (what `runtime.Text` and `runtime.Icon` set) | what the node holds: a text's measured lines, an icon's side |
+| `SemanticSize.ParentPct(f)` | `Size.Fill`, `Size.Pct(f)` | the parent: a share of the space inside its padding |
+| `SemanticSize.ChildrenSum()` | `Size.Fit` (what `Row` and `Column` start with) | the children: summed along the layout axis, the largest across it, plus padding |
+
+`node.Sized(x, y)` sets a node's size on the axes it is given, leaves an axis
+it is not given as it was, and hands the node back, so the size is said where
+the node is made. `runtime.Em(n)` is *n* times the font size in scope, in
+pixels, taken when it is called: a row height or a gap that follows the text.
 
 A box lays out its children along its `ChildLayoutAxis`: `LayoutAxis.X` for a
-row, `LayoutAxis.Y` for a column. `Arrange` gives the common shapes:
+row, `LayoutAxis.Y` for a column. `runtime.Row()` and `runtime.Column()` make
+one, and what is built between `BeginParent` and `EndParent` is laid out in it
+(see [the parent in scope](#retained-and-pooled-boxes)):
 
 ```csharp
-Box toolbar = Row(
-        runtime.Text(title),
-        Spring(),                                   // takes the room left, pushing what follows to the end
-        runtime.Button("save", save),
-        Space(8f),                                  // a fixed 8 px gap
-        runtime.Button("close", close))
-    .FillX()                                        // as wide as the parent
-    .Px(height: 40f);                               // and exactly 40 px tall
+var toolbar = runtime.BeginParent(runtime.Row().Sized(Size.Fill, Size.Px(40f)));   // as wide as the parent, 40 px tall
+runtime.Text(title);
+runtime.Spacer(Size.Fill);                          // takes the room left, pushing what follows to the end
+runtime.Button("save", save);
+runtime.Gap(8f);                                    // a fixed 8 px gap
+runtime.Button("close", close);
+runtime.EndParent(toolbar);
 ```
 
 How the solver uses those sizes:
@@ -117,9 +120,9 @@ How the solver uses those sizes:
 - **Fills share the room.** Along the layout axis, a fill starts at its full
   share of the parent. If the children then overflow, each gives up space in
   proportion to its *strictness*: a fill gives up all it needs to, and pixels,
-  text and children-sized nodes give up nothing. In a 400 px row, `.FillX()`
-  next to `.Px(100f)` ends up 300 px wide. `.FillX(1f)` next to `.FillX(2f)`
-  splits the row one third to two thirds. Every `SemanticSize` factory takes an
+  text and children-sized nodes give up nothing. In a 400 px row, `Size.Fill`
+  next to `Size.Px(100f)` ends up 300 px wide. `Size.Pct(1f)` next to
+  `Size.Pct(2f)` splits the row one third to two thirds. Every `SemanticSize` factory takes an
   optional `strictness` from 0 (gives up everything) to 1 (never shrinks).
 - **Across the layout axis**, a child larger than its parent is cut to the
   parent.
@@ -160,7 +163,10 @@ always the code that built it, not the solver.
 its children, and the rule inside it wants a share of the row's width:
 
 ```csharp
-Box row = Row(runtime.Text(title), runtime.Box().FillX().Px(height: 1f));
+var row = runtime.BeginParent(runtime.Row());
+runtime.Text(title);
+runtime.Box().Sized(Size.Fill, Size.Px(1f));
+runtime.EndParent(row);
 // LayoutException: Unsolvable layout ring along X: Box > Box > Box (beside "Title") takes a share
 // of its parent, and the parent is sized by its children. Give the parent a size along X (pixels,
 // or a share of a sized ancestor), or size this node by its content.
@@ -170,21 +176,27 @@ Fix it by giving the parent a size, here a share of a parent that has one, or
 by giving the child a size of its own:
 
 ```csharp
-Box row = Row(runtime.Text(title), runtime.Box().FillX().Px(height: 1f)).FillX();
+var row = runtime.BeginParent(runtime.Row().Sized(Size.Fill));
 ```
 
-**Centring in a row whose height comes from what it centres.** `CentredY`
-builds a column that fills the row's height. If the row is sized by its
-children, that is a ring on Y:
+**Centring in a row whose height comes from what it centres.**
+`BeginCenterAcross` builds a cell that fills the row's height. If the row is
+sized by its children, that is a ring on Y:
 
 ```csharp
-Box item = Row(runtime.Icon("check"), Space(8f), CentredY(runtime.Text(title)));   // ring on Y
+var item = runtime.BeginParent(runtime.Row());
+runtime.Icon("check");
+runtime.Gap(8f);
+runtime.BeginCenterAcross();
+runtime.Text(title);
+runtime.EndCenterAcross();
+runtime.EndParent(item);                            // ring on Y
 ```
 
-Give the row a height, and the springs have something to share:
+Give the row a height, and the spacers have something to share:
 
 ```csharp
-Box item = Row(runtime.Icon("check"), Space(8f), CentredY(runtime.Text(title))).Px(height: 32f);
+var item = runtime.BeginParent(runtime.Row().Sized(y: Size.Px(32f)));
 ```
 
 **A box with no size, or a size on the wrong axis.** `runtime.Box()` has no
@@ -197,9 +209,10 @@ swatch.SizeX = SemanticSize.Pixels(16f);
 swatch.SizeX = SemanticSize.Pixels(16f);     // meant SizeY: "No size along Y for Box > Box."
 ```
 
-`swatch.Px(16f, 16f)` says both at once. To give every box in a block the same
-size, `runtime.PushSizeX(...)` / `runtime.PushSizeY(...)` set the size of the
-boxes acquired inside a `using` scope.
+`swatch.Sized(Size.Px(16f), Size.Px(16f))` says both at once. To give every box
+in a block the same size, `runtime.BeginSizeX(...)` / `runtime.BeginSizeY(...)`
+set the size of the boxes acquired until the matching `EndSizeX()` /
+`EndSizeY()`.
 
 **A scroll area that does not scroll.** Children that run past a box are cut
 to it unless the box allows overflow along that axis (`AllowOverflowY = true`).
@@ -234,76 +247,105 @@ the *same* box, so give siblings distinct ids (`"row-" + item.Id`, not
 `runtime.TextFromId(id, ...)` is the retained form of a text.
 
 Pooled or retained, a node built through the runtime is linked under the
-**parent in scope**: the box most recently pushed with `PushParent`. When
-nothing is pushed it is linked nowhere, and you place it yourself, for example
-as an argument to `Row` or `Column`:
+**parent in scope**: the box most recently begun with `BeginParent` and not yet
+ended. When none is, it is the frame's root:
 
 ```csharp
 Box card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
 card.ChildLayoutAxis = LayoutAxis.Y;
-card.Px(240f, 120f);
+card.Sized(Size.Px(240f), Size.Px(120f));
 card.Style.Padding = EdgeInsets.All(12f);
 card.Style.BackgroundColor = UiColor.SurfaceRaised;
 
-using (runtime.PushParent(card))
-{
-    runtime.Text(title);                                   // linked under card
-    runtime.Gap(4f);                                       // 4 px along card's axis
-    runtime.Text(subtitle, ComponentSize.Sm, TextColor.Secondary);
-}
+runtime.BeginParent(card);
+runtime.Text(title);                                       // linked under card
+runtime.Gap(4f);                                           // 4 px along card's axis
+runtime.Text(subtitle, ComponentSize.Sm, TextColor.Secondary);
+runtime.EndParent(card);
 ```
+
+`EndParent` names the box it ends, so an End that pairs with the wrong Begin
+throws instead of ending another box's.
 
 For the common case, a column or row, `runtime.Column()` and `runtime.Row()`
 make a pooled box with its axis set, linked under the parent in scope like
-any other; push it to build into it. Like `Box()`, they are sized by the sizes
-pushed, and with none, not at all, so you usually call a sized form. Each
-names the rule for the axes it names, and an axis it does not name is as large
-as its children:
+any other; begin it as the parent to build into it. On an axis no
+`BeginSizeX` / `BeginSizeY` is in force for, they are as large as their
+children (`Size.Fit`), so a row of buttons needs nothing more. `.Sized` says
+the rest:
 
-| Column | Row | Width | Height |
-|---|---|---|---|
-| `ColumnFit()` | `RowFit()` | children | children |
-| `ColumnFillX()` | `RowFillX()` | parent | children |
-| `ColumnFillY()` | `RowFillY()` | children | parent |
-| `ColumnFill()` | `RowFill()` | parent | parent |
-| `ColumnWidth(px)` | | pixels | children |
-| | `RowHeight(px)` | children | pixels |
-| | `RowFillX(height)` | parent | pixels |
-| `ColumnPx(w, h)` | `RowPx(w, h)` | pixels | pixels |
+| Box | Width | Height |
+|---|---|---|
+| `runtime.Row()` | children | children |
+| `runtime.Row().Sized(Size.Fill)` | parent | children |
+| `runtime.Column().Sized(y: Size.Fill)` | children | parent |
+| `runtime.Column().Sized(Size.Fill, Size.Fill)` | parent | parent |
+| `runtime.Column().Sized(Size.Px(240f))` | pixels | children |
+| `runtime.Row().Sized(Size.Fill, runtime.Em(2.5f))` | parent | two and a half lines of the font in scope |
+| `runtime.Row().Sized(Size.Px(w), Size.Px(h))` | pixels | pixels |
 
-They return the box, so the size helpers chain on it. Built with nothing
-pushed, the page lands under the frame's root:
+Built with no parent begun, the page lands under the frame's root:
 
 ```csharp
-var page = runtime.ColumnFillX().Padded(EdgeInsets.All(24f));
-using (runtime.PushParent(page))
-{
-    runtime.Text(title);
-    using (runtime.PushParent(runtime.RowFit()))
-    {
-        if (runtime.Button("ok", "OK").Clicked) Save();
-        runtime.Gap(8f);
-        if (runtime.Button("cancel", "Cancel", ghost: true).Clicked) Close();
-    }
-}
+var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill));
+page.Style.Padding = EdgeInsets.All(24f);
+runtime.Text(title);
+var actions = runtime.BeginParent(runtime.Row());
+if (runtime.Button("ok", "OK").Clicked) Save();
+runtime.Gap(8f);
+if (runtime.Button("cancel", "Cancel", ghost: true).Clicked) Close();
+runtime.EndParent(actions);
+runtime.EndParent(page);
 ```
 
-`runtime.Spring()` takes the room left along the parent in scope, and
-`using (runtime.Centred()) { ... }` puts a spring before and after what is
-built inside: centred across a row, that is
-`using (runtime.PushParent(runtime.RowFillX())) using (runtime.Centred()) runtime.Text(empty);`.
+`runtime.Gap(px)` is a fixed gap along the parent in scope, and
+`runtime.Spacer(size)` a spacer of any size along it and nothing across it.
+`Spacer(Size.Fill)` is a spring: it takes the room its siblings leave, pushing
+what follows to the far end, and gives it up first when they do not fit.
 
-The two forms mix. A node has one parent, and pushing it somewhere else
-(`Row`, `Column`, `CentredY`, `UiNode.PushIntoParent`) **moves** it: it is
-taken out of the parent it was linked under and appended to the new one. So
-inside a `PushParent` scope, `Row(runtime.Text(title), Spring(), badge)` makes
-the text under the parent in scope and then moves it into the row; push the
-row where it belongs. Pushing a node into the parent it is already in moves it
-to the end. Pushing a node into one of its own descendants throws.
+Centring is two springs, one either side of what is centred:
 
-Every `Push…` returns a scope to dispose. If a scope is still open when the
-build returns, the runtime throws rather than linking next frame's boxes under
-this frame's parent.
+- `BeginCenter()` … `EndCenter()` centres **along** the parent's axis (left to
+  right in a row). It makes no box: the springs are the parent's own children,
+  so the parent's size along its axis must be known, not taken from its
+  children.
+- `BeginCenterAcross()` … `EndCenterAcross()` centres **across** it (top to
+  bottom in a row). It makes a cell as large as the parent across and as its
+  content along, with the springs inside, so the parent's size across its axis
+  must be known.
+- `BeginCenterX()` / `BeginCenterY()` name the screen axis instead, and choose
+  between the two by the parent's axis: in a row, X is along and Y across.
+
+Centred both ways, **begin the one along the parent's axis first**: in a
+column, Y and then X; in a row, X and then Y. The second then makes its cell in
+the parent, as large as it. Begun the other way round, the second centres in
+the first's cell, which is only as large as its content across, and that is a
+ring. An empty state in the middle of a panel:
+
+```csharp
+var panel = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+runtime.BeginCenterY();                             // along the column first
+runtime.BeginCenterX();                             // then across it, in a cell as wide as the column
+runtime.Text(empty);
+runtime.EndCenterX();
+runtime.EndCenterY();
+runtime.EndParent(panel);
+```
+
+A node has one parent, and pushing it somewhere else
+(`UiNode.PushIntoParent(parent, node)`) **moves** it: it is taken out of the
+parent it was linked under and appended to the new one. So a control can be
+built where its ask belongs and linked into its place afterwards, as
+[`samples/bibui-app`](../samples/bibui-app/App.cs) builds its controls before
+the page that shows them. Pushing a node into the parent it is already in
+moves it to the end. Pushing a node into one of its own descendants throws.
+
+Every `Begin…` has its `End…`: `BeginParent`/`EndParent`, `BeginAxis`,
+`BeginSizeX`/`Y`, `BeginFontSize`, `BeginFontFace` and the centres. Each
+`Push…` is the `Begin` handing back a scope whose `Dispose` is the `End`, for
+a build that would rather say it with `using`. If a scope is still open when
+the build returns, the runtime throws rather than linking next frame's boxes
+under this frame's parent.
 
 ## Claims and asks
 
@@ -364,8 +406,8 @@ var knob  = runtime.BoxFromId("knob",  InteractionKinds.LeftPress);
 Interaction onKnob  = runtime.InteractionsFor(knob);    // ask, innermost first
 Interaction onPanel = runtime.InteractionsFor(panel);   // then the container
 
-panel.Px(200f, 200f);                                  // describe, in any order, afterwards
-knob.Px(20f, 20f).At(onKnob.Dragging ? onKnob.X - panel.Rect.X : 90f, 90f);
+panel.Sized(Size.Px(200f), Size.Px(200f));             // describe, in any order, afterwards
+knob.Sized(Size.Px(20f), Size.Px(20f)).At(onKnob.Dragging ? onKnob.X - panel.Rect.X : 90f, 90f);
 UiNode.PushIntoParent(panel, knob);
 ```
 
@@ -408,28 +450,27 @@ select.End();
 ```
 
 `Select.Begin` and `End` do all of this: the trigger's click opens the list or
-closes it, and they begin the list under the trigger, push it as the parent
-for the rows, and ask for the root last.
+closes it, and they begin the list under the trigger, make it the parent in
+scope for the rows, and ask for the root last.
 
 Whether a box is inside the dropdown is decided **when it asks**, by walking
 its parents. So a control in a dropdown (or a `Dialog` or a `Menu`, which are
 dropdowns) must already be linked under it at the moment it asks. Both forms
 work there:
 
-- **Statement form** is always right: build under the dropdown, or under a box
-  pushed inside it, and every control is linked there as it is built.
-- **Expression form** works too, because a component asks inside its `Build`,
-  while it is still linked under the parent in scope; `Row`, `CentredY` and
-  the rest move it afterwards. Keep the dropdown (or something in it) as the
-  parent in scope while the arguments are built, and push the result inside
-  the dropdown: `UiNode.PushIntoParent(panel, Row(label, Spring(), (...).Button()))`.
+- **Built in place** is always right: build under the dropdown, or under a box
+  begun inside it, and every control is linked there as it is built.
+- **Built first and moved** works too, because a component asks inside its
+  `Build`, while it is still linked under the parent in scope;
+  `UiNode.PushIntoParent` moves it afterwards. Keep the dropdown (or something
+  in it) as the parent in scope while the control is built, and push it where
+  it goes inside the dropdown.
 
-What that rules out is asking a box **after** it has been moved into a row
-or column that is not yet linked under the dropdown, for example acquiring a
-box with `BoxFromId`, putting it in a `Row`, then calling `InteractionsFor`
-before the row is pushed in: at that moment the box is under a row with no
-parent, outside the dropdown, and inside the dropdown's rectangle it gets
-nothing. Ask before you rearrange, or push the row in first.
+What that rules out is asking a box while it is linked **outside** the
+dropdown, for example acquiring a box with `BoxFromId` while a parent outside
+the dropdown is in scope, then calling `InteractionsFor` before it is pushed
+in: at that moment the box is outside the dropdown, and inside the dropdown's
+rectangle it gets nothing. Push it in first, or acquire it under the dropdown.
 `runtime.OpenToolTip()` is linked last too, after the dropdowns, but it claims
 nothing and covers nothing: the pointer goes through a tooltip.
 
@@ -510,7 +551,7 @@ Both are written only by an ask. A box that claims nothing, or never calls
 ```csharp
 Box chip = runtime.BoxFromId("chip", InteractionKinds.LeftPress);
 runtime.InteractionsFor(chip);
-chip.Px(80f, 28f);
+chip.Sized(Size.Px(80f), Size.Px(28f));
 chip.Style.CornerRadius = 14f;
 chip.Style.BackgroundColor = UiColor.Accent.WithAlpha(0.15f + 0.25f * chip.HotT - 0.1f * chip.ActiveT);
 ```
@@ -524,7 +565,7 @@ returns where the value has got to on its way to `target`:
 
 ```csharp
 float open = runtime.Animate("sidebar", "width", sidebarOpen ? 1f : 0f);
-Box sidebar = runtime.Box().Px(width: 48f + 192f * open).FillY();
+Box sidebar = runtime.Box().Sized(Size.Px(48f + 192f * open), Size.Fill);
 ```
 
 - The first time a value is asked for, it starts at its target, so a screen
@@ -575,8 +616,10 @@ place and with their item, while they collapse, and added rows can stagger in.
 ```csharp
 foreach (var row in runtime.PresenceList("inbox", messages, m => m.Id, stagger: 0.02f))
 {
-    Box holder = runtime.CollapseBox("row-" + row.Key, row.Progress).FillX();
-    using (runtime.PushParent(holder)) BuildRow(row.Item, interactive: !row.Exiting);
+    Box holder = runtime.CollapseBox("row-" + row.Key, row.Progress).Sized(Size.Fill);
+    runtime.BeginParent(holder);
+    BuildRow(row.Item, interactive: !row.Exiting);
+    runtime.EndParent(holder);
 }
 ```
 
@@ -615,8 +658,9 @@ public static class Chip
         chip.Style.BackgroundColor = selected ? UiColor.Accent.WithAlpha(0.15f) : (UiColor?)null;
         chip.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
 
-        using (runtime.PushParent(chip))
-            runtime.Text(label, ComponentSize.Sm, selected ? TextColor.Accent : TextColor.Primary);
+        runtime.BeginParent(chip);
+        runtime.Text(label, ComponentSize.Sm, selected ? TextColor.Accent : TextColor.Primary);
+        runtime.EndParent(chip);
 
         return new BibuiWidget(chip, interaction);
     }
@@ -647,9 +691,8 @@ The rules that make components compose:
 - **Claim at the door.** Pass the claims to `BoxFromId`, and pass
   `InteractionKinds.Disabled` (not `None`) when the component is disabled.
 
-`BibuiWidget` converts to `UiNode` wherever a node is expected, and goes
-straight into the argument list of `Row` or `Column`, as the samples above
-show.
+`BibuiWidget` converts to `UiNode` wherever a node is expected, so a widget
+built first goes straight into `UiNode.PushIntoParent` where it belongs.
 
 `Button`, `Switch`, `Checkbox`, `Slider`, `Select` and the rest of the built-in
 components are written exactly this way. Their source is the best reference
@@ -682,8 +725,9 @@ static class Labels
 }
 ```
 
-Use `runtime.PushFontSize(...)` and `runtime.PushFontFace(...)` to set the size,
-family and weight for every text built inside a scope.
+Use `runtime.BeginFontSize(...)` … `EndFontSize()` and
+`runtime.BeginFontFace(...)` … `EndFontFace()` to set the size, family and
+weight for every text built between them.
 
 ## Painting
 
@@ -712,7 +756,7 @@ that must know when it is hovered draws on its own retained box:
 ```csharp
 Box chart = runtime.BoxFromId("chart", InteractionKinds.LeftPress);
 Interaction i = runtime.InteractionsFor(chart);
-chart.FillX().FillY();
+chart.Sized(Size.Fill, Size.Fill);
 chart.Draw = (box, ctx) =>
 {
     var r = ctx.Logical;                          // the box's rect, logical px, at (0,0)

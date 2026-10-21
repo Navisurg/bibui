@@ -96,16 +96,12 @@ sealed class FormatBar
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        Box row = runtime.Box();
-        row.ChildLayoutAxis = LayoutAxis.X;
-        row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(row))
-        {
-            if (runtime.Toggle("format-bold", _bold, Bold, icon: "bold").Clicked) _bold = !_bold;
-            runtime.Gap(12f);
-            var align = runtime.ToggleGroup("format-align", Alignments, _align);
-            if (align.Picked is { } picked) _align = picked;
-        }
+        var row = runtime.BeginParent(runtime.Row());
+        if (runtime.Toggle("format-bold", _bold, Bold, icon: "bold").Clicked) _bold = !_bold;
+        runtime.Gap(12f);
+        var align = runtime.ToggleGroup("format-align", Alignments, _align);
+        if (align.Picked is { } picked) _align = picked;
+        runtime.EndParent(row);
         return row;
     }
 }

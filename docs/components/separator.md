@@ -47,19 +47,14 @@ sealed class Toolbar
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        Box row = runtime.Box();
-        row.ChildLayoutAxis = LayoutAxis.X;
-        row.SizeX = SemanticSize.ChildrenSum();
-        row.SizeY = SemanticSize.Pixels(36f);
-        using (runtime.PushParent(row))
-        {
-            runtime.Button("toolbar-cut", Cut, ghost: true);
-            runtime.Button("toolbar-copy", Copy, ghost: true);
-            runtime.Gap(8f);
-            Separator.Build(runtime, vertical: true);   // the row's 36 px
-            runtime.Gap(8f);
-            runtime.Button("toolbar-help", Help, ghost: true);
-        }
+        var row = runtime.BeginParent(runtime.Row().Sized(y: Size.Px(36f)));
+        runtime.Button("toolbar-cut", Cut, ghost: true);
+        runtime.Button("toolbar-copy", Copy, ghost: true);
+        runtime.Gap(8f);
+        Separator.Build(runtime, vertical: true);   // the row's 36 px
+        runtime.Gap(8f);
+        runtime.Button("toolbar-help", Help, ghost: true);
+        runtime.EndParent(row);
         return row;
     }
 }

@@ -38,9 +38,11 @@ internal static class DemoDisplay
         box.Style.BackgroundColor = "#18181B";
         box.Style.CornerRadius = 6f;
         box.Style.Padding = EdgeInsets.All(8);
-        using (runtime.PushParent(box))
-        using (runtime.PushSizeY(rows is { } r ? TextField.Rows(runtime, r) : SemanticSize.ChildrenSum()))
-            runtime.MultilineTextField(id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0);
+        runtime.BeginParent(box);
+        runtime.BeginSizeY(rows is { } r ? TextField.Rows(runtime, r) : SemanticSize.ChildrenSum());
+        runtime.MultilineTextField(id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0);
+        runtime.EndSizeY();
+        runtime.EndParent(box);
     }
 
     // The editable ellipsis: what an application would hold for it.
@@ -62,9 +64,9 @@ internal static class DemoDisplay
         box.Style.Padding = EdgeInsets.All(8);
         box.Style.BorderWidth = 1f;
         box.Style.BorderColor = EllipsisFocused ? UiColor.BorderFocus : UiColor.Border;
-        BibuiWidget line;
-        using (runtime.PushParent(box))
-            line = runtime.EllipsisTextField(id, EllipsisText, EllipsisEdit, EllipsisFocused, events: TextField.SingleLineEvents);
+        runtime.BeginParent(box);
+        BibuiWidget line = runtime.EllipsisTextField(id, EllipsisText, EllipsisEdit, EllipsisFocused, events: TextField.SingleLineEvents);
+        runtime.EndParent(box);
         if (line.Pressed) EllipsisFocused = true;
         if (EllipsisFocused)
             foreach (var ev in runtime.UnconsumedEvents)
@@ -117,8 +119,10 @@ internal static class DemoDisplay
 
     private static float LineHeight(BibuiRuntime runtime, ComponentSize size, FontWeight weight = FontWeight.Regular)
     {
-        using (runtime.PushFontFace(weight: weight))
-            return runtime.Fonts.LineHeight(runtime.FontInScope(size));
+        runtime.BeginFontFace(weight: weight);
+        float height = runtime.Fonts.LineHeight(runtime.FontInScope(size));
+        runtime.EndFontFace();
+        return height;
     }
 
     // A gap that puts the next line `advance` below the top of a line set in
@@ -164,13 +168,17 @@ internal static class DemoDisplay
         }
 
         UiColor ink = disabled ? TextColor.Disabled : primary ? TextColor.AccentForeground : TextColor.Primary;
-        using (runtime.PushParent(box))
-        using (runtime.Centred())
-            if (width is null) runtime.Text(label, size, ink);
-            else
-                using (runtime.PushParent(runtime.RowFillX()))
-                using (runtime.Centred())
-                    runtime.Text(label, size, ink);
+        runtime.BeginParent(box);
+        runtime.BeginCenterY();
+        if (width is null) runtime.Text(label, size, ink);
+        else
+        {
+            runtime.BeginCenterX();
+            runtime.Text(label, size, ink);
+            runtime.EndCenterX();
+        }
+        runtime.EndCenterY();
+        runtime.EndParent(box);
         return new BibuiWidget(box, interaction);
     }
 
@@ -178,11 +186,13 @@ internal static class DemoDisplay
     private static void CentredLabel(BibuiRuntime runtime, Box box, string label, ComponentSize size, UiColor color)
     {
         box.ChildLayoutAxis = LayoutAxis.X;
-        using (runtime.PushParent(box))
-        using (runtime.Centred())
-        using (runtime.PushParent(runtime.ColumnFillY()))
-        using (runtime.Centred())
-            runtime.Text(label, size, color);
+        runtime.BeginParent(box);
+        runtime.BeginCenterX();
+        runtime.BeginCenterY();
+        runtime.Text(label, size, color);
+        runtime.EndCenterY();
+        runtime.EndCenterX();
+        runtime.EndParent(box);
     }
 
     // ── Text ────────────────────────────────────────────────────────────────
@@ -226,16 +236,15 @@ internal static class DemoDisplay
     {
         Bold(runtime, "Status indicators", ComponentSize.Sm, TextColor.Secondary);
         runtime.Gap(16f);
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            Badge.Build(runtime, "Default");
-            runtime.Gap(8f);
-            Badge.Build(runtime, "Primary", BadgeVariant.Primary);
-            runtime.Gap(8f);
-            Badge.Build(runtime, "Success", BadgeVariant.Success);
-            runtime.Gap(8f);
-            Badge.Build(runtime, "Destructive", BadgeVariant.Destructive);
-        }
+        var badges = runtime.BeginParent(runtime.Row());
+        Badge.Build(runtime, "Default");
+        runtime.Gap(8f);
+        Badge.Build(runtime, "Primary", BadgeVariant.Primary);
+        runtime.Gap(8f);
+        Badge.Build(runtime, "Success", BadgeVariant.Success);
+        runtime.Gap(8f);
+        Badge.Build(runtime, "Destructive", BadgeVariant.Destructive);
+        runtime.EndParent(badges);
     }
 
     // ── Label ───────────────────────────────────────────────────────────────
@@ -259,31 +268,29 @@ internal static class DemoDisplay
     {
         Bold(runtime, "Loading spinner", ComponentSize.Sm, TextColor.Secondary);
         runtime.Gap(20f);
-        using (runtime.PushParent(runtime.RowHeight(40f)))
-        {
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                StepSpinner(runtime, ComponentSize.Sm, 16f);
-            runtime.Gap(20f);
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                StepSpinner(runtime, ComponentSize.Md, 24f);
-            runtime.Gap(20f);
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                StepSpinner(runtime, ComponentSize.Lg, 32f);
-        }
+        var sizes = runtime.BeginParent(runtime.Row().Sized(y: Size.Px(40f)));
+        runtime.BeginCenterAcross();
+        StepSpinner(runtime, ComponentSize.Sm, 16f);
+        runtime.EndCenterAcross();
         runtime.Gap(20f);
-        using (runtime.PushParent(runtime.RowHeight(40f)))
-        {
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                StepSpinner(runtime, ComponentSize.Sm, 16f);
-            runtime.Gap(8f);
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                runtime.Text("Loading data…", ComponentSize.Sm, TextColor.Secondary);
-        }
+        runtime.BeginCenterAcross();
+        StepSpinner(runtime, ComponentSize.Md, 24f);
+        runtime.EndCenterAcross();
+        runtime.Gap(20f);
+        runtime.BeginCenterAcross();
+        StepSpinner(runtime, ComponentSize.Lg, 32f);
+        runtime.EndCenterAcross();
+        runtime.EndParent(sizes);
+        runtime.Gap(20f);
+        var loading = runtime.BeginParent(runtime.Row().Sized(y: Size.Px(40f)));
+        runtime.BeginCenterAcross();
+        StepSpinner(runtime, ComponentSize.Sm, 16f);
+        runtime.EndCenterAcross();
+        runtime.Gap(8f);
+        runtime.BeginCenterAcross();
+        runtime.Text("Loading data…", ComponentSize.Sm, TextColor.Secondary);
+        runtime.EndCenterAcross();
+        runtime.EndParent(loading);
     }
 
     // A spinner at one of the size steps, `diameter` across: drawn with the
@@ -301,16 +308,15 @@ internal static class DemoDisplay
     {
         Caption(runtime, "User avatars with initials fallback");
         runtime.Gap(20f);
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            Avatar.Build(runtime, "JD", 56f);
-            runtime.Gap(12f);
-            Avatar.Build(runtime, "AB", 56f);
-            runtime.Gap(12f);
-            Avatar.Build(runtime, "MK", 56f);
-            runtime.Gap(12f);
-            Avatar.Build(runtime, "TC", 56f);
-        }
+        var avatars = runtime.BeginParent(runtime.Row());
+        Avatar.Build(runtime, "JD", 56f);
+        runtime.Gap(12f);
+        Avatar.Build(runtime, "AB", 56f);
+        runtime.Gap(12f);
+        Avatar.Build(runtime, "MK", 56f);
+        runtime.Gap(12f);
+        Avatar.Build(runtime, "TC", 56f);
+        runtime.EndParent(avatars);
     }
 
     // ── Card ────────────────────────────────────────────────────────────────
@@ -319,28 +325,29 @@ internal static class DemoDisplay
     // that wraps, each spaced as the reference card spaced them.
     private static void Card(BibuiRuntime runtime, string id, string title, string description, string? body, float width)
     {
-        Box card = runtime.ColumnWidth(width);
+        Box card = runtime.Column().Sized(Size.Px(width));
         card.Style.BackgroundColor = UiColor.SurfaceRaised;
         card.Style.BorderColor = UiColor.Border;
         card.Style.BorderWidth = 1f;
         card.Style.CornerRadius = 8f;
         card.Style.Padding = EdgeInsets.All(16f);
-        using (runtime.PushParent(card))
+        runtime.BeginParent(card);
+        Bold(runtime, title, ComponentSize.Lg);
+        Advance(runtime, 16f * 1.8f, ComponentSize.Lg, FontWeight.Bold);
+        runtime.Text(description, ComponentSize.Md, TextColor.Secondary);
+        if (body is not null)
         {
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, ComponentSize.Lg);
-            Advance(runtime, 16f * 1.8f, ComponentSize.Lg, FontWeight.Bold);
-            runtime.Text(description, ComponentSize.Md, TextColor.Secondary);
-            if (body is not null)
-            {
-                Advance(runtime, 14f * 1.8f + 18f - 14f * 0.4f, ComponentSize.Md);
-                Box lines = runtime.Box();
-                lines.SizeX = SemanticSize.ParentPct(1f);
-                lines.SizeY = SemanticSize.ChildrenSum();
-                using (runtime.PushParent(lines))
-                using (runtime.PushSizeY(SemanticSize.ChildrenSum()))
-                    runtime.MultilineTextField(id, GalleryHelpers.Held(id, body), NoEdit, focused: false, events: 0);
-            }
+            Advance(runtime, 14f * 1.8f + 18f - 14f * 0.4f, ComponentSize.Md);
+            Box lines = runtime.Box();
+            lines.SizeX = SemanticSize.ParentPct(1f);
+            lines.SizeY = SemanticSize.ChildrenSum();
+            runtime.BeginParent(lines);
+            runtime.BeginSizeY(SemanticSize.ChildrenSum());
+            runtime.MultilineTextField(id, GalleryHelpers.Held(id, body), NoEdit, focused: false, events: 0);
+            runtime.EndSizeY();
+            runtime.EndParent(lines);
         }
+        runtime.EndParent(card);
     }
 
     private static void CardPage(BibuiRuntime runtime)
@@ -359,26 +366,24 @@ internal static class DemoDisplay
     // left edge in the variant's colour, and a bold title over a description.
     private static void Alert(BibuiRuntime runtime, string title, string description, UiColor accent, UiColor fill, string icon)
     {
-        Box alert = runtime.RowFillX(80f);
+        Box alert = runtime.Row().Sized(Size.Fill, Size.Px(80f));
         alert.Style.BackgroundColor = fill;
         alert.Style.BorderColor = accent;
         alert.Style.BorderWidth = 1f;
         alert.Style.CornerRadius = 6f;
         alert.Style.Padding = new EdgeInsets(0f, 12f, 0f, 12f);
-        using (runtime.PushParent(alert))
-        {
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                runtime.Icon(icon, 20f).Color = accent;
-            runtime.Gap(8f);
-            using (runtime.PushParent(runtime.ColumnFit()))
-            {
-                runtime.Gap(12f);
-                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, ComponentSize.Md);
-                Advance(runtime, 14f * 1.4f + 4f, ComponentSize.Md, FontWeight.Bold);
-                runtime.Text(description, ComponentSize.Sm, TextColor.Secondary);
-            }
-        }
+        runtime.BeginParent(alert);
+        runtime.BeginCenterAcross();
+        runtime.Icon(icon, 20f).Color = accent;
+        runtime.EndCenterAcross();
+        runtime.Gap(8f);
+        var text = runtime.BeginParent(runtime.Column());
+        runtime.Gap(12f);
+        Bold(runtime, title, ComponentSize.Md);
+        Advance(runtime, 14f * 1.4f + 4f, ComponentSize.Md, FontWeight.Bold);
+        runtime.Text(description, ComponentSize.Sm, TextColor.Secondary);
+        runtime.EndParent(text);
+        runtime.EndParent(alert);
     }
 
     private static void AlertPage(BibuiRuntime runtime)
@@ -406,20 +411,19 @@ internal static class DemoDisplay
         runtime.Gap(16f);
         Caption(runtime, "Vertical separator (inline)");
         runtime.Gap(16f);
-        using (runtime.PushParent(runtime.RowHeight(24f)))
-        {
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                runtime.Text("Left");
-            runtime.Gap(16f);
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                Separator.Build(runtime, vertical: true).Px(height: 20f);
-            runtime.Gap(16f);
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                runtime.Text("Right");
-        }
+        var inline = runtime.BeginParent(runtime.Row().Sized(y: Size.Px(24f)));
+        runtime.BeginCenterAcross();
+        runtime.Text("Left");
+        runtime.EndCenterAcross();
+        runtime.Gap(16f);
+        runtime.BeginCenterAcross();
+        Separator.Build(runtime, vertical: true).Sized(y: Size.Px(20f));
+        runtime.EndCenterAcross();
+        runtime.Gap(16f);
+        runtime.BeginCenterAcross();
+        runtime.Text("Right");
+        runtime.EndCenterAcross();
+        runtime.EndParent(inline);
     }
 
     // ── Progress ────────────────────────────────────────────────────────────
@@ -428,27 +432,26 @@ internal static class DemoDisplay
     {
         Caption(runtime, "Task completion indicator");
         runtime.Gap(16f);
-        Progress.Build(runtime, state.ProgressValue, 100f, "Upload progress").Px(width: 400f);
+        Progress.Build(runtime, state.ProgressValue, 100f, "Upload progress").Sized(Size.Px(400f));
         runtime.Gap(16f);
         runtime.Text($"{state.ProgressValue:0}% complete", ComponentSize.Sm, TextColor.Accent);
         runtime.Gap(16f);
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            var minus = PageButton(runtime, "demo-progress-minus", "-10", primary: false, width: 60f);
-            runtime.Gap(8f);
-            var plus = PageButton(runtime, "demo-progress-plus", "+10", primary: true, width: 60f);
-            if (minus.Clicked) set(state with { ProgressValue = Math.Max(0f, state.ProgressValue - 10f) });
-            if (plus.Clicked) set(state with { ProgressValue = Math.Min(100f, state.ProgressValue + 10f) });
-        }
+        var buttons = runtime.BeginParent(runtime.Row());
+        var minus = PageButton(runtime, "demo-progress-minus", "-10", primary: false, width: 60f);
+        runtime.Gap(8f);
+        var plus = PageButton(runtime, "demo-progress-plus", "+10", primary: true, width: 60f);
+        if (minus.Clicked) set(state with { ProgressValue = Math.Max(0f, state.ProgressValue - 10f) });
+        if (plus.Clicked) set(state with { ProgressValue = Math.Min(100f, state.ProgressValue + 10f) });
+        runtime.EndParent(buttons);
         runtime.Gap(16f);
-        Progress.Build(runtime, 100f, 100f, "Completed").Px(width: 400f);
+        Progress.Build(runtime, 100f, 100f, "Completed").Sized(Size.Px(400f));
     }
 
     // ── Skeleton ────────────────────────────────────────────────────────────
 
     private static void Bone(BibuiRuntime runtime, float width, float height, float radius)
     {
-        Box bone = runtime.Box().Px(width, height);
+        Box bone = runtime.Box().Sized(Size.Px(width), Size.Px(height));
         bone.Style.BackgroundColor = UiColor.SurfaceRaised;
         bone.Style.CornerRadius = radius;
     }
@@ -473,7 +476,7 @@ internal static class DemoDisplay
     // A raised box `width` wide and as tall as the ratio makes it, its label in the middle.
     private static void AspectBox(BibuiRuntime runtime, float width, float ratio, string label)
     {
-        Box box = runtime.Box().Px(width, width / ratio);
+        Box box = runtime.Box().Sized(Size.Px(width), Size.Px(width / ratio));
         box.Style.BackgroundColor = UiColor.SurfaceRaised;
         box.Style.BorderColor = UiColor.Border;
         box.Style.BorderWidth = 1f;
@@ -496,16 +499,15 @@ internal static class DemoDisplay
     {
         Caption(runtime, "One key cap per key, in the order they are pressed");
         runtime.Gap(20f);
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            KeyboardShortcut.Build(runtime, "⌘", "K");
-            runtime.Gap(12f);
-            KeyboardShortcut.Build(runtime, "Ctrl", "Shift", "P");
-            runtime.Gap(12f);
-            KeyboardShortcut.Build(runtime, "Escape");
-            runtime.Gap(12f);
-            KeyboardShortcut.Build(runtime, "↑", "↓");
-        }
+        var shortcuts = runtime.BeginParent(runtime.Row());
+        KeyboardShortcut.Build(runtime, "⌘", "K");
+        runtime.Gap(12f);
+        KeyboardShortcut.Build(runtime, "Ctrl", "Shift", "P");
+        runtime.Gap(12f);
+        KeyboardShortcut.Build(runtime, "Escape");
+        runtime.Gap(12f);
+        KeyboardShortcut.Build(runtime, "↑", "↓");
+        runtime.EndParent(shortcuts);
     }
 
     // ── Table and PagedTable ────────────────────────────────────────────────
@@ -517,33 +519,32 @@ internal static class DemoDisplay
     // columns share the width equally.
     private static void Table(BibuiRuntime runtime, string[] columns, IReadOnlyList<string[]> rows, float width)
     {
-        Box table = runtime.ColumnWidth(width);
+        Box table = runtime.Column().Sized(Size.Px(width));
         table.Style.BorderColor = UiColor.Border;
         table.Style.BorderWidth = 1f;
         table.Style.CornerRadius = 6f;
         float column = width / columns.Length;
-        using (runtime.PushParent(table))
-        {
-            // Squares the header's lower corners, under it: drawn first, out of the flow.
-            Box square = runtime.Box().FillX().Px(height: 12f);
-            square.Style.BackgroundColor = UiColor.SurfaceRaised;
-            square.At(0f, TableRow - 6f);
+        runtime.BeginParent(table);
+        // Squares the header's lower corners, under it: drawn first, out of the flow.
+        Box square = runtime.Box().Sized(Size.Fill, Size.Px(12f));
+        square.Style.BackgroundColor = UiColor.SurfaceRaised;
+        square.At(0f, TableRow - 6f);
 
-            Box header = runtime.RowFillX(TableRow);
-            header.Style.BackgroundColor = UiColor.SurfaceRaised;
-            header.Style.CornerRadius = 6f;
-            using (runtime.PushParent(header))
-                foreach (var name in columns) Cell(runtime, name, column, TextColor.Secondary, FontWeight.Bold);
-            for (int r = 0; r < rows.Count; r++)
-            {
-                using (runtime.PushParent(runtime.RowFillX(TableRow)))
-                {
-                    // The rule between rows is along this one's top edge, out of the flow.
-                    if (r > 0) Separator.Build(runtime).At(0f, 0f);
-                    foreach (var value in rows[r]) Cell(runtime, value, column, TextColor.Primary, FontWeight.Regular);
-                }
-            }
+        Box header = runtime.Row().Sized(Size.Fill, Size.Px(TableRow));
+        header.Style.BackgroundColor = UiColor.SurfaceRaised;
+        header.Style.CornerRadius = 6f;
+        runtime.BeginParent(header);
+        foreach (var name in columns) Cell(runtime, name, column, TextColor.Secondary, FontWeight.Bold);
+        runtime.EndParent(header);
+        for (int r = 0; r < rows.Count; r++)
+        {
+            var row = runtime.BeginParent(runtime.Row().Sized(Size.Fill, Size.Px(TableRow)));
+            // The rule between rows is along this one's top edge, out of the flow.
+            if (r > 0) Separator.Build(runtime).At(0f, 0f);
+            foreach (var value in rows[r]) Cell(runtime, value, column, TextColor.Primary, FontWeight.Regular);
+            runtime.EndParent(row);
         }
+        runtime.EndParent(table);
     }
 
     // A cell `width` wide, its text down the middle, 12 px in from its left.
@@ -554,10 +555,13 @@ internal static class DemoDisplay
         cell.SizeX = SemanticSize.Pixels(width);
         cell.SizeY = SemanticSize.ParentPct(1f);
         cell.Style.Padding = new EdgeInsets(0f, 12f, 0f, 12f);
-        using (runtime.PushParent(cell))
-        using (runtime.Centred())
-        using (runtime.PushFontFace(weight: weight))
-            runtime.Text(text, ComponentSize.Sm, color);
+        runtime.BeginParent(cell);
+        runtime.BeginCenter();
+        runtime.BeginFontFace(weight: weight);
+        runtime.Text(text, ComponentSize.Sm, color);
+        runtime.EndFontFace();
+        runtime.EndCenter();
+        runtime.EndParent(cell);
     }
 
     private static readonly string[][] TableRows =
@@ -619,21 +623,20 @@ internal static class DemoDisplay
         runtime.Gap(16f);
         Table(runtime, ["Name", "Email", "Role", "Status"], rows, width);
         runtime.Gap(10f);
-        using (runtime.PushParent(runtime.RowPx(width, 32f)))
-        {
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                runtime.Text($"Page {page} of {PageCount}", ComponentSize.Sm, TextColor.Secondary);
-            runtime.Spring();
-            var previous = PageButton(runtime, "demo-pagedtable-prev", "Previous", primary: false, width: 72f, height: 32f,
-                size: ComponentSize.Sm, radius: 4f, disabled: page <= 1);
-            runtime.Gap(4f);
-            var next = PageButton(runtime, "demo-pagedtable-next", "Next", primary: false, width: 56f, height: 32f,
-                size: ComponentSize.Sm, radius: 4f, disabled: page >= PageCount);
-            runtime.Gap(4f);
-            if (previous.Clicked) set(state with { PagedTablePage = page - 1 });
-            if (next.Clicked) set(state with { PagedTablePage = page + 1 });
-        }
+        var footer = runtime.BeginParent(runtime.Row().Sized(Size.Px(width), Size.Px(32f)));
+        runtime.BeginCenterAcross();
+        runtime.Text($"Page {page} of {PageCount}", ComponentSize.Sm, TextColor.Secondary);
+        runtime.EndCenterAcross();
+        runtime.Spacer(Size.Fill);
+        var previous = PageButton(runtime, "demo-pagedtable-prev", "Previous", primary: false, width: 72f, height: 32f,
+            size: ComponentSize.Sm, radius: 4f, disabled: page <= 1);
+        runtime.Gap(4f);
+        var next = PageButton(runtime, "demo-pagedtable-next", "Next", primary: false, width: 56f, height: 32f,
+            size: ComponentSize.Sm, radius: 4f, disabled: page >= PageCount);
+        runtime.Gap(4f);
+        if (previous.Clicked) set(state with { PagedTablePage = page - 1 });
+        if (next.Clicked) set(state with { PagedTablePage = page + 1 });
+        runtime.EndParent(footer);
     }
 
     // ── FormField ───────────────────────────────────────────────────────────
@@ -642,20 +645,19 @@ internal static class DemoDisplay
     // description, and its error in the destructive colour when it has one.
     private static void FormField(BibuiRuntime runtime, string label, string description, string? error, bool required)
     {
-        using (runtime.PushParent(runtime.ColumnFillX()))
+        var field = runtime.BeginParent(runtime.Column().Sized(Size.Fill));
+        Bold(runtime, required ? label + " *" : label, ComponentSize.Sm);
+        Advance(runtime, 12f * 1.4f + 4f, ComponentSize.Sm, FontWeight.Bold);
+        Box frame = runtime.Box().Sized(Size.Fill, Size.Px(40f));
+        TextField.InputStyle(runtime, frame, focused: false, error: error is not null);
+        runtime.Gap(4f);
+        runtime.Text(description, ComponentSize.Sm, TextColor.Secondary);
+        if (error is not null)
         {
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(required ? label + " *" : label, ComponentSize.Sm);
-            Advance(runtime, 12f * 1.4f + 4f, ComponentSize.Sm, FontWeight.Bold);
-            Box frame = runtime.Box().FillX().Px(height: 40f);
-            TextField.InputStyle(runtime, frame, focused: false, error: error is not null);
-            runtime.Gap(4f);
-            runtime.Text(description, ComponentSize.Sm, TextColor.Secondary);
-            if (error is not null)
-            {
-                Advance(runtime, 12f * 1.4f + 4f, ComponentSize.Sm);
-                runtime.Text(error, ComponentSize.Sm, UiColor.Destructive);
-            }
+            Advance(runtime, 12f * 1.4f + 4f, ComponentSize.Sm);
+            runtime.Text(error, ComponentSize.Sm, UiColor.Destructive);
         }
+        runtime.EndParent(field);
     }
 
     private static void FormFieldPage(BibuiRuntime runtime)
@@ -688,16 +690,15 @@ internal static class DemoDisplay
         if (!disabled) row.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
 
         UiColor ink = disabled ? TextColor.Disabled : TextColor.Primary;
-        using (runtime.PushParent(row))
-        {
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                runtime.Icon(icon, 16f).Color = ink;
-            runtime.Gap(8f);
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                runtime.Text(label, ComponentSize.Md, ink);
-        }
+        runtime.BeginParent(row);
+        runtime.BeginCenterAcross();
+        runtime.Icon(icon, 16f).Color = ink;
+        runtime.EndCenterAcross();
+        runtime.Gap(8f);
+        runtime.BeginCenterAcross();
+        runtime.Text(label, ComponentSize.Md, ink);
+        runtime.EndCenterAcross();
+        runtime.EndParent(row);
         return new BibuiWidget(row, interaction);
     }
 
@@ -730,26 +731,25 @@ internal static class DemoDisplay
     {
         Caption(runtime, "What a list shows before it has anything in it");
         runtime.Gap(16f);
-        using (runtime.PushParent(runtime.ColumnPx(400f, 160f)))
-        {
-            runtime.Spring();
-            using (runtime.PushParent(runtime.RowFillX()))
-            using (runtime.Centred())
-                runtime.Icon("folder", 48f).Color = TextColor.Disabled;
-            runtime.Gap(12f);
-            using (runtime.PushParent(runtime.RowFillX()))
-            using (runtime.Centred())
-                Bold(runtime, "No workspaces yet", ComponentSize.Lg);
-            runtime.Gap(4f);
-            using (runtime.PushParent(runtime.RowFillX()))
-            using (runtime.Centred())
-                runtime.Text("Make one to start adding files.", ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(12f);
-            using (runtime.PushParent(runtime.RowFillX()))
-            using (runtime.Centred())
-                PageButton(runtime, "demo-empty-create", "New workspace", primary: true, height: 36f);
-            runtime.Spring();
-        }
+        var empty = runtime.BeginParent(runtime.Column().Sized(Size.Px(400f), Size.Px(160f)));
+        runtime.Spacer(Size.Fill);
+        runtime.BeginCenterAcross();
+        runtime.Icon("folder", 48f).Color = TextColor.Disabled;
+        runtime.EndCenterAcross();
+        runtime.Gap(12f);
+        runtime.BeginCenterAcross();
+        Bold(runtime, "No workspaces yet", ComponentSize.Lg);
+        runtime.EndCenterAcross();
+        runtime.Gap(4f);
+        runtime.BeginCenterAcross();
+        runtime.Text("Make one to start adding files.", ComponentSize.Sm, TextColor.Secondary);
+        runtime.EndCenterAcross();
+        runtime.Gap(12f);
+        runtime.BeginCenterAcross();
+        PageButton(runtime, "demo-empty-create", "New workspace", primary: true, height: 36f);
+        runtime.EndCenterAcross();
+        runtime.Spacer(Size.Fill);
+        runtime.EndParent(empty);
     }
 
     // ── Toast ───────────────────────────────────────────────────────────────
@@ -787,7 +787,7 @@ internal static class DemoDisplay
         runtime.OpenDropDown(id);
         Box panel = runtime.BeginDropDown(id)!;
         panel.ChildLayoutAxis = LayoutAxis.X;
-        panel.Px(ToastWidth, ToastHeight);
+        panel.Sized(Size.Px(ToastWidth), Size.Px(ToastHeight));
         panel.At(runtime.SurfaceWidth - ToastWidth - ToastMargin, runtime.SurfaceHeight - ToastHeight - ToastMargin);
         panel.Style.BackgroundColor = UiColor.SurfaceRaised;
         panel.Style.BorderColor = UiColor.Border;
@@ -796,43 +796,43 @@ internal static class DemoDisplay
         panel.Style.Padding = new EdgeInsets(12f, 12f, 12f, 12f);
 
         bool pressed = false;
-        using (runtime.PushParent(panel))
-        {
-            Box close = runtime.BoxFromId(id + "-close", InteractionKinds.LeftPress);
-            pressed |= runtime.InteractionsFor(close).Clicked;
-            close.Px(16f, 16f);
-            close.At(ToastWidth - 12f - 16f, 12f);
-            close.Style.CornerRadius = 4f;
-            close.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
-            CentredIcon(runtime, close, "x", 14f, TextColor.Secondary);
+        runtime.BeginParent(panel);
+        Box close = runtime.BoxFromId(id + "-close", InteractionKinds.LeftPress);
+        pressed |= runtime.InteractionsFor(close).Clicked;
+        close.Sized(Size.Px(16f), Size.Px(16f));
+        close.At(ToastWidth - 12f - 16f, 12f);
+        close.Style.CornerRadius = 4f;
+        close.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
+        CentredIcon(runtime, close, "x", 14f, TextColor.Secondary);
 
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                runtime.Icon("bell", 18f).Color = UiColor.Border;
-            runtime.Gap(8f);
+        runtime.BeginCenterAcross();
+        runtime.Icon("bell", 18f).Color = UiColor.Border;
+        runtime.EndCenterAcross();
+        runtime.Gap(8f);
 
-            using (runtime.PushParent(runtime.ColumnFit()))
-            {
-                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, ComponentSize.Md);
-                Advance(runtime, 14f * 1.4f + 4f, ComponentSize.Md, FontWeight.Bold);
-                runtime.Text(description, ComponentSize.Sm, TextColor.Secondary);
-                Advance(runtime, 12f * 1.4f + 8f, ComponentSize.Sm);
-                var undo = PageButton(runtime, id + "-action", action, primary: false, height: 26f,
-                    size: ComponentSize.Sm, radius: 4f, padX: 6f);
-                undo.Node.Style.BackgroundColor = null;
-                pressed |= undo.Clicked;
-            }
-        }
+        var text = runtime.BeginParent(runtime.Column());
+        Bold(runtime, title, ComponentSize.Md);
+        Advance(runtime, 14f * 1.4f + 4f, ComponentSize.Md, FontWeight.Bold);
+        runtime.Text(description, ComponentSize.Sm, TextColor.Secondary);
+        Advance(runtime, 12f * 1.4f + 8f, ComponentSize.Sm);
+        var undo = PageButton(runtime, id + "-action", action, primary: false, height: 26f,
+            size: ComponentSize.Sm, radius: 4f, padX: 6f);
+        undo.Node.Style.BackgroundColor = null;
+        pressed |= undo.Clicked;
+        runtime.EndParent(text);
+        runtime.EndParent(panel);
         return pressed;
     }
 
     private static void CentredIcon(BibuiRuntime runtime, Box box, string name, float size, UiColor color)
     {
         box.ChildLayoutAxis = LayoutAxis.X;
-        using (runtime.PushParent(box))
-        using (runtime.Centred())
-        using (runtime.PushParent(runtime.ColumnFillY()))
-        using (runtime.Centred())
-            runtime.Icon(name, size).Color = color;
+        runtime.BeginParent(box);
+        runtime.BeginCenterX();
+        runtime.BeginCenterY();
+        runtime.Icon(name, size).Color = color;
+        runtime.EndCenterY();
+        runtime.EndCenterX();
+        runtime.EndParent(box);
     }
 }

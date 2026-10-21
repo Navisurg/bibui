@@ -16,8 +16,8 @@ public static Box Build(BibuiRuntime runtime, ReadOnlySpan<char> caption)
 public const float Spacing = 12f;   // under the caption, and between children
 ```
 
-It returns the column with the caption already in it. Push the column to build
-the section's children, and put `runtime.Gap(Section.Spacing)` between them.
+It returns the column with the caption already in it. Begin the column as the
+parent (`BeginParent`) to build the section's children, and put `runtime.Gap(Section.Spacing)` between them.
 
 ## Claims and reports
 
@@ -48,17 +48,13 @@ sealed class AppearanceSection
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        Box column = runtime.Box();
-        column.ChildLayoutAxis = LayoutAxis.Y;
-        column.SizeX = SemanticSize.Pixels(320f);
-        column.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(column))
-        using (runtime.PushParent(Section.Build(runtime, Caption)))
-        {
-            if (runtime.Switch("appearance-dark", _dark, Dark).Clicked) _dark = !_dark;
-            runtime.Gap(Section.Spacing);
-            _alpha = runtime.Slider("appearance-alpha", _alpha, 0f, 1f, 0.01f, Alpha).Value;
-        }
+        var column = runtime.BeginParent(runtime.Column().Sized(Size.Px(320f)));
+        var section = runtime.BeginParent(Section.Build(runtime, Caption));
+        if (runtime.Switch("appearance-dark", _dark, Dark).Clicked) _dark = !_dark;
+        runtime.Gap(Section.Spacing);
+        _alpha = runtime.Slider("appearance-alpha", _alpha, 0f, 1f, 0.01f, Alpha).Value;
+        runtime.EndParent(section);
+        runtime.EndParent(column);
         return column;
     }
 }

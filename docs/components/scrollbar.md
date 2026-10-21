@@ -76,13 +76,15 @@ sealed class LogView
         view.SizeX = SemanticSize.ParentPct(1f);
         view.SizeY = SemanticSize.ParentPct(1f);
         view.AllowOverflowY = true;
-        using (runtime.PushParent(view))
-            foreach (var line in Lines)
-                runtime.Text(line, ComponentSize.Sm);
+        runtime.BeginParent(view);
+        foreach (var line in Lines)
+            runtime.Text(line, ComponentSize.Sm);
+        runtime.EndParent(view);
 
         // The bar asks before the view, so the view's wheel claim does not take its presses.
-        using (runtime.PushParent(panel))
-            runtime.Scrollbar("log-bar", view);
+        runtime.BeginParent(panel);
+        runtime.Scrollbar("log-bar", view);
+        runtime.EndParent(panel);
         runtime.InteractionsFor(view);
         return panel;
     }

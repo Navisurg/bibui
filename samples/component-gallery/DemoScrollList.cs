@@ -21,19 +21,19 @@ internal static class DemoScrollList
         panel.Style.CornerRadius = 8f;
         panel.Style.Padding = EdgeInsets.All(1f);   // inside the border
 
-        using (runtime.PushParent(panel))
+        runtime.BeginParent(panel);
+        runtime.BeginScrollList("sl-list", ref _scroll, Pitch, Rows);
+        for (int i = _scroll.First; i < _scroll.Last; i++)
         {
-            runtime.BeginScrollList("sl-list", ref _scroll, Pitch, Rows);
-            for (int i = _scroll.First; i < _scroll.Last; i++)
-            {
-                var row = runtime.RowFillX(Pitch);
-                row.Style.Padding = new EdgeInsets(0, 12, 0, 12);
-                row.Style.BackgroundColor = i % 2 == 0 ? (UiColor?)UiColor.Surface : null;
-                using (runtime.PushParent(row))
-                    runtime.Text(RowLabels.Of(i), ComponentSize.Sm, TextColor.Primary);
-            }
-            runtime.EndScrollList(ref _scroll);
+            var row = runtime.Row().Sized(Size.Fill, Size.Px(Pitch));
+            row.Style.Padding = new EdgeInsets(0, 12, 0, 12);
+            row.Style.BackgroundColor = i % 2 == 0 ? (UiColor?)UiColor.Surface : null;
+            runtime.BeginParent(row);
+            runtime.Text(RowLabels.Of(i), ComponentSize.Sm, TextColor.Primary);
+            runtime.EndParent(row);
         }
+        runtime.EndScrollList(ref _scroll);
+        runtime.EndParent(panel);
 
         // The caption counts the rows the list built, so it is built after the
         // list, and the panel is moved after it.

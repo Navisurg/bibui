@@ -44,9 +44,10 @@ void Build()
 
     var page = runtime.Column().Sized(Size.Fill, Size.Fill);
     page.Style = new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(28f) };
-    using var inPage = runtime.PushParent(page);
-    using (runtime.PushFontFace(weight: FontWeight.Bold))
-        runtime.Text("Hello from raw Wayland", ComponentSize.Xxl, TextColor.Primary);
+    runtime.BeginParent(page);
+    runtime.BeginFontFace(weight: FontWeight.Bold);
+    runtime.Text("Hello from raw Wayland", ComponentSize.Xxl, TextColor.Primary);
+    runtime.EndFontFace();
     runtime.Gap(16f);
     runtime.Text("wl_shm buffers, CPU raster, frame-callback pacing, xkbcommon input. No GLFW, no GL.",
         textColor: TextColor.Secondary);
@@ -64,10 +65,10 @@ void Build()
     Box field = runtime.Box();
     TextField.InputStyle(runtime, field, typing);
     field.Sized(Size.Fill, Size.Px(40f));
-    BibuiWidget line;
-    using (runtime.PushParent(field))
-        line = runtime.TextField("typed", typed, typedEdit, typing,
-            placeholder: "Type here: dead keys, AltGr, held keys repeat, Ctrl+A, Ctrl+Left");
+    runtime.BeginParent(field);
+    BibuiWidget line = runtime.TextField("typed", typed, typedEdit, typing,
+        placeholder: "Type here: dead keys, AltGr, held keys repeat, Ctrl+A, Ctrl+Left");
+    runtime.EndParent(field);
     if (line.Pressed) typing = true;
     foreach (var ev in runtime.UnconsumedEvents)
         if (typing && ev is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
@@ -83,12 +84,11 @@ void Build()
     groove.Style.BackgroundColor = UiColor.SurfaceRaised;
     groove.Style.BorderColor = UiColor.Border;
     groove.Style.Padding = EdgeInsets.All(1f);
-    using (runtime.PushParent(groove))
-    {
-        Box fill = runtime.Box().Sized(Size.Px(24f + t * 420f), Size.Px(12f));
-        fill.Style.CornerRadius = 6f;
-        fill.Style.BackgroundColor = UiColor.Accent;
-    }
+    runtime.BeginParent(groove);
+    Box fill = runtime.Box().Sized(Size.Px(24f + t * 420f), Size.Px(12f));
+    fill.Style.CornerRadius = 6f;
+    fill.Style.BackgroundColor = UiColor.Accent;
+    runtime.EndParent(groove);
     runtime.Gap(16f);
 
     // The pad takes every button and the wheel, and shows what arrived.
@@ -108,20 +108,20 @@ void Build()
     pad.Style.BorderWidth = 1f;
     pad.Style.BorderColor = p.Hovering ? UiColor.Accent : UiColor.Border;
     pad.Style.BackgroundColor = UiColor.SurfaceRaised;
-    using (runtime.PushParent(pad))
-    {
-        runtime.Text(p.Hovering ? $"pointer at {p.X:0.#}, {p.Y:0.#}" : "Move over this pad, press any button, scroll (Shift+wheel too)",
-            ComponentSize.Sm);
-        runtime.Gap(6f);
-        runtime.Text($"last press: {lastButton}    wheel total: x {wheelX:0.#} px, y {wheelY:0.#} px (a notch is 32 px)",
-            ComponentSize.Sm, TextColor.Secondary);
-        runtime.Gap(6f);
-        runtime.Text($"modifiers with the last event: {lastModifiers}", ComponentSize.Sm, TextColor.Secondary);
-    }
+    runtime.BeginParent(pad);
+    runtime.Text(p.Hovering ? $"pointer at {p.X:0.#}, {p.Y:0.#}" : "Move over this pad, press any button, scroll (Shift+wheel too)",
+        ComponentSize.Sm);
+    runtime.Gap(6f);
+    runtime.Text($"last press: {lastButton}    wheel total: x {wheelX:0.#} px, y {wheelY:0.#} px (a notch is 32 px)",
+        ComponentSize.Sm, TextColor.Secondary);
+    runtime.Gap(6f);
+    runtime.Text($"modifiers with the last event: {lastModifiers}", ComponentSize.Sm, TextColor.Secondary);
+    runtime.EndParent(pad);
     runtime.Gap(16f);
 
     runtime.Text($"frame {frame} · {runtime.SurfaceWidth}×{runtime.SurfaceHeight} at {runtime.ScaleFactor:0.###}×",
         ComponentSize.Sm, TextColor.Secondary);
+    runtime.EndParent(page);
 }
 
 // CI's start-up check: one frame built and drawn headless, then exit.

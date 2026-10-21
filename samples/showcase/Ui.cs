@@ -17,15 +17,19 @@ internal static class Ui
 
     public static Text Bold(BibuiRuntime rt, string s, FontSize? size = null, UiColor? color = null)
     {
-        using (rt.PushFontFace(weight: FontWeight.Bold))
-            return rt.Text(s, size, color);
+        rt.BeginFontFace(weight: FontWeight.Bold);
+        var bold = rt.Text(s, size, color);
+        rt.EndFontFace();
+        return bold;
     }
 
     /// <summary>A small capitalised label above a group: tracking is not a thing yet, so it is plain small caps by hand.</summary>
     public static Text Eyebrow(BibuiRuntime rt, string s)
     {
-        using (rt.PushFontFace(weight: FontWeight.Bold))
-            return rt.Text(s.ToUpperInvariant(), FontSize.Px(11f), UiColor.TextSecondary);
+        rt.BeginFontFace(weight: FontWeight.Bold);
+        var eyebrow = rt.Text(s.ToUpperInvariant(), FontSize.Px(11f), UiColor.TextSecondary);
+        rt.EndFontFace();
+        return eyebrow;
     }
 
     public static Icon Icon(BibuiRuntime rt, string name, float size, UiColor color)
@@ -56,20 +60,22 @@ internal static class Ui
     /// </summary>
     public static Box CentredY(BibuiRuntime rt, UiNode node)
     {
-        var column = rt.ColumnFillY();
-        using (rt.PushParent(column))
-        using (rt.Centred())
-            UiNode.PushIntoParent(column, node);
+        var column = rt.BeginParent(rt.Column().Sized(y: Size.Fill));
+        rt.BeginCenter();
+        UiNode.PushIntoParent(column, node);
+        rt.EndCenter();
+        rt.EndParent(column);
         return column;
     }
 
     /// <summary>The same as <see cref="CentredY"/>, across the column in scope: a full-width row.</summary>
     public static Box CentredX(BibuiRuntime rt, UiNode node)
     {
-        var row = rt.RowFillX();
-        using (rt.PushParent(row))
-        using (rt.Centred())
-            UiNode.PushIntoParent(row, node);
+        var row = rt.BeginParent(rt.Row().Sized(Size.Fill));
+        rt.BeginCenter();
+        UiNode.PushIntoParent(row, node);
+        rt.EndCenter();
+        rt.EndParent(row);
         return row;
     }
 
@@ -80,13 +86,11 @@ internal static class Ui
     /// </summary>
     public static Box BottomY(BibuiRuntime rt, UiNode node, float lift)
     {
-        var column = rt.ColumnFillY();
-        using (rt.PushParent(column))
-        {
-            rt.Spring();
-            Place(rt, node);
-            rt.Gap(lift);
-        }
+        var column = rt.BeginParent(rt.Column().Sized(y: Size.Fill));
+        rt.Spacer(Size.Fill);
+        Place(rt, node);
+        rt.Gap(lift);
+        rt.EndParent(column);
         return column;
     }
 
@@ -96,45 +100,48 @@ internal static class Ui
     /// <summary>A card's heading row: icon, title, an optional caption, and whatever goes at the far end.</summary>
     public static Box CardHeader(BibuiRuntime rt, string icon, string title, string? caption, params UiNode[] trailing)
     {
-        var row = rt.RowFillX(32f);
-        using (rt.PushParent(row))
+        var row = rt.BeginParent(rt.Row().Sized(Size.Fill, Size.Px(32f)));
+        CentredY(rt, Icon(rt, icon, 16f, UiColor.Accent));
+        rt.Gap(10f);
+        CentredY(rt, Bold(rt, title, ComponentSize.Md, UiColor.TextPrimary));
+        if (caption is not null)
         {
-            CentredY(rt, Icon(rt, icon, 16f, UiColor.Accent));
             rt.Gap(10f);
-            CentredY(rt, Bold(rt, title, ComponentSize.Md, UiColor.TextPrimary));
-            if (caption is not null)
-            {
-                rt.Gap(10f);
-                CentredY(rt, T(rt, caption, ComponentSize.Sm, UiColor.TextSecondary));
-            }
-            rt.Spring();
-            foreach (var node in trailing) Place(rt, node);
+            CentredY(rt, T(rt, caption, ComponentSize.Sm, UiColor.TextSecondary));
         }
+        rt.Spacer(Size.Fill);
+        foreach (var node in trailing) Place(rt, node);
+        rt.EndParent(row);
         return row;
     }
 
     /// <summary>A rounded pill of tinted colour with a label: a status, a delta, a tag.</summary>
     public static Box Pill(BibuiRuntime rt, string label, UiColor tint, bool dot = false, float height = 22f)
     {
-        var pill = rt.RowHeight(height).Styled(new Style
+        var pill = rt.BeginParent(rt.Row().Sized(y: Size.Px(height)));
+        pill.Style = new Style
         {
             Padding = EdgeInsets.Symmetric(horizontal: 9f, vertical: 0f),
             CornerRadius = height / 2f,
             BackgroundColor = tint.WithAlpha(0.16f),
-        });
-        using (rt.PushParent(pill))
+        };
+        if (dot)
         {
-            if (dot)
-            {
-                CentredY(rt, rt.Box().Px(6f, 6f).Styled(new Style { CornerRadius = 3f, BackgroundColor = tint }));
-                rt.Gap(6f);
-            }
-            CentredY(rt, Bold(rt, label, FontSize.Px(11.5f), tint));
+            var dotBox = rt.Box().Sized(Size.Px(6f), Size.Px(6f));
+            dotBox.Style = new Style { CornerRadius = 3f, BackgroundColor = tint };
+            CentredY(rt, dotBox);
+            rt.Gap(6f);
         }
+        CentredY(rt, Bold(rt, label, FontSize.Px(11.5f), tint));
+        rt.EndParent(pill);
         return pill;
     }
 
     /// <summary>A hairline across the parent.</summary>
-    public static Box Rule(BibuiRuntime rt) =>
-        rt.Box().FillX().Px(height: 1f).Styled(new Style { BackgroundColor = UiColor.Border });
+    public static Box Rule(BibuiRuntime rt)
+    {
+        var rule = rt.Box().Sized(Size.Fill, Size.Px(1f));
+        rule.Style = new Style { BackgroundColor = UiColor.Border };
+        return rule;
+    }
 }
