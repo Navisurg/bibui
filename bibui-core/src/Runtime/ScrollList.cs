@@ -42,6 +42,9 @@ public struct ScrollPt
     internal long Stepped;    // the frame Off was last eased in, so a build run twice eases once
     internal float Pitch;     // Begin's, for End
     internal float MaxPx;     // Begin's, for End: the furthest the target goes
+    internal RowHeights? Rows; // an uneven list's heights; null for rows of one pitch
+    internal float Height;    // an uneven list's view height, for End
+    internal string? ListId;  // an uneven list's id, for its rows
 
     /// <summary>
     /// Moves the target to row <paramref name="idx"/>, <paramref name="px"/>
@@ -74,7 +77,7 @@ public struct ScrollPt
 /// runtime.EndScrollList(ref scroll);
 /// </code>
 /// </summary>
-public static class ScrollList
+public static partial class ScrollList
 {
     // A view not laid out yet has no height. Build as if for a tall screen, so
     // its first frame is not a single row.
@@ -155,6 +158,7 @@ public static class ScrollList
 
         float dy = runtime.InteractionsFor(view).ScrollY;
         if (dy == 0f) return;
+        if (pt.Rows is not null) { EndUneven(runtime, ref pt, dy); return; }
         float px = pt.Px + dy;
         int carry = (int)MathF.Floor(px / pt.Pitch);
         pt.Target(pt.Idx + carry, px - carry * pt.Pitch, pt.Pitch);

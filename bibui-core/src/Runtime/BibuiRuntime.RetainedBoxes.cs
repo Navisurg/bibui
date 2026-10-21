@@ -76,6 +76,14 @@ public sealed partial class BibuiRuntime
     }
 
     /// <summary>
+    /// The retained box named <paramref name="id"/> as the last frame laid it
+    /// out, or null when there is none: for a component that reads back what
+    /// its own boxes measured (a scroll list's rows) before it builds them again.
+    /// </summary>
+    internal Box? RetainedBox(string id) =>
+        _retainedBoxes.Entries.TryGetValue(id, out var entry) ? entry.Value : null;
+
+    /// <summary>
     /// Clears everything a build function sets, keeping only what has to outlive
     /// the frame: <see cref="UiNode.Id"/> (it is the cache key), and
     /// <see cref="Box.HotT"/>/<see cref="Box.ActiveT"/> (the state a build

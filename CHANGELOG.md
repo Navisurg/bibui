@@ -6,6 +6,23 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **ScrollList: rows of any height.** `runtime.BeginScrollList(id, ref scroll,
+  rows, count)` takes a `RowHeights` the caller keeps beside its `ScrollPt`,
+  and each row is built between `runtime.BeginScrollRow(ref scroll, i)` and
+  `runtime.EndScrollRow(row)`. The list reads each row's height back from the
+  layout that drew it, a frame late, and takes a row never built to be the
+  mean of those that were (`RowHeights.Estimate` before any has been), so
+  only the rows in sight are built, as with rows of one pitch. It scrolls by
+  pixels and keeps its place by a row: a row above the view that turns out
+  taller than estimated moves nothing in view. The bar is placed from the
+  heights measured so far and the estimate for the rest, so its thumb can
+  shift a little as new rows come into view. `RowHeights.Insert`, `Remove`
+  and `Clear` keep the heights with their rows when the list changes or its
+  width does. Rows of one height keep the `pitch` overload, which is unchanged
+  and needs no heights.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning
