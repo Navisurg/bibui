@@ -82,8 +82,9 @@ Where they differ:
   its textures, except on `SilkSkiaGl`, where the GPU draws into the window
   and a separate CPU renderer draws the screenshots.
 
-The counter is in the repository three times, with the same code and a
-different package: [`samples/counter`](https://github.com/Navisurg/bibui/tree/main/samples/counter)
+The counter is one app, [`samples/counter`](https://github.com/Navisurg/bibui/tree/main/samples/counter),
+compiled by three projects that differ only in their package:
+[`samples/counter-gl`](https://github.com/Navisurg/bibui/tree/main/samples/counter-gl)
 (`SilkSkiaGl`), [`samples/counter-cpu`](https://github.com/Navisurg/bibui/tree/main/samples/counter-cpu)
 (`SilkSkiaCpu`) and [`samples/counter-wayland`](https://github.com/Navisurg/bibui/tree/main/samples/counter-wayland)
 (`WaylandManaged`, one Native AOT binary).

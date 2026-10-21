@@ -16,37 +16,28 @@ applications with bibui.
 ![Zenith, the showcase app, built with bibui](samples/showcase/screenshots/overview-dark.png)
 
 **Platforms:** Linux on x64, and the browser through .NET WebAssembly. Other
-platforms are not supported yet.
+platforms are not supported yet. We expect macOS, and maybe even iOS, to be supported in the near future.
 
 ## Install
 
-bibui needs .NET 10. Add one `Bibui.App` package: it brings bibui, a window
-and a renderer.
+**Prerequisites**
+- .NET 10.
+
+Add the `Bibui` package to a console app:
 
 ```bash
 dotnet new console -n Counter && cd Counter
-dotnet add package Bibui.App.SilkSkiaGl
+dotnet add package Bibui
 ```
 
-| Package | Window | Renderer | Native AOT |
-|---|---|---|---|
-| `Bibui.App.SilkSkiaGl` | Silk (GLFW) | Skia on the GPU (OpenGL) | No, JIT only for now |
-| `Bibui.App.SilkSkiaCpu` | Silk (GLFW) | Skia on the CPU | No, JIT only for now |
-| `Bibui.App.SilkManaged` | Silk (GLFW) | managed rasterizer, on the CPU | No, JIT only for now |
-| `Bibui.App.WaylandManaged` | Wayland | managed rasterizer, on the CPU | Yes |
-| `Bibui.App.WaylandSkiaCpu` | Wayland | Skia on the CPU | Yes, beside `libSkiaSharp.so` |
-
-Each has the same `BibuiApp` type with the same calls, so changing the package
-changes how your app is drawn and nothing in its code. [Bibui.App
-packages](docs/app-packages.md) says where they differ. Headless tests use
-`Bibui.Testing`. In the browser there is no `Bibui.App` package: a browser app
-references `Bibui.Platform.Browser` and a renderer ([bibui in the
-browser](docs/browser.md)).
+`Bibui` is all of bibui in one reference: the core, `BibuiApp` on a Silk.NET
+window drawn by Skia on OpenGL, and every other window, renderer and the
+testing package beside it.
 
 ## Quick start
 
-[`samples/counter`](samples/counter/Program.cs) is a simple bibui app: a label
-and a button that counts its clicks.
+With `Bibui` referenced, [`samples/counter`](samples/counter/Program.cs) is a
+whole bibui app: a label and a button that counts its clicks.
 
 ```csharp
 using Bibui.App;
@@ -60,28 +51,68 @@ while (app.BeginFrame())
 {
     runtime.BeginBuild(app.Events);
     var column = runtime.BeginParent(runtime.Column());
-    runtime.Text($"Clicked {count} times");
-    if (runtime.Button("add", "Add one").Clicked) count++;
+    {
+        runtime.Text($"Clicked {count} times");
+        if (runtime.Button("add", "Add one").Clicked)
+            count++;
+    }
     runtime.EndParent(column);
+
     runtime.EndBuild();
     app.EndFrame();
 }
 ```
 
-The app owns its loop:
-
-- `app.BeginFrame()` waits until a frame is wanted and collects its input;
-- `runtime.BeginBuild` / `EndBuild` build the frame and record what to draw;
-- `app.EndFrame()` draws that into the window, presents it, and paces the loop.
-
-The build is ordinary code inside that loop, and the app's state is its own
-variables. Run it:
+You can run the app using the Skia+OpenGL backend with
 
 ```bash
-dotnet run --project samples/counter
+dotnet run --project samples/counter-gl
 ```
 
 ![The quick start's window after three clicks: "Clicked 3 times" above an "Add one" button](docs/images/quick-start-counter.png)
+
+
+## Minimal dependencies
+
+bibui consists of a core part, [bibui-core](bibui-core), that defines
+how you build user interfaces with bibui through layout constraints
+and the builtin UI node typestypes.
+By itself it has no idea how to talk to the OS to get window and
+input events, or do any type of rendering of the UI.
+
+An app package references `bibui-core` and a window and renderer.
+By default `Bibui` packages the `Bibui.App.SilkSkiaGl` app package,
+but you may reference any of the below builtin app packages instead of
+`Bibui`, and get only the dependencies of its window and renderer:
+
+| Package | Window | Renderer | Native AOT |
+|---|---|---|---|
+| `Bibui.App.SilkSkiaGl` | Silk (GLFW) | Skia on the GPU (OpenGL) | No, JIT only for now |
+| `Bibui.App.SilkSkiaCpu` | Silk (GLFW) | Skia on the CPU | No, JIT only for now |
+| `Bibui.App.SilkManaged` | Silk (GLFW) | managed rasterizer, on the CPU | No, JIT only for now |
+| `Bibui.App.WaylandManaged` | Wayland | managed rasterizer, on the CPU | Yes |
+| `Bibui.App.WaylandSkiaCpu` | Wayland | Skia on the CPU | Yes, beside `libSkiaSharp.so` |
+
+```bash
+dotnet add package Bibui.App.WaylandManaged   # no third-party NuGet dependencies, and Native AOT
+```
+
+An app that publishes with Native AOT references a Wayland app package this
+way rather than `Bibui`, whose Silk.NET keeps an app on the JIT.
+
+Every app package has the same `BibuiApp` and the same calls, so changing the
+package changes the target and nothing in the code. Reference one at a time:
+each defines `BibuiApp`, and `Bibui` already includes `Bibui.App.SilkSkiaGl`.
+The `counter-gl`, `counter-cpu` and `counter-wayland` samples compile the same
+app, [`samples/counter`](samples/counter/Program.cs), each with a different
+package. [App packages](docs/app-packages.md) has the details.
+
+In the browser there is no app package: a browser app references
+`Bibui.Platform.Browser` and a renderer, and the browser owns the loop.
+[`samples/counter-browser`](samples/counter-browser/Program.cs) is the counter
+there, and [bibui in the browser](docs/browser.md) has the details.
+
+## The bibui UI tree structure
 
 bibui has no dedicated `Column` type that contains a list of its children.
 Instead every node (`UiNode`, which `Box` and `Text` derive from) links to its
@@ -98,36 +129,40 @@ Each node is built where it goes: the text, then the button, in the order
 they appear in the column.
 
 `runtime.Button` is itself a composition: a `Box` that claims left presses,
-with a `Text` inside. `button.Clicked` reports a click, so the app reacts to it
-inline, with no callbacks.
+with a `Text` inside. `button.Clicked` reports an [Interaction](bibui-core/src/Public/Interaction.cs) as a struct with all the interactions the `Box` took.
 
-### Writing the loop yourself
+## bibui app from scratch
 
-A `Bibui.App` package is a window package and a renderer package, put
-together. Reference those instead (`Bibui.Core`, `Bibui.Platform.Silk`,
-`Bibui.Raster.Skia`) and the same loop is:
+A `Bibui.App` package is a fast path for gluing together a window package and a renderer package.
+
+You may instead reference directly `Bibui.Core`, `Bibui.Platform.Silk`,
+`Bibui.Raster.Skia`, and then you will have to write the main app loop as:
 
 ```csharp
 using var window = SilkWindow.Open(runtime, new("Counter", 360, 160));
 using var skia = new SkiaGlRenderer(window.Gl);
 
-while (SilkWindow.BeginFrame(window, runtime))
+while (SilkWindow.BeginFrame(window, runtime))  // window:   wait for a frame; Silk input → window.Events
 {
-    runtime.BeginBuild(window.Events);
-    Build();
-    runtime.EndBuild();
-    SilkWindow.BeginDraw(window);
+    runtime.BeginBuild(window.Events);          // runtime:  WindowEvent → BibUiEvent; start a new tree
+    Build();                                    // your app: build boxes and text, read interactions
+    runtime.EndBuild();                         // runtime:  lay the tree out, record runtime.DrawList
+    SilkWindow.BeginDraw(window);               // renderer: draw the DrawList into the GL framebuffer
     skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);
-    SilkWindow.EndFrame(window, runtime);
+    SilkWindow.EndDraw(window);                 // window:   swap; the frame is on screen
+    SilkWindow.EndFrame(window, runtime);       // window:   sleep until the next frame is due
 }
 ```
 
-That is the way to draw several renderers into one window, step a test server
-of your own, or bring a window or renderer that bibui does not ship.
-[`samples/bibui-app`](samples/bibui-app/Program.cs) is written this way.
+Each layer sends data only to layers below it, and each layer is free to interpret that data however it likes.
+With this design, you may target a new platform, by writing a new platform layer that produces `WindowEvent`s.
+You may be able to reuse any of the renderers, or write a new one for the platform that renders using the draw operations issued to a `DrawList`.
 
-### The test server
+[Bibui.Platform.Wayland](bibui-platform-wayland/) and the managed rasterizer are both built this way.
+
+This design enables us to have different combinations of platform layers for handling input and renderers, for rendering the bibui `DrawList`.
+
+## The test server
 
 The test server lets a test or an agent drive a running app: click, type,
 read the tree, take a screenshot. A `BibuiApp` starts it when asked,
@@ -146,37 +181,6 @@ Markdown viewer and more. Below, a multiline text field holds Markdown source,
 
 Every component, with pictures, is in [Components](docs/components/index.md).
 
-## Three routes
-
-The runtime records each frame into a draw list; a renderer draws that list,
-into a window a platform provides. You pick both explicitly, and nothing is
-discovered at run time.
-
-- **Silk + Skia.** `SilkWindow` opens the window with GLFW, and `SkiaGlRenderer`
-  draws into its OpenGL framebuffer. This route runs on the JIT only for now:
-  Silk.NET itself is not trim-safe, so it does not publish with Native AOT.
-- **Wayland + managed raster.** `WaylandWindow` talks to the compositor through
-  libwayland-client, and `ManagedRenderer` draws on the CPU into its
-  shared-memory buffers, with a rasterizer written in C# and FreeType/HarfBuzz
-  text. There is no GLFW, GL or Skia on this route, and it publishes as a
-  single Native AOT binary of about 5 MB:
-  `dotnet run --project tests/wayland-hello`.
-
-  ```bash
-  dotnet publish -c Release -r linux-x64 -p:PublishAot=true
-  ```
-
-- **Browser + managed raster.** `BrowserWindow` is a `<canvas>` in a .NET
-  WebAssembly app, and `ManagedRenderer` draws each frame on the CPU, with
-  FreeType and HarfBuzz built for the browser. A page may not block, so the
-  browser owns the loop: the frame is handed to `BrowserWindow.Run` and drawn
-  on `requestAnimationFrame` when there is something to draw. Several apps can
-  share one page. The counter is about 1.7 MB to download with Brotli:
-  [`samples/counter-browser`](samples/counter-browser/Program.cs).
-
-Your build code is the same on every route. [Publishing with Native
-AOT](docs/aot.md) and [bibui in the browser](docs/browser.md) have the details.
-
 ## Dependencies
 
 bibui uses .NET 10, and the platform + rasterizer route your application uses
@@ -193,7 +197,7 @@ decides which other dependencies it needs. In every case the dependency tree is 
 | `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`) | none beyond `Bibui.Core`'s |
 
 The Wayland + managed route has no third-party NuGet dependencies at all, and
-it is the route that publishes with Native AOT; Silk.NET keeps the other on the
+it is the route that publishes with Native AOT; Silk.NET keeps the others on the
 JIT for now.
 
 ## Documentation
@@ -206,13 +210,10 @@ JIT for now.
 - [Components](docs/components/index.md): every component, with pictures.
 - [Native AOT](docs/aot.md): publishing one native binary, and the trimming
   rules for app code.
-- [bibui in the browser](docs/browser.md): a bibui app on a canvas, with .NET
-  WebAssembly, and what does not work there yet.
 - Samples: [`samples/showcase`](samples/showcase) is an observatory console
   that uses most of bibui, [`samples/bibui-app`](samples/bibui-app) is a short
   interactive app, and [`samples/component-gallery`](samples/component-gallery)
-  has a page per component. [`samples/counter-browser`](samples/counter-browser)
-  is the counter in the browser.
+  has a page per component.
 
 ## Building from source
 

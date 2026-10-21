@@ -887,7 +887,7 @@ that draws on the CPU draws into memory that `GlCpuFramebuffer` (package
 `Bibui.Gl`) shows there: each frame it uploads the memory into a texture and
 blits it onto the framebuffer. It takes a GPU renderer's place in the loop: a
 frame is drawn into the framebuffer by one or the other, never both.
-[`samples/counter-cpu`](../samples/counter-cpu/Program.cs) is the counter drawn
+[`samples/counter-cpu`](../samples/counter-cpu/counter-cpu.csproj) is the counter drawn
 this way, with `SkiaCpuRenderer`.
 
 ```csharp

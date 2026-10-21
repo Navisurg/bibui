@@ -9,6 +9,8 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The app is samples/counter; this project only picks its package. -->
+    <Compile Include="../counter/*.cs" />
     <ProjectReference Include="../../bibui-apps/silk-skia-cpu/bibui-app-silk-skia-cpu.csproj" />
   </ItemGroup>
 </Project>

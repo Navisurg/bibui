@@ -46,6 +46,8 @@ PROJECTS=(
   "bibui-apps/silk-managed/bibui-app-silk-managed.csproj"
   "bibui-apps/wayland-managed/bibui-app-wayland-managed.csproj"
   "bibui-apps/wayland-skia-cpu/bibui-app-wayland-skia-cpu.csproj"
+  # Bibui: all of the above in one reference, the default app among them.
+  "bibui-all/bibui-all.csproj"
 )
 
 # A layer kept in its own top-level directory lists its packages in
@@ -60,7 +62,8 @@ for list in "$SCRIPT_DIR"/*/nuget-projects; do
 done
 
 for proj in "${PROJECTS[@]}"; do
-  if [[ $proj == bibui-platform-browser/* && ! -f "$SCRIPT_DIR/bibui-platform-browser/native/lib/libfreetype.so.6.a" ]]; then
+  # Bibui depends on the browser package too, so it waits for it.
+  if [[ ($proj == bibui-platform-browser/* || $proj == bibui-all/*) && ! -f "$SCRIPT_DIR/bibui-platform-browser/native/lib/libfreetype.so.6.a" ]]; then
     echo "==> Skipping $proj: run bibui-platform-browser/native/build.sh first (it needs the wasm-tools workload)"
     continue
   fi
@@ -76,7 +79,7 @@ echo ""
 echo "Packages published to: $FEED"
 echo ""
 echo "To use in another project, add:"
-echo "  <PackageReference Include=\"Bibui.App.SilkSkiaGl\" Version=\"$VERSION\" />"
-echo "  or another Bibui.App package (docs/app-packages.md), or Bibui plus a window and a renderer"
+echo "  <PackageReference Include=\"Bibui\" Version=\"$VERSION\" />"
+echo "  or, for the fewest dependencies, the one Bibui.App package the app runs on (docs/app-packages.md)"
 echo "  for a loop of your own; Bibui.Testing for headless tests."
 echo "  samples/counter is the whole loop."

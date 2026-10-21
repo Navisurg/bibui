@@ -73,6 +73,7 @@ jobs:
             bibui-apps/silk-managed/bibui-app-silk-managed.csproj \
             bibui-apps/wayland-managed/bibui-app-wayland-managed.csproj \
             bibui-apps/wayland-skia-cpu/bibui-app-wayland-skia-cpu.csproj \
+            bibui-all/bibui-all.csproj \
             tools/wayland-scanner/wayland-scanner.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
             bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
@@ -85,7 +86,7 @@ jobs:
             tests/browser-tests/browser-tests.csproj \
             samples/component-gallery/component-gallery.csproj \
             samples/bibui-app/bibui-app.csproj \
-            samples/counter/counter.csproj \
+            samples/counter-gl/counter-gl.csproj \
             samples/counter-cpu/counter-cpu.csproj \
             samples/counter-wayland/counter-wayland.csproj
           do
