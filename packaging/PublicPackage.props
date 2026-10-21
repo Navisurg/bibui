@@ -11,7 +11,7 @@
     share docs/app-packages.md).
   -->
   <PropertyGroup>
-    <PackageProjectUrl>https://github.com/Navisurg/bibui</PackageProjectUrl>
+    <PackageProjectUrl>https://navisurgvision.com/bibui</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Navisurg/bibui</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageIcon>icon.png</PackageIcon>
