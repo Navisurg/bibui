@@ -11,13 +11,17 @@ int count = 0;
 while (app.BeginFrame())
 {
     runtime.BeginBuild(app.Events);
+
+    runtime.BeginCenterXY();
     var column = runtime.BeginParent(runtime.Column());
     {
         runtime.Text($"Clicked {count} times");
+        runtime.Gap(12);
         if (runtime.Button("add", "Add one").Clicked)
             count++;
     }
     runtime.EndParent(column);
+    runtime.EndCenterXY();
 
     runtime.EndBuild();
     app.EndFrame();
