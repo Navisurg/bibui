@@ -102,7 +102,7 @@ Each node is built where it goes: the text, then the button, in the order
 they appear in the column.
 
 `runtime.Button` is itself a composition: a `Box` that claims left presses,
-with a `Text` inside. `button.Clicked` reports an [Interaction](bibui/src/Public/Interaction.cs) as a struct with all the interactions the `Box` took.
+with a `Text` inside. `button.Clicked` reports an [Interaction](bibui-core/src/Public/Interaction.cs) as a struct with all the interactions the `Box` took.
 
 ## bibui app from scratch
 
