@@ -23,34 +23,21 @@ platforms are not supported yet. We expect macOS, and maybe even iOS, to be supp
 **Prerequisites**
 - .NET 10.
 
-**Getting started with a bibui app**
-
-bibui provides a set of [app-packages](bibui-apps/) for getting up and running with a bibui app. Each package pulls in everything you need to get started:
+Add the `Bibui` package to a console app:
 
 ```bash
 dotnet new console -n Counter && cd Counter
-dotnet add package Bibui.App.SilkSkiaGl
+dotnet add package Bibui
 ```
 
-This creates a bibui app that runs in a Silk.NET window and renders using the Skia OpenGL backend.
-Below we give the set of app platforms currently supported by bibui.
-
-| Package | Window | Renderer | Native AOT |
-|---|---|---|---|
-| `Bibui.App.SilkSkiaGl` | Silk (GLFW) | Skia on the GPU (OpenGL) | No, JIT only for now |
-| `Bibui.App.SilkSkiaCpu` | Silk (GLFW) | Skia on the CPU | No, JIT only for now |
-| `Bibui.App.SilkManaged` | Silk (GLFW) | managed rasterizer, on the CPU | No, JIT only for now |
-| `Bibui.App.WaylandManaged` | Wayland | managed rasterizer, on the CPU | Yes |
-| `Bibui.App.WaylandSkiaCpu` | Wayland | Skia on the CPU | Yes, beside `libSkiaSharp.so` |
-
-Each app platform has the same API, and you can therefore change the target platform by changing the package reference. We provide the `counter-gl` and `counter-cpu` samples in the [samples](samples/) directory. They compile the same app, [`samples/counter`](samples/counter/Program.cs), each with a different package: `counter-gl` with `Bibui.App.SilkSkiaGl` (Skia on OpenGL) and `counter-cpu` with `Bibui.App.SilkSkiaCpu` (Skia on the CPU).
-
-In the browser there is no `Bibui.App` package: a browser app references `Bibui.Platform.Browser` and a renderer, and the browser owns the loop. [`samples/counter-browser`](samples/counter-browser/Program.cs) is the counter there, and [bibui in the browser](docs/browser.md) has the details.
+`Bibui` is all of bibui in one reference: the core, `BibuiApp` on a Silk.NET
+window drawn by Skia on OpenGL, and every other window, renderer and the
+testing package beside it.
 
 ## Quick start
 
-[`samples/counter`](samples/counter/Program.cs) is a simple bibui app: a label
-and a button that counts its clicks.
+With `Bibui` referenced, this is a whole app: a label and a button that counts
+its clicks ([`samples/counter`](samples/counter/Program.cs)).
 
 ```csharp
 using Bibui.App;
@@ -84,6 +71,40 @@ dotnet run --project samples/counter-gl
 
 ![The quick start's window after three clicks: "Clicked 3 times" above an "Add one" button](docs/images/quick-start-counter.png)
 
+
+## Minimal dependencies
+
+`Bibui` brings every window and renderer, whichever the app uses. For an app
+that ships only what it runs on, reference the one app package for its window
+and renderer instead of `Bibui`. Each pulls in the core and exactly that
+window and renderer:
+
+| Package | Window | Renderer | Native AOT |
+|---|---|---|---|
+| `Bibui.App.SilkSkiaGl` | Silk (GLFW) | Skia on the GPU (OpenGL) | No, JIT only for now |
+| `Bibui.App.SilkSkiaCpu` | Silk (GLFW) | Skia on the CPU | No, JIT only for now |
+| `Bibui.App.SilkManaged` | Silk (GLFW) | managed rasterizer, on the CPU | No, JIT only for now |
+| `Bibui.App.WaylandManaged` | Wayland | managed rasterizer, on the CPU | Yes |
+| `Bibui.App.WaylandSkiaCpu` | Wayland | Skia on the CPU | Yes, beside `libSkiaSharp.so` |
+
+```bash
+dotnet add package Bibui.App.WaylandManaged   # no third-party NuGet dependencies, and Native AOT
+```
+
+An app that publishes with Native AOT references a Wayland app package this
+way rather than `Bibui`, whose Silk.NET keeps an app on the JIT.
+
+Every app package has the same `BibuiApp` and the same calls, so changing the
+package changes the target and nothing in the code. Reference one at a time:
+each defines `BibuiApp`, and `Bibui` already includes `Bibui.App.SilkSkiaGl`.
+The `counter-gl`, `counter-cpu` and `counter-wayland` samples compile the same
+app, [`samples/counter`](samples/counter/Program.cs), each with a different
+package. [App packages](docs/app-packages.md) has the details.
+
+In the browser there is no app package: a browser app references
+`Bibui.Platform.Browser` and a renderer, and the browser owns the loop.
+[`samples/counter-browser`](samples/counter-browser/Program.cs) is the counter
+there, and [bibui in the browser](docs/browser.md) has the details.
 
 ## The bibui UI tree structure
 
