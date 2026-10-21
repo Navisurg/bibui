@@ -73,6 +73,7 @@ jobs:
             bibui-apps/silk-managed/bibui-app-silk-managed.csproj \
             bibui-apps/wayland-managed/bibui-app-wayland-managed.csproj \
             bibui-apps/wayland-skia-cpu/bibui-app-wayland-skia-cpu.csproj \
+            bibui-all/bibui-all.csproj \
             tools/wayland-scanner/wayland-scanner.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
             bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \

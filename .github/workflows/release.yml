@@ -105,6 +105,7 @@ jobs:
             bibui-apps/silk-managed/bibui-app-silk-managed.csproj
             bibui-apps/wayland-managed/bibui-app-wayland-managed.csproj
             bibui-apps/wayland-skia-cpu/bibui-app-wayland-skia-cpu.csproj
+            bibui-all/bibui-all.csproj
           )
           mkdir -p nupkgs
           for proj in "${projects[@]}"; do
@@ -145,7 +146,9 @@ jobs:
                 [[ -f $dir/$file ]] || { echo "::error::$pkg has no $file"; bad=1; }
               done
             fi
+            # Bibui is dependencies only: it has no lib/ to check.
             for dll in "$dir"/lib/*/*.dll; do
+              [[ -f $dll ]] || continue
               if ! grep -qaF "+$GITHUB_SHA" "$dll"; then
                 echo "::error::$dll: its informational version is not stamped with $GITHUB_SHA"; bad=1
               fi

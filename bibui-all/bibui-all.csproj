@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+  <!-- Bibui: everything in one reference. No code of its own: a package whose
+       dependencies are the default app package, Bibui.App.SilkSkiaGl (so
+       BibuiApp opens a Silk window drawn by Skia on the GPU), and every
+       window, renderer and testing package beside it. Only one Bibui.App
+       package can be referenced (all five define BibuiApp), so an app on
+       another window or renderer references that Bibui.App package instead. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- NU5128: a package of dependencies only has no lib/ to match them. -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <PackageId>Bibui</PackageId>
+    <Description>All of bibui in one reference: the core, BibuiApp on a Silk window drawn by Skia on the GPU (Bibui.App.SilkSkiaGl), and every window, renderer and the testing package. For the fewest dependencies, reference the one Bibui.App package an app runs on instead.</Description>
+    <PackageTags>$(PackageTags);silk;wayland;browser;skia;opengl</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <!-- Every asset flows through, build ones too: Bibui.Platform.Browser's
+         buildTransitive targets link FreeType and HarfBuzz into a browser app. -->
+    <ProjectReference>
+      <PrivateAssets>none</PrivateAssets>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectReference Include="../bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj" />
+    <ProjectReference Include="../bibui-core/bibui-core.csproj" />
+    <ProjectReference Include="../bibui-gl/bibui-gl.csproj" />
+    <ProjectReference Include="../bibui-platform-silk/bibui-platform-silk.csproj" />
+    <ProjectReference Include="../bibui-platform-wayland/bibui-platform-wayland.csproj" />
+    <ProjectReference Include="../bibui-platform-browser/bibui-platform-browser.csproj" />
+    <ProjectReference Include="../bibui-raster-skia/bibui-raster-skia.csproj" />
+    <ProjectReference Include="../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
+    <ProjectReference Include="../bibui-testing/bibui-testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+  <!-- Each dependency at exactly the version it was packed with, as a Bibui.App
+       package's are: they are released together. -->
+  <Import Project="../bibui-apps/Directory.Build.targets" />
+</Project>

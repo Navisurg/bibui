@@ -8,6 +8,15 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
+- **`Bibui`: all of bibui in one reference.** The package `Bibui` is now a
+  package of dependencies only: `Bibui.App.SilkSkiaGl` (so `BibuiApp` opens a
+  Silk window drawn by Skia on the GPU), `Bibui.Core`, both windows
+  (`Bibui.Platform.Silk`, `Bibui.Platform.Wayland`), the browser host, both
+  renderers (`Bibui.Raster.Skia`, `Bibui.Raster.Managed.Backend`), `Bibui.Gl`
+  and `Bibui.Testing`, each at exactly its own version. An app that wants the
+  fewest dependencies, or another window or renderer, references the one
+  `Bibui.App` package it runs on instead; an app that referenced `Bibui` for the
+  core alone references `Bibui.Core`.
 - **bibui in the browser: `Bibui.Platform.Browser`.** `BrowserWindow` is a
   window on a `<canvas>` in a .NET WebAssembly app
   (`Microsoft.NET.Sdk.WebAssembly`, no Blazor), with `window.Events` and a

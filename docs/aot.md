@@ -40,7 +40,7 @@ HarfBuzz (`libfreetype6` and `libharfbuzz0b` on Debian and Ubuntu).
 
 ```bash
 dotnet new console -n Counter && cd Counter
-dotnet add package Bibui
+dotnet add package Bibui.Core
 dotnet add package Bibui.Platform.Wayland
 dotnet add package Bibui.Raster.Managed.Backend
 ```
