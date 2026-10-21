@@ -17,7 +17,6 @@ public readonly record struct SliderWidget(UiNode Node, float Value, Interaction
     public static implicit operator UiNode(SliderWidget widget) => widget.Node;
 
     /// <summary>So it goes straight into <c>Row(...)</c> or <c>Column(...)</c>.</summary>
-    public static implicit operator Arrange.Item(SliderWidget widget) => widget.Node;
 }
 
 /// <summary>

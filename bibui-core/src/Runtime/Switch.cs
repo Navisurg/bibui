@@ -115,12 +115,11 @@ public static class SwitchExtensions
         cell.ChildLayoutAxis = LayoutAxis.Y;
         cell.SizeX = SemanticSize.ChildrenSum();
         cell.SizeY = SemanticSize.Pixels(height);
-        using (runtime.PushParent(cell))
-        {
-            Arrange.Spring(cell);
-            runtime.Text(label, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
-            Arrange.Spring(cell);
-        }
+        runtime.BeginParent(cell);
+        runtime.BeginCenter();
+        runtime.Text(label, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
+        runtime.EndCenter();
+        runtime.EndParent(cell);
         return new BibuiWidget(row, interaction);
     }
 

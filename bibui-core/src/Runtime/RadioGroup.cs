@@ -61,56 +61,38 @@ public static class RadioGroupExtensions
                 row.SizeX = SemanticSize.ChildrenSum();
                 row.SizeY = SemanticSize.Pixels(theme.Density.Of(RowHeight));
 
-                using (runtime.PushParent(row))
-                {
-                    // The ring, centred down the row: a cell the row's height
-                    // with a spring above and below.
-                    using (runtime.PushParent(Cell(runtime)))
-                    {
-                        Arrange.Spring(runtime.ParentInScope);
-                        Box ring = runtime.Box();
-                        ring.ChildLayoutAxis = LayoutAxis.X;
-                        ring.Px(Ring, Ring);
-                        ring.Style.CornerRadius = FullRadius;
-                        ring.Style.BorderWidth = chosen ? theme.Borders.Strong : theme.Borders.Width;
-                        ring.Style.BorderColor = off ? UiColor.TextDisabled : chosen ? UiColor.Accent : UiColor.Border;
-                        ring.Style.Padding = EdgeInsets.All((Ring - Dot) / 2f);
-                        if (chosen)
-                        {
-                            using (runtime.PushParent(ring))
-                            {
-                                Box dot = runtime.Box();
-                                dot.Px(Dot, Dot);
-                                dot.Style.CornerRadius = FullRadius;
-                                dot.Style.BackgroundColor = off ? UiColor.TextDisabled : UiColor.Accent;
-                            }
-                        }
-                        Arrange.Spring(runtime.ParentInScope);
-                    }
+                runtime.BeginParent(row);
 
-                    if (item.Label.Length > 0)
-                    {
-                        runtime.Gap(LabelGap);
-                        using (runtime.PushParent(Cell(runtime)))
-                        {
-                            Arrange.Spring(runtime.ParentInScope);
-                            runtime.Text(item.Label, textColor: off ? TextColor.Disabled : TextColor.Primary);
-                            Arrange.Spring(runtime.ParentInScope);
-                        }
-                    }
+                // The ring, centred down the row.
+                runtime.BeginCenterAcross();
+                Box ring = runtime.Box();
+                ring.ChildLayoutAxis = LayoutAxis.X;
+                ring.Sized(Size.Px(Ring), Size.Px(Ring));
+                ring.Style.CornerRadius = FullRadius;
+                ring.Style.BorderWidth = chosen ? theme.Borders.Strong : theme.Borders.Width;
+                ring.Style.BorderColor = off ? UiColor.TextDisabled : chosen ? UiColor.Accent : UiColor.Border;
+                ring.Style.Padding = EdgeInsets.All((Ring - Dot) / 2f);
+                if (chosen)
+                {
+                    runtime.BeginParent(ring);
+                    Box dot = runtime.Box();
+                    dot.Sized(Size.Px(Dot), Size.Px(Dot));
+                    dot.Style.CornerRadius = FullRadius;
+                    dot.Style.BackgroundColor = off ? UiColor.TextDisabled : UiColor.Accent;
+                    runtime.EndParent(ring);
                 }
+                runtime.EndCenterAcross();
+
+                if (item.Label.Length > 0)
+                {
+                    runtime.Gap(LabelGap);
+                    runtime.BeginCenterAcross();
+                    runtime.Text(item.Label, textColor: off ? TextColor.Disabled : TextColor.Primary);
+                    runtime.EndCenterAcross();
+                }
+                runtime.EndParent(row);
             }
         }
         return new RadioGroupWidget(group, picked);
-    }
-
-    // A column as tall as the row it is in and as wide as what it holds.
-    private static Box Cell(BibuiRuntime runtime)
-    {
-        Box cell = runtime.Box();
-        cell.ChildLayoutAxis = LayoutAxis.Y;
-        cell.SizeX = SemanticSize.ChildrenSum();
-        cell.SizeY = SemanticSize.ParentPct(1f);
-        return cell;
     }
 }

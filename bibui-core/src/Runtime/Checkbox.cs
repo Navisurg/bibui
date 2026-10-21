@@ -36,53 +36,44 @@ public static class CheckboxExtensions
         row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
 
         bool filled = on || indeterminate;
-        using (runtime.PushParent(row))
+        runtime.BeginParent(row);
+        Box square = runtime.Box();
+        square.Sized(Size.Px(Square), Size.Px(Square));
+        square.Style.CornerRadius = Radius;
+        square.Style.BorderWidth = runtime.Theme.Borders.Width;
+        square.Style.BackgroundColor = filled ? UiColor.Accent : UiColor.Surface;
+        square.Style.BorderColor = disabled ? UiColor.TextDisabled : filled ? UiColor.Accent : UiColor.Border;
+
+        if (filled)
         {
-            Box square = runtime.Box();
-            square.Px(Square, Square);
-            square.Style.CornerRadius = Radius;
-            square.Style.BorderWidth = runtime.Theme.Borders.Width;
-            square.Style.BackgroundColor = filled ? UiColor.Accent : UiColor.Surface;
-            square.Style.BorderColor = disabled ? UiColor.TextDisabled : filled ? UiColor.Accent : UiColor.Border;
-
-            if (filled)
+            // Centred in the square, which has a size, both ways.
+            square.ChildLayoutAxis = LayoutAxis.X;
+            runtime.BeginParent(square);
+            runtime.BeginCenterX();
+            runtime.BeginCenterY();
+            if (indeterminate)
             {
-                // Centred in the square, which has a size: a spring either side on both axes.
-                using (runtime.PushParent(square))
-                {
-                    square.ChildLayoutAxis = LayoutAxis.X;
-                    Arrange.Spring(square);
-                    Box column = runtime.Box();
-                    column.ChildLayoutAxis = LayoutAxis.Y;
-                    column.SizeX = SemanticSize.ChildrenSum();
-                    column.SizeY = SemanticSize.ParentPct(1f);
-                    Arrange.Spring(square);
-                    using (runtime.PushParent(column))
-                    {
-                        Arrange.Spring(column);
-                        if (indeterminate)
-                        {
-                            Box dash = runtime.Box();
-                            dash.Px(DashWidth, DashHeight);
-                            dash.Style.CornerRadius = 1f;
-                            dash.Style.BackgroundColor = UiColor.AccentForeground;
-                        }
-                        else
-                        {
-                            Icon check = runtime.Icon("check", size: Mark);
-                            check.Color = UiColor.AccentForeground;
-                        }
-                        Arrange.Spring(column);
-                    }
-                }
+                Box dash = runtime.Box();
+                dash.Sized(Size.Px(DashWidth), Size.Px(DashHeight));
+                dash.Style.CornerRadius = 1f;
+                dash.Style.BackgroundColor = UiColor.AccentForeground;
             }
-
-            if (!label.IsEmpty)
+            else
             {
-                runtime.Gap(Gap);
-                runtime.Text(label, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
+                Icon check = runtime.Icon("check", size: Mark);
+                check.Color = UiColor.AccentForeground;
             }
+            runtime.EndCenterY();
+            runtime.EndCenterX();
+            runtime.EndParent(square);
         }
+
+        if (!label.IsEmpty)
+        {
+            runtime.Gap(Gap);
+            runtime.Text(label, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
+        }
+        runtime.EndParent(row);
         return new BibuiWidget(row, interaction);
     }
 }

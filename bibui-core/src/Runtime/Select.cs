@@ -61,7 +61,7 @@ public static class Select
         using (runtime.PushParent(trigger))
         {
             runtime.Text(text, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
-            Arrange.Spring(trigger);
+            runtime.Spacer(Size.Fill);
             Icon chevron = runtime.Icon(open ? "chevron-up" : "chevron-down", size: 16f);
             chevron.Color = UiColor.TextSecondary;
         }

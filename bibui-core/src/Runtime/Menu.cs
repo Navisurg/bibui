@@ -154,7 +154,7 @@ public static class MenuExtensions
             runtime.Text(label, textColor: ink);
             if (!shortcut.IsEmpty)
             {
-                Arrange.Spring(row);
+                runtime.Spacer(Size.Fill);
                 runtime.Text(shortcut, ComponentSize.Sm, UiColor.TextDisabled);
             }
         }

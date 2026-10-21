@@ -69,12 +69,11 @@ public static class ToggleGroupExtensions
                 item.Style.BackgroundColor = active ? UiColor.SurfaceRaised : (UiColor?)null;
 
                 // Centred in the item, which has the group's height.
-                using (runtime.PushParent(item))
-                {
-                    Arrange.Spring(item);
-                    runtime.Text(items[i].Label, textColor: active ? TextColor.Primary : TextColor.Secondary);
-                    Arrange.Spring(item);
-                }
+                runtime.BeginParent(item);
+                runtime.BeginCenter();
+                runtime.Text(items[i].Label, textColor: active ? TextColor.Primary : TextColor.Secondary);
+                runtime.EndCenter();
+                runtime.EndParent(item);
             }
         }
         return new ToggleGroupWidget(group, picked);

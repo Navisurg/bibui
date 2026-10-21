@@ -51,11 +51,10 @@ public static class KeyboardShortcut
         style.BackgroundColor = UiColor.SurfaceRaised;
         style.BorderColor = UiColor.Border;
         style.BorderWidth = runtime.Theme.Borders.Width;
-        using (runtime.PushParent(cap))
-        {
-            Arrange.Spring(cap);
-            runtime.Text(key, ComponentSize.Sm, TextColor.Primary);
-            Arrange.Spring(cap);
-        }
+        runtime.BeginParent(cap);
+        runtime.BeginCenter();
+        runtime.Text(key, ComponentSize.Sm, TextColor.Primary);
+        runtime.EndCenter();
+        runtime.EndParent(cap);
     }
 }

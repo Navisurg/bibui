@@ -144,19 +144,21 @@ public sealed partial class BibuiRuntime
     private void SweepFrame()
     {
         bool animating;
-        // A scope left open would link next frame's boxes under this
+        // A Begin left without its End would link next frame's boxes under this
         // frame's parent.
         bool unbalanced = _parentStack.Count > 0 || _axisStack.Count > 0
-            || _sizeXStack.Count > 0 || _sizeYStack.Count > 0 || _fontSizeStack.Count > 0 || _faceStack.Count > 0;
+            || _sizeXStack.Count > 0 || _sizeYStack.Count > 0 || _fontSizeStack.Count > 0 || _faceStack.Count > 0
+            || _centerStack.Count > 0;
         _parentStack.Clear();
         _axisStack.Clear();
         _sizeXStack.Clear();
         _sizeYStack.Clear();
         _fontSizeStack.Clear();
         _faceStack.Clear();
+        _centerStack.Clear();
         if (unbalanced)
             throw new InvalidOperationException(
-                "PushParent, PushAxis, PushFontSize, PushFontFace or a size scope was not disposed before the build returned; use them with `using`.");
+                "A BeginParent, BeginAxis, BeginSizeX, BeginSizeY, BeginFontSize, BeginFontFace or BeginCenter had no End before the build returned (or its Push scope was not disposed).");
 
         animating = StepHotAndActive();
         animating |= StepEased();

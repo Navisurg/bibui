@@ -15,7 +15,6 @@ public readonly record struct DialogWidget(Box Panel, bool Dismissed)
     public static implicit operator UiNode(DialogWidget widget) => widget.Panel;
 
     /// <summary>So it goes straight into <c>Row(...)</c> or <c>Column(...)</c>.</summary>
-    public static implicit operator Arrange.Item(DialogWidget widget) => widget.Panel;
 }
 
 /// <summary>
@@ -53,7 +52,7 @@ public static class Dialog
         // Opened in every frame it is built, so no press dismisses it.
         runtime.OpenDropDown(id);
         Box root = runtime.BeginDropDown(id)!;
-        root.Px(runtime.SurfaceWidth, runtime.SurfaceHeight).At(0f, 0f);
+        root.Sized(Size.Px(runtime.SurfaceWidth), Size.Px(runtime.SurfaceHeight)).At(0f, 0f);
         root.Style.BackgroundColor = Scrim.WithAlpha(ScrimAlpha * shown);
         bool across = side is DialogSide.Left or DialogSide.Right;
         root.ChildLayoutAxis = across ? LayoutAxis.X : LayoutAxis.Y;
@@ -62,46 +61,37 @@ public static class Dialog
         // under the parent in scope, so it is never linked a second time.
         float hidden = 1f - shown;
         Box panel;
-        using (runtime.PushParent(root))
+        runtime.BeginParent(root);
+        switch (side)
         {
-            switch (side)
-            {
-                case DialogSide.Center:
-                {
-                    Arrange.Spring(root);
-                    var row = runtime.Box();
-                    row.ChildLayoutAxis = LayoutAxis.X;
-                    row.SizeX = SemanticSize.ParentPct(1f);
-                    row.SizeY = SemanticSize.ChildrenSum();
-                    using (runtime.PushParent(row))
-                    {
-                        Arrange.Spring(row);
-                        panel = Panel(runtime, id, shown, SemanticSize.Pixels(width), SemanticSize.ChildrenSum());
-                        panel.Style.CornerRadius = Radius;
-                        Arrange.Spring(row);
-                    }
-                    Arrange.Spring(root);
-                    // Slid down into place from a little above.
-                    root.ViewOffset = new System.Numerics.Vector2(0f, Travel * hidden);
-                    break;
-                }
-                case DialogSide.Left or DialogSide.Right:
-                    if (side == DialogSide.Right) Arrange.Spring(root);
-                    panel = Panel(runtime, id, shown, SemanticSize.Pixels(width), SemanticSize.ParentPct(1f));
-                    if (side == DialogSide.Left) Arrange.Spring(root);
-                    // Slid in from its edge, its whole width.
-                    root.ViewOffset = new System.Numerics.Vector2((side == DialogSide.Right ? -1f : 1f) * width * hidden, 0f);
-                    break;
-                default:
-                    if (side == DialogSide.Bottom) Arrange.Spring(root);
-                    panel = Panel(runtime, id, shown, SemanticSize.ParentPct(1f), SemanticSize.ChildrenSum());
-                    if (side == DialogSide.Top) Arrange.Spring(root);
-                    // As tall as it was drawn last frame; a first frame slides from just off its edge.
-                    float height = MathF.Max(panel.Extent.Y, Travel);
-                    root.ViewOffset = new System.Numerics.Vector2(0f, (side == DialogSide.Bottom ? -1f : 1f) * height * hidden);
-                    break;
-            }
+            case DialogSide.Center:
+                // Centred both ways in the screen.
+                runtime.BeginCenter();
+                runtime.BeginCenterAcross();
+                panel = Panel(runtime, id, shown, SemanticSize.Pixels(width), SemanticSize.ChildrenSum());
+                panel.Style.CornerRadius = Radius;
+                runtime.EndCenterAcross();
+                runtime.EndCenter();
+                // Slid down into place from a little above.
+                root.ViewOffset = new System.Numerics.Vector2(0f, Travel * hidden);
+                break;
+            case DialogSide.Left or DialogSide.Right:
+                if (side == DialogSide.Right) runtime.Spacer(Size.Fill);
+                panel = Panel(runtime, id, shown, SemanticSize.Pixels(width), SemanticSize.ParentPct(1f));
+                if (side == DialogSide.Left) runtime.Spacer(Size.Fill);
+                // Slid in from its edge, its whole width.
+                root.ViewOffset = new System.Numerics.Vector2((side == DialogSide.Right ? -1f : 1f) * width * hidden, 0f);
+                break;
+            default:
+                if (side == DialogSide.Bottom) runtime.Spacer(Size.Fill);
+                panel = Panel(runtime, id, shown, SemanticSize.ParentPct(1f), SemanticSize.ChildrenSum());
+                if (side == DialogSide.Top) runtime.Spacer(Size.Fill);
+                // As tall as it was drawn last frame; a first frame slides from just off its edge.
+                float height = MathF.Max(panel.Extent.Y, Travel);
+                root.ViewOffset = new System.Numerics.Vector2(0f, (side == DialogSide.Bottom ? -1f : 1f) * height * hidden);
+                break;
         }
+        runtime.EndParent(root);
         return new DialogScope(runtime, root, panel, runtime.PushParent(panel));
     }
 

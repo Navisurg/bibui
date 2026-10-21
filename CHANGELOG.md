@@ -31,6 +31,25 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Changed
 
+- **Layout is said with a few fast paths over the primitives (breaking).**
+  `Arrange` and the sized rows and columns (`RowFit`, `RowFillX`, `ColumnFill`,
+  `ColumnPx`, …), `Spring` and `Centred` are gone. In their place:
+  - `Row()` and `Column()` are as large as their children on any axis no size
+    is pushed for, and `.Sized(x, y)` sets the axes it is given:
+    `Row().Sized(Size.Fill, runtime.Em(2.5f))` is a toolbar.
+  - `Size.Fit`, `Size.Fill`, `Size.Pct`, `Size.Px` and `Size.Text` name the
+    sizes, and `runtime.Em(n)` is `n` times the font size in scope.
+  - `Gap(px)` and `Spacer(size)` space along the parent's axis;
+    `Spacer(Size.Fill)` is a spring.
+  - `BeginCenter` centres along the parent's axis, `BeginCenterAcross` across
+    it, and `BeginCenterX`/`BeginCenterY` choose between them by the parent's
+    axis.
+  - Every scope has a `Begin`/`End` pair (`BeginParent(box)`/`EndParent(box)`,
+    `BeginAxis`, `BeginSizeX`, `BeginFontSize`, `BeginFontFace`, the centres),
+    and `Push…` is the `Begin` handing back a scope whose `Dispose` is the
+    `End`.
+  - `.At(x, y)` floats a node; `Styled`, `Padded` and `Clipped` are the
+    node's fields, set as such.
 - **Only the frame's ground is in the theme's background.** A tooltip's text
   and the active tab are drawn in `Surface`, not `Background`, so a theme
   whose background is transparent (`#00000000`) gives a transparent frame for

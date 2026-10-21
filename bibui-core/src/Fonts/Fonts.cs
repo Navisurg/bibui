@@ -179,7 +179,7 @@ public sealed class Fonts : IDisposable
     /// and one line tall. A text is one line whatever room it is given; what
     /// breaks into lines is composed from texts, as a multi-line field is.
     /// </summary>
-    internal Size Measure(Text text, in Font font)
+    internal Bibui.Core.Draw.Size Measure(Text text, in Font font)
         => new(Measure(text.Content, font), LineHeight(font));
 
     // ── Public: measuring in a Font ──────────────────────────────────────────

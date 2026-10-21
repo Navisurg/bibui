@@ -272,8 +272,12 @@ internal static unsafe class HostTests
             // into by a renderer, and compared with the same frame drawn packed.
             var runtime = BibuiRuntime.Create();
             using var skia = new SkiaCpuRenderer();
-            runtime.SetBuild(() => Bibui.Core.Arrange.FillY(Bibui.Core.Arrange.FillX(runtime.Box()))
-                    .Styled(new Bibui.Core.Style { BackgroundColor = Bibui.Core.UiColor.Accent, CornerRadius = 8f }),
+            runtime.SetBuild(() =>
+                {
+                    var box = runtime.Box().Sized(Bibui.Core.Size.Fill, Bibui.Core.Size.Fill);
+                    box.Style = new Bibui.Core.Style { BackgroundColor = Bibui.Core.UiColor.Accent, CornerRadius = 8f };
+                    return box;
+                },
                 new Bibui.Core.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });
             pool = new BufferPool<ShmBuffer>(new ShmAllocator(_shm, bufferListener, null), depth: 2);
             var buffer = pool.TryAcquire(64, 48)!;

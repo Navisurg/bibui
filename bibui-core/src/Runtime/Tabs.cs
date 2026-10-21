@@ -13,7 +13,6 @@ public readonly record struct TabsWidget(Box Node, string? Picked)
     public static implicit operator UiNode(TabsWidget widget) => widget.Node;
 
     /// <summary>So it goes straight into <c>Row(...)</c> or <c>Column(...)</c>.</summary>
-    public static implicit operator Arrange.Item(TabsWidget widget) => widget.Node;
 }
 
 /// <summary>
@@ -104,12 +103,11 @@ public static class TabsExtensions
                 tab.Style.HoverBackgroundColor = active ? (UiColor?)null : UiColor.SurfaceRaisedHover;
 
                 // Centred down the tab, which has the strip's height.
-                using (runtime.PushParent(tab))
-                {
-                    Arrange.Spring(tab);
-                    runtime.Text(items[i].Label, textColor: active ? TextColor.Primary : TextColor.Secondary);
-                    Arrange.Spring(tab);
-                }
+                runtime.BeginParent(tab);
+                runtime.BeginCenter();
+                runtime.Text(items[i].Label, textColor: active ? TextColor.Primary : TextColor.Secondary);
+                runtime.EndCenter();
+                runtime.EndParent(tab);
             }
         }
         return new TabsWidget(strip, picked);

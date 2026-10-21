@@ -37,7 +37,7 @@ public abstract class UiNode
     /// A node that already has a parent is moved: it is unlinked from that
     /// parent first, so a node made under the parent in scope (by
     /// <c>runtime.Text</c>, <c>runtime.Box</c>, a component) can be pushed
-    /// somewhere else afterwards, as the <c>Arrange</c> expressions do. Pushed
+    /// somewhere else afterwards. Pushed
     /// into the parent it is already in, it moves to the end. Pushing a node
     /// into itself or into one of its own descendants throws.
     /// </summary>

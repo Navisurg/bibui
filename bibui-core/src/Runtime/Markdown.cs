@@ -21,7 +21,6 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
     public static implicit operator UiNode(MarkdownWidget widget) => widget.Node;
 
     /// <summary>So it goes straight into <c>Row(...)</c> or <c>Column(...)</c>.</summary>
-    public static implicit operator Arrange.Item(MarkdownWidget widget) => widget.Node;
 }
 
 /// <summary>

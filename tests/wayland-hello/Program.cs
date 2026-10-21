@@ -42,8 +42,8 @@ void Build()
     if (animate) runtime.RequestFrame();
     float t = (MathF.Sin(frame / 40f) + 1f) / 2f;
 
-    var page = runtime.ColumnFill()
-        .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(28f) });
+    var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+    page.Style = new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(28f) };
     using var inPage = runtime.PushParent(page);
     using (runtime.PushFontFace(weight: FontWeight.Bold))
         runtime.Text("Hello from raw Wayland", ComponentSize.Xxl, TextColor.Primary);
@@ -63,7 +63,7 @@ void Build()
     // A press focuses the field; Escape or Enter lets it go.
     Box field = runtime.Box();
     TextField.InputStyle(runtime, field, typing);
-    field.FillX().Px(height: 40f);
+    field.Sized(Size.Fill, Size.Px(40f));
     BibuiWidget line;
     using (runtime.PushParent(field))
         line = runtime.TextField("typed", typed, typedEdit, typing,
@@ -78,14 +78,14 @@ void Build()
     runtime.Gap(16f);
 
     // The bar a frame moves: a groove and a fill inside it.
-    Box groove = runtime.Box().FillX().Px(height: 14f);
+    Box groove = runtime.Box().Sized(Size.Fill, Size.Px(14f));
     groove.Style.CornerRadius = 7f;
     groove.Style.BackgroundColor = UiColor.SurfaceRaised;
     groove.Style.BorderColor = UiColor.Border;
     groove.Style.Padding = EdgeInsets.All(1f);
     using (runtime.PushParent(groove))
     {
-        Box fill = runtime.Box().Px(24f + t * 420f, 12f);
+        Box fill = runtime.Box().Sized(Size.Px(24f + t * 420f), Size.Px(12f));
         fill.Style.CornerRadius = 6f;
         fill.Style.BackgroundColor = UiColor.Accent;
     }
@@ -101,7 +101,7 @@ void Build()
     else if (p.MiddlePressed) lastButton = "middle";
     if (p.Hovering) lastModifiers = p.Modifiers;
 
-    pad.FillX().Px(height: 96f);
+    pad.Sized(Size.Fill, Size.Px(96f));
     pad.ChildLayoutAxis = LayoutAxis.Y;
     pad.Style.CornerRadius = 10f;
     pad.Style.Padding = EdgeInsets.All(12f);

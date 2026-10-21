@@ -148,20 +148,9 @@ public sealed partial class BibuiRuntime
 
     /// <summary>
     /// A gap of <paramref name="pixels"/> along the axis of the parent in
-    /// scope, and nothing across it: a keyless spacer, as
-    /// <see cref="Arrange.Gap"/> pushes, without naming the parent and taken
-    /// from this runtime's pool rather than allocated.
+    /// scope, and nothing across it: <see cref="Spacer"/> of <see cref="Size.Px"/>.
     /// </summary>
-    public Box Gap(float pixels)
-    {
-        var parent = _parentStack.Count > 0 ? _parentStack[^1]
-            : throw new InvalidOperationException("A gap is along its parent's axis, and there is no parent in scope.");
-        var gap = Box();
-        bool along = parent.ChildLayoutAxis == LayoutAxis.X;
-        gap.SizeX = along ? SemanticSize.Pixels(pixels) : SemanticSize.Pixels(0f);
-        gap.SizeY = along ? SemanticSize.Pixels(0f) : SemanticSize.Pixels(pixels);
-        return gap;
-    }
+    public Box Gap(float pixels) => Spacer(Size.Px(pixels));
 
     // A text is the one node sized by what it holds: on an axis with nothing
     // pushed, it is as large as its text.
