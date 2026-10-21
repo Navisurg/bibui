@@ -1,8 +1,8 @@
 using System.Numerics;
-using Bibui;
-using Bibui.Runtime;
-using Bibui.TextEdit;
-using Bibui.Theming;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
+using Bibui.Core.Theming;
 using Bibui.Raster.Skia;
 
 /// <summary>

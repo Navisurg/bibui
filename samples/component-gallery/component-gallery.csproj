@@ -9,7 +9,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
     <!-- The cross-platform host (GLFW + GL): SilkWindow.Open(runtime, ...) opens on it. -->
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />

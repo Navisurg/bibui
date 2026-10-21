@@ -1,7 +1,7 @@
-using Bibui;
-using Bibui.Runtime;
-using Bibui.TextEdit;
-using Bibui.Theming;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
+using Bibui.Core.Theming;
 using static Showcase.Ui;
 
 namespace Showcase;
@@ -65,7 +65,7 @@ internal sealed partial class App
     {
         ThemeTokens t = ThemeFileName is { } file
             ? ThemeRegistry.Load(file)
-            : Bibui.Theming.Theme.FromSeed(Accent, neutral: "#64748B", radius: Radius, density: Density,
+            : Bibui.Core.Theming.Theme.FromSeed(Accent, neutral: "#64748B", radius: Radius, density: Density,
                 mode: Dark ? ThemeMode.Dark : ThemeMode.Light, name: "zenith");
         t = t with { Elevation = Dark ? ElevationTokens.Soft : LightElevation };
         // Reduced motion: the whole group copied to change one field, as token
@@ -128,7 +128,7 @@ internal sealed partial class App
     }
 
     /// <summary>One whole frame: BeginBuild with the frame's input (none, headless), the app, EndBuild.</summary>
-    public void Frame(BibuiRuntime rt, List<Bibui.Runtime.Platform.WindowEvent>? events = null)
+    public void Frame(BibuiRuntime rt, List<Bibui.Core.Runtime.Platform.WindowEvent>? events = null)
     {
         rt.BeginBuild(events);
         Build(rt);

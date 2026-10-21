@@ -27,7 +27,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../src/Bibui.Raster.Managed.csproj" />
-    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

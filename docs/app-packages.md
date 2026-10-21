@@ -9,7 +9,7 @@ dotnet add package Bibui.App.SilkSkiaGl
 
 ```csharp
 using Bibui.App;
-using Bibui.Runtime;
+using Bibui.Core.Runtime;
 
 var runtime = BibuiRuntime.Create();
 using var app = BibuiApp.Open(runtime, new("Counter", 360, 160));
@@ -41,10 +41,10 @@ while (app.BeginFrame())
 the package changes how the app is drawn, and nothing in its code. Because it
 is the same type, an app references exactly one `Bibui.App` package, and a
 library references none: two in one app do not compile (CS0433). A library
-takes the parts it needs (`Bibui`, a renderer) and leaves the choice of window
+takes the parts it needs (`Bibui.Core`, a renderer) and leaves the choice of window
 and renderer to the app.
 
-Each package depends on exactly the version of `Bibui`, its window and its
+Each package depends on exactly the version of `Bibui.Core`, its window and its
 renderer that it was built with (`[0.10.1]`, not `>= 0.10.1`). They are
 released together, so an app that also references one of them directly
 references the same version.
@@ -100,7 +100,7 @@ off.
 ## Writing the loop yourself
 
 A `Bibui.App` package is a window package and a renderer package, put
-together. Reference those instead (for `SilkSkiaGl`: `Bibui`,
+together. Reference those instead (for `SilkSkiaGl`: `Bibui.Core`,
 `Bibui.Platform.Silk`, `Bibui.Raster.Skia`) to write the loop yourself, draw
 more than one renderer into a window, or bring a window or renderer of your
 own:

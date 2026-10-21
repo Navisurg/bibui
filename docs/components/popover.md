@@ -49,8 +49,8 @@ pointer is over the trigger or the card, and closes it when it is over neither.
 ## Example
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 sealed class SharePopover
 {

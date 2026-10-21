@@ -26,12 +26,12 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- The window and renderer this package is, under the names BibuiApp.cs uses. -->
-    <Using Include="Bibui.Runtime.Platform.SilkWindow" Alias="AppWindow" />
+    <Using Include="Bibui.Core.Runtime.Platform.SilkWindow" Alias="AppWindow" />
     <Using Include="Bibui.Raster.Managed.Backend.ManagedRenderer" Alias="AppRenderer" />
     <Compile Include="../BibuiApp.cs" Link="BibuiApp.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
     <!-- GlCpuFramebuffer: the CPU frame shown on the window's GL framebuffer. -->
     <ProjectReference Include="../../bibui-gl/bibui-gl.csproj" />

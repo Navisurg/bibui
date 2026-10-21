@@ -1,6 +1,6 @@
-using Bibui;
-using Bibui.Draw;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Draw;
+using Bibui.Core.Runtime;
 
 namespace Showcase;
 
@@ -62,7 +62,7 @@ internal static class Charts
         int? h = hover;
         host.Draw = (_, ctx) =>
         {
-            bool reduced = ctx.Theme.Motion.Easing == Bibui.Theming.MotionEasing.None;
+            bool reduced = ctx.Theme.Motion.Easing == Bibui.Core.Theming.MotionEasing.None;
             Rgba line = ctx.Resolve(color);
             Rgba grid = ctx.Resolve(UiColor.Border);
             Rgba text = ctx.Resolve(UiColor.TextSecondary);

@@ -29,7 +29,7 @@
     <Compile Include="../BibuiApp.cs" Link="BibuiApp.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
     <ProjectReference Include="../../bibui-platform-wayland/bibui-platform-wayland.csproj" />
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
   </ItemGroup>

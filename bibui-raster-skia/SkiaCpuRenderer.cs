@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using Bibui.Draw;
+using Bibui.Core.Draw;
 using SkiaSharp;
 
 namespace Bibui.Raster.Skia;

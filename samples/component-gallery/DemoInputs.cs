@@ -1,6 +1,6 @@
-using Bibui;
-using Bibui.Runtime;
-using Bibui.TextEdit;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
 
 namespace ComponentGallery;
 
@@ -281,7 +281,7 @@ internal static class DemoInputs
     {
         if (Focused is null) return;
         foreach (var ev in runtime.UnconsumedEvents)
-            if (ev is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: BibUiEventKind.Submit })
+            if (ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape } or { Kind: BibUiEventKind.Submit })
             {
                 Focused = null;
                 ev.Eat();

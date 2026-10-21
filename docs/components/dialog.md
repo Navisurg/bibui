@@ -63,8 +63,8 @@ Whether it is open. The eased `shown` lives in `runtime.Animate`.
 ## Example
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 sealed class DeleteConfirmation
 {

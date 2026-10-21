@@ -120,8 +120,8 @@ None of the three claims or reports anything.
 ## Example
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 sealed class SearchStatus
 {

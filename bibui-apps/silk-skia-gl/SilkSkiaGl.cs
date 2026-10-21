@@ -1,7 +1,7 @@
-using Bibui.Draw;
+using Bibui.Core.Draw;
 using Bibui.Raster.Skia;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 
 namespace Bibui.App;
 

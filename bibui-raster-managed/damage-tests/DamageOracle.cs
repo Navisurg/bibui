@@ -1,11 +1,11 @@
 using System.Numerics;
-using Bibui;
-using Bibui.Draw;
+using Bibui.Core;
+using Bibui.Core.Draw;
 using Surface = Bibui.Raster.Managed.Surface;
 using Bibui.Raster.Managed.Backend;
-using Bibui.Runtime;
-using Bibui.TextEdit;
-using Bibui.Theming;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
+using Bibui.Core.Theming;
 
 /// <summary>
 /// The damage oracle: every scene runs on two runtimes side by side, each drawn

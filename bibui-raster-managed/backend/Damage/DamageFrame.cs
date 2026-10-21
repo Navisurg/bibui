@@ -1,5 +1,6 @@
 using System.Numerics;
-using Bibui.Draw;
+using Bibui.Core;
+using Bibui.Core.Draw;
 
 namespace Bibui.Raster.Managed.Backend.Damage;
 
@@ -322,7 +323,7 @@ internal sealed class DamageFrame
     /// </summary>
     private PixelRect Covered(in DrawOp op, DrawList list)
     {
-        if (op.Paint.Style != Bibui.PaintStyle.Fill || op.MaskBlurSigma > 0f || op.ImageBlurSigma > 0f
+        if (op.Paint.Style != Bibui.Core.PaintStyle.Fill || op.MaskBlurSigma > 0f || op.ImageBlurSigma > 0f
             || _s.Layers != 0 || op.Paint.Color.A != 255 || !AxisAligned) return default;
         if (op.Shading.Present)
             foreach (var c in list.Colors.Slice(op.Shading.ColorStart, op.Shading.ColorCount)) if (c.A != 255) return default;
@@ -343,7 +344,7 @@ internal sealed class DamageFrame
 
     /// <summary>Half a stroke's width, local units — how far it reaches past its geometry — a hairline's half pixel at least; 0 for a fill.</summary>
     private static float StrokeHalf(in DrawOp op) =>
-        op.Paint.Style == Bibui.PaintStyle.Fill ? 0f : MathF.Max(1f, op.Paint.StrokeWidth) / 2f;
+        op.Paint.Style == Bibui.Core.PaintStyle.Fill ? 0f : MathF.Max(1f, op.Paint.StrokeWidth) / 2f;
 
     private static RectF Inflate(RectF r, float d) => new(
         MathF.Min(r.Left, r.Right) - d, MathF.Min(r.Top, r.Bottom) - d,

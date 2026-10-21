@@ -1,6 +1,6 @@
 # Components
 
-bibui's components are plain functions in the `Bibui.Runtime` namespace. Each one
+bibui's components are plain functions in the `Bibui.Core.Runtime` namespace. Each one
 builds a few boxes and texts under the parent in scope and returns what happened
 to them this frame. None of them owns state, and none of them has a renderer of
 its own: the ordinary painter draws every one.
@@ -57,7 +57,7 @@ fill between `Begin` and `End` return a scope, and `End()` gives the result.
 ### The examples
 
 Each example on these pages is a whole C# file that compiles against the
-`Bibui` package. The caller's state is in the fields of a small class, and its
+`Bibui.Core` package. The caller's state is in the fields of a small class, and its
 `Build(runtime)` method is meant to be called from your build function every
 frame. Each screenshot is the reference picture of a fixture in bibui's pixel
 verification suite, which checks every component against its pictures on each

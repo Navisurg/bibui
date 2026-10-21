@@ -23,7 +23,7 @@
     <!-- BibuiRuntime, WindowInput and CpuTarget. The window uses no Silk.NET
          and no SkiaSharp type: the app's renderer draws into its shm buffer
          through window.Cpu. -->
-    <ProjectReference Include="../bibui/bibui.csproj" />
+    <ProjectReference Include="../bibui-core/bibui-core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="bibui-wayland-tests" />

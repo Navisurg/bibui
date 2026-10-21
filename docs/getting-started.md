@@ -15,7 +15,7 @@ cd Stepper
 dotnet add package Bibui.App.SilkSkiaGl
 ```
 
-`Bibui.App.SilkSkiaGl` brings the three parts an app needs: `Bibui`, the
+`Bibui.App.SilkSkiaGl` brings the three parts an app needs: `Bibui.Core`, the
 library; `Bibui.Platform.Silk`, a platform that opens the window (GLFW) and puts
 frames on screen with OpenGL; and `Bibui.Raster.Skia`, the renderer that draws
 them, with Skia on the GPU. This route runs on the JIT; for a single native
@@ -42,10 +42,10 @@ git clone https://github.com/Navisurg/bibui ../bibui
 Replace `Program.cs`:
 
 ```csharp
-using Bibui;
+using Bibui.Core;
 using Bibui.App;
-using Bibui.Runtime;
-using static Bibui.Arrange;
+using Bibui.Core.Runtime;
+using static Bibui.Core.Arrange;
 
 var runtime = BibuiRuntime.Create();
 var hello = "Hello, bibui";
@@ -95,9 +95,9 @@ does not change yours: the app decides what a press means.
 Add `Stepper.cs`, a number with a minus and a plus button:
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
-using static Bibui.Arrange;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using static Bibui.Core.Arrange;
 
 /// <summary>What a stepper built this frame: its node, and the value after any press.</summary>
 public readonly record struct StepperWidget(Box Node, int Value);
@@ -136,9 +136,9 @@ Two things to notice:
 The app's state is the app's own fields; bibui never holds it. Add `App.cs`:
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
-using static Bibui.Arrange;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using static Bibui.Core.Arrange;
 
 public sealed class App
 {
@@ -176,7 +176,7 @@ And `Program.cs` becomes:
 
 ```csharp
 using Bibui.App;
-using Bibui.Runtime;
+using Bibui.Core.Runtime;
 
 var runtime = BibuiRuntime.Create();
 var stepper = new App();
@@ -224,7 +224,7 @@ full.
 Set the theme on the runtime, by name, before the loop:
 
 ```csharp
-runtime.SetTheme(ThemeRegistry.Load("default-light"));   // namespace Bibui.Theming
+runtime.SetTheme(ThemeRegistry.Load("default-light"));   // namespace Bibui.Core.Theming
 ```
 
 `ThemeRegistry.Names` lists the themes available, `default-dark` and
@@ -253,7 +253,7 @@ dotnet add reference ../Stepper/Stepper.csproj
 
 ```csharp
 using Bibui.Testing;
-using Bibui.Theming;
+using Bibui.Core.Theming;
 using Xunit;
 
 public class StepperTests

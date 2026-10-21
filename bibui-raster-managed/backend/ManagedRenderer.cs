@@ -1,18 +1,19 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using Bibui.Draw;
-using Bibui.FreeType;
+using Bibui.Core;
+using Bibui.Core.Draw;
+using Bibui.Core.FreeType;
 using Bibui.Raster.Managed.Backend.Damage;
-using BPaintStyle = Bibui.PaintStyle;
-using BStrokeCap = Bibui.StrokeCap;
-using BStrokeJoin = Bibui.StrokeJoin;
-using BPathVerb = Bibui.Draw.PathVerb;
+using BPaintStyle = Bibui.Core.PaintStyle;
+using BStrokeCap = Bibui.Core.StrokeCap;
+using BStrokeJoin = Bibui.Core.StrokeJoin;
+using BPathVerb = Bibui.Core.Draw.PathVerb;
 using MPath = Bibui.Raster.Managed.Path;
 
 namespace Bibui.Raster.Managed.Backend;
 
-// Bibui.TextColor (a theme role) is nearer than the using above; here a text colour is the engine's.
-using FtTextColor = Bibui.FreeType.TextColor;
+// Bibui.Core.TextColor (a theme role) is nearer than the using above; here a text colour is the engine's.
+using FtTextColor = Bibui.Core.FreeType.TextColor;
 
 /// <summary>
 /// Draws a <see cref="DrawList"/> with the managed rasterizer and the

@@ -81,8 +81,8 @@ item clicked is usually your cue to act and close the menu.
 ## Example
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 sealed class AccountMenu
 {
@@ -119,8 +119,8 @@ For a context menu, ask about the area that opens it, and open the menu at the
 pointer on its right press:
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 sealed class FileContextMenu
 {

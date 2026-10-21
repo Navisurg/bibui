@@ -1,9 +1,9 @@
-using Bibui;
-using Bibui.Imaging;
-using Bibui.Draw;
+using Bibui.Core;
+using Bibui.Core.Imaging;
+using Bibui.Core.Draw;
 using Bibui.Raster.Skia;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 
 /// <summary>A frame's pixels, as a test reads them: BGRA8888 premultiplied, top row first.</summary>
 public sealed record Pixels(byte[] RawBgraBytes, int Width, int Height)
@@ -42,7 +42,7 @@ public static class Frames
     }
 
     /// <summary>A free-standing tree as a runtime's whole frame, built and drawn with Skia.</summary>
-    public static Pixels Frame(UiNode root, SurfaceOptions surface, Bibui.Theming.ThemeTokens theme)
+    public static Pixels Frame(UiNode root, SurfaceOptions surface, Bibui.Core.Theming.ThemeTokens theme)
     {
         var runtime = BibuiRuntime.Create();
         runtime.SetBuild(() => root, theme, surface);
@@ -61,10 +61,10 @@ public static class TestBuild
 
     /// <summary>Keeps <paramref name="build"/> as the test's, on a surface (800×600 at 1× by default) in a theme.</summary>
     public static void SetBuild(this BibuiRuntime runtime, Func<UiNode> build, SurfaceOptions? surface = null, string theme = "bibui-dark")
-        => runtime.SetBuild(build, Bibui.Theming.ThemeRegistry.Load(theme), surface);
+        => runtime.SetBuild(build, Bibui.Core.Theming.ThemeRegistry.Load(theme), surface);
 
     /// <inheritdoc cref="SetBuild(BibuiRuntime, Func{UiNode}, SurfaceOptions?, string)"/>
-    public static void SetBuild(this BibuiRuntime runtime, Func<UiNode> build, Bibui.Theming.ThemeTokens theme, SurfaceOptions? surface = null)
+    public static void SetBuild(this BibuiRuntime runtime, Func<UiNode> build, Bibui.Core.Theming.ThemeTokens theme, SurfaceOptions? surface = null)
     {
         s_builds.AddOrUpdate(runtime, build);
         runtime.Surface = surface ?? new SurfaceOptions { Width = 800, Height = 600, ScaleFactor = 1f };

@@ -1,4 +1,6 @@
 
+using Bibui.Core;
+
 namespace Bibui.Platform.Wayland;
 
 /// <summary>

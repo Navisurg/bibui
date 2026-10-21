@@ -1,4 +1,4 @@
-using Bibui.Draw;
+using Bibui.Core.Draw;
 using Bibui.Gl;
 using SkiaSharp;
 using Silk.NET.OpenGL;

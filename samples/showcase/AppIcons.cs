@@ -1,4 +1,4 @@
-using Bibui;
+using Bibui.Core;
 
 namespace Showcase;
 

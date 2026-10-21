@@ -1,7 +1,7 @@
-using Bibui;
-using Bibui.Runtime;
-using Bibui.TextEdit;
-using Bibui.Theming;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
+using Bibui.Core.Theming;
 using static Showcase.Ui;
 
 namespace Showcase;
@@ -104,13 +104,13 @@ internal sealed partial class App
         Section(rt, "Density");
         var density = rt.RadioGroup("settings-density", DensityOptions, Density switch
         {
-            Bibui.Theming.Density.Compact => "compact",
-            Bibui.Theming.Density.Comfortable => "comfortable",
+            Bibui.Core.Theming.Density.Compact => "compact",
+            Bibui.Core.Theming.Density.Comfortable => "comfortable",
             _ => "default",
         });
         if (density.Picked is { } d)
         {
-            Density = d switch { "compact" => Bibui.Theming.Density.Compact, "comfortable" => Bibui.Theming.Density.Comfortable, _ => Bibui.Theming.Density.Default };
+            Density = d switch { "compact" => Bibui.Core.Theming.Density.Compact, "comfortable" => Bibui.Core.Theming.Density.Comfortable, _ => Bibui.Core.Theming.Density.Default };
             ThemeFileName = null;
         }
         rt.Gap(22f);

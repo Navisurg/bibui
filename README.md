@@ -50,7 +50,7 @@ and a button that counts its clicks.
 
 ```csharp
 using Bibui.App;
-using Bibui.Runtime;
+using Bibui.Core.Runtime;
 
 var runtime = BibuiRuntime.Create();
 using var app = BibuiApp.Open(runtime, new("Counter", 360, 160));
@@ -115,7 +115,7 @@ inline, with no callbacks.
 ### Writing the loop yourself
 
 A `Bibui.App` package is a window package and a renderer package, put
-together. Reference those instead (`Bibui`, `Bibui.Platform.Silk`,
+together. Reference those instead (`Bibui.Core`, `Bibui.Platform.Silk`,
 `Bibui.Raster.Skia`) and the same loop is:
 
 ```csharp
@@ -195,13 +195,13 @@ decides which other dependencies it needs. In every case the dependency tree is 
 
 | Package | NuGet dependencies | System libraries |
 |---|---|---|
-| `Bibui` | `System.IO.Hashing` | `libfreetype6`, `libharfbuzz0b` (text) |
+| `Bibui.Core` | `System.IO.Hashing` | `libfreetype6`, `libharfbuzz0b` (text) |
 | `Bibui.Raster.Skia` | `SkiaSharp` (with its Linux native assets), `Bibui.Gl` | `libfontconfig1` |
 | `Bibui.Gl` | `Silk.NET.OpenGL` (the GL binding only) | an OpenGL driver |
 | `Bibui.Platform.Silk` | `Silk.NET` windowing, input and OpenGL (GLFW), `Bibui.Gl`, `TextCopy` | an OpenGL driver; GLFW itself ships with Silk.NET |
 | `Bibui.Platform.Wayland` | none | `libwayland-client`, `libwayland-cursor`, `libxkbcommon` |
 | `Bibui.Platform.Browser` | none | none: FreeType and HarfBuzz ship inside it, built for the browser; building an app needs the `wasm-tools` workload |
-| `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`) | none beyond `Bibui`'s |
+| `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`) | none beyond `Bibui.Core`'s |
 
 The Wayland + managed route has no third-party NuGet dependencies at all, and
 it is the route that publishes with Native AOT; Silk.NET keeps the other on the
@@ -228,7 +228,7 @@ JIT for now.
 ## Building from source
 
 ```bash
-dotnet build bibui/bibui.csproj -c Release
+dotnet build bibui-core/bibui-core.csproj -c Release
 dotnet run --project tests/bibui-runtime-tests -c Release   # runtime, components and layout tests
 dotnet run --project samples/component-gallery              # every component in one window
 ```

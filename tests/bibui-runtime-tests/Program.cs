@@ -1,13 +1,13 @@
 using System.Diagnostics;
-using Bibui;
-using Bibui.Theming;
+using Bibui.Core;
+using Bibui.Core.Theming;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Raster.Skia;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 using Bibui.Testing;
-using Bibui.TextEdit;
+using Bibui.Core.TextEdit;
 
 // ── Test runner ───────────────────────────────────────────────────────────────
 
@@ -157,7 +157,7 @@ static UiNode Btn(BibuiRuntime runtime, string id, string label, Action? onClick
 Console.WriteLine("bibui-runtime-tests");
 Console.WriteLine("===================");
 
-// ── Bibui.Key / Bibui.MouseButton ────────────────────────────────────
+// ── Bibui.Core.Key / Bibui.Core.MouseButton ────────────────────────────────────
 
 // The Silk host converts with a cast, and the test server parses key names,
 // so both enums must keep Silk.NET.Input's names and values exactly.
@@ -166,14 +166,14 @@ Run("Key and MouseButton: Silk.NET.Input's names, with Silk's values", () =>
     foreach (var silk in Enum.GetValues<Silk.NET.Input.Key>())
     {
         string name = silk.ToString();
-        IsTrue(Enum.TryParse<Key>(name, out var ours), $"Bibui.Key has no {name}");
+        IsTrue(Enum.TryParse<Key>(name, out var ours), $"Bibui.Core.Key has no {name}");
         Eq((int)silk, (int)ours, $"Key.{name}");
     }
     Eq(Enum.GetNames<Silk.NET.Input.Key>().Length, Enum.GetNames<Key>().Length, "Key member count");
     foreach (var silk in Enum.GetValues<Silk.NET.Input.MouseButton>())
     {
         string name = silk.ToString();
-        IsTrue(Enum.TryParse<MouseButton>(name, out var ours), $"Bibui.MouseButton has no {name}");
+        IsTrue(Enum.TryParse<MouseButton>(name, out var ours), $"Bibui.Core.MouseButton has no {name}");
         Eq((int)silk, (int)ours, $"MouseButton.{name}");
     }
     Eq(Enum.GetNames<Silk.NET.Input.MouseButton>().Length, Enum.GetNames<MouseButton>().Length, "MouseButton member count");
@@ -834,7 +834,7 @@ Run("HitTest D: Next button fills column width", () =>
         frame.Px(240f, 40f);
         using (runtime.PushParent(frame))
         {
-            var field = FieldFrame(runtime, Bibui.Runtime.TextField.Rows(runtime, 1));
+            var field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
             using (runtime.PushParent(field)) runtime.TextField("txt", text, edit, focused: true);
         }
         return frame;
@@ -1854,7 +1854,7 @@ Run("UiColor.WithAlpha: drops a pre-existing alpha rather than compounding it", 
 // A select whose state the test keeps, built the way an app builds one.
 static void BuildSelect(BibuiRuntime runtime, SelectState state, string id)
 {
-    var select = Bibui.Runtime.Select.Begin(runtime, id, state.Value ?? "Pick one...");
+    var select = Bibui.Core.Runtime.Select.Begin(runtime, id, state.Value ?? "Pick one...");
     if (select.Open)
         foreach (var (label, value) in new[] { ("Option A", "a"), ("Option B", "b"), ("Option C", "c") })
             if (runtime.SelectItem($"{id}-option-{value}", label, value == state.Value).Clicked)
@@ -1941,7 +1941,7 @@ Run("Select: in a dialog, a row is picked by a press and a release in frames of 
         var page = runtime.ColumnFill();
         using (runtime.PushParent(page))
         {
-            var dialog = Bibui.Runtime.Dialog.Begin(runtime, "sheet", shown: 1f, DialogSide.Right, width: 320f);
+            var dialog = Bibui.Core.Runtime.Dialog.Begin(runtime, "sheet", shown: 1f, DialogSide.Right, width: 320f);
             BuildSelect(runtime, state, "sel");
             dialog.End();
         }
@@ -2547,7 +2547,7 @@ Console.WriteLine("Renderers");
 
 // What a wl_shm host does: the compositor's buffer, with its own stride, drawn
 // into where it lies. Each renderer draws the rows it draws into a packed buffer.
-void StrideContract(string name, Bibui.Draw.DrawToPixels draw)
+void StrideContract(string name, Bibui.Core.Draw.DrawToPixels draw)
 {
     const int w = 240, h = 120, stride = w * 4 + 64;
     var runtime = BibuiRuntime.Create();
@@ -2559,7 +2559,7 @@ void StrideContract(string name, Bibui.Draw.DrawToPixels draw)
     var packed = runtime.Frame(draw);
 
     var memory = GC.AllocateArray<byte>(stride * h, pinned: true);
-    draw(runtime.DrawList, new Bibui.Draw.RasterPixels(
+    draw(runtime.DrawList, new Bibui.Core.Draw.RasterPixels(
         System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(memory, 0), w, h, stride));
     for (int y = 0; y < h; y++)
         IsTrue(memory.AsSpan(y * stride, w * 4).SequenceEqual(packed.RawBgraBytes.AsSpan(y * w * 4, w * 4)),
@@ -2617,9 +2617,9 @@ Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string
         Eq(font.MeasureText(text), shaped.Width, $"Skia measures the string as FreeType does (Skia {font.MeasureText(text)}, FreeType {shaped.Width})");
     }
 
-    var list = new Bibui.Draw.DrawList();
-    list.Push(Bibui.Draw.DrawOpKind.Clear).Color = Rgba.White;
-    ref var glyphs = ref list.Push(Bibui.Draw.DrawOpKind.Glyphs);
+    var list = new Bibui.Core.Draw.DrawList();
+    list.Push(Bibui.Core.Draw.DrawOpKind.Clear).Color = Rgba.White;
+    ref var glyphs = ref list.Push(Bibui.Core.Draw.DrawOpKind.Glyphs);
     (glyphs.Resource, glyphs.C, glyphs.A, glyphs.B, glyphs.Color) = (list.AddFace(face), size, 6.25f, 32f, Rgba.Black);
     (glyphs.Start, glyphs.Count) = (list.AddGlyphs(shaped.Glyphs), shaped.Glyphs.Length);
     glyphs.Start2 = list.AddPoints(shaped.Positions);
@@ -2631,11 +2631,11 @@ Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string
 
 // Textures: one checked against each renderer, through the renderer's own
 // texture functions.
-void TextureContract(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn create, UpdateTextureFn update,
-    Action<Bibui.Draw.TextureHandle> release)
+void TextureContract(string name, Bibui.Core.Draw.DrawToPixels draw, CreateTextureFn create, UpdateTextureFn update,
+    Action<Bibui.Core.Draw.TextureHandle> release)
 {
-    var rgba8 = Bibui.Draw.TextureFormat.RGBA8;
-    var stream = Bibui.Draw.TextureKind.Stream;
+    var rgba8 = Bibui.Core.Draw.TextureFormat.RGBA8;
+    var stream = Bibui.Core.Draw.TextureKind.Stream;
     // 4x2 opaque pixels, RGBA, each one different.
     static byte[] Rgba8(byte seed)
     {
@@ -2644,11 +2644,11 @@ void TextureContract(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn 
         return px;
     }
     // Drawn 1:1 at the origin with an opaque paint, read back as RGBA.
-    byte[] Draw(Bibui.Draw.TextureHandle texture)
+    byte[] Draw(Bibui.Core.Draw.TextureHandle texture)
     {
-        var list = new Bibui.Draw.DrawList();
-        list.Push(Bibui.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
-        ref var op = ref list.Push(Bibui.Draw.DrawOpKind.Texture);
+        var list = new Bibui.Core.Draw.DrawList();
+        list.Push(Bibui.Core.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
+        ref var op = ref list.Push(Bibui.Core.Draw.DrawOpKind.Texture);
         (op.Texture, op.Rect, op.Paint) = (texture, new RectF(0, 0, 4, 2), new PaintSpec { Color = Rgba.Black, FilterQuality = FilterQuality.Low });
         var bgra = Pixels.Of(list, 4, 2, draw).RawBgraBytes;
         for (int i = 0; i < bgra.Length; i += 4) (bgra[i], bgra[i + 2]) = (bgra[i + 2], bgra[i]);
@@ -2664,7 +2664,7 @@ void TextureContract(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn 
     update(first, b, 0);
     IsTrue(Draw(first).SequenceEqual(b), $"{name}: an update changes what the same Stream handle draws");
 
-    var still = create(rgba8, Bibui.Draw.TextureKind.Static, 4, 2, a, 0);
+    var still = create(rgba8, Bibui.Core.Draw.TextureKind.Static, 4, 2, a, 0);
     update(still, b, 0);
     IsTrue(Draw(still).SequenceEqual(a), $"{name}: a Static texture ignores an update");
     release(still);
@@ -2682,13 +2682,13 @@ void TextureContract(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn 
     // Each format's default look, drawn plainly: R8 grey, A8 white coverage
     // (premultiplied, so (a, a, a, a)), RG8 (r, g, 0, 1).
     byte[] one = [0, 40, 80, 120, 160, 200, 240, 255];
-    var r8 = create(Bibui.Draw.TextureFormat.R8, stream, 4, 2, one, 0);
+    var r8 = create(Bibui.Core.Draw.TextureFormat.R8, stream, 4, 2, one, 0);
     IsTrue(Draw(r8).SequenceEqual(one.SelectMany(v => new[] { v, v, v, (byte)255 })), $"{name}: R8 draws grey");
-    var a8 = create(Bibui.Draw.TextureFormat.A8, stream, 4, 2, one, 0);
+    var a8 = create(Bibui.Core.Draw.TextureFormat.A8, stream, 4, 2, one, 0);
     IsTrue(Draw(a8).SequenceEqual(one.SelectMany(v => new[] { v, v, v, v })), $"{name}: A8 draws white coverage");
     var two = new byte[16];
     for (int i = 0; i < 8; i++) (two[2 * i], two[2 * i + 1]) = ((byte)(i * 30), (byte)(255 - i * 30));
-    var rg8 = create(Bibui.Draw.TextureFormat.RG8, stream, 4, 2, two, 0);
+    var rg8 = create(Bibui.Core.Draw.TextureFormat.RG8, stream, 4, 2, two, 0);
     IsTrue(Draw(rg8).SequenceEqual(Enumerable.Range(0, 8).SelectMany(i => new[] { two[2 * i], two[2 * i + 1], (byte)0, (byte)255 })),
         $"{name}: RG8 draws (r, g, 0, 1)");
     update(r8, one.Reverse().ToArray(), 0);
@@ -2696,12 +2696,12 @@ void TextureContract(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn 
     // BGRA8 is RGBA8 in another byte order: the same picture.
     var bgra = new byte[a.Length];
     for (int i = 0; i < 8; i++) (bgra[4 * i], bgra[4 * i + 1], bgra[4 * i + 2], bgra[4 * i + 3]) = (a[4 * i + 2], a[4 * i + 1], a[4 * i], a[4 * i + 3]);
-    var bgra8 = create(Bibui.Draw.TextureFormat.BGRA8, stream, 4, 2, bgra, 0);
+    var bgra8 = create(Bibui.Core.Draw.TextureFormat.BGRA8, stream, 4, 2, bgra, 0);
     IsTrue(Draw(bgra8).SequenceEqual(a), $"{name}: BGRA8 draws as the RGBA8 it reorders");
     release(r8); release(a8); release(rg8); release(bgra8);
 
     var empty = new byte[4 * 2 * 4];
-    IsTrue(Draw(Bibui.Draw.TextureHandle.None).SequenceEqual(empty), $"{name}: None draws nothing");
+    IsTrue(Draw(Bibui.Core.Draw.TextureHandle.None).SequenceEqual(empty), $"{name}: None draws nothing");
     release(first);
     IsTrue(Draw(first).SequenceEqual(empty), $"{name}: a released handle draws nothing");
     var second = create(rgba8, stream, 4, 2, a, 0);
@@ -2743,10 +2743,10 @@ Run("DrawList: recording a frame after the first allocates nothing", () =>
     }, new SurfaceOptions { Width = 400, Height = 300 });
     runtime.Step();
 
-    var caches = new Bibui.Draw.RenderCaches();
+    var caches = new Bibui.Core.Draw.RenderCaches();
     using var fonts = new Fonts();
-    var painter = new Bibui.Draw.Painter(caches, fonts);
-    var list = new Bibui.Draw.DrawList();
+    var painter = new Bibui.Core.Draw.Painter(caches, fonts);
+    var list = new Bibui.Core.Draw.DrawList();
     var surface = new SurfaceOptions { Width = 400, Height = 300 };
     var theme = runtime.Theme;
     for (int i = 0; i < 3; i++)
@@ -2787,14 +2787,14 @@ Run("Renderers: SkiaGlRenderer, SkiaCpuRenderer and ManagedRenderer share their 
 // A texture through a table (TextureLookup): each pixel's raw channel picks the
 // entry drawn. The same cases on every renderer, drawn 1:1 so filtering lands on
 // texel centres and the entry read is exact.
-void LookupContract(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn create, Action<Bibui.Draw.TextureHandle> release)
+void LookupContract(string name, Bibui.Core.Draw.DrawToPixels draw, CreateTextureFn create, Action<Bibui.Core.Draw.TextureHandle> release)
 {
-    var stat = Bibui.Draw.TextureKind.Static;
-    byte[] Draw(Bibui.Draw.TextureHandle texture, Bibui.Draw.TextureLookup lookup)
+    var stat = Bibui.Core.Draw.TextureKind.Static;
+    byte[] Draw(Bibui.Core.Draw.TextureHandle texture, Bibui.Core.Draw.TextureLookup lookup)
     {
-        var list = new Bibui.Draw.DrawList();
-        list.Push(Bibui.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
-        ref var op = ref list.Push(Bibui.Draw.DrawOpKind.Texture);
+        var list = new Bibui.Core.Draw.DrawList();
+        list.Push(Bibui.Core.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
+        ref var op = ref list.Push(Bibui.Core.Draw.DrawOpKind.Texture);
         (op.Texture, op.Rect, op.Paint) = (texture, new RectF(0, 0, 4, 2), new PaintSpec { Color = Rgba.Black, FilterQuality = FilterQuality.Low });
         op.Resource = list.AddLookup(lookup);
         var bgra = Pixels.Of(list, 4, 2, draw).RawBgraBytes;
@@ -2807,66 +2807,66 @@ void LookupContract(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn c
     // A 1-D table whose every entry differs: entry i = (i, 255 - i, i * 7, 255).
     var line = new byte[256 * 4];
     for (int i = 0; i < 256; i++) (line[4 * i], line[4 * i + 1], line[4 * i + 2], line[4 * i + 3]) = ((byte)i, (byte)(255 - i), (byte)(i * 7), 255);
-    var table = create(Bibui.Draw.TextureFormat.RGBA8, stat, 256, 1, line, 0);
+    var table = create(Bibui.Core.Draw.TextureFormat.RGBA8, stat, 256, 1, line, 0);
     byte[] Entry(int i) => [line[4 * i], line[4 * i + 1], line[4 * i + 2], line[4 * i + 3]];
 
     byte[] one = [0, 40, 80, 120, 160, 200, 240, 255];
-    var r8 = create(Bibui.Draw.TextureFormat.R8, stat, 4, 2, one, 0);
-    IsTrue(Near(Draw(r8, new(table, Bibui.Draw.TextureChannel.R)), one.SelectMany(v => Entry(v)).ToArray()),
+    var r8 = create(Bibui.Core.Draw.TextureFormat.R8, stat, 4, 2, one, 0);
+    IsTrue(Near(Draw(r8, new(table, Bibui.Core.Draw.TextureChannel.R)), one.SelectMany(v => Entry(v)).ToArray()),
         $"{name}: an R8 value picks its entry of a 1-D table");
 
-    var a8 = create(Bibui.Draw.TextureFormat.A8, stat, 4, 2, one, 0);
-    IsTrue(Near(Draw(a8, new(table, Bibui.Draw.TextureChannel.A)), one.SelectMany(v => Entry(v)).ToArray()),
+    var a8 = create(Bibui.Core.Draw.TextureFormat.A8, stat, 4, 2, one, 0);
+    IsTrue(Near(Draw(a8, new(table, Bibui.Core.Draw.TextureChannel.A)), one.SelectMany(v => Entry(v)).ToArray()),
         $"{name}: A8's coverage is its raw A");
-    IsTrue(Near(Draw(a8, new(table, Bibui.Draw.TextureChannel.R)), Enumerable.Range(0, 8).SelectMany(_ => Entry(0)).ToArray()),
+    IsTrue(Near(Draw(a8, new(table, Bibui.Core.Draw.TextureChannel.R)), Enumerable.Range(0, 8).SelectMany(_ => Entry(0)).ToArray()),
         $"{name}: a channel the format lacks reads 0");
 
     // A 2-D table: entry (x, y) = (x, y, 77, 255); RG8's two channels pick column and row.
     var plane = new byte[256 * 256 * 4];
     for (int y = 0; y < 256; y++) for (int x = 0; x < 256; x++)
         { int o = (y * 256 + x) * 4; (plane[o], plane[o + 1], plane[o + 2], plane[o + 3]) = ((byte)x, (byte)y, 77, 255); }
-    var grid = create(Bibui.Draw.TextureFormat.RGBA8, stat, 256, 256, plane, 0);
+    var grid = create(Bibui.Core.Draw.TextureFormat.RGBA8, stat, 256, 256, plane, 0);
     var two = new byte[16];
     for (int i = 0; i < 8; i++) (two[2 * i], two[2 * i + 1]) = ((byte)(i * 30), (byte)(255 - i * 30));
-    var rg8 = create(Bibui.Draw.TextureFormat.RG8, stat, 4, 2, two, 0);
-    IsTrue(Near(Draw(rg8, new(grid, Bibui.Draw.TextureChannel.R, Bibui.Draw.TextureChannel.G)),
+    var rg8 = create(Bibui.Core.Draw.TextureFormat.RG8, stat, 4, 2, two, 0);
+    IsTrue(Near(Draw(rg8, new(grid, Bibui.Core.Draw.TextureChannel.R, Bibui.Core.Draw.TextureChannel.G)),
         Enumerable.Range(0, 8).SelectMany(i => new[] { two[2 * i], two[2 * i + 1], (byte)77, (byte)255 }).ToArray()),
         $"{name}: RG8's two channels pick an entry of a 2-D table");
 
     // RGBA8 is read straight, not premultiplied: R at half alpha still picks entry R.
     var rgba = new byte[32];
     for (int i = 0; i < 8; i++) (rgba[4 * i], rgba[4 * i + 1], rgba[4 * i + 2], rgba[4 * i + 3]) = ((byte)(i * 30), 0, 0, 128);
-    var half = create(Bibui.Draw.TextureFormat.RGBA8, stat, 4, 2, rgba, 0);
-    IsTrue(Near(Draw(half, new(table, Bibui.Draw.TextureChannel.R)), Enumerable.Range(0, 8).SelectMany(i => Entry(i * 30)).ToArray(), tolerance: 7),
+    var half = create(Bibui.Core.Draw.TextureFormat.RGBA8, stat, 4, 2, rgba, 0);
+    IsTrue(Near(Draw(half, new(table, Bibui.Core.Draw.TextureChannel.R)), Enumerable.Range(0, 8).SelectMany(i => Entry(i * 30)).ToArray(), tolerance: 7),
         $"{name}: RGBA8's R is read straight, whatever its alpha");
 
     // A transparent entry draws nothing; a released table draws nothing.
     var clear = (byte[])line.Clone();
     for (int i = 0; i < 128; i++) clear[4 * i + 3] = 0;
-    var halfClear = create(Bibui.Draw.TextureFormat.RGBA8, stat, 256, 1, clear, 0);
-    var drawn = Draw(r8, new(halfClear, Bibui.Draw.TextureChannel.R));
+    var halfClear = create(Bibui.Core.Draw.TextureFormat.RGBA8, stat, 256, 1, clear, 0);
+    var drawn = Draw(r8, new(halfClear, Bibui.Core.Draw.TextureChannel.R));
     IsTrue(drawn[3] == 0 && drawn[4 * 7 + 3] == 255, $"{name}: an entry's alpha is drawn: transparent below 128, opaque at 255");
     release(halfClear);
-    IsTrue(Draw(r8, new(halfClear, Bibui.Draw.TextureChannel.R)).All(b => b == 0), $"{name}: a released table draws nothing");
+    IsTrue(Draw(r8, new(halfClear, Bibui.Core.Draw.TextureChannel.R)).All(b => b == 0), $"{name}: a released table draws nothing");
     release(table); release(grid); release(r8); release(a8); release(rg8); release(half);
 }
 
 // A frame that draws through a table, drawn again: what was made for the first
 // (the effect, the shader, the managed shader's state) is reused, and the managed
 // heap does not grow.
-void LookupAllocatesNothing(string name, Bibui.Draw.DrawToPixels draw, CreateTextureFn create)
+void LookupAllocatesNothing(string name, Bibui.Core.Draw.DrawToPixels draw, CreateTextureFn create)
 {
     var line = new byte[256 * 4];
     for (int i = 0; i < 256; i++) (line[4 * i], line[4 * i + 1], line[4 * i + 2], line[4 * i + 3]) = ((byte)i, (byte)(255 - i), 7, 255);
-    var table = create(Bibui.Draw.TextureFormat.RGBA8, Bibui.Draw.TextureKind.Static, 256, 1, line, 0);
-    var source = create(Bibui.Draw.TextureFormat.R8, Bibui.Draw.TextureKind.Static, 64, 64, new byte[64 * 64], 0);
-    var list = new Bibui.Draw.DrawList();
-    list.Push(Bibui.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
-    ref var op = ref list.Push(Bibui.Draw.DrawOpKind.Texture);
+    var table = create(Bibui.Core.Draw.TextureFormat.RGBA8, Bibui.Core.Draw.TextureKind.Static, 256, 1, line, 0);
+    var source = create(Bibui.Core.Draw.TextureFormat.R8, Bibui.Core.Draw.TextureKind.Static, 64, 64, new byte[64 * 64], 0);
+    var list = new Bibui.Core.Draw.DrawList();
+    list.Push(Bibui.Core.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
+    ref var op = ref list.Push(Bibui.Core.Draw.DrawOpKind.Texture);
     (op.Texture, op.Rect, op.Paint) = (source, new RectF(0, 0, 128, 128), new PaintSpec { Color = Rgba.Black, FilterQuality = FilterQuality.Low });
-    op.Resource = list.AddLookup(new(table, Bibui.Draw.TextureChannel.R));
+    op.Resource = list.AddLookup(new(table, Bibui.Core.Draw.TextureChannel.R));
     var bgra = GC.AllocateArray<byte>(128 * 128 * 4, pinned: true);
-    var pixels = new Bibui.Draw.RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), 128, 128, 128 * 4);
+    var pixels = new Bibui.Core.Draw.RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), 128, 128, 128 * 4);
     for (int i = 0; i < 3; i++) draw(list, pixels);
     long before = GC.GetAllocatedBytesForCurrentThread();
     draw(list, pixels);
@@ -2876,11 +2876,11 @@ void LookupAllocatesNothing(string name, Bibui.Draw.DrawToPixels draw, CreateTex
 
 Run("Texture lookups: LookupAt is total: an index that names no lookup reads None", () =>
 {
-    var list = new Bibui.Draw.DrawList();
-    ref var plain = ref list.Push(Bibui.Draw.DrawOpKind.Texture);
+    var list = new Bibui.Core.Draw.DrawList();
+    ref var plain = ref list.Push(Bibui.Core.Draw.DrawOpKind.Texture);
     IsTrue(list.LookupAt(plain.Resource).IsNone, $"a texture op pushed without a table reads None (Resource {plain.Resource})");
-    var table = new Bibui.Draw.TextureHandle(7, 1);
-    int at = list.AddLookup(new(table, Bibui.Draw.TextureChannel.R));
+    var table = new Bibui.Core.Draw.TextureHandle(7, 1);
+    int at = list.AddLookup(new(table, Bibui.Core.Draw.TextureChannel.R));
     Eq(table, list.LookupAt(at).Table, "an added lookup reads back");
     IsTrue(list.LookupAt(-1).IsNone && list.LookupAt(at + 1).IsNone && list.LookupAt(int.MinValue).IsNone, "-1, past the end and int.MinValue read None");
     list.Reset();
@@ -2911,25 +2911,25 @@ Run("Texture lookups: a texture's raw channels pick a table's entries, on the ma
 // same cases on every renderer, against the formulas on premultiplied values:
 // a backdrop of two colours under a group that covers the left half only, so
 // the right half shows what each mode does with the layer's transparent pixels.
-void GroupContract(string name, Bibui.Draw.DrawToPixels draw)
+void GroupContract(string name, Bibui.Core.Draw.DrawToPixels draw)
 {
     var back = new Rgba(200, 100, 50, 255);
-    byte[] Draw(Action<Bibui.Draw.DrawList> group, Rgba fill)
+    byte[] Draw(Action<Bibui.Core.Draw.DrawList> group, Rgba fill)
     {
-        var list = new Bibui.Draw.DrawList();
-        list.Push(Bibui.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
-        ref var bg = ref list.Push(Bibui.Draw.DrawOpKind.Rect);
+        var list = new Bibui.Core.Draw.DrawList();
+        list.Push(Bibui.Core.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
+        ref var bg = ref list.Push(Bibui.Core.Draw.DrawOpKind.Rect);
         (bg.Rect, bg.Paint) = (new RectF(0, 0, 4, 1), new PaintSpec { Color = back });
         group(list);
-        ref var op = ref list.Push(Bibui.Draw.DrawOpKind.Rect);
+        ref var op = ref list.Push(Bibui.Core.Draw.DrawOpKind.Rect);
         (op.Rect, op.Paint) = (new RectF(0, 0, 2, 1), new PaintSpec { Color = fill });
-        list.Push(Bibui.Draw.DrawOpKind.Pop);
+        list.Push(Bibui.Core.Draw.DrawOpKind.Pop);
         var bgra = Pixels.Of(list, 4, 1, draw).RawBgraBytes;
         for (int i = 0; i < bgra.Length; i += 4) (bgra[i], bgra[i + 2]) = (bgra[i + 2], bgra[i]);
         return bgra;
     }
-    Action<Bibui.Draw.DrawList> Mode(Bibui.Draw.BlendMode m) => l => l.Push(Bibui.Draw.DrawOpKind.PushBlendMode).Blend = m;
-    Action<Bibui.Draw.DrawList> Matrix(float[] m) => l => { ref var op = ref l.Push(Bibui.Draw.DrawOpKind.PushColorMatrix); (op.Start, op.Count) = (l.AddFloats(m), 20); };
+    Action<Bibui.Core.Draw.DrawList> Mode(Bibui.Core.Draw.BlendMode m) => l => l.Push(Bibui.Core.Draw.DrawOpKind.PushBlendMode).Blend = m;
+    Action<Bibui.Core.Draw.DrawList> Matrix(float[] m) => l => { ref var op = ref l.Push(Bibui.Core.Draw.DrawOpKind.PushColorMatrix); (op.Start, op.Count) = (l.AddFloats(m), 20); };
     static bool Near(byte[] got, byte[] want, int tolerance) =>
         got.Length == want.Length && got.Zip(want).All(p => Math.Abs(p.First - p.Second) <= tolerance);
     string Show(byte[] px) => string.Join(" ", px.Chunk(4).Select(c => $"({string.Join(",", c)})"));
@@ -2952,15 +2952,15 @@ void GroupContract(string name, Bibui.Draw.DrawToPixels draw)
     foreach (var fill in new[] { new Rgba(100, 150, 220, 255), new Rgba(100, 150, 220, 128) })
     {
         string f = fill.A == 255 ? "opaque" : "translucent";
-        (string Mode, Bibui.Draw.BlendMode M, Func<float, float, float, float, float> C, Func<float, float, float> A, bool Clears)[] cases =
+        (string Mode, Bibui.Core.Draw.BlendMode M, Func<float, float, float, float, float> C, Func<float, float, float> A, bool Clears)[] cases =
         [
-            ("SrcOver", Bibui.Draw.BlendMode.SrcOver, (s, d, sa, da) => s + d * (1 - sa), Over, false),
-            ("Multiply", Bibui.Draw.BlendMode.Multiply, (s, d, sa, da) => s * d + s * (1 - da) + d * (1 - sa), Over, false),
-            ("Screen", Bibui.Draw.BlendMode.Screen, (s, d, sa, da) => s + d - s * d, Over, false),
-            ("Plus", Bibui.Draw.BlendMode.Plus, (s, d, sa, da) => MathF.Min(1, s + d), (sa, da) => MathF.Min(1, sa + da), false),
-            ("Overlay", Bibui.Draw.BlendMode.Overlay, (s, d, sa, da) =>
+            ("SrcOver", Bibui.Core.Draw.BlendMode.SrcOver, (s, d, sa, da) => s + d * (1 - sa), Over, false),
+            ("Multiply", Bibui.Core.Draw.BlendMode.Multiply, (s, d, sa, da) => s * d + s * (1 - da) + d * (1 - sa), Over, false),
+            ("Screen", Bibui.Core.Draw.BlendMode.Screen, (s, d, sa, da) => s + d - s * d, Over, false),
+            ("Plus", Bibui.Core.Draw.BlendMode.Plus, (s, d, sa, da) => MathF.Min(1, s + d), (sa, da) => MathF.Min(1, sa + da), false),
+            ("Overlay", Bibui.Core.Draw.BlendMode.Overlay, (s, d, sa, da) =>
                 (2 * d <= da ? 2 * s * d : sa * da - 2 * (da - d) * (sa - s)) + s * (1 - da) + d * (1 - sa), Over, false),
-            ("Src", Bibui.Draw.BlendMode.Src, (s, d, sa, da) => s, (sa, da) => sa, true),
+            ("Src", Bibui.Core.Draw.BlendMode.Src, (s, d, sa, da) => s, (sa, da) => sa, true),
         ];
         foreach (var c in cases)
         {
@@ -2983,7 +2983,7 @@ void GroupContract(string name, Bibui.Draw.DrawToPixels draw)
     // A translucent layer's straight colour is what the matrix sees: halving
     // alpha in the matrix gives the colour at half alpha, over the backdrop.
     var halved = Draw(Matrix([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0.5f, 0]), red);
-    var opacity = Draw(l2 => { ref var op = ref l2.Push(Bibui.Draw.DrawOpKind.PushColorMatrix); (op.Start, op.Count) = (l2.AddFloats([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 128 / 255f, 0]), 20); }, red);
+    var opacity = Draw(l2 => { ref var op = ref l2.Push(Bibui.Core.Draw.DrawOpKind.PushColorMatrix); (op.Start, op.Count) = (l2.AddFloats([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 128 / 255f, 0]), 20); }, red);
     IsTrue(Near(halved, opacity, 2), $"{name}: an alpha-only matrix is an opacity layer: {Show(halved)} vs {Show(opacity)}");
 
     // A matrix that adds alpha lights up the layer's transparent pixels too:
@@ -2993,22 +2993,22 @@ void GroupContract(string name, Bibui.Draw.DrawToPixels draw)
 
 }
 
-void GroupsAllocateNothing(string name, Bibui.Draw.DrawToPixels draw)
+void GroupsAllocateNothing(string name, Bibui.Core.Draw.DrawToPixels draw)
 {
-    var list = new Bibui.Draw.DrawList();
-    list.Push(Bibui.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
-    foreach (var m in new[] { Bibui.Draw.BlendMode.Multiply, Bibui.Draw.BlendMode.Src, Bibui.Draw.BlendMode.Overlay })
+    var list = new Bibui.Core.Draw.DrawList();
+    list.Push(Bibui.Core.Draw.DrawOpKind.Clear).Color = new Rgba(0, 0, 0, 0);
+    foreach (var m in new[] { Bibui.Core.Draw.BlendMode.Multiply, Bibui.Core.Draw.BlendMode.Src, Bibui.Core.Draw.BlendMode.Overlay })
     {
-        list.Push(Bibui.Draw.DrawOpKind.PushBlendMode).Blend = m;
-        ref var mop = ref list.Push(Bibui.Draw.DrawOpKind.PushColorMatrix);
+        list.Push(Bibui.Core.Draw.DrawOpKind.PushBlendMode).Blend = m;
+        ref var mop = ref list.Push(Bibui.Core.Draw.DrawOpKind.PushColorMatrix);
         (mop.Start, mop.Count) = (list.AddFloats([0.3f, 0.6f, 0.1f, 0, 0, 0.3f, 0.6f, 0.1f, 0, 0, 0.3f, 0.6f, 0.1f, 0, 0.2f, 0, 0, 0, 1, 0]), 20);
-        ref var op = ref list.Push(Bibui.Draw.DrawOpKind.Rect);
+        ref var op = ref list.Push(Bibui.Core.Draw.DrawOpKind.Rect);
         (op.Rect, op.Paint) = (new RectF(10, 10, 100, 100), new PaintSpec { Color = new Rgba(200, 80, 40, 255) });
-        list.Push(Bibui.Draw.DrawOpKind.Pop);
-        list.Push(Bibui.Draw.DrawOpKind.Pop);
+        list.Push(Bibui.Core.Draw.DrawOpKind.Pop);
+        list.Push(Bibui.Core.Draw.DrawOpKind.Pop);
     }
     var bgra = GC.AllocateArray<byte>(128 * 128 * 4, pinned: true);
-    var pixels = new Bibui.Draw.RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), 128, 128, 128 * 4);
+    var pixels = new Bibui.Core.Draw.RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), 128, 128, 128 * 4);
     for (int i = 0; i < 3; i++) draw(list, pixels);
     long before = GC.GetAllocatedBytesForCurrentThread();
     draw(list, pixels);
@@ -3084,7 +3084,7 @@ Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and 
             Draw = (_, ctx) =>
             {
                 var r = ctx.Rect;
-                var shader = Bibui.Draw.RasterShader.Linear(new System.Numerics.Vector2(r.Left, r.Top),
+                var shader = Bibui.Core.Draw.RasterShader.Linear(new System.Numerics.Vector2(r.Left, r.Top),
                     new System.Numerics.Vector2(r.Right, r.Top), [new Rgba(255, 0, 0), new Rgba(0, 0, 255)], []);
                 ctx.DrawRect(r, 8f, new Paint { Shader = shader });
                 var tri = ctx.Path(CacheKey.Of([42]), r, static (rect, p) =>
@@ -3094,7 +3094,7 @@ Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and 
                     p.LineTo(rect.Right - 10, rect.Bottom - 10);
                     p.Close();
                 });
-                ctx.DrawPath(tri, new Paint { Stroke = Rgba.White, StrokeWidth = 2f, Dash = new Bibui.Draw.DashPattern(4f, 2f) });
+                ctx.DrawPath(tri, new Paint { Stroke = Rgba.White, StrokeWidth = 2f, Dash = new Bibui.Core.Draw.DashPattern(4f, 2f) });
             },
     }.Px(120f, 60f);
     var output = Frames.Frame(root, new SurfaceOptions { Width = 120, Height = 60, ScaleFactor = 1f }, ThemeLoader.NeutralDark());
@@ -3896,11 +3896,11 @@ Run("Separator.Build: one pixel thick, as long as its parent", () =>
             var column = runtime.ColumnPx(300f, 100f);
             using (runtime.PushParent(column))
             {
-                across = Bibui.Runtime.Separator.Build(runtime);
+                across = Bibui.Core.Runtime.Separator.Build(runtime);
                 var row = runtime.Box();
                 row.Px(300f, 40f);
                 using (runtime.PushParent(row))
-                    down = Bibui.Runtime.Separator.Build(runtime, vertical: true);
+                    down = Bibui.Core.Runtime.Separator.Build(runtime, vertical: true);
             }
             return column;
         },
@@ -3921,23 +3921,23 @@ Run("Progress.Build: the fill is the given share of the track", () =>
         {
             var column = runtime.ColumnPx(400f, 100f);
             using (runtime.PushParent(column))
-                bar = Bibui.Runtime.Progress.Build(runtime, 65f, 100f).Px(width: 400f);
+                bar = Bibui.Core.Runtime.Progress.Build(runtime, 65f, 100f).Px(width: 400f);
             return column;
         },
         new SurfaceOptions { Width = 400, Height = 100 });
     runtime.Step();
     var fill = (Box)bar.FirstChild!;
     Eq(400f, bar.Extent.X, "the track is as wide as it was sized");
-    Eq(Bibui.Runtime.Progress.DefaultThickness, bar.Extent.Y, "and the default thickness tall");
+    Eq(Bibui.Core.Runtime.Progress.DefaultThickness, bar.Extent.Y, "and the default thickness tall");
     Eq(260f, fill.Extent.X, "65 of 100 fills 65% of it");
     Eq(bar.Rect.X, fill.Rect.X, "from its left end");
 });
 
 Run("Progress.Build: a label above, and nothing filled at zero or past the end clamped", () =>
 {
-    Eq(0f, Bibui.Runtime.Progress.Share(-5f, 100f), "below zero is empty");
-    Eq(1f, Bibui.Runtime.Progress.Share(150f, 100f), "past max is full");
-    Eq(0f, Bibui.Runtime.Progress.Share(10f, 0f), "no max is empty");
+    Eq(0f, Bibui.Core.Runtime.Progress.Share(-5f, 100f), "below zero is empty");
+    Eq(1f, Bibui.Core.Runtime.Progress.Share(150f, 100f), "past max is full");
+    Eq(0f, Bibui.Core.Runtime.Progress.Share(10f, 0f), "no max is empty");
 
     var runtime = BibuiRuntime.Create();
     Box column = null!;
@@ -3946,7 +3946,7 @@ Run("Progress.Build: a label above, and nothing filled at zero or past the end c
         {
             var page = runtime.ColumnPx(400f, 100f);
             using (runtime.PushParent(page))
-                column = Bibui.Runtime.Progress.Build(runtime, 0f, 100f, "Upload").Px(width: 300f);
+                column = Bibui.Core.Runtime.Progress.Build(runtime, 0f, 100f, "Upload").Px(width: 300f);
             return page;
         },
         new SurfaceOptions { Width = 400, Height = 100 });
@@ -3967,7 +3967,7 @@ Run("Avatar.Build: a circle of the given size with the initials centred", () =>
         {
             var row = runtime.RowPx(200f, 100f);
             using (runtime.PushParent(row))
-                circle = Bibui.Runtime.Avatar.Build(runtime, "JD", 56f);
+                circle = Bibui.Core.Runtime.Avatar.Build(runtime, "JD", 56f);
             return row;
         },
         new SurfaceOptions { Width = 200, Height = 100 });
@@ -3994,7 +3994,7 @@ Run("KeyboardShortcut.Build: a keycap per key, 24 px tall, 4 px apart", () =>
         {
             var page = runtime.RowPx(300f, 60f);
             using (runtime.PushParent(page))
-                row = Bibui.Runtime.KeyboardShortcut.Build(runtime, "Ctrl", "K");
+                row = Bibui.Core.Runtime.KeyboardShortcut.Build(runtime, "Ctrl", "K");
             return page;
         },
         new SurfaceOptions { Width = 300, Height = 60 });
@@ -4002,8 +4002,8 @@ Run("KeyboardShortcut.Build: a keycap per key, 24 px tall, 4 px apart", () =>
     var first = (Box)row.FirstChild!;
     var last = (Box)row.LastChild!;
     IsTrue(first != last, "two keycaps");
-    Eq(Bibui.Runtime.KeyboardShortcut.KeyHeight, first.Extent.Y);
-    Eq(Bibui.Runtime.KeyboardShortcut.KeyHeight, row.Extent.Y);
+    Eq(Bibui.Core.Runtime.KeyboardShortcut.KeyHeight, first.Extent.Y);
+    Eq(Bibui.Core.Runtime.KeyboardShortcut.KeyHeight, row.Extent.Y);
     Eq(4f, last.Rect.X - (first.Rect.X + first.Extent.X), "4 px between them");
     Eq(first.Extent.X + 4f + last.Extent.X, row.Extent.X, "the row is as wide as they are");
     var key = (Text)last.FirstChild!.Next!;
@@ -4327,7 +4327,7 @@ Run("Badge.Build: a pill as large as its label plus padding, linked under the pa
         {
             var row = runtime.RowPx(300f, 60f);
             using (runtime.PushParent(row))
-                pill = Bibui.Runtime.Badge.Build(runtime, "Outline", BadgeVariant.Outline);
+                pill = Bibui.Core.Runtime.Badge.Build(runtime, "Outline", BadgeVariant.Outline);
             return row;
         },
         new SurfaceOptions { Width = 300, Height = 60 });
@@ -4647,7 +4647,7 @@ Run("PushIntoParent: in a Select, rows built in expression form are picked by a 
             using (runtime.PushParent(page))
             {
                 runtime.OpenDropDown("pick-list");
-                var select = Bibui.Runtime.Select.Begin(runtime, "pick", "Pick one");
+                var select = Bibui.Core.Runtime.Select.Begin(runtime, "pick", "Pick one");
                 if (select.Open)
                 {
                     // Something in the list to push into: built under the list, the parent in scope.
@@ -5425,7 +5425,7 @@ Run("runtime.Tabs: clicking a tab reports its value", () =>
         new SurfaceOptions { Width = 300, Height = 100 });
     runtime.Step();
     var beta = BibuiPage.From(runtime, runtime.BuildTree).GetBounds("tabs-b");
-    Eq(Bibui.Runtime.Tabs.Height - 4f, beta.Height, "the tab fills the strip inside its inset");
+    Eq(Bibui.Core.Runtime.Tabs.Height - 4f, beta.Height, "the tab fills the strip inside its inset");
     float x = beta.X + beta.Width / 2f, y = beta.Y + beta.Height / 2f;
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x, Y = y });
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = x, Y = y });
@@ -5457,7 +5457,7 @@ Run("runtime.Expander: a click on the header reports a toggle, and the body is t
     runtime.Step();
     IsTrue(!hadBody, "closed, there is no body to build into");
     var header = BibuiPage.From(runtime, runtime.BuildTree).GetBounds("coll");
-    Eq(Bibui.Runtime.Expander.HeaderHeight, header.Height, "the header is its own height");
+    Eq(Bibui.Core.Runtime.Expander.HeaderHeight, header.Height, "the header is its own height");
     float x = header.X + header.Width / 2f, y = header.Y + header.Height / 2f;
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x, Y = y });
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = x, Y = y });
@@ -6248,7 +6248,7 @@ Run("UiColor: numbers in, numbers out, and the same colour either way", () =>
 });
 
 // The bibui graphics types cross to Skia by reinterpretation and casts
-// (bibui/src/Renderer/SkiaInterop.cs), so their packing and enum values must be
+// (bibui-core/src/Renderer/SkiaInterop.cs), so their packing and enum values must be
 // Skia's exactly — this is what keeps the type swap from moving a pixel.
 Run("Rgba/PaintSpec enums: the same bits and values Skia uses", () =>
 {
@@ -6401,7 +6401,7 @@ Run("Menu: an item clicked in an open menu reports it, and the caller closes it"
         {
             var trigger = runtime.Button("menu-trigger", "Actions");
             if (trigger.Clicked) runtime.OpenDropDown("menu", trigger.Node);
-            if (Bibui.Runtime.Menu.BeginBelow(runtime, "menu", trigger.Node) is { } menu)
+            if (Bibui.Core.Runtime.Menu.BeginBelow(runtime, "menu", trigger.Node) is { } menu)
             {
                 foreach (var label in new[] { "Copy", "Paste" })
                     if (runtime.MenuItem($"menu-{label}", label).Clicked)
@@ -6409,7 +6409,7 @@ Run("Menu: an item clicked in an open menu reports it, and the caller closes it"
                         picked = label;
                         runtime.CloseDropDown("menu");
                     }
-                Bibui.Runtime.Menu.Separator(runtime);
+                Bibui.Core.Runtime.Menu.Separator(runtime);
                 runtime.MenuItem("menu-Delete", "Delete", disabled: true);
                 menu.End();
             }
@@ -6437,22 +6437,22 @@ Run("Menu: Escape closes the open menu and is eaten", () =>
         var page = runtime.ColumnFill();
         using (runtime.PushParent(page))
         {
-            if (Bibui.Runtime.Menu.Begin(runtime, "menu", 10f, 10f) is { } menu)
+            if (Bibui.Core.Runtime.Menu.Begin(runtime, "menu", 10f, 10f) is { } menu)
             {
                 runtime.MenuItem("menu-copy", "Copy");
                 menu.End();
             }
-            escapesLeft += runtime.UnconsumedEvents.Count(h => h is { IsKeyDown: true, Key: Bibui.Key.Escape });
+            escapesLeft += runtime.UnconsumedEvents.Count(h => h is { IsKeyDown: true, Key: Bibui.Core.Key.Escape });
         }
         return page;
     }, new SurfaceOptions { Width = 200, Height = 200 });
     runtime.OpenDropDown("menu");
     runtime.Step();
-    runtime.ProcessEvent(BibUiEvent.FromKey(Bibui.Key.Escape, ctrl: false, shift: false));
+    runtime.ProcessEvent(BibUiEvent.FromKey(Bibui.Core.Key.Escape, ctrl: false, shift: false));
     runtime.Step();
     IsTrue(!runtime.IsDropDownOpen("menu"), "Escape closes it");
     Eq(0, escapesLeft, "and the menu ate it");
-    runtime.ProcessEvent(BibUiEvent.FromKey(Bibui.Key.Escape, ctrl: false, shift: false));
+    runtime.ProcessEvent(BibUiEvent.FromKey(Bibui.Core.Key.Escape, ctrl: false, shift: false));
     runtime.Step();
     Eq(1, escapesLeft, "with the menu closed, Escape is left for the app");
 });
@@ -6481,10 +6481,10 @@ Run("Menu: Escape closes the open menu and is eaten", () =>
             var trigger = runtime.Button("trigger", "Actions");
             if (trigger.Clicked)
                 if (runtime.IsDropDownOpen("menu")) runtime.CloseDropDown("menu"); else runtime.OpenDropDown("menu", trigger.Node);
-            if (Bibui.Runtime.Menu.BeginBelow(runtime, "menu", trigger.Node, width: 160f) is { } menu)
+            if (Bibui.Core.Runtime.Menu.BeginBelow(runtime, "menu", trigger.Node, width: 160f) is { } menu)
             {
                 runtime.MenuItem("menu-copy", "Copy");
-                Bibui.Runtime.Menu.Separator(runtime);
+                Bibui.Core.Runtime.Menu.Separator(runtime);
                 runtime.MenuItem("menu-paste", "Paste");
                 menu.End();
             }
@@ -6495,7 +6495,7 @@ Run("Menu: Escape closes the open menu and is eaten", () =>
                 if (i.RightPressed) { (menuFor, mx, my) = (id, i.X, i.Y); runtime.OpenDropDown("ctx"); }
                 row.Px(400f, 40f);
             }
-            if (Bibui.Runtime.Menu.Begin(runtime, "ctx", mx, my, 120f) is { } ctx)
+            if (Bibui.Core.Runtime.Menu.Begin(runtime, "ctx", mx, my, 120f) is { } ctx)
             {
                 runtime.MenuItem("ctx-open", "Open");
                 ctx.End();
@@ -6665,13 +6665,13 @@ Run("Dismiss: a dropdown its caller stops building closes", () =>
 
 Run("BibUiEvent.IsKeyDown: every key-down kind, and nothing else", () =>
 {
-    foreach (var key in new[] { Bibui.Key.Up, Bibui.Key.Down, Bibui.Key.Left, Bibui.Key.Home, Bibui.Key.Enter,
-                 Bibui.Key.Escape, Bibui.Key.Slash, Bibui.Key.Backspace, Bibui.Key.Delete })
+    foreach (var key in new[] { Bibui.Core.Key.Up, Bibui.Core.Key.Down, Bibui.Core.Key.Left, Bibui.Core.Key.Home, Bibui.Core.Key.Enter,
+                 Bibui.Core.Key.Escape, Bibui.Core.Key.Slash, Bibui.Core.Key.Backspace, Bibui.Core.Key.Delete })
         IsTrue(BibUiEvent.FromKey(key, ctrl: false, shift: false).IsKeyDown, $"{key} is a key-down");
-    foreach (var key in new[] { Bibui.Key.A, Bibui.Key.C, Bibui.Key.X, Bibui.Key.V })
+    foreach (var key in new[] { Bibui.Core.Key.A, Bibui.Core.Key.C, Bibui.Core.Key.X, Bibui.Core.Key.V })
         IsTrue(BibUiEvent.FromKey(key, ctrl: true, shift: false).IsKeyDown, $"Ctrl+{key} is a key-down");
-    Eq(BibUiEventKind.Navigate, BibUiEvent.FromKey(Bibui.Key.Up, false, false).Kind, "an arrow is still a Navigate");
-    Eq(BibUiEventKind.Submit, BibUiEvent.FromKey(Bibui.Key.Enter, false, false).Kind, "Enter is still a Submit");
+    Eq(BibUiEventKind.Navigate, BibUiEvent.FromKey(Bibui.Core.Key.Up, false, false).Kind, "an arrow is still a Navigate");
+    Eq(BibUiEventKind.Submit, BibUiEvent.FromKey(Bibui.Core.Key.Enter, false, false).Kind, "Enter is still a Submit");
     foreach (var kind in new[] { BibUiEventKind.Null, BibUiEventKind.Text, BibUiEventKind.Release, BibUiEventKind.MouseDown,
                  BibUiEventKind.MouseUp, BibUiEventKind.MouseMove, BibUiEventKind.Scroll })
         IsTrue(!new BibUiEvent { Kind = kind }.IsKeyDown, $"{kind} is not a key-down");
@@ -6680,7 +6680,7 @@ Run("BibUiEvent.IsKeyDown: every key-down kind, and nothing else", () =>
 Run("BibUiEvent.IsKeyDown: a shortcut handler sees arrows and Enter that reach the app", () =>
 {
     var runtime = BibuiRuntime.Create();
-    var seen = new List<Bibui.Key>();
+    var seen = new List<Bibui.Core.Key>();
     runtime.SetBuild(() =>
     {
         foreach (var ev in runtime.UnconsumedEvents)
@@ -6688,7 +6688,7 @@ Run("BibUiEvent.IsKeyDown: a shortcut handler sees arrows and Enter that reach t
         return runtime.Box().Px(10f, 10f);
     }, new SurfaceOptions { Width = 100, Height = 100 });
     runtime.Step();
-    foreach (var key in new[] { Bibui.Key.Down, Bibui.Key.Enter, Bibui.Key.G })
+    foreach (var key in new[] { Bibui.Core.Key.Down, Bibui.Core.Key.Enter, Bibui.Core.Key.G })
         runtime.ProcessEvent(BibUiEvent.FromKey(key, ctrl: false, shift: false));
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.Text, Char = 'g', CodePoint = 'g' });
     runtime.Step();
@@ -6712,7 +6712,7 @@ Run("Popover: its open panel blocks the box beneath it, and only there", () =>
             below.Node.FillX().FillY();
             if (below.Clicked) beneath++;
             runtime.OpenDropDown("pop", trigger.Node);
-            if (Bibui.Runtime.Popover.Begin(runtime, "pop", trigger.Node, width: 200f) is { } popover)
+            if (Bibui.Core.Runtime.Popover.Begin(runtime, "pop", trigger.Node, width: 200f) is { } popover)
             {
                 runtime.Text("Floating over the button below");
                 panel = (Box)popover.End().Node;
@@ -6742,7 +6742,7 @@ Run("Tooltip: claims nothing, so a press on it reaches what is beneath", () =>
             var button = runtime.Button("under", "Under the tip");
             button.Node.FillX().FillY();
             if (button.Clicked) clicks++;
-            pill = Bibui.Runtime.Tooltip.Build(runtime, "A hint", (Box)button.Node);
+            pill = Bibui.Core.Runtime.Tooltip.Build(runtime, "A hint", (Box)button.Node);
             pill.Parent!.At(150f, 120f);   // over the middle of the button
         }
         return page;
@@ -6901,15 +6901,15 @@ Run("Fonts.Measure: a longer text is wider, and nothing has no width", () =>
             {
                 var field = FieldFrame(runtime, SemanticSize.ChildrenSum());
                 using (runtime.PushParent(field))
-                using (runtime.PushSizeY(Bibui.Runtime.TextField.Rows(runtime, 3)))
+                using (runtime.PushSizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
                     line = runtime.MultilineTextField("field", text, edit, focused,
-                        events == uint.MaxValue ? Bibui.Runtime.TextField.MultiLineEvents : events);
+                        events == uint.MaxValue ? Bibui.Core.Runtime.TextField.MultiLineEvents : events);
             }
             else
             {
-                var field = FieldFrame(runtime, Bibui.Runtime.TextField.Rows(runtime, 1));
+                var field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
                 using (runtime.PushParent(field)) line = runtime.TextField("field", text, edit, focused,
-                    events == uint.MaxValue ? Bibui.Runtime.TextField.SingleLineEvents : events);
+                    events == uint.MaxValue ? Bibui.Core.Runtime.TextField.SingleLineEvents : events);
             }
             if (line.Pressed) focused = true;
             submitLeft |= runtime.UnconsumedEvents.Any(h => h.Kind == BibUiEventKind.Submit);
@@ -6928,7 +6928,7 @@ void TypeInto(BibuiRuntime runtime, string chars)
     runtime.Step();
 }
 
-void PressKey(BibuiRuntime runtime, Bibui.Key key, bool ctrl = false, bool shift = false)
+void PressKey(BibuiRuntime runtime, Bibui.Core.Key key, bool ctrl = false, bool shift = false)
 {
     runtime.ProcessEvent(BibUiEvent.FromKey(key, ctrl, shift));
     runtime.Step();
@@ -6995,7 +6995,7 @@ Run("runtime.EllipsisTextField: a press is the field's, and being edited it scro
         box.SizeY = SemanticSize.ChildrenSum();
         BibuiWidget line;
         using (runtime.PushParent(box))
-            line = runtime.EllipsisTextField("label", text, edit, focused, events: Bibui.Runtime.TextField.SingleLineEvents);
+            line = runtime.EllipsisTextField("label", text, edit, focused, events: Bibui.Core.Runtime.TextField.SingleLineEvents);
         if (line.Pressed) focused = true;
     }), new SurfaceOptions { Width = 400, Height = 100 });
     runtime.Step();
@@ -7071,7 +7071,7 @@ Run("runtime.TextField: a line wider than its box scrolls to the caret, and back
         parent.Px(300f, 200f);
         using (runtime.PushParent(parent))
         {
-            field = FieldFrame(runtime, Bibui.Runtime.TextField.Rows(runtime, 1));
+            field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
             field.SizeX = SemanticSize.Pixels(100f);
             using (runtime.PushParent(field))
                 runtime.TextField("field", text, edit, focused: true);
@@ -7079,7 +7079,7 @@ Run("runtime.TextField: a line wider than its box scrolls to the caret, and back
         return parent;
     }, new SurfaceOptions { Width = 400, Height = 300 });
     for (int i = 0; i < 3; i++) runtime.Step();   // laid out, then scrolled
-    PressKey(runtime, Bibui.Key.End);      // an edit-free move: the view eases rather than jumps
+    PressKey(runtime, Bibui.Core.Key.End);      // an edit-free move: the view eases rather than jumps
     for (int i = 0; i < 60; i++) runtime.Step();
 
     var font = runtime.FontInScope();
@@ -7091,7 +7091,7 @@ Run("runtime.TextField: a line wider than its box scrolls to the caret, and back
     IsTrue(caret.Rect.X >= field.Rect.X - 1f && caret.Rect.X <= field.Rect.X + 100f,
         $"the caret is in the box: {caret.Rect.X} in {field.Rect.X}..{field.Rect.X + 100f}");
 
-    PressKey(runtime, Bibui.Key.Home);
+    PressKey(runtime, Bibui.Core.Key.Home);
     for (int i = 0; i < 60; i++) runtime.Step();
     Eq(0f, view.TargetViewOffset.X, "at the start, the line is shown from its start");
 });
@@ -7110,7 +7110,7 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
         parent.Px(300f, 200f);
         using (runtime.PushParent(parent))
         using (runtime.PushParent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
-        using (runtime.PushSizeY(Bibui.Runtime.TextField.Rows(runtime, 3)))
+        using (runtime.PushSizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
         {
             var field = runtime.MultilineTextField("field", text, edit, focused);
             view = (Box)field.Node;
@@ -7125,7 +7125,7 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
     IsTrue(focused, "a press focuses it");
     Eq(0f, view.TargetViewOffset.Y, "on the first line, nothing to scroll");
 
-    for (int i = 0; i < 6; i++) { PressKey(runtime, Bibui.Key.Down); runtime.Step(); }
+    for (int i = 0; i < 6; i++) { PressKey(runtime, Bibui.Core.Key.Down); runtime.Step(); }
     for (int i = 0; i < 30; i++) runtime.Step();
     var font = runtime.FontInScope();
     float lineHeight = runtime.Fonts.LineHeight(font), advance = runtime.Fonts.LineAdvance(font);
@@ -7149,7 +7149,7 @@ Run("runtime.TextField: typing edits the caller's buffer; Enter is left to the c
     runtime.Step();
     TypeInto(runtime, ", world");
     Eq("Hello, world", text.ToString());
-    PressKey(runtime, Bibui.Key.Enter);
+    PressKey(runtime, Bibui.Core.Key.Enter);
     Eq("Hello, world", text.ToString(), "a single line takes no line break");
     IsTrue(submitLeft(), "Submit is still the caller's");
 });
@@ -7161,10 +7161,10 @@ Run("runtime.MultilineTextField: Enter ends the line, and Up goes back to it", (
     var (runtime, _, _) = MountField(text, edit, multiline: true);
     ClickAt(runtime, 200f, 5f);   // past the end of the line
     runtime.Step();
-    PressKey(runtime, Bibui.Key.Enter);
+    PressKey(runtime, Bibui.Core.Key.Enter);
     TypeInto(runtime, "two");
     Eq("one\ntwo", text.ToString());
-    PressKey(runtime, Bibui.Key.Up);
+    PressKey(runtime, Bibui.Core.Key.Up);
     Eq(3, edit.Cursor, "the end of line one, at about the same x");
 });
 
@@ -7172,17 +7172,17 @@ Run("TextField read-only: moves and copies, never edits", () =>
 {
     var text = BibuiStr.FromStrLit("hello world");
     var edit = new TextEditState();
-    var (runtime, _, _) = MountField(text, edit, events: Bibui.Runtime.TextField.SingleLineReadOnlyEvents);
+    var (runtime, _, _) = MountField(text, edit, events: Bibui.Core.Runtime.TextField.SingleLineReadOnlyEvents);
     string copied = "";
     runtime.ClipboardSet = t => copied = t;
     ClickAt(runtime, 1f, 5f);   // the start
     runtime.Step();
     TypeInto(runtime, "x");
-    PressKey(runtime, Bibui.Key.Backspace);
-    PressKey(runtime, Bibui.Key.Right, shift: true);
-    PressKey(runtime, Bibui.Key.Right, shift: true);
-    PressKey(runtime, Bibui.Key.C, ctrl: true);
-    PressKey(runtime, Bibui.Key.X, ctrl: true);
+    PressKey(runtime, Bibui.Core.Key.Backspace);
+    PressKey(runtime, Bibui.Core.Key.Right, shift: true);
+    PressKey(runtime, Bibui.Core.Key.Right, shift: true);
+    PressKey(runtime, Bibui.Core.Key.C, ctrl: true);
+    PressKey(runtime, Bibui.Core.Key.X, ctrl: true);
     Eq("hello world", text.ToString(), "nothing changed");
     Eq("he", copied, "the selection was copied");
 });
@@ -7707,13 +7707,13 @@ Run("Tokens: a theme's border widths are what the outlines are drawn at", () =>
         var cell = (Box)((Box)group.Node.FirstChild!).FirstChild!;
         chosenRing = ((Box)cell.FirstChild!.Next!).Style.BorderWidth;
 
-        panel = Bibui.Runtime.Tabs.Panel(rt).Style.BorderWidth;
+        panel = Bibui.Core.Runtime.Tabs.Panel(rt).Style.BorderWidth;
 
         Box input = rt.Box().Px(100f, 30f);
-        Bibui.Runtime.TextField.InputStyle(rt, input, focused: false);
+        Bibui.Core.Runtime.TextField.InputStyle(rt, input, focused: false);
         field = input.Style.BorderWidth;
 
-        rule = Bibui.Runtime.Separator.Build(rt);
+        rule = Bibui.Core.Runtime.Separator.Build(rt);
     });
     Eq(3f, square, "a checkbox's square");
     Eq(5f, chosenRing, "a chosen radio's ring is the strong width");
@@ -7729,8 +7729,8 @@ Run("Tokens: a focused field draws the theme's focus ring as its outline", () =>
     Style focused = null!, resting = null!;
     Themed(theme, rt =>
     {
-        Box a = rt.Box().Px(100f, 30f); Bibui.Runtime.TextField.InputStyle(rt, a, focused: true);
-        Box b = rt.Box().Px(100f, 30f); Bibui.Runtime.TextField.InputStyle(rt, b, focused: false);
+        Box a = rt.Box().Px(100f, 30f); Bibui.Core.Runtime.TextField.InputStyle(rt, a, focused: true);
+        Box b = rt.Box().Px(100f, 30f); Bibui.Core.Runtime.TextField.InputStyle(rt, b, focused: false);
         (focused, resting) = (Copy(a.Style), Copy(b.Style));
     });
     Eq(2f, focused.BorderWidth, "the ring's width while focused");
@@ -7749,8 +7749,8 @@ Run("Tokens: elevation puts the theme's shadow under what floats", () =>
         Themed(theme, rt =>
         {
             rt.OpenDropDown("menu");
-            menu = ((Box)Bibui.Runtime.Menu.Begin(rt, "menu", 10f, 10f)!.Value.End().Node).Style.Shadow;
-            var panel = Bibui.Runtime.Dialog.Begin(rt, "dialog", shown: 1f).End().Panel;
+            menu = ((Box)Bibui.Core.Runtime.Menu.Begin(rt, "menu", 10f, 10f)!.Value.End().Node).Style.Shadow;
+            var panel = Bibui.Core.Runtime.Dialog.Begin(rt, "dialog", shown: 1f).End().Panel;
             dialog = panel.Style.Shadow;
         });
         if (elevated)

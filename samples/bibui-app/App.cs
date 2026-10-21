@@ -1,6 +1,6 @@
-using Bibui;
-using Bibui.Runtime;
-using Bibui.TextEdit;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
 
 namespace BibuiApp;
 
@@ -43,7 +43,7 @@ public static class Demo
             placeholder: Labels.NamePlaceholder);
         if (nameLine.Pressed) state.NameFocused = true;
         foreach (var ev in runtime.UnconsumedEvents)
-            if (state.NameFocused && ev is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: BibUiEventKind.Submit })
+            if (state.NameFocused && ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape } or { Kind: BibUiEventKind.Submit })
             {
                 state.NameFocused = false;
                 ev.Eat();

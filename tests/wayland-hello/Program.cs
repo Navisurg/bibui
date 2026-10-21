@@ -14,11 +14,11 @@
 //
 // Native AOT: dotnet publish tests/wayland-hello -c Release -r linux-x64 -p:PublishAot=true
 
-using Bibui;
+using Bibui.Core;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
-using Bibui.Runtime;
-using Bibui.TextEdit;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
 
 bool animate = !args.Contains("--still");
 int clicks = 0;

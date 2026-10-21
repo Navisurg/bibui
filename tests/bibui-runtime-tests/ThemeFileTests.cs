@@ -1,5 +1,5 @@
-using Bibui;
-using Bibui.Theming;
+using Bibui.Core;
+using Bibui.Core.Theming;
 
 /// <summary>
 /// Theme files: bibui's own themes as the C# that defined them before

@@ -25,6 +25,18 @@ All notable changes to bibui are recorded here. The format is based on
   type yet. See [bibui in the browser](docs/browser.md) and
   `samples/counter-browser`.
 
+### Changed
+
+- **The core package is `Bibui.Core` (breaking).** The package `Bibui` is
+  now `Bibui.Core`, built from `bibui-core/` into the assembly
+  `Bibui.Core`, and its namespaces moved under it: `Bibui` is
+  `Bibui.Core`, and `Bibui.Runtime`, `Bibui.Draw`, `Bibui.Theming`,
+  `Bibui.FreeType`, `Bibui.Imaging` and `Bibui.TextEdit` are
+  `Bibui.Core.Runtime`, `Bibui.Core.Draw` and so on. Replace a
+  `PackageReference` to `Bibui` with `Bibui.Core`, and `using Bibui…;`
+  with `using Bibui.Core…;`. The embedded fonts and themes are named
+  `Bibui.Core.Assets.*`. The other packages keep their names.
+
 ### Fixed
 
 - **FreeType on 32-bit processes.** The FreeType struct offsets bibui reads

@@ -1,5 +1,5 @@
 using Bibui.Platform.Wayland.Protocol;
-using Bibui.Draw;
+using Bibui.Core.Draw;
 
 namespace Bibui.Platform.Wayland;
 

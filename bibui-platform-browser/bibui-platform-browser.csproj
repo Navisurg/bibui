@@ -36,7 +36,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../bibui/bibui.csproj" />
+    <ProjectReference Include="../bibui-core/bibui-core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

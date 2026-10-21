@@ -11,6 +11,6 @@
   <ItemGroup>
     <!-- Skia: what the parameterless new BibuiRuntime()/BibuiRenderer() draw with. -->
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
-    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
   </ItemGroup>
 </Project>

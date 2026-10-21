@@ -12,13 +12,13 @@
 
 using System.Diagnostics;
 using System.Globalization;
-using Bibui;
+using Bibui.Core;
 using Bibui.Platform.Wayland;
-using Bibui.Draw;
+using Bibui.Core.Draw;
 using Bibui.Raster.Managed.Backend;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
-using Bibui.Theming;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
+using Bibui.Core.Theming;
 using Showcase;
 
 long started = Stopwatch.GetTimestamp();

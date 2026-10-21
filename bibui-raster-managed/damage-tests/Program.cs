@@ -4,12 +4,12 @@
 // apps; the tests above it pin the policy a host relies on.
 //
 //   dotnet run -c Release --project bibui-raster-managed/damage-tests [filter]
-using Bibui;
-using Bibui.Draw;
+using Bibui.Core;
+using Bibui.Core.Draw;
 using Surface = Bibui.Raster.Managed.Surface;
 using Bibui.Raster.Managed.Backend;
-using Bibui.Runtime;
-using Bibui.Theming;
+using Bibui.Core.Runtime;
+using Bibui.Core.Theming;
 
 int passed = 0, failed = 0;
 string? filter = args.Length > 0 ? args[0] : null;

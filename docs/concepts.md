@@ -9,10 +9,10 @@ and before writing your first component. For each component's API, see
 The samples on this page assume these usings:
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
-using Bibui.Theming;
-using static Bibui.Arrange;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.Theming;
+using static Bibui.Core.Arrange;
 ```
 
 ## The frame: build, layout, paint
@@ -788,7 +788,7 @@ references no renderer; the app adds `Bibui.Raster.Skia` and binds a
 
 ```csharp
 using Bibui.Raster.Skia;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime.Platform;
 
 var runtime = BibuiRuntime.Create();
 using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("My app", 960, 640));
@@ -855,7 +855,7 @@ combination ships no Skia. Bind it to the window's `Cpu`:
 ```csharp
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime.Platform;
 
 var runtime = BibuiRuntime.Create();
 if (!WaylandWindow.IsSupported) return;

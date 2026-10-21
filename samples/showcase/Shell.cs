@@ -1,5 +1,5 @@
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 using static Showcase.Ui;
 
 namespace Showcase;
@@ -196,7 +196,7 @@ internal sealed partial class App
                 var r = ctx.Logical;
                 float s = ctx.Scale;
                 float rad = r.Width / 2f;
-                var light = Bibui.Draw.RasterShader.Radial(new System.Numerics.Vector2((r.Left + r.Width * 0.32f) * s, (r.Top + r.Height * 0.28f) * s),
+                var light = Bibui.Core.Draw.RasterShader.Radial(new System.Numerics.Vector2((r.Left + r.Width * 0.32f) * s, (r.Top + r.Height * 0.28f) * s),
                     r.Width * s, [Rgba.White.WithAlpha(235), accent, deep], [0f, 0.42f, 1f]);
                 ctx.DrawRect(ctx.Physical(r.Left, r.Top, r.Width, r.Height), rad * s, new Paint { Fill = Rgba.White, Shader = light });
                 // A ring round it, tilted: an orbit.

@@ -26,12 +26,12 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- The window and renderer this package is, under the names BibuiApp.cs uses. -->
-    <Using Include="Bibui.Runtime.Platform.SilkWindow" Alias="AppWindow" />
+    <Using Include="Bibui.Core.Runtime.Platform.SilkWindow" Alias="AppWindow" />
     <Using Include="Bibui.Raster.Skia.SkiaGlRenderer" Alias="AppRenderer" />
     <Compile Include="../BibuiApp.cs" Link="BibuiApp.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
   </ItemGroup>

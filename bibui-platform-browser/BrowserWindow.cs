@@ -1,9 +1,9 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
-using Bibui.Draw;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Draw;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 
 namespace Bibui.Platform.Browser;
 

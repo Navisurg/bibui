@@ -114,9 +114,9 @@ it yourself on Escape, on Submit, or on a press elsewhere.
 ## Example
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
-using Bibui.TextEdit;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
 
 sealed class EmailInput
 {
@@ -154,9 +154,9 @@ sealed class EmailInput
 A textarea is the same, with `Multiline` and a height pushed for it:
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
-using Bibui.TextEdit;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
 
 sealed class MessageBox
 {

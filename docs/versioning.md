@@ -6,7 +6,7 @@ a part of that API is retired.
 ## Semantic versioning
 
 bibui follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
-Every public package (`Bibui`, `Bibui.Gl`, `Bibui.Testing`,
+Every public package (`Bibui.Core`, `Bibui.Gl`, `Bibui.Testing`,
 `Bibui.Raster.Skia`, `Bibui.Raster.Managed`, `Bibui.Raster.Managed.Backend`,
 `Bibui.Platform.Silk`, `Bibui.Platform.Wayland`, `Bibui.Platform.Browser` and
 the five `Bibui.App` packages) is released together, at the same version, from one tag. Depend on one version of all of them.

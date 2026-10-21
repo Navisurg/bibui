@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- The managed PNG codec (bibui/src/Imaging), checked pixel for pixel against
+  <!-- The managed PNG codec (bibui-core/src/Imaging), checked pixel for pixel against
        SkiaSharp's decode of every PNG in the repo. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -19,6 +19,6 @@
   <ItemGroup>
     <!-- Skia: what the parameterless new BibuiRuntime()/BibuiRenderer() draw with. -->
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
-    <ProjectReference Include="../../bibui/bibui.csproj" />
+    <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
   </ItemGroup>
 </Project>

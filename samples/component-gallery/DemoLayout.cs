@@ -1,5 +1,5 @@
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 namespace ComponentGallery;
 
@@ -409,7 +409,7 @@ internal static class DemoLayout
                         Box swatch = runtime.Box().Px(48f, 12f);
                         swatch.Style.CornerRadius = 3f;
                         swatch.Style.BackgroundGradient = Gradient.Horizontal(
-                            [.. (Bibui.Theming.Colormaps.Get(name) ?? []).Select(s => new ColorStop(s.Stop, UiColor.Hex(s.Color)))]);
+                            [.. (Bibui.Core.Theming.Colormaps.Get(name) ?? []).Select(s => new ColorStop(s.Stop, UiColor.Hex(s.Color)))]);
                     }
                     runtime.Gap(8f);
                     runtime.Text(name);

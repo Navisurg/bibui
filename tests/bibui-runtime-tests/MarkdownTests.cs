@@ -1,7 +1,7 @@
 using System.Text;
-using Bibui;
-using Bibui.Runtime;
-using Bibui.TextEdit;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.TextEdit;
 using Bibui.Raster.Skia;
 
 /// <summary>

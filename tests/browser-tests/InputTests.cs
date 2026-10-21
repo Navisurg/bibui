@@ -1,9 +1,10 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using Bibui.Core;
 using Bibui.Platform.Browser;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
-using Bibui.TextEdit;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
+using Bibui.Core.TextEdit;
 
 namespace Bibui.BrowserTests;
 

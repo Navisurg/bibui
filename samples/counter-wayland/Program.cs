@@ -1,7 +1,7 @@
 // The counter on Wayland: the same code as samples/counter, with the
 // Bibui.App.WaylandManaged package; it publishes as one Native AOT binary.
 using Bibui.App;
-using Bibui.Runtime;
+using Bibui.Core.Runtime;
 
 var runtime = BibuiRuntime.Create();
 using var app = BibuiApp.Open(runtime, new("Counter (Wayland)", 360, 160));

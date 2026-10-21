@@ -55,8 +55,8 @@ None. The scroll position lives on the view, a retained box.
 ## Example
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 sealed class LogView
 {

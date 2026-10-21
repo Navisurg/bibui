@@ -57,8 +57,8 @@ None. A button has no value. What a click means is up to you.
 ## Example
 
 ```csharp
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 sealed class Counter
 {

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 using Bibui.Raster.Skia;
 
 /// <summary>

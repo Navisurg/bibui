@@ -5,7 +5,7 @@
 // is a frame to draw.
 using Bibui.Platform.Browser;
 using Bibui.Raster.Managed.Backend;
-using Bibui.Runtime;
+using Bibui.Core.Runtime;
 
 // The app runs only in the browser, as BrowserWindow does.
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("browser")]

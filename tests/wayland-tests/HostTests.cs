@@ -1,8 +1,9 @@
 using System.Runtime.InteropServices;
+using Bibui.Core;
 using Bibui.Platform.Wayland;
 using Bibui.Platform.Wayland.Protocol;
-using Bibui.Runtime;
-using Bibui.Runtime.Platform;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 using Bibui.Raster.Skia;
 
 namespace Bibui.WaylandTests;
@@ -271,16 +272,16 @@ internal static unsafe class HostTests
             // into by a renderer, and compared with the same frame drawn packed.
             var runtime = BibuiRuntime.Create();
             using var skia = new SkiaCpuRenderer();
-            runtime.SetBuild(() => Bibui.Arrange.FillY(Bibui.Arrange.FillX(runtime.Box()))
-                    .Styled(new Bibui.Style { BackgroundColor = Bibui.UiColor.Accent, CornerRadius = 8f }),
-                new Bibui.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });
+            runtime.SetBuild(() => Bibui.Core.Arrange.FillY(Bibui.Core.Arrange.FillX(runtime.Box()))
+                    .Styled(new Bibui.Core.Style { BackgroundColor = Bibui.Core.UiColor.Accent, CornerRadius = 8f }),
+                new Bibui.Core.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });
             pool = new BufferPool<ShmBuffer>(new ShmAllocator(_shm, bufferListener, null), depth: 2);
             var buffer = pool.TryAcquire(64, 48)!;
             runtime.Step();
             skia.Draw(runtime.DrawList, buffer.Pixels);
             var shmPixels = new ReadOnlySpan<byte>((void*)buffer.Map, 64 * 48 * 4).ToArray();
             var reference = new byte[64 * 48 * 4];
-            fixed (byte* p = reference) skia.Draw(runtime.DrawList, new Bibui.Draw.RasterPixels((nint)p, 64, 48, 64 * 4));
+            fixed (byte* p = reference) skia.Draw(runtime.DrawList, new Bibui.Core.Draw.RasterPixels((nint)p, 64, 48, 64 * 4));
             Assert.True(shmPixels.AsSpan().SequenceEqual(reference), "shm pixels equal the frame drawn packed");
             Assert.True(WaylandNative.wl_display_roundtrip(display) >= 0, "the compositor accepted pool and buffer");
             pool.Clear();

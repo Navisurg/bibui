@@ -1,5 +1,5 @@
-using Bibui;
-using Bibui.Runtime;
+using Bibui.Core;
+using Bibui.Core.Runtime;
 
 namespace ComponentGallery;
 
@@ -22,7 +22,7 @@ internal sealed record DisplayState
 internal static class DemoDisplay
 {
     // Nothing edits a label, so every one shares a state no one reads.
-    private static readonly Bibui.TextEdit.TextEditState NoEdit = new();
+    private static readonly Bibui.Core.TextEdit.TextEditState NoEdit = new();
 
     private static readonly string LongFiller = "When content is genuinely long, the box stops at six lines and scrolls. "
         + string.Join(' ', Enumerable.Repeat("Filler sentence to fill many wrapped lines.", 30));
@@ -46,7 +46,7 @@ internal static class DemoDisplay
     // The editable ellipsis: what an application would hold for it.
     private static readonly BibuiStr EllipsisText = BibuiStr.FromStrLit(
         "This is a very long label that gets truncated with an ellipsis character");
-    private static readonly Bibui.TextEdit.TextEditState EllipsisEdit = new();
+    private static readonly Bibui.Core.TextEdit.TextEditState EllipsisEdit = new();
     private static bool EllipsisFocused;
 
     // A line in a dark box of the given width, ending in "…" when it is wider
@@ -68,7 +68,7 @@ internal static class DemoDisplay
         if (line.Pressed) EllipsisFocused = true;
         if (EllipsisFocused)
             foreach (var ev in runtime.UnconsumedEvents)
-                if (ev is { IsKeyDown: true, Key: Bibui.Key.Escape } or { Kind: Bibui.TextEdit.BibUiEventKind.Submit })
+                if (ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape } or { Kind: Bibui.Core.TextEdit.BibUiEventKind.Submit })
                 {
                     EllipsisFocused = false;
                     ev.Eat();

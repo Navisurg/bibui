@@ -20,7 +20,7 @@
   <ItemGroup>
     <!-- Skia: what BibuiPage.Launch renders with, named rather than defaulted. -->
     <ProjectReference Include="../bibui-raster-skia/bibui-raster-skia.csproj" />
-    <ProjectReference Include="../bibui/bibui.csproj" />
+    <ProjectReference Include="../bibui-core/bibui-core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
