@@ -53,7 +53,7 @@ public static class Tooltip
             pill.Style.BackgroundColor = UiColor.TextPrimary;
             pill.Style.Shadow = runtime.Theme.Elevation.Level(ElevationTokens.Tooltip);
             using (runtime.PushParent(pill))
-                runtime.Text(text, ComponentSize.Sm, UiColor.Background);
+                runtime.Text(text, ComponentSize.Sm, UiColor.Surface);
         }
         return pill;
     }

@@ -100,7 +100,7 @@ public static class TabsExtensions
                 tab.SizeY = SemanticSize.ParentPct(1f);
                 tab.Style.Padding = EdgeInsets.Symmetric(horizontal: PadX, vertical: 0f);
                 tab.Style.CornerRadius = RadiusSm;
-                tab.Style.BackgroundColor = active ? UiColor.Background : (UiColor?)null;
+                tab.Style.BackgroundColor = active ? UiColor.Surface : (UiColor?)null;
                 tab.Style.HoverBackgroundColor = active ? (UiColor?)null : UiColor.SurfaceRaisedHover;
 
                 // Centred down the tab, which has the strip's height.

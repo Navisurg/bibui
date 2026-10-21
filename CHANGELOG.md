@@ -31,6 +31,11 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Changed
 
+- **Only the frame's ground is in the theme's background.** A tooltip's text
+  and the active tab are drawn in `Surface`, not `Background`, so a theme
+  whose background is transparent (`#00000000`) gives a transparent frame for
+  a host to compose over its own content, and both still show. With bibui's
+  own themes, where the two are the same colour, nothing changes.
 - **The core package is `Bibui.Core` (breaking).** The package `Bibui` is
   now `Bibui.Core`, built from `bibui-core/` into the assembly
   `Bibui.Core`, and its namespaces moved under it: `Bibui` is

@@ -5434,6 +5434,51 @@ Run("runtime.Tabs: clicking a tab reports its value", () =>
     Eq("b", value, "clicking Beta picks it");
 });
 
+Run("A transparent theme background clears the frame to transparent; the active tab and a tooltip's text still show", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    var theme = runtime.Theme with { Colors = runtime.Theme.Colors with { Background = "#00000000" } };
+    TabOption[] items = [new("Alpha", "a"), new("Beta", "b")];
+    Box? pill = null, strip = null;
+    runtime.SetBuild(
+        () =>
+        {
+            var column = runtime.ColumnPx(300f, 200f);
+            using (runtime.PushParent(column))
+            {
+                strip = runtime.Tabs("tabs", items, "a").Node;
+                pill = Bibui.Core.Runtime.Tooltip.Build(runtime, "A hint", strip);
+                pill.Parent!.At(100f, 120f);
+            }
+            return column;
+        },
+        theme, new SurfaceOptions { Width = 300, Height = 200 });
+    runtime.Step();
+    var frame = runtime.Frame();
+    byte Alpha(float x, float y) => frame.RawBgraBytes[((int)y * frame.Width + (int)x) * 4 + 3];
+    uint Bgra(float x, float y) => BitConverter.ToUInt32(frame.RawBgraBytes, ((int)y * frame.Width + (int)x) * 4);
+
+    Eq(default(Rgba), runtime.DrawList.Ops[0].Color, "the frame opens with a transparent clear");
+    Eq((byte)0, Alpha(290f, 190f), "where nothing is drawn, the frame is transparent");
+    var alpha = BibuiPage.From(runtime, runtime.BuildTree).GetBounds("tabs-a");
+    float tabY = alpha.Y + alpha.Height / 2f;
+    IsTrue(Bgra(alpha.X + 2f, tabY) != Bgra(strip!.Rect.X + 1f, tabY), "the active tab has a fill of its own, not the strip showing through");
+
+    // The pill's inside, clear of its rounded corners: the text is drawn in a
+    // colour of its own, not in the pill's fill.
+    int x0 = (int)pill!.Rect.X + 4, y0 = (int)pill.Rect.Y + 4, x1 = (int)(pill.Rect.X + pill.Extent.X) - 4, y1 = (int)(pill.Rect.Y + pill.Extent.Y) - 4;
+    int fill = (y0 * frame.Width + x0) * 4;
+    int text = 0;
+    for (int y = y0; y < y1; y++)
+        for (int x = x0; x < x1; x++)
+        {
+            int i = (y * frame.Width + x) * 4;
+            if (frame.RawBgraBytes[i] != frame.RawBgraBytes[fill] || frame.RawBgraBytes[i + 1] != frame.RawBgraBytes[fill + 1]
+                || frame.RawBgraBytes[i + 2] != frame.RawBgraBytes[fill + 2]) text++;
+        }
+    IsTrue(text > 0, "the tooltip's text shows on its pill");
+});
+
 Run("runtime.Expander: a click on the header reports a toggle, and the body is there only while open", () =>
 {
     var runtime = BibuiRuntime.Create();
