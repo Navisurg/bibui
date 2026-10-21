@@ -205,8 +205,8 @@ JIT for now.
 ## Documentation
 
 The documentation is online at
-[navisurgvision.com/bibui](https://navisurgvision.com/bibui). The same pages
-are in [`docs`](docs):
+[navisurgvision.com/bibui](https://navisurgvision.com/bibui). In this
+repository:
 
 - [Getting started](docs/getting-started.md): from an empty project to a
   component with state, a headless test and a Native AOT binary.
