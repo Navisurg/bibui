@@ -18,9 +18,11 @@ public sealed partial class BibuiRuntime
     /// A text showing <paramref name="text"/>, linked under the parent
     /// in scope and sized by the size stacks — on an axis with nothing pushed,
     /// by its own text. Set in <paramref name="fontSize"/>, or the size in
-    /// scope, and in <paramref name="family"/>, or the family in scope, at the
-    /// weight in scope (<see cref="PushFontSize"/>, <see cref="PushFontFace"/>);
-    /// <paramref name="textColor"/>, or the primary text colour.
+    /// scope, in <paramref name="family"/>, or the family in scope, and at
+    /// <paramref name="weight"/>, or the weight in scope (<see cref="BeginFontSize"/>,
+    /// <see cref="BeginFontFace"/>); <paramref name="textColor"/>, or the primary
+    /// text colour. <c>runtime.Text(title, weight: FontWeight.Bold)</c> is one
+    /// bold text; a face begun is for everything built inside it.
     ///
     /// <para>The text is copied into the node, so a string, a slice of a
     /// <see cref="BibuiStr"/> or a buffer on the stack may all be passed, and
@@ -31,9 +33,9 @@ public sealed partial class BibuiRuntime
     /// again.</para>
     /// </summary>
     public Text Text(ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null,
-        FontSlot? family = null)
+        FontSlot? family = null, FontWeight? weight = null)
     {
-        return DescribeText(_texts.Next(), text, fontSize, textColor, family);
+        return DescribeText(_texts.Next(), text, fontSize, textColor, family, weight);
     }
 
     /// <summary>
@@ -45,9 +47,9 @@ public sealed partial class BibuiRuntime
 
     /// <summary>
     /// The font a <see cref="Text"/> built at this point would be set
-    /// in: <paramref name="size"/>, or the size pushed with <see cref="PushFontSize"/>,
+    /// in: <paramref name="size"/>, or the size pushed with <see cref="FontSize"/>,
     /// or <see cref="ComponentSize.Md"/>; in <paramref name="family"/>, or the
-    /// family pushed with <see cref="PushFontFace"/>; at the weight pushed with
+    /// family pushed with <see cref="FontFace"/>; at the weight pushed with
     /// it; at the surface's scale. Hand it to <see cref="Fonts"/> to measure
     /// what such a text would show.
     /// </summary>
@@ -63,17 +65,17 @@ public sealed partial class BibuiRuntime
     /// to find it by, or to animate.
     /// </summary>
     public Text TextFromId(string id, ReadOnlySpan<char> text, FontSize? fontSize = null,
-        UiColor? textColor = null, FontSlot? family = null)
+        UiColor? textColor = null, FontSlot? family = null, FontWeight? weight = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         return DescribeText(_retainedTexts.FromKey(id, id, static key => new Text { Id = key }),
-            text, fontSize, textColor, family);
+            text, fontSize, textColor, family, weight);
     }
 
     /// <summary>
     /// The icon named <paramref name="name"/>, linked under the parent in
     /// scope: a square <paramref name="size"/> px on a side, or the size pushed
-    /// with <see cref="PushFontSize"/>, or Md — so an icon beside a label is the
+    /// with <see cref="FontSize"/>, or Md — so an icon beside a label is the
     /// label's size. It is as large as its <see cref="Icon.Size"/>, which may be
     /// changed on the icon that came back; the size stacks do not reach it.
     /// The name is one of bibui's icons or one the app registered with
@@ -94,7 +96,7 @@ public sealed partial class BibuiRuntime
         LinkUnder(icon, parent: null);
         icon.ResetIcon();
         icon.Name = name;
-        icon.Size = size is { } pixels ? FontSize.Px(pixels) : SizeInScope();
+        icon.Size = size is { } pixels ? Bibui.Core.FontSize.Px(pixels) : SizeInScope();
         return icon;
     }
 
@@ -132,7 +134,7 @@ public sealed partial class BibuiRuntime
     }
 
     /// <summary>
-    /// The parent in scope: the node the last <see cref="PushParent"/> pushed,
+    /// The parent in scope: the node the last <see cref="Parent"/> pushed,
     /// which what is built now is linked under. For a builder that describes
     /// the contents of a box its caller acquired and pushed. Throws when
     /// nothing is pushed.
@@ -155,7 +157,7 @@ public sealed partial class BibuiRuntime
     // A text is the one node sized by what it holds: on an axis with nothing
     // pushed, it is as large as its text.
     private Text DescribeText(Text text, ReadOnlySpan<char> content, FontSize? fontSize, UiColor? textColor,
-        FontSlot? family)
+        FontSlot? family, FontWeight? weight)
     {
         ResetNode(text);
         text.SizeX = _sizeXStack.Count > 0 ? _sizeXStack[^1] : SemanticSize.Text();
@@ -165,17 +167,17 @@ public sealed partial class BibuiRuntime
         text.Size = fontSize ?? SizeInScope();
         text.Color = textColor;
         var face = FaceInScope();
-        text.Weight = face.Weight;
+        text.Weight = weight ?? face.Weight;
         text.Family = family ?? face.Family;
         return text;
     }
 
-    // The family and weight pushed with PushFontFace, or the body family at its
+    // The family and weight begun with BeginFontFace, or the body family at its
     // regular weight.
     private (FontSlot Family, FontWeight Weight) FaceInScope() =>
         _faceStack.Count > 0 ? _faceStack[^1] : (FontSlot.Body, FontWeight.Regular);
 
-    // The size pushed with PushFontSize, or Md.
+    // The size pushed with BeginFontSize, or Md.
     private FontSize SizeInScope() => _fontSizeStack.Count > 0 ? _fontSizeStack[^1] : ComponentSize.Md;
 
     private void RewindLeaves()

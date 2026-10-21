@@ -273,7 +273,7 @@ internal static unsafe class ScaleTests
                     BackgroundColor = Bibui.Core.UiColor.Accent, CornerRadius = 8f, Padding = new Bibui.Core.EdgeInsets(6f, 6f, 6f, 6f),
                 };
                 box.ChildLayoutAxis = Bibui.Core.LayoutAxis.Y;
-                using (runtime.PushParent(box))
+                using (runtime.Parent(box))
                 {
                     runtime.Text("Sharp at 1.25×");
                     runtime.Text("ÆØÅ fig. 0123");

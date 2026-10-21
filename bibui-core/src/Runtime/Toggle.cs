@@ -46,7 +46,7 @@ public static class ToggleExtensions
 
         UiColor ink = disabled ? TextColor.Disabled : TextColor.Primary;
         bool hasLabel = !label.IsEmpty;
-        using (runtime.PushParent(box))
+        using (runtime.Parent(box))
         {
             if (icon is not null)
             {

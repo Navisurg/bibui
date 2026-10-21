@@ -59,7 +59,7 @@ public static class Menu
         style.Shadow = theme.Elevation.Level(ElevationTokens.Overlay);
         style.BorderColor = UiColor.Border;
         style.BackgroundColor = UiColor.SurfaceRaised;
-        return new MenuScope(runtime, list, runtime.PushParent(list));
+        return new MenuScope(runtime, list, runtime.Parent(list));
     }
 
     /// <summary>
@@ -85,7 +85,7 @@ public static class Menu
         band.SizeX = SemanticSize.ParentPct(1f);
         band.SizeY = SemanticSize.ChildrenSum();
         band.Style.Padding = EdgeInsets.Symmetric(horizontal: RuleInset, vertical: RuleGap);
-        using (runtime.PushParent(band))
+        using (runtime.Parent(band))
         {
             Box rule = runtime.Box();
             rule.SizeX = SemanticSize.ParentPct(1f);
@@ -104,8 +104,8 @@ public static class Menu
         band.SizeX = SemanticSize.ParentPct(1f);
         band.SizeY = SemanticSize.ChildrenSum();
         band.Style.Padding = EdgeInsets.Symmetric(horizontal: ItemPadX, vertical: LabelPadY);
-        using (runtime.PushParent(band))
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(text, ComponentSize.Sm, UiColor.TextSecondary);
+        using (runtime.Parent(band))
+            using (runtime.FontFace(weight: FontWeight.Bold)) runtime.Text(text, ComponentSize.Sm, UiColor.TextSecondary);
         return band;
     }
 }
@@ -136,7 +136,7 @@ public static class MenuExtensions
         row.Style.HoverBackgroundColor = disabled ? (UiColor?)null : UiColor.SurfaceRaisedHover;
 
         UiColor ink = disabled ? UiColor.TextDisabled : UiColor.TextPrimary;
-        using (runtime.PushParent(row))
+        using (runtime.Parent(row))
         {
             if (icon is not null)
             {
@@ -144,7 +144,7 @@ public static class MenuExtensions
                 Box cell = runtime.Box();
                 cell.ChildLayoutAxis = LayoutAxis.Y;
                 cell.SizeX = cell.SizeY = SemanticSize.ChildrenSum();
-                using (runtime.PushParent(cell))
+                using (runtime.Parent(cell))
                 {
                     runtime.Gap(3f);
                     runtime.Icon(icon, IconSize).Color = ink;

@@ -30,7 +30,7 @@ static partial class IconNameTests
                 () =>
                 {
                     var row = runtime.Row().Sized(Size.Px(100f), Size.Px(40f));
-                    using (runtime.PushParent(row))
+                    using (runtime.Parent(row))
                     {
                         try { runtime.Icon("folder-open", 20f); }
                         catch (ArgumentException e) { thrown = e; }

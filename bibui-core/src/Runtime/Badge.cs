@@ -42,7 +42,7 @@ public static class Badge
             style.BorderWidth = runtime.Theme.Borders.Width;
         }
 
-        using (runtime.PushParent(pill))
+        using (runtime.Parent(pill))
         {
             if (leadingDot)
             {

@@ -128,7 +128,7 @@ public static class ScrollList
         if (pt.Off != 0f) runtime.RequestFrame();
 
         // The bar, before the rows: what it does moves the rows chosen below.
-        using (runtime.PushParent(area))
+        using (runtime.Parent(area))
             pt = runtime.Scrollbar(id + "-bar", pt, count, height / pitch);
         ClampTarget(ref pt, pitch, maxPx);
 
@@ -138,7 +138,7 @@ public static class ScrollList
         pt.Last = Math.Clamp(pt.First + (int)MathF.Ceiling(height / pitch) + 1, pt.First, count);
         view.ViewOffset = view.TargetViewOffset = new Vector2(0f, (top - pt.First) * pitch);
 
-        runtime.PushParent(view);   // EndScrollList pops it
+        runtime.Parent(view);   // EndScrollList pops it
     }
 
     /// <summary>

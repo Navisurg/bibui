@@ -31,7 +31,7 @@ static class ScrollListTests
             Runtime.SetBuild(() =>
             {
                 var panel = Runtime.BoxFromId("panel").Sized(Size.Fill, Size.Fill);
-                using (Runtime.PushParent(panel))
+                using (Runtime.Parent(panel))
                 {
                     Runtime.BeginScrollList("list", ref Pt, Pitch, Count);
                     for (int i = Pt.First; i < Pt.Last; i++)

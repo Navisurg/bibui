@@ -135,7 +135,7 @@ internal static class DamageOracle
     // A text at the bold weight.
     private static Text Bold(BibuiRuntime runtime, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null)
     {
-        using (runtime.PushFontFace(weight: FontWeight.Bold))
+        using (runtime.FontFace(weight: FontWeight.Bold))
             return runtime.Text(text, fontSize, textColor);
     }
 
@@ -149,7 +149,7 @@ internal static class DamageOracle
         {
             if (i > 0) rt.Gap(gap);
             var row = rt.Row();
-            using (rt.PushParent(row))
+            using (rt.Parent(row))
                 for (int j = i; j < Math.Min(nodes.Count, i + perRow); j++)
                 {
                     if (j > i) rt.Gap(gap);
@@ -177,7 +177,7 @@ internal static class DamageOracle
     {
         var page = rt.Column().Sized(Size.Fill, Size.Fill);
         page.Style.Padding = EdgeInsets.All(pad);
-        using (rt.PushParent(page)) build();
+        using (rt.Parent(page)) build();
         return page;
     }
 
@@ -276,7 +276,7 @@ internal static class DamageOracle
                 TextField.InputStyle(rt, field, focus == index);
                 field.Sized(Size.Fill, Size.Px(36f));
                 BibuiWidget line;
-                using (rt.PushParent(field))
+                using (rt.Parent(field))
                     line = rt.TextField(id, text, edit, focus == index, placeholder: placeholder);
                 if (line.Pressed) focus = index;
                 return field;
@@ -317,7 +317,7 @@ internal static class DamageOracle
                 {
                     if (f % 2 == 0) Bold(rt, $"Tick {f}"); else rt.Text($"Tick {f}");
                     rt.Gap(10f);
-                    using (rt.PushParent(rt.Row()))
+                    using (rt.Parent(rt.Row()))
                         for (int i = 0; i < 6; i++)
                         {
                             if (i > 0) rt.Gap(8f);
@@ -330,7 +330,7 @@ internal static class DamageOracle
                     rt.Gap(10f);
                     if (f % 14 < 7) { Badge.Build(rt, "Notice"); rt.Gap(10f); }
                     // A list that gains an entry every ten frames, sometimes with one pinned in front.
-                    using (rt.PushParent(rt.Column()))
+                    using (rt.Parent(rt.Column()))
                     {
                         if ((f / 10) % 2 == 1) rt.Text("Pinned");
                         for (int i = 0; i < 2 + f / 10; i++) rt.Text($"Entry {i}");
@@ -353,7 +353,7 @@ internal static class DamageOracle
                     bar.Style.CornerRadius = 6f;
                     bar.Style.BackgroundColor = UiColor.Hex(new Rgba(59, 130, 246, (byte)Math.Clamp((int)(a * 255f), 0, 255)).ToString());
                     rt.Gap(12f);
-                    using (rt.PushParent(rt.Row()))
+                    using (rt.Parent(rt.Row()))
                     {
                         rt.Gap(w / 2f);
                         var dot = rt.Box().Sized(Size.Px(40f), Size.Px(40f));
@@ -388,7 +388,7 @@ internal static class DamageOracle
                 if (shown > 0.001f)
                 {
                     var d = Dialog.Begin(rt, "dialog", shown, width: 320f);
-                    using (rt.PushFontFace(weight: FontWeight.Bold)) rt.Text("Dialog");
+                    using (rt.FontFace(weight: FontWeight.Bold)) rt.Text("Dialog");
                     rt.Gap(12f);
                     rt.Button("dialog-ok", "OK");
                     d.End();
@@ -397,7 +397,7 @@ internal static class DamageOracle
                 for (int i = 0; i < grid.Length; i++) grid[i] = rt.Button($"u{i}", $"Under {i}").Node;
                 return Page(rt, 16f, () =>
                 {
-                    using (rt.PushParent(rt.Row()))
+                    using (rt.Parent(rt.Row()))
                     {
                         UiNode.PushIntoParent(rt.ParentInScope, trigger.Node);
                         rt.Gap(12f);
@@ -457,7 +457,7 @@ internal static class DamageOracle
             UiNode Card(int i)
             {
                 var card = rt.Column().Sized(Size.Px(190f), Size.Px(150f));
-                using (rt.PushParent(card))
+                using (rt.Parent(card))
                 {
                     rt.Button($"c{i}a", "Open");
                     rt.Gap(6f);
@@ -516,7 +516,7 @@ internal static class DamageOracle
                 }.Sized(Size.Px(300f), Size.Px(120f));
                 return Page(rt, 16f, () =>
                 {
-                    using (rt.PushParent(rt.Row()))
+                    using (rt.Parent(rt.Row()))
                     {
                         rt.Spinner();
                         rt.Gap(16f);
@@ -541,7 +541,7 @@ internal static class DamageOracle
                 {
                     var panel = rt.Row();
                     panel.Style = new Style { Opacity = o, Padding = EdgeInsets.All(8f), BackgroundColor = UiColor.Hex("#27272a"), CornerRadius = 8f };
-                    using (rt.PushParent(panel))
+                    using (rt.Parent(panel))
                         for (int i = 0; i < 4; i++)
                         {
                             if (i > 0) rt.Gap(6f);
@@ -716,7 +716,7 @@ internal static class DamageOracle
                 column.ChildLayoutAxis = LayoutAxis.Y;
                 column.Sized(Size.Fill, Size.Fill);
                 column.Style.Padding = EdgeInsets.All(8f);
-                using (rt.PushParent(column))
+                using (rt.Parent(column))
                 {
                     for (int start = 0; start < 600; start += 20)
                     {
@@ -725,7 +725,7 @@ internal static class DamageOracle
                         row.ChildLayoutAxis = LayoutAxis.X;
                         row.Sized(Size.Fill);
                         row.SizeY = SemanticSize.ChildrenSum();
-                        using (rt.PushParent(row))
+                        using (rt.Parent(row))
                         {
                             for (int i = start; i < start + 20; i++)
                             {

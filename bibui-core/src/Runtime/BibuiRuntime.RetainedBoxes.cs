@@ -36,7 +36,7 @@ public sealed partial class BibuiRuntime
     /// convention that can be broken by asking too early.</para>
     ///
     /// <para>The box is linked under <paramref name="parent"/>, or under the
-    /// top of <see cref="PushParent"/>'s stack when none is given.</para>
+    /// top of <see cref="Parent"/>'s stack when none is given.</para>
     /// </summary>
     public Box BoxFromId(string id, InteractionKinds claims = InteractionKinds.None, UiNode? parent = null)
     {

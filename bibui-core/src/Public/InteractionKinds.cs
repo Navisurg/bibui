@@ -61,7 +61,7 @@ public enum InteractionKinds
 
     /// <summary>
     /// Children are clipped to this box: painting, and the rects of boxes
-    /// acquired under it with <c>BibuiRuntime.PushParent</c> before they are tested.
+    /// acquired under it with <c>BibuiRuntime.BeginParent</c> before they are tested.
     /// Takes nothing itself, but like <see cref="ClampX"/> counts as interactive.
     /// </summary>
     Clip = 1 << 8,

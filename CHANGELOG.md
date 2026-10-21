@@ -42,14 +42,18 @@ All notable changes to bibui are recorded here. The format is based on
   - `Gap(px)` and `Spacer(size)` space along the parent's axis;
     `Spacer(Size.Fill)` is a spring.
   - `BeginCenter` centres along the parent's axis, `BeginCenterAcross` across
-    it, and `BeginCenterX`/`BeginCenterY` choose between them by the parent's
-    axis.
+    it (handing back the cell it makes), `BeginCenterX`/`BeginCenterY` choose
+    between them by the parent's axis, and `BeginCenterXY` centres both ways.
   - Every scope has a `Begin`/`End` pair (`BeginParent(box)`/`EndParent(box)`,
     `BeginAxis`, `BeginSizeX`, `BeginFontSize`, `BeginFontFace`, the centres),
-    and `Push…` is the `Begin` handing back a scope whose `Dispose` is the
-    `End`.
+    and the scope form, named without `Begin` (`Parent(box)`, `Center()`,
+    `FontFace(...)`, …), is the `Begin` handing back a scope whose `Dispose`
+    is the `End`. `PushParent`, `PushFontSize` and the other `Push…` names
+    are gone.
   - `.At(x, y)` floats a node; `Styled`, `Padded` and `Clipped` are the
     node's fields, set as such.
+  - `Text` and `TextFromId` take a `weight`, as they take a `family`: one bold
+    text is `Text(title, weight: FontWeight.Bold)`, with no face begun.
 - **Only the frame's ground is in the theme's background.** A tooltip's text
   and the active tab are drawn in `Surface`, not `Background`, so a theme
   whose background is transparent (`#00000000`) gives a transparent frame for

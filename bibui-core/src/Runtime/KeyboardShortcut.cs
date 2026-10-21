@@ -29,7 +29,7 @@ public static class KeyboardShortcut
         row.ChildLayoutAxis = LayoutAxis.X;
         row.SizeX = SemanticSize.ChildrenSum();
         row.SizeY = SemanticSize.Pixels(KeyHeight);
-        using (runtime.PushParent(row))
+        using (runtime.Parent(row))
             for (int i = 0; i < keys.Length; i++)
             {
                 if (i > 0) runtime.Gap(KeyGap);

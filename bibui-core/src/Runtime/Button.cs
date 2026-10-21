@@ -82,7 +82,7 @@ public static class ButtonExtensions
         // otherwise says where the label sits with the padding.
         box.ChildLayoutAxis = LayoutAxis.X;
         box.SizeX = box.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(box))
+        using (runtime.Parent(box))
             runtime.Text(label, size, disabled ? TextColor.Disabled : TextColor.Primary);
 
         return new BibuiWidget(box, interaction);

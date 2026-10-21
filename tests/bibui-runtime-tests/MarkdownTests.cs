@@ -336,7 +336,7 @@ static class MarkdownTests
             runtime.SetBuild(() =>
             {
                 var page = runtime.Column().Sized(Size.Fill, Size.Fill);
-                using (runtime.PushParent(page))
+                using (runtime.Parent(page))
                     runtime.Markdown("same", source, width: 400f);
                 return page;
             }, surface);
@@ -347,8 +347,8 @@ static class MarkdownTests
             plain.SetBuild(() =>
             {
                 var page = plain.Column().Sized(Size.Fill, Size.Fill);
-                using (plain.PushParent(page))
-                using (plain.PushParent(plain.Column().Sized(Size.Px(400f))))
+                using (plain.Parent(page))
+                using (plain.Parent(plain.Column().Sized(Size.Px(400f))))
                     foreach (var t in texts) plain.Text(t);
                 return page;
             }, surface);

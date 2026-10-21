@@ -46,7 +46,7 @@ public static class ToggleGroupExtensions
         group.Style.Padding = EdgeInsets.All(line);   // the items sit inside the outline, not over it
 
         string? picked = null;
-        using (runtime.PushParent(group))
+        using (runtime.Parent(group))
         {
             for (int i = 0; i < items.Count; i++)
             {

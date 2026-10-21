@@ -48,7 +48,7 @@ public static class Popover
         style.Shadow = theme.Elevation.Level(ElevationTokens.Overlay);
         style.BorderColor = UiColor.Border;
         style.BackgroundColor = UiColor.SurfaceRaised;
-        return new PopoverScope(runtime, panel, runtime.PushParent(panel));
+        return new PopoverScope(runtime, panel, runtime.Parent(panel));
     }
 }
 

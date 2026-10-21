@@ -92,7 +92,7 @@ public static class Dialog
                 break;
         }
         runtime.EndParent(root);
-        return new DialogScope(runtime, root, panel, runtime.PushParent(panel));
+        return new DialogScope(runtime, root, panel, runtime.Parent(panel));
     }
 
     // The raised panel: retained, so it can be asked about and remembers its height.

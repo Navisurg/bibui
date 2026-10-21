@@ -118,7 +118,7 @@ public static class TextField
             selection.SizeX = SemanticSize.ChildrenSum();
             selection.SizeY = SemanticSize.ParentPct(1f);
             selection.Style.BackgroundColor = Highlight;
-            using (runtime.PushParent(selection)) Part(runtime, line[lo..hi], color);
+            using (runtime.Parent(selection)) Part(runtime, line[lo..hi], color);
         }
         if (hi < line.Length) Part(runtime, line[hi..], color);
     }
@@ -126,8 +126,8 @@ public static class TextField
     // A slice of the line, sized by its text whatever size is pushed.
     internal static void Part(BibuiRuntime runtime, ReadOnlySpan<char> text, TextColor color)
     {
-        using (runtime.PushSizeX(SemanticSize.Text()))
-        using (runtime.PushSizeY(SemanticSize.Text()))
+        using (runtime.SizeX(SemanticSize.Text()))
+        using (runtime.SizeY(SemanticSize.Text()))
             runtime.Text(text, textColor: color);
     }
 
@@ -284,7 +284,7 @@ public static class TextFieldExtensions
             ScrollToCaret(view, new Vector2(runtime.Fonts.Measure(shown[..caret], font), 0f), Vector2.Zero,
                 new Vector2(runtime.Fonts.Measure(shown, font), 0f), view.Extent / 4f);
 
-        using (runtime.PushParent(view))
+        using (runtime.Parent(view))
         {
             DrawLine(runtime, shown, lo, hi, color);
             // Draw carret last so it appears over text
@@ -350,7 +350,7 @@ public static class TextFieldExtensions
         int mark = focused && !empty ? Math.Clamp(edit.Mark, 0, shown.Length) : 0;
         int lo = Math.Min(caret, mark), hi = Math.Max(caret, mark);
 
-        using var inView = runtime.PushParent(view);
+        using var inView = runtime.Parent(view);
 
         // A row per line, LineAdvance apart.
         int index = 0, caretLine = -1;
@@ -367,7 +367,7 @@ public static class TextFieldExtensions
             // The selection's part on this line, in the line's offsets.
             int selectionStart = Math.Clamp(lo, line.Start, line.End) - line.Start;
             int selectionEnd = Math.Clamp(hi, line.Start, line.End) - line.Start;
-            using (runtime.PushParent(row))
+            using (runtime.Parent(row))
                 DrawLine(runtime, shown[line.Start..line.End], selectionStart, selectionEnd, color);
         }
 
@@ -417,8 +417,8 @@ public static class TextFieldExtensions
             return line;   // fits, or being edited: it scrolls instead
 
         runtime.Gap(DotsGap);
-        using (runtime.PushSizeX(SemanticSize.Text()))
-        using (runtime.PushSizeY(SemanticSize.Text()))
+        using (runtime.SizeX(SemanticSize.Text()))
+        using (runtime.SizeY(SemanticSize.Text()))
             runtime.Text(Dots, textColor: empty ? TextColor.Secondary : textColor);
         return line;
     }

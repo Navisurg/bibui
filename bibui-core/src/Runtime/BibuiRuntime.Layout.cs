@@ -1,6 +1,7 @@
 namespace Bibui.Core.Runtime;
 
-// Each stack is pushed by a Begin and popped by its End; a Push is the Begin
+// Each stack is pushed by a Begin and popped by its End; the scope form,
+// named without the Begin (Parent, Center, FontFace, ...), is the Begin
 // handing back a scope whose Dispose is the End, for a build that says them
 // with `using`. Either way they pair up before the build returns (SweepFrame).
 public sealed partial class BibuiRuntime
@@ -45,7 +46,7 @@ public sealed partial class BibuiRuntime
     }
 
     /// <summary><see cref="BeginParent"/>, ended when the scope is disposed.</summary>
-    public ParentScope PushParent(UiNode box)
+    public ParentScope Parent(UiNode box)
     {
         BeginParent(box);
         return new ParentScope(this, box);
@@ -114,6 +115,7 @@ public sealed partial class BibuiRuntime
     // The other then makes its cell in the parent, as tall (or wide) as it.
     // Begun the other way round, the second centres in the first's cell,
     // which is only as large as its content across, and that is a ring.
+    // BeginCenterXY begins them in that order.
 
     /// <summary>
     /// What is built until <see cref="EndCenter"/> is centred along the axis of
@@ -138,8 +140,9 @@ public sealed partial class BibuiRuntime
     /// What is built until <see cref="EndCenterAcross"/> is centred across the
     /// axis of the parent in scope (in a row: top to bottom), in a cell of its
     /// own that is as large as the parent across and as its content along.
+    /// Hands the cell back: a box like any other, to style or to move.
     /// </summary>
-    public void BeginCenterAcross()
+    public Box BeginCenterAcross()
     {
         var parent = ParentInScope;
         Box cell = parent.ChildLayoutAxis == LayoutAxis.X
@@ -148,6 +151,7 @@ public sealed partial class BibuiRuntime
         BeginParent(cell);
         Spacer(Size.Fill);
         _centerStack.Add(cell);
+        return cell;
     }
 
     /// <summary>Ends the innermost <see cref="BeginCenterAcross"/>.</summary>
@@ -183,6 +187,26 @@ public sealed partial class BibuiRuntime
         else BeginCenterAcross();
     }
 
+    /// <summary>
+    /// What is built until <see cref="EndCenterXY"/> is centred both ways in
+    /// the parent in scope: <see cref="BeginCenter"/> along its axis, then
+    /// <see cref="BeginCenterAcross"/> in it, the order that centres both (the
+    /// other order centres the second in the first's cell, which has no room).
+    /// The parent's size on both axes must be known. Hands the cell back.
+    /// </summary>
+    public Box BeginCenterXY()
+    {
+        BeginCenter();
+        return BeginCenterAcross();
+    }
+
+    /// <summary>Ends the innermost <see cref="BeginCenterXY"/>.</summary>
+    public void EndCenterXY()
+    {
+        EndCenterAcross();
+        EndCenter();
+    }
+
     /// <summary>Ends the innermost <see cref="BeginCenterX"/>.</summary>
     public void EndCenterX() => EndCenterEither("EndCenterX");
 
@@ -190,16 +214,19 @@ public sealed partial class BibuiRuntime
     public void EndCenterY() => EndCenterEither("EndCenterY");
 
     /// <summary><see cref="BeginCenter"/>, ended when the scope is disposed.</summary>
-    public CenterScope PushCenter() { BeginCenter(); return new CenterScope(this, _centerStack.Count); }
+    public CenterScope Center() { BeginCenter(); return new CenterScope(this, _centerStack.Count); }
 
     /// <summary><see cref="BeginCenterAcross"/>, ended when the scope is disposed.</summary>
-    public CenterScope PushCenterAcross() { BeginCenterAcross(); return new CenterScope(this, _centerStack.Count); }
+    public CenterScope CenterAcross() { BeginCenterAcross(); return new CenterScope(this, _centerStack.Count); }
 
     /// <summary><see cref="BeginCenterX"/>, ended when the scope is disposed.</summary>
-    public CenterScope PushCenterX() { BeginCenterX(); return new CenterScope(this, _centerStack.Count); }
+    public CenterScope CenterX() { BeginCenterX(); return new CenterScope(this, _centerStack.Count); }
 
     /// <summary><see cref="BeginCenterY"/>, ended when the scope is disposed.</summary>
-    public CenterScope PushCenterY() { BeginCenterY(); return new CenterScope(this, _centerStack.Count); }
+    public CenterScope CenterY() { BeginCenterY(); return new CenterScope(this, _centerStack.Count); }
+
+    /// <summary><see cref="BeginCenterXY"/>, ended when the scope is disposed.</summary>
+    public CenterScope CenterXY() { BeginCenterXY(); return new CenterScope(this, _centerStack.Count, both: true); }
 
     // X and Y chose along or across when they began; the entry says which.
     private void EndCenterEither(string end)
@@ -232,7 +259,7 @@ public sealed partial class BibuiRuntime
     public void EndAxis() => Pop(_axisStack, "EndAxis without a BeginAxis.");
 
     /// <summary><see cref="BeginAxis"/>, ended when the scope is disposed.</summary>
-    public AxisScope PushAxis(LayoutAxis axis)
+    public AxisScope Axis(LayoutAxis axis)
     {
         BeginAxis(axis);
         return new AxisScope(this, _axisStack.Count);
@@ -256,14 +283,14 @@ public sealed partial class BibuiRuntime
     public void EndSizeY() => Pop(_sizeYStack, "EndSizeY without a BeginSizeY.");
 
     /// <summary><see cref="BeginSizeX"/>, ended when the scope is disposed.</summary>
-    public SizeScope PushSizeX(SemanticSize size)
+    public SizeScope SizeX(SemanticSize size)
     {
         BeginSizeX(size);
         return new SizeScope(this, LayoutAxis.X, _sizeXStack.Count);
     }
 
     /// <summary><see cref="BeginSizeY"/>, ended when the scope is disposed.</summary>
-    public SizeScope PushSizeY(SemanticSize size)
+    public SizeScope SizeY(SemanticSize size)
     {
         BeginSizeY(size);
         return new SizeScope(this, LayoutAxis.Y, _sizeYStack.Count);
@@ -282,7 +309,7 @@ public sealed partial class BibuiRuntime
     public void EndFontSize() => Pop(_fontSizeStack, "EndFontSize without a BeginFontSize.");
 
     /// <summary><see cref="BeginFontSize"/>, ended when the scope is disposed.</summary>
-    public FontSizeScope PushFontSize(FontSize size)
+    public FontSizeScope FontSize(FontSize size)
     {
         BeginFontSize(size);
         return new FontSizeScope(this, _fontSizeStack.Count);
@@ -292,8 +319,8 @@ public sealed partial class BibuiRuntime
     /// Texts built until <see cref="EndFontFace"/> are set in <paramref name="family"/>
     /// at <paramref name="weight"/>. Either left out is the one already in scope,
     /// so <c>BeginFontFace(weight: FontWeight.Bold)</c> makes what is inside bold
-    /// in whatever family it was. A text's own family still wins
-    /// (<see cref="Text"/>); its weight is only ever the one in scope.
+    /// in whatever family it was. A text's own family and weight still win
+    /// (<see cref="Text"/>).
     /// </summary>
     public void BeginFontFace(FontSlot? family = null, FontWeight? weight = null)
     {
@@ -305,7 +332,7 @@ public sealed partial class BibuiRuntime
     public void EndFontFace() => Pop(_faceStack, "EndFontFace without a BeginFontFace.");
 
     /// <summary><see cref="BeginFontFace"/>, ended when the scope is disposed.</summary>
-    public FontFaceScope PushFontFace(FontSlot? family = null, FontWeight? weight = null)
+    public FontFaceScope FontFace(FontSlot? family = null, FontWeight? weight = null)
     {
         BeginFontFace(family, weight);
         return new FontFaceScope(this, _faceStack.Count);
@@ -323,7 +350,7 @@ public sealed partial class BibuiRuntime
     // (EndParent checks that itself).
 
     /// <summary>
-    /// Ends <see cref="PushParent"/> when disposed. A <c>default</c> scope
+    /// Ends <see cref="Parent"/> when disposed. A <c>default</c> scope
     /// began nothing and ends nothing, for a parent that is only sometimes there.
     /// </summary>
     public readonly struct ParentScope : IDisposable
@@ -344,7 +371,7 @@ public sealed partial class BibuiRuntime
         }
     }
 
-    /// <summary>Ends <see cref="PushSizeX"/> or <see cref="PushSizeY"/> when disposed.</summary>
+    /// <summary>Ends <see cref="SizeX"/> or <see cref="SizeY"/> when disposed.</summary>
     public readonly struct SizeScope : IDisposable
     {
         private readonly BibuiRuntime _runtime;
@@ -368,7 +395,7 @@ public sealed partial class BibuiRuntime
         }
     }
 
-    /// <summary>Ends <see cref="PushFontSize"/> when disposed.</summary>
+    /// <summary>Ends <see cref="FontSize"/> when disposed.</summary>
     public readonly struct FontSizeScope : IDisposable
     {
         private readonly BibuiRuntime _runtime;
@@ -383,12 +410,12 @@ public sealed partial class BibuiRuntime
         public void Dispose()
         {
             if (_runtime._fontSizeStack.Count != _depth)
-                throw new InvalidOperationException("PushFontSize was disposed out of order.");
+                throw new InvalidOperationException("A FontSize scope was disposed out of order.");
             _runtime.EndFontSize();
         }
     }
 
-    /// <summary>Ends <see cref="PushFontFace"/> when disposed.</summary>
+    /// <summary>Ends <see cref="FontFace"/> when disposed.</summary>
     public readonly struct FontFaceScope : IDisposable
     {
         private readonly BibuiRuntime _runtime;
@@ -403,32 +430,35 @@ public sealed partial class BibuiRuntime
         public void Dispose()
         {
             if (_runtime._faceStack.Count != _depth)
-                throw new InvalidOperationException("PushFontFace was disposed out of order.");
+                throw new InvalidOperationException("A FontFace scope was disposed out of order.");
             _runtime.EndFontFace();
         }
     }
 
-    /// <summary>Ends a <see cref="PushCenter"/>, <see cref="PushCenterAcross"/>, <see cref="PushCenterX"/> or <see cref="PushCenterY"/> when disposed.</summary>
+    /// <summary>Ends a <see cref="Center"/>, <see cref="CenterAcross"/>, <see cref="CenterX"/>, <see cref="CenterY"/> or <see cref="CenterXY"/> when disposed.</summary>
     public readonly struct CenterScope : IDisposable
     {
         private readonly BibuiRuntime _runtime;
         private readonly int _depth;
+        private readonly bool _both;   // a CenterXY scope: two entries, the cell's on top
 
-        internal CenterScope(BibuiRuntime runtime, int depth)
+        internal CenterScope(BibuiRuntime runtime, int depth, bool both = false)
         {
             _runtime = runtime;
             _depth = depth;
+            _both = both;
         }
 
         public void Dispose()
         {
             if (_runtime._centerStack.Count != _depth)
                 throw new InvalidOperationException("A centre scope was disposed out of order.");
-            _runtime.EndCenterEither("A centre scope");
+            if (_both) _runtime.EndCenterXY();
+            else _runtime.EndCenterEither("A centre scope");
         }
     }
 
-    /// <summary>Ends <see cref="PushAxis"/> when disposed.</summary>
+    /// <summary>Ends <see cref="Axis"/> when disposed.</summary>
     public readonly struct AxisScope : IDisposable
     {
         private readonly BibuiRuntime _runtime;
@@ -443,7 +473,7 @@ public sealed partial class BibuiRuntime
         public void Dispose()
         {
             if (_runtime._axisStack.Count != _depth)
-                throw new InvalidOperationException("PushAxis was disposed out of order.");
+                throw new InvalidOperationException("An Axis scope was disposed out of order.");
             _runtime.EndAxis();
         }
     }

@@ -30,8 +30,8 @@ public void BeginFontFace(FontSlot? family = null, FontWeight? weight = null)
 public void EndFontFace()
 ```
 
-`PushFontSize` and `PushFontFace` are the same Begins, handing back a scope
-whose `Dispose` is the End.
+`FontSize` and `FontFace` are the same Begins, handing back a scope whose
+`Dispose` is the End.
 
 - `text` is copied into the node, so a `string`, a slice of a `BibuiStr` or
   text formatted into a stack buffer will all do, and may change as soon as the

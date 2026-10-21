@@ -30,13 +30,9 @@ public static class Avatar
         circle.Style.BackgroundColor = fill ?? UiColor.Accent;
 
         runtime.BeginParent(circle);
-        runtime.BeginCenterX();
-        runtime.BeginCenterY();
-        runtime.BeginFontFace(weight: FontWeight.Bold);
-        runtime.Text(initials, fontSize, ink ?? UiColor.AccentForeground);
-        runtime.EndFontFace();
-        runtime.EndCenterY();
-        runtime.EndCenterX();
+        runtime.BeginCenterXY();
+        runtime.Text(initials, fontSize, ink ?? UiColor.AccentForeground, weight: FontWeight.Bold);
+        runtime.EndCenterXY();
         runtime.EndParent(circle);
         return circle;
     }

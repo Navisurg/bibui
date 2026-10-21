@@ -85,7 +85,7 @@ public static class TabsExtensions
         strip.Style.Padding = new EdgeInsets(Inset, 4f, Inset, 4f);
 
         string? picked = null;
-        using (runtime.PushParent(strip))
+        using (runtime.Parent(strip))
         {
             for (int i = 0; i < items.Count; i++)
             {

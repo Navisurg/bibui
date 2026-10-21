@@ -63,7 +63,7 @@ public static class ExpanderExtensions
 
         Box? body = null;
         Interaction interaction;
-        using (runtime.PushParent(frame))
+        using (runtime.Parent(frame))
         {
             Box header = runtime.BoxFromId(id, InteractionKinds.LeftPress);
             interaction = runtime.InteractionsFor(header);
@@ -72,12 +72,10 @@ public static class ExpanderExtensions
             header.SizeY = SemanticSize.Pixels(theme.Density.Of(HeaderHeight));
             header.Style.Padding = EdgeInsets.Symmetric(horizontal: PadX, vertical: 0f);
             header.Style.CornerRadius = Radius;
-            using (runtime.PushParent(header))
+            using (runtime.Parent(header))
             {
                 runtime.BeginCenterAcross();
-                runtime.BeginFontFace(weight: FontWeight.Bold);
-                runtime.Text(title, textColor: TextColor.Primary);
-                runtime.EndFontFace();
+                runtime.Text(title, textColor: TextColor.Primary, weight: FontWeight.Bold);
                 runtime.EndCenterAcross();
                 runtime.Spacer(Size.Fill);
                 runtime.BeginCenterAcross();

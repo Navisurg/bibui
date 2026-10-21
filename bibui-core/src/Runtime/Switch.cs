@@ -47,7 +47,7 @@ public static class SwitchExtensions
         // With a label, the row is the outer box: acquired first, so the track
         // and the label are acquired under it.
         Box? row = !label.IsEmpty ? runtime.BoxFromId("row" + id) : null;
-        using var inRow = row is not null ? runtime.PushParent(row) : default;
+        using var inRow = row is not null ? runtime.Parent(row) : default;
         if (row is not null)
         {
             row.ChildLayoutAxis = LayoutAxis.X;   // whatever the caller pushed
@@ -100,7 +100,7 @@ public static class SwitchExtensions
 
         // Placed by a spacer before it: the track lays its children out along X
         // from its left edge, and the knob grows about its centre.
-        using (runtime.PushParent(track)) runtime.Gap(inset + travel * crossed - grow / 2f);
+        using (runtime.Parent(track)) runtime.Gap(inset + travel * crossed - grow / 2f);
         Box knob = runtime.BoxFromId("knob" + id, parent: track);
         (knob.SizeX, knob.SizeY) = (SemanticSize.Pixels(knobSize), SemanticSize.Pixels(knobSize));
         knob.Style.CornerRadius = FullRadius;

@@ -523,7 +523,7 @@ static class MotionTests
             runtime.SetBuild(() =>
             {
                 var root = Root();
-                using (runtime.PushParent(root))
+                using (runtime.Parent(root))
                 {
                     holder = runtime.CollapseBox("row-1", progress).Sized(Size.Fill);
                     UiNode.PushIntoParent(holder, new Box().Sized(Size.Px(200f), Size.Px(40f)));

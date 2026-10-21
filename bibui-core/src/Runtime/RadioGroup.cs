@@ -45,7 +45,7 @@ public static class RadioGroupExtensions
         group.SizeX = group.SizeY = SemanticSize.ChildrenSum();
 
         string? picked = null;
-        using (runtime.PushParent(group))
+        using (runtime.Parent(group))
         {
             for (int i = 0; i < items.Count; i++)
             {

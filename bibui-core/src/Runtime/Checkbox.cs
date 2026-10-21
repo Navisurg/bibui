@@ -49,8 +49,7 @@ public static class CheckboxExtensions
             // Centred in the square, which has a size, both ways.
             square.ChildLayoutAxis = LayoutAxis.X;
             runtime.BeginParent(square);
-            runtime.BeginCenterX();
-            runtime.BeginCenterY();
+            runtime.BeginCenterXY();
             if (indeterminate)
             {
                 Box dash = runtime.Box();
@@ -63,8 +62,7 @@ public static class CheckboxExtensions
                 Icon check = runtime.Icon("check", size: Mark);
                 check.Color = UiColor.AccentForeground;
             }
-            runtime.EndCenterY();
-            runtime.EndCenterX();
+            runtime.EndCenterXY();
             runtime.EndParent(square);
         }
 

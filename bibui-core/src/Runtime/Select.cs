@@ -58,7 +58,7 @@ public static class Select
         style.BorderWidth = theme.Borders.Width;
         style.BorderColor = UiColor.Border;
         style.BackgroundColor = disabled ? UiColor.SurfaceRaised : UiColor.Surface;
-        using (runtime.PushParent(trigger))
+        using (runtime.Parent(trigger))
         {
             runtime.Text(text, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
             runtime.Spacer(Size.Fill);
@@ -79,7 +79,7 @@ public static class Select
         list.Style.Shadow = theme.Elevation.Level(ElevationTokens.Overlay);
         list.Style.BorderColor = UiColor.Border;
         list.Style.BackgroundColor = UiColor.SurfaceRaised;
-        return new SelectScope(runtime, trigger, listId, list, runtime.PushParent(list));
+        return new SelectScope(runtime, trigger, listId, list, runtime.Parent(list));
     }
 
 
@@ -109,7 +109,7 @@ public static class SelectExtensions
         row.Style.CornerRadius = ItemRadius;
         row.Style.BackgroundColor = selected ? UiColor.SurfaceRaisedHover : (UiColor?)null;
         row.Style.HoverBackgroundColor = disabled ? (UiColor?)null : UiColor.SurfaceRaisedHover;
-        using (runtime.PushParent(row))
+        using (runtime.Parent(row))
         {
             runtime.Text(label, textColor: disabled ? TextColor.Disabled : TextColor.Primary);
         }

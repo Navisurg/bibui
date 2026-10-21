@@ -227,7 +227,7 @@ public sealed partial class BibuiRuntime
     {
         if (_parentStack.Count == 0 || _parentStack[^1] != _root)
             throw new InvalidOperationException(
-                "EndBuild without its BeginBuild, or with a PushParent scope still open; use scopes with `using`.");
+                "EndBuild without its BeginBuild, or with a BeginParent still open.");
         _parentStack.RemoveAt(_parentStack.Count - 1);
         var surface = _frameSurface;
         var theme = _frameTheme;
