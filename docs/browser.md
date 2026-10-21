@@ -32,8 +32,8 @@ A browser app is a `Microsoft.NET.Sdk.WebAssembly` project (the SDK of the
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Bibui.Platform.Browser" Version="0.10.1" />
-    <PackageReference Include="Bibui.Raster.Managed.Backend" Version="0.10.1" />
+    <PackageReference Include="Bibui.Platform.Browser" Version="1.0.0" />
+    <PackageReference Include="Bibui.Raster.Managed.Backend" Version="1.0.0" />
   </ItemGroup>
 </Project>
 ```
