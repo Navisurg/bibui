@@ -6,6 +6,14 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-21
+
+The first stable release, and the start of the full semantic-versioning
+promise (docs/versioning.md). The core package is `Bibui.Core`; `Bibui` is
+all of bibui in one reference; layout is said with a few fast paths over the
+primitives, with a Begin and End for every scope; and bibui runs in the
+browser.
+
 ### Added
 
 - **`Bibui`: all of bibui in one reference.** The package `Bibui` is now a
@@ -694,7 +702,8 @@ before it was published.
   pipeline.
 - The `Bibui.Contracts` and `Bibui.Runtime` packages (merged into `Bibui`).
 
-[Unreleased]: https://github.com/Navisurg/bibui/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/Navisurg/bibui/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Navisurg/bibui/compare/v0.10.1...v1.0.0
 [0.10.1]: https://github.com/Navisurg/bibui/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/Navisurg/bibui/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/Navisurg/bibui/releases/tag/v0.9.3

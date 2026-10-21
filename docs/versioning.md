@@ -6,7 +6,7 @@ a part of that API is retired.
 ## Semantic versioning
 
 bibui follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
-Every public package (`Bibui.Core`, `Bibui.Gl`, `Bibui.Testing`,
+Every public package (`Bibui`, `Bibui.Core`, `Bibui.Gl`, `Bibui.Testing`,
 `Bibui.Raster.Skia`, `Bibui.Raster.Managed`, `Bibui.Raster.Managed.Backend`,
 `Bibui.Platform.Silk`, `Bibui.Platform.Wayland`, `Bibui.Platform.Browser` and
 the five `Bibui.App` packages) is released together, at the same version, from one tag. Depend on one version of all of them.
@@ -28,11 +28,10 @@ promises nothing about the API it adds; it may change before the release.
 The first public release is **0.9.0**. Before it, bibui was developed and used
 privately, and the versions it carried then were never published.
 
-**Until 1.0.0**, as semantic versioning allows for `0.y.z`, a **minor** release
-(0.9 → 0.10) may change or remove public API; a **patch** release (0.9.0 →
-0.9.1) still never does. Every such change is listed in the changelog with
-what to use instead, and is deprecated first wherever that is practical.
-1.0.0 starts the full promise above, once the API has settled with real use.
+**Before 1.0.0**, as semantic versioning allows for `0.y.z`, a **minor**
+release (0.9 → 0.10) could change or remove public API; a **patch** release
+(0.9.0 → 0.9.1) never did. Every such change is listed in the changelog with
+what to use instead. **From 1.0.0** the full promise above holds.
 
 ## What counts as public API
 
