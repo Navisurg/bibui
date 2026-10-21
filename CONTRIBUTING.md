@@ -116,9 +116,13 @@ public static BibuiWidget Switch(this BibuiRuntime runtime, string id, bool on, 
 
 - Compose it from `runtime.Box()` (pooled, keyless), `runtime.BoxFromId(id,
   claims)` (retained, for anything you ask about), `runtime.Text`,
-  `runtime.Icon`, `runtime.Gap` and `runtime.PushParent`.
-- Every node states its size on both axes (`.Px()`, `.FillX()`, a share of
-  its parent, or the sum of its children). There is no default size.
+  `runtime.Icon`, `runtime.Gap` and `runtime.BeginParent`.
+- Every node states its size on both axes (`.Sized(Size.Px(…), Size.Fill)`,
+  a share of its parent, or the sum of its children). A box from
+  `runtime.Box()` has no default size; `runtime.Row()` and `runtime.Column()`
+  are as large as their children unless told otherwise.
+- Build each node where it goes in the tree; don't build a control early and
+  move it into place.
 - Text is UTF-16. A read-only label is a `ReadOnlySpan<char>` (a `string` converts to it);
   a `BibuiStr` is only for text the user edits, such as a `TextField`'s buffer.
 - Colours are theme tokens (`UiColor.Accent`, `UiColor.Border`) resolved at

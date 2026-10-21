@@ -111,25 +111,20 @@ public static class Stepper
 
     public static StepperWidget Build(BibuiRuntime runtime, string id, int value)
     {
-        var down = runtime.Button(id + "-down", Minus);
-        var up = runtime.Button(id + "-up", Plus);
-        if (down.Clicked) value--;
-        if (up.Clicked) value++;
+        var row = runtime.BeginParent(runtime.Row().Sized(y: Size.Px(40f)));
+        runtime.BeginCenterAcross();
+        if (runtime.Button(id + "-down", Minus).Clicked) value--;
+        runtime.EndCenterAcross();
+        runtime.Gap(12f);
 
         Span<char> digits = stackalloc char[11];
         value.TryFormat(digits, out int length);
-
-        var row = runtime.BeginParent(runtime.Row().Sized(y: Size.Px(40f)));
-        runtime.BeginCenterAcross();
-        UiNode.PushIntoParent(runtime.ParentInScope, down.Node);
-        runtime.EndCenterAcross();
-        runtime.Gap(12f);
         runtime.BeginCenterAcross();
         runtime.TextFromId(id + "-value", digits[..length], ComponentSize.Lg);
         runtime.EndCenterAcross();
         runtime.Gap(12f);
         runtime.BeginCenterAcross();
-        UiNode.PushIntoParent(runtime.ParentInScope, up.Node);
+        if (runtime.Button(id + "-up", Plus).Clicked) value++;
         runtime.EndCenterAcross();
         runtime.EndParent(row);
         return new(row, value);
@@ -142,9 +137,10 @@ Three things to notice:
 - Button labels are plain strings; a `const` costs nothing per frame. The
   value is formatted into a stack buffer rather than a new string each frame:
   the text copies it, so the buffer can go when the call returns.
-- The buttons are built, and asked, before the value is drawn, so the number
-  shows this frame's press. `UiNode.PushIntoParent` then moves each one into
-  its place in the row.
+- Each button is built where it goes, and asked as it is built. The value
+  between them shows a press on `-` in the same frame; a press on `+` is
+  answered after the value was built, so the value shows it on the next frame,
+  which every pointer event asks for.
 - The row is given a height (`.Sized(y: Size.Px(40f))`) because its items are
   centred across it. `BeginCenterAcross` makes a cell as tall as the row, so
   that height cannot come from the same items. A fill inside a parent sized by
@@ -166,15 +162,16 @@ public sealed class App
     /// <summary>One frame, built between the runtime's BeginBuild and EndBuild.</summary>
     public void Build(BibuiRuntime runtime)
     {
-        // Ask first: the reset box, then the stepper, which shows the value after both.
+        var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+        page.Style.Padding = EdgeInsets.All(24f);
+
+        Count = Stepper.Build(runtime, "count", Count).Value;
+        runtime.Gap(16f);
+
+        // A button of the app's own: a box that claims left presses, asked, then described.
         Box reset = runtime.BoxFromId("reset", InteractionKinds.LeftPress);
         Interaction press = runtime.InteractionsFor(reset);
         if (press.Clicked) Count = 0;
-
-        var stepper = Stepper.Build(runtime, "count", Count);
-        Count = stepper.Value;
-
-        // Then describe.
         reset.Sized(Size.Px(120f), Size.Px(36f));
         reset.Style.CornerRadius = 8f;
         reset.Style.Padding = EdgeInsets.All(8f);
@@ -183,11 +180,6 @@ public sealed class App
         runtime.Text(ResetLabel, textColor: press.Hovering ? TextColor.AccentForeground : TextColor.Primary);
         runtime.EndParent(reset);
 
-        var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
-        page.Style.Padding = EdgeInsets.All(24f);
-        UiNode.PushIntoParent(runtime.ParentInScope, stepper.Node);
-        runtime.Gap(16f);
-        UiNode.PushIntoParent(runtime.ParentInScope, reset);
         runtime.EndParent(page);
     }
 }

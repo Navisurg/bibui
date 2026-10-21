@@ -108,11 +108,9 @@ internal static class DemoLayout
         pane.Style.BorderWidth = 1f;
         pane.Style.CornerRadius = 6f;
         runtime.BeginParent(pane);
-        runtime.BeginCenterY();
-        runtime.BeginCenterX();
+        runtime.BeginCenterXY();
         runtime.Text(label, ComponentSize.Sm, TextColor.Secondary);
-        runtime.EndCenterX();
-        runtime.EndCenterY();
+        runtime.EndCenterXY();
         runtime.EndParent(pane);
         return pane;
     }
@@ -138,11 +136,9 @@ internal static class DemoLayout
         slide.Style.BorderWidth = 1f;
         slide.Style.CornerRadius = 8f;
         runtime.BeginParent(slide);
-        runtime.BeginCenterY();
-        runtime.BeginCenterX();
+        runtime.BeginCenterXY();
         runtime.Text(Slides[index], textColor: TextColor.Secondary);
-        runtime.EndCenterX();
-        runtime.EndCenterY();
+        runtime.EndCenterXY();
         runtime.EndParent(slide);
 
         if (Arrow(runtime, "demo-carousel-arrow-next", "chevron-right", index < Slides.Length - 1)) go = index + 1;

@@ -79,13 +79,11 @@ int count = 0;
 
 void Build()
 {
-    var add = runtime.Button("add", "Add one");
-    if (add.Clicked) count++;
     var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
     page.Style.Padding = EdgeInsets.All(24f);
     runtime.Text($"Clicked {count} times");
     runtime.Gap(12f);
-    UiNode.PushIntoParent(runtime.ParentInScope, add.Node);   // built first, so the count shows its click
+    if (runtime.Button("add", "Add one").Clicked) count++;
     runtime.EndParent(page);
 }
 

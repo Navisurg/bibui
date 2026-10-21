@@ -34,13 +34,11 @@ using var skia = new SkiaGlRenderer(window.Gl);   // Bibui.Raster.Skia
 while (SilkWindow.BeginFrame(window, runtime))
 {
     runtime.BeginBuild(window.Events);
-    var button = runtime.Button("hello", "Click me");   // built first, so the text shows its click
-    if (button.Clicked) clicks++;
     var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
     page.Style = new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(24f) };
     runtime.Text($"Clicked {clicks} times");
     runtime.Gap(12f);
-    UiNode.PushIntoParent(page, button.Node);
+    if (runtime.Button("hello", "Click me").Clicked) clicks++;
     runtime.EndParent(page);
     runtime.EndBuild();
     SilkWindow.BeginDraw(window);

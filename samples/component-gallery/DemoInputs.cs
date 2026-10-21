@@ -515,11 +515,9 @@ internal static class DemoInputs
             if (icon is not null) width += 24f;
             box.SizeX = SemanticSize.Pixels(width);
             runtime.BeginParent(box);
-            runtime.BeginCenterX();
-            runtime.BeginCenterY();
+            runtime.BeginCenterXY();
             runtime.Spinner(16f);
-            runtime.EndCenterY();
-            runtime.EndCenterX();
+            runtime.EndCenterXY();
             runtime.EndParent(box);
             return new BibuiWidget(box, interaction);
         }

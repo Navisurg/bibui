@@ -15,6 +15,11 @@ internal static class DemoScrollList
 
     internal static void Build(BibuiRuntime runtime)
     {
+        // The caption counts the rows the list built last frame, which scrolling
+        // asks again for: it is above the list, so it is built first.
+        Bold(runtime, $"{Rows:N0} rows of {Pitch}px, about {_scroll.Last - _scroll.First} built. Wheel, drag the thumb, or press the track to page.",
+            ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(16f);
         var panel = runtime.BoxFromId("sl-panel");
         (panel.SizeX, panel.SizeY) = (SemanticSize.Pixels(420f), SemanticSize.Pixels(320f));
         panel.Style.Draw = DrawFlags.Border;
@@ -35,12 +40,6 @@ internal static class DemoScrollList
         runtime.EndScrollList(ref _scroll);
         runtime.EndParent(panel);
 
-        // The caption counts the rows the list built, so it is built after the
-        // list, and the panel is moved after it.
-        Bold(runtime, $"{Rows:N0} rows of {Pitch}px, about {_scroll.Last - _scroll.First} built. Wheel, drag the thumb, or press the track to page.",
-            ComponentSize.Sm, TextColor.Secondary);
-        runtime.Gap(16f);
-        UiNode.PushIntoParent(runtime.ParentInScope, panel);
     }
 
     // A row's label, made once per row rather than once a frame.

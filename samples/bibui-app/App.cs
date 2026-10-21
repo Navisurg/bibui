@@ -29,40 +29,6 @@ public static class Demo
 {
     public static void Build(BibuiRuntime runtime, DemoState state)
     {
-        var nameText = state.NameText;
-        var nameEdit = state.NameEdit;
-
-        var subscribe = runtime.Checkbox("subscribe-checkbox", state.Subscribed, Labels.Subscribe);
-        if (subscribe.Clicked) state.Subscribed = !state.Subscribed;
-
-        // A press focuses the name field; Escape or Enter ends editing.
-        Box nameField = runtime.Box().Sized(Size.Fill, Size.Px(44f));
-        TextField.InputStyle(runtime, nameField, state.NameFocused);
-        runtime.BeginParent(nameField);
-        BibuiWidget nameLine = runtime.TextField("name-input", nameText, nameEdit, state.NameFocused,
-            placeholder: Labels.NamePlaceholder);
-        runtime.EndParent(nameField);
-        if (nameLine.Pressed) state.NameFocused = true;
-        foreach (var ev in runtime.UnconsumedEvents)
-            if (state.NameFocused && ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape } or { Kind: BibUiEventKind.Submit })
-            {
-                state.NameFocused = false;
-                ev.Eat();
-            }
-        var decrement = runtime.Button("decrement-btn", Labels.Minus);
-        if (decrement.Clicked) state.Counter--;
-        var increment = runtime.Button("increment-btn", Labels.Plus);
-        if (increment.Clicked) state.Counter++;
-
-        var weight = Slider(runtime, "weight-slider", state.LeftWeight, min: 5f, max: 95f, step: 1f);
-        state.LeftWeight = weight.Value;
-
-        string name = nameText.ToString();
-        // Typed text is not worth keeping once it changes, so the greeting is encoded each frame.
-        string greeting = string.IsNullOrEmpty(name) ? "…" : $"Hello, {name}!";
-
-        // The widgets above are built first, so what they change this frame is
-        // what the page shows; they are linked into their places here.
         var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
         page.Style = new Style { Padding = EdgeInsets.All(28f), BackgroundColor = UiColor.Background };
 
@@ -78,7 +44,7 @@ public static class Demo
         // Centring down the row needs the row to have a height of its own.
         var buttons = runtime.BeginParent(runtime.Row().Sized(Size.Fill, Size.Px(40f)));
         runtime.BeginCenterAcross();
-        UiNode.PushIntoParent(runtime.ParentInScope, decrement.Node);
+        if (runtime.Button("decrement-btn", Labels.Minus).Clicked) state.Counter--;
         runtime.EndCenterAcross();
         runtime.Gap(8f);
         runtime.BeginCenterAcross();
@@ -86,7 +52,7 @@ public static class Demo
         runtime.EndCenterAcross();
         runtime.Gap(8f);
         runtime.BeginCenterAcross();
-        UiNode.PushIntoParent(runtime.ParentInScope, increment.Node);
+        if (runtime.Button("increment-btn", Labels.Plus).Clicked) state.Counter++;
         runtime.EndCenterAcross();
         runtime.EndParent(buttons);
         runtime.EndParent(counter);
@@ -125,7 +91,7 @@ public static class Demo
         runtime.Text($"{state.LeftWeight:0}", ComponentSize.Sm, TextColor.Primary);
         runtime.EndParent(share);
         runtime.Gap(8f);
-        UiNode.PushIntoParent(runtime.ParentInScope, weight.Node.Sized(Size.Fill));
+        state.LeftWeight = Slider(runtime, "weight-slider", state.LeftWeight, min: 5f, max: 95f, step: 1f);
         runtime.Gap(12f);
         runtime.Text($"Split {state.LeftWeight:0} : {100f - state.LeftWeight:0}  — drag to resize", ComponentSize.Sm, TextColor.Secondary);
         runtime.EndParent(split);
@@ -137,8 +103,23 @@ public static class Demo
         input.Style = Card();
         Bold(runtime, "Input", ComponentSize.Lg);
         runtime.Gap(10f);
-        UiNode.PushIntoParent(runtime.ParentInScope, nameField);
+        // A press focuses the name field; Escape or Enter ends editing.
+        Box nameField = runtime.BeginParent(runtime.Box().Sized(Size.Fill, Size.Px(44f)));
+        TextField.InputStyle(runtime, nameField, state.NameFocused);
+        BibuiWidget nameLine = runtime.TextField("name-input", state.NameText, state.NameEdit, state.NameFocused,
+            placeholder: Labels.NamePlaceholder);
+        runtime.EndParent(nameField);
+        if (nameLine.Pressed) state.NameFocused = true;
+        foreach (var ev in runtime.UnconsumedEvents)
+            if (state.NameFocused && ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape } or { Kind: BibUiEventKind.Submit })
+            {
+                state.NameFocused = false;
+                ev.Eat();
+            }
         runtime.Gap(10f);
+        string name = state.NameText.ToString();
+        // Typed text is not worth keeping once it changes, so the greeting is encoded each frame.
+        string greeting = string.IsNullOrEmpty(name) ? "…" : $"Hello, {name}!";
         runtime.TextFromId("greeting", greeting, ComponentSize.Sm, string.IsNullOrEmpty(name) ? TextColor.Secondary : TextColor.Accent);
         runtime.EndParent(input);
         runtime.Gap(16f);
@@ -146,7 +127,7 @@ public static class Demo
         check.Style = Card();
         Bold(runtime, "Checkbox", ComponentSize.Lg);
         runtime.Gap(12f);
-        UiNode.PushIntoParent(runtime.ParentInScope, subscribe.Node);
+        if (runtime.Checkbox("subscribe-checkbox", state.Subscribed, Labels.Subscribe).Clicked) state.Subscribed = !state.Subscribed;
         runtime.Gap(12f);
         Badge.Build(runtime, state.Subscribed ? Labels.Subscribed : Labels.Unsubscribed,
             state.Subscribed ? BadgeVariant.Primary : BadgeVariant.Default);
@@ -160,16 +141,15 @@ public static class Demo
     private static Text Bold(BibuiRuntime runtime, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null,
         string? id = null)
     {
-        runtime.BeginFontFace(weight: FontWeight.Bold);
-        Text bold = id is null ? runtime.Text(text, fontSize, textColor) : runtime.TextFromId(id, text, fontSize, textColor);
-        runtime.EndFontFace();
-        return bold;
+        return id is null ? runtime.Text(text, fontSize, textColor, weight: FontWeight.Bold)
+            : runtime.TextFromId(id, text, fontSize, textColor, weight: FontWeight.Bold);
     }
 
-    // A slider, composed: a track that takes a press and follows the drag, holding
-    // the filled rail, the knob and the rest of the rail side by side. It owns no
-    // state — it hands back the value under the pointer and the caller applies it.
-    private static (Box Node, float Value) Slider(BibuiRuntime runtime, string id, float value, float min, float max, float step)
+    // A slider, composed, built where it is called: a track as wide as its parent
+    // that takes a press and follows the drag, holding the filled rail, the knob
+    // and the rest of the rail side by side. It owns no state — it hands back the
+    // value under the pointer and the caller applies it.
+    private static float Slider(BibuiRuntime runtime, string id, float value, float min, float max, float step)
     {
         const float Knob = 16f, Rail = 6f;
 
@@ -193,7 +173,7 @@ public static class Demo
         knob.Style.BorderWidth = 2f;
         RailPart(runtime, 1f - t, UiColor.Border);
         runtime.EndParent(track);
-        return (track, value);
+        return value;
 
         // A share of the track, the knob's height, with the rail drawn centred in it.
         static void RailPart(BibuiRuntime runtime, float share, UiColor color)

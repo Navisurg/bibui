@@ -17,19 +17,13 @@ internal static class Ui
 
     public static Text Bold(BibuiRuntime rt, string s, FontSize? size = null, UiColor? color = null)
     {
-        rt.BeginFontFace(weight: FontWeight.Bold);
-        var bold = rt.Text(s, size, color);
-        rt.EndFontFace();
-        return bold;
+        return rt.Text(s, size, color, weight: FontWeight.Bold);
     }
 
     /// <summary>A small capitalised label above a group: tracking is not a thing yet, so it is plain small caps by hand.</summary>
     public static Text Eyebrow(BibuiRuntime rt, string s)
     {
-        rt.BeginFontFace(weight: FontWeight.Bold);
-        var eyebrow = rt.Text(s.ToUpperInvariant(), FontSize.Px(11f), UiColor.TextSecondary);
-        rt.EndFontFace();
-        return eyebrow;
+        return rt.Text(s.ToUpperInvariant(), FontSize.Px(11f), UiColor.TextSecondary, weight: FontWeight.Bold);
     }
 
     public static Icon Icon(BibuiRuntime rt, string name, float size, UiColor color)
@@ -55,63 +49,58 @@ internal static class Ui
     // ── Placing ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// <paramref name="node"/>, built already, centred across the row in scope:
-    /// a full-height column of a spring, it, and a spring.
+    /// What is built until <see cref="EndBottomY"/> sits at the foot of a
+    /// full-height column across the row in scope, <paramref name="lift"/> px
+    /// up: a small text set by eye on the baseline of a large one beside it.
+    /// Hands the column back for the End.
     /// </summary>
-    public static Box CentredY(BibuiRuntime rt, UiNode node)
+    public static Box BeginBottomY(BibuiRuntime rt)
     {
         var column = rt.BeginParent(rt.Column().Sized(y: Size.Fill));
-        rt.BeginCenter();
-        UiNode.PushIntoParent(column, node);
-        rt.EndCenter();
-        rt.EndParent(column);
+        rt.Spacer(Size.Fill);
         return column;
     }
 
-    /// <summary>The same as <see cref="CentredY"/>, across the column in scope: a full-width row.</summary>
-    public static Box CentredX(BibuiRuntime rt, UiNode node)
+    /// <summary>Ends <see cref="BeginBottomY"/>: the lift under what was built, and the column.</summary>
+    public static void EndBottomY(BibuiRuntime rt, Box column, float lift)
     {
-        var row = rt.BeginParent(rt.Row().Sized(Size.Fill));
-        rt.BeginCenter();
-        UiNode.PushIntoParent(row, node);
-        rt.EndCenter();
-        rt.EndParent(row);
-        return row;
+        rt.Gap(lift);
+        rt.EndParent(column);
     }
 
     /// <summary>
-    /// <paramref name="node"/>, built already, at the foot of a full-height column
-    /// across the row in scope, <paramref name="lift"/> px up: a small text set
-    /// by eye on the baseline of a large one beside it.
+    /// A card's heading row: icon, title, an optional caption, and a spring.
+    /// What is built until <see cref="EndCardHeader"/> goes at the far end.
     /// </summary>
-    public static Box BottomY(BibuiRuntime rt, UiNode node, float lift)
-    {
-        var column = rt.BeginParent(rt.Column().Sized(y: Size.Fill));
-        rt.Spacer(Size.Fill);
-        Place(rt, node);
-        rt.Gap(lift);
-        rt.EndParent(column);
-        return column;
-    }
-
-    /// <summary><paramref name="node"/>, built already, linked last under the parent in scope.</summary>
-    public static void Place(BibuiRuntime rt, UiNode node) => UiNode.PushIntoParent(rt.ParentInScope, node);
-
-    /// <summary>A card's heading row: icon, title, an optional caption, and whatever goes at the far end.</summary>
-    public static Box CardHeader(BibuiRuntime rt, string icon, string title, string? caption, params UiNode[] trailing)
+    public static Box BeginCardHeader(BibuiRuntime rt, string icon, string title, string? caption)
     {
         var row = rt.BeginParent(rt.Row().Sized(Size.Fill, Size.Px(32f)));
-        CentredY(rt, Icon(rt, icon, 16f, UiColor.Accent));
+        rt.BeginCenterAcross();
+        Icon(rt, icon, 16f, UiColor.Accent);
+        rt.EndCenterAcross();
         rt.Gap(10f);
-        CentredY(rt, Bold(rt, title, ComponentSize.Md, UiColor.TextPrimary));
+        rt.BeginCenterAcross();
+        Bold(rt, title, ComponentSize.Md, UiColor.TextPrimary);
+        rt.EndCenterAcross();
         if (caption is not null)
         {
             rt.Gap(10f);
-            CentredY(rt, T(rt, caption, ComponentSize.Sm, UiColor.TextSecondary));
+            rt.BeginCenterAcross();
+            T(rt, caption, ComponentSize.Sm, UiColor.TextSecondary);
+            rt.EndCenterAcross();
         }
         rt.Spacer(Size.Fill);
-        foreach (var node in trailing) Place(rt, node);
-        rt.EndParent(row);
+        return row;
+    }
+
+    /// <summary>Ends <see cref="BeginCardHeader"/>.</summary>
+    public static void EndCardHeader(BibuiRuntime rt, Box row) => rt.EndParent(row);
+
+    /// <summary>A card's heading row with nothing at the far end.</summary>
+    public static Box CardHeader(BibuiRuntime rt, string icon, string title, string? caption)
+    {
+        var row = BeginCardHeader(rt, icon, title, caption);
+        EndCardHeader(rt, row);
         return row;
     }
 
@@ -127,12 +116,15 @@ internal static class Ui
         };
         if (dot)
         {
+            rt.BeginCenterAcross();
             var dotBox = rt.Box().Sized(Size.Px(6f), Size.Px(6f));
             dotBox.Style = new Style { CornerRadius = 3f, BackgroundColor = tint };
-            CentredY(rt, dotBox);
+            rt.EndCenterAcross();
             rt.Gap(6f);
         }
-        CentredY(rt, Bold(rt, label, FontSize.Px(11.5f), tint));
+        rt.BeginCenterAcross();
+        Bold(rt, label, FontSize.Px(11.5f), tint);
+        rt.EndCenterAcross();
         rt.EndParent(pill);
         return pill;
     }

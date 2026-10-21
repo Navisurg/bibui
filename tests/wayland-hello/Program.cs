@@ -45,9 +45,7 @@ void Build()
     var page = runtime.Column().Sized(Size.Fill, Size.Fill);
     page.Style = new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(28f) };
     runtime.BeginParent(page);
-    runtime.BeginFontFace(weight: FontWeight.Bold);
-    runtime.Text("Hello from raw Wayland", ComponentSize.Xxl, TextColor.Primary);
-    runtime.EndFontFace();
+    runtime.Text("Hello from raw Wayland", ComponentSize.Xxl, TextColor.Primary, weight: FontWeight.Bold);
     runtime.Gap(16f);
     runtime.Text("wl_shm buffers, CPU raster, frame-callback pacing, xkbcommon input. No GLFW, no GL.",
         textColor: TextColor.Secondary);

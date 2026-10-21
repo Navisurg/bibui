@@ -312,38 +312,64 @@ Centring is two springs, one either side of what is centred:
 - `BeginCenterAcross()` … `EndCenterAcross()` centres **across** it (top to
   bottom in a row). It makes a cell as large as the parent across and as its
   content along, with the springs inside, so the parent's size across its axis
-  must be known.
+  must be known. It hands the cell back, a box like any other.
 - `BeginCenterX()` / `BeginCenterY()` name the screen axis instead, and choose
   between the two by the parent's axis: in a row, X is along and Y across.
 
-Centred both ways, **begin the one along the parent's axis first**: in a
-column, Y and then X; in a row, X and then Y. The second then makes its cell in
-the parent, as large as it. Begun the other way round, the second centres in
-the first's cell, which is only as large as its content across, and that is a
-ring. An empty state in the middle of a panel:
+- `BeginCenterXY()` … `EndCenterXY()` centres both ways, so the parent's size
+  on both axes must be known. An empty state in the middle of a panel:
 
 ```csharp
 var panel = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
-runtime.BeginCenterY();                             // along the column first
-runtime.BeginCenterX();                             // then across it, in a cell as wide as the column
+runtime.BeginCenterXY();
 runtime.Text(empty);
-runtime.EndCenterX();
-runtime.EndCenterY();
+runtime.EndCenterXY();
 runtime.EndParent(panel);
 ```
 
+It is the centre along the parent's axis and then the one across it, in that
+order. Begun the other way round, by hand, the second centres in the first's
+cell, which is only as large as its content across, and that is a ring.
+
+**Build each node where it goes.** A node is linked under the parent in
+scope when it is built, so the build reads in the order of the tree:
+
+```csharp
+var row = runtime.BeginParent(runtime.Row().Sized(Size.Fill, Size.Px(40f)));
+if (runtime.Button("decrement", "−").Clicked) state.Counter--;
+runtime.Text(state.Counter.ToString());
+if (runtime.Button("increment", "+").Clicked) state.Counter++;
+runtime.EndParent(row);
+```
+
+A click on the `+` is answered when its button is built, after the count was
+drawn: the count shows it on the next frame, which every pointer event asks
+for. Don't build a control early and move it into place so that what comes
+before it sees the click in the same frame; that buys one frame and makes the
+build order differ from the tree.
+
 A node has one parent, and pushing it somewhere else
 (`UiNode.PushIntoParent(parent, node)`) **moves** it: it is taken out of the
-parent it was linked under and appended to the new one. So a control can be
-built where its ask belongs and linked into its place afterwards, as
-[`samples/bibui-app`](../samples/bibui-app/App.cs) builds its controls before
-the page that shows them. Pushing a node into the parent it is already in
-moves it to the end. Pushing a node into one of its own descendants throws.
+parent it was linked under and appended to the new one. That is for a node
+that has to be somewhere the build cannot reach in order, not for reordering
+a build. Pushing a node into the parent it is already in moves it to the end.
+Pushing a node into one of its own descendants throws.
 
 Every `Begin…` has its `End…`: `BeginParent`/`EndParent`, `BeginAxis`,
-`BeginSizeX`/`Y`, `BeginFontSize`, `BeginFontFace` and the centres. Each
-`Push…` is the `Begin` handing back a scope whose `Dispose` is the `End`, for
-a build that would rather say it with `using`. If a scope is still open when
+`BeginSizeX`/`Y`, `BeginFontSize`, `BeginFontFace` and the centres. Each has a
+scope form named without the `Begin` (`Parent(box)`, `Axis`, `SizeX`, `SizeY`,
+`FontSize`, `FontFace`, `Center`, `CenterAcross`, `CenterX`, `CenterY`,
+`CenterXY`): the `Begin` handing back a scope whose `Dispose` is the `End`,
+for a build that would rather say it with `using`:
+
+```csharp
+using (runtime.Parent(card))
+using (runtime.CenterXY())
+    runtime.Text(empty);
+```
+
+A scope hands back the scope, not the cell a centre makes; take the cell from
+`BeginCenterAcross` or `BeginCenterXY`. If a scope is still open when
 the build returns, the runtime throws rather than linking next frame's boxes
 under this frame's parent.
 
@@ -460,11 +486,9 @@ work there:
 
 - **Built in place** is always right: build under the dropdown, or under a box
   begun inside it, and every control is linked there as it is built.
-- **Built first and moved** works too, because a component asks inside its
-  `Build`, while it is still linked under the parent in scope;
-  `UiNode.PushIntoParent` moves it afterwards. Keep the dropdown (or something
-  in it) as the parent in scope while the control is built, and push it where
-  it goes inside the dropdown.
+- **Built first and moved** would work too, because a component asks inside
+  its `Build`, while it is still linked under the parent in scope. Don't:
+  build it in place (see *Build each node where it goes*).
 
 What that rules out is asking a box while it is linked **outside** the
 dropdown, for example acquiring a box with `BoxFromId` while a parent outside
@@ -691,8 +715,7 @@ The rules that make components compose:
 - **Claim at the door.** Pass the claims to `BoxFromId`, and pass
   `InteractionKinds.Disabled` (not `None`) when the component is disabled.
 
-`BibuiWidget` converts to `UiNode` wherever a node is expected, so a widget
-built first goes straight into `UiNode.PushIntoParent` where it belongs.
+`BibuiWidget` converts to `UiNode` wherever a node is expected.
 
 `Button`, `Switch`, `Checkbox`, `Slider`, `Select` and the rest of the built-in
 components are written exactly this way. Their source is the best reference

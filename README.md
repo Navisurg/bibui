@@ -94,19 +94,8 @@ In the sample, `runtime.BeginParent(column)` and `runtime.EndParent(column)`
 bracket a scope where all boxes built through the runtime are added as
 children of `column`.
 
-You may also explicitly append the children to the `column` `Box`:
-
-```csharp
-var column = runtime.Column();
-
-var text = runtime.Text($"Clicked {count} times");
-UiNode.PushIntoParent(column, text);
-
-var button = runtime.Button(id: "add", "Add one");
-UiNode.PushIntoParent(column, button);
-```
-
-This appends each node to `column`'s children.
+Each node is built where it goes: the text, then the button, in the order
+they appear in the column.
 
 `runtime.Button` is itself a composition: a `Box` that claims left presses,
 with a `Text` inside. `button.Clicked` reports a click, so the app reacts to it

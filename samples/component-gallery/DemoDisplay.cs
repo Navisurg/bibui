@@ -187,11 +187,9 @@ internal static class DemoDisplay
     {
         box.ChildLayoutAxis = LayoutAxis.X;
         runtime.BeginParent(box);
-        runtime.BeginCenterX();
-        runtime.BeginCenterY();
+        runtime.BeginCenterXY();
         runtime.Text(label, size, color);
-        runtime.EndCenterY();
-        runtime.EndCenterX();
+        runtime.EndCenterXY();
         runtime.EndParent(box);
     }
 
@@ -828,11 +826,9 @@ internal static class DemoDisplay
     {
         box.ChildLayoutAxis = LayoutAxis.X;
         runtime.BeginParent(box);
-        runtime.BeginCenterX();
-        runtime.BeginCenterY();
+        runtime.BeginCenterXY();
         runtime.Icon(name, size).Color = color;
-        runtime.EndCenterY();
-        runtime.EndCenterX();
+        runtime.EndCenterXY();
         runtime.EndParent(box);
     }
 }

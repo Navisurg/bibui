@@ -27,8 +27,7 @@ internal sealed partial class App
         float inner = width - 48f - Scrollbar.Lane - 4f;
         // A control asks while it is built, so it is built with the dialog's
         // panel (or something under it) as the parent in scope: that is how
-        // the dialog knows the press is its own. Where it is pushed afterwards,
-        // by PushIntoParent or CentredY, is free, so long as it stays inside.
+        // the dialog knows the press is its own.
         var sheet = Dialog.Begin(rt, "settings", shown, DialogSide.Right, width);
 
         // The sheet scrolls when the window is shorter than what is in it.
@@ -39,7 +38,6 @@ internal sealed partial class App
         view.AllowOverflowY = true;
         rt.BeginParent(view);
 
-        var close = IconButton(rt, "settings-close", "x", 30f);
         var header = rt.BeginParent(rt.Row().Sized(Size.Px(inner), Size.Px(44f)));
         rt.BeginCenterAcross();
         Bold(rt, "Appearance", ComponentSize.Lg, UiColor.TextPrimary);
@@ -47,7 +45,9 @@ internal sealed partial class App
         T(rt, "One seed colour, the whole theme, live", ComponentSize.Sm, UiColor.TextSecondary);
         rt.EndCenterAcross();
         rt.Spacer(Size.Fill);
-        CentredY(rt, close.Node);
+        rt.BeginCenterAcross();
+        var close = IconButton(rt, "settings-close", "x", 30f);
+        rt.EndCenterAcross();
         rt.EndParent(header);
         rt.Gap(22f);
 
@@ -125,9 +125,13 @@ internal sealed partial class App
         foreach (var (keys, what) in Shortcuts)
         {
             var shortcut = rt.BeginParent(rt.Row().Sized(Size.Px(inner), Size.Px(30f)));
-            CentredY(rt, T(rt, what, ComponentSize.Sm, UiColor.TextSecondary));
+            rt.BeginCenterAcross();
+            T(rt, what, ComponentSize.Sm, UiColor.TextSecondary);
+            rt.EndCenterAcross();
             rt.Spacer(Size.Fill);
-            CentredY(rt, KeyboardShortcut.Build(rt, keys));
+            rt.BeginCenterAcross();
+            KeyboardShortcut.Build(rt, keys);
+            rt.EndCenterAcross();
             rt.EndParent(shortcut);
         }
 
@@ -178,11 +182,9 @@ internal sealed partial class App
         if (chosen)
         {
             rt.BeginParent(dot);
-            rt.BeginCenterX();
-            rt.BeginCenterY();
+            rt.BeginCenterXY();
             Icon(rt, "check", 15f, "#0B0D17");
-            rt.EndCenterY();
-            rt.EndCenterX();
+            rt.EndCenterXY();
             rt.EndParent(dot);
         }
         rt.EndParent(b);
@@ -293,8 +295,19 @@ internal sealed partial class App
         float sideW = wide ? 320f : cw;
         float logW = wide ? cw - Gutter - sideW : cw;
 
-        // The night card: a checklist, a rating, and a collapsible summary.
+        // Wide, the two cards side by side; narrow, stacked in the page's column.
+        Box? cards = wide ? rt.BeginParent(rt.Row()) : null;
+        LogCard(rt, logW, wide ? h : 640f, ComponentSize.Md, night: true);
+        rt.Gap(Gutter);
+
+        // The night card: a checklist, a rating, and a collapsible summary. The
+        // count in its header is built before the checklist, so a tick shows
+        // there a frame late.
         float inner = sideW - 36f;
+        var night = rt.BeginParent(rt.Column().Sized(Size.Px(sideW), Size.Px(wide ? h : 520f)));
+        night.Style = CardStyle(rt);
+        CardHeader(rt, "check-square", "Tonight", $"{Checklist.Count(c => c)} of {Checklist.Length} done");
+        rt.Gap(14f);
         var items = rt.BeginParent(rt.Column());
         for (int k = 0; k < ChecklistItems.Length; k++)
         {
@@ -303,8 +316,28 @@ internal sealed partial class App
             if (cb.Clicked) Checklist[k] = !Checklist[k];
         }
         rt.EndParent(items);
+        rt.Gap(22f);
+        Eyebrow(rt, "Conditions");
+        rt.Gap(10f);
         var rating = rt.RadioGroup("rating", Ratings, Rating);
         if (rating.Picked is { } r) Rating = r;
+        rt.Gap(20f);
+        Eyebrow(rt, "Hand-over");
+        rt.Gap(10f);
+        // A hand-over note: a multi-line field, four rows tall, that a press gives the keyboard.
+        var noteBox = rt.Column().Sized(Size.Px(inner));
+        TextField.InputStyle(rt, noteBox, NoteFocused);
+        rt.BeginParent(noteBox);
+        rt.BeginFontSize(ComponentSize.Sm);
+        rt.BeginSizeY(TextField.Rows(rt, 4));
+        var note = rt.MultilineTextField("note", Note, NoteEdit, NoteFocused, placeholder: "Hand-over note for the morning crew");
+        rt.EndSizeY();
+        rt.EndFontSize();
+        rt.EndParent(noteBox);
+        if (note.Pressed) { NoteFocused = true; SearchFocused = false; }
+        rt.Gap(18f);
+        Separator.Build(rt);
+        rt.Gap(6f);
         var summary = rt.Expander("night-summary", "Night summary", NightOpen);
         if (summary.Toggled) NightOpen = !NightOpen;
         if (summary.Body is { } body)
@@ -322,42 +355,7 @@ internal sealed partial class App
             }
             rt.EndParent(body);
         }
-        // A hand-over note: a multi-line field, four rows tall, that a press gives the keyboard.
-        var noteBox = rt.Column().Sized(Size.Px(inner));
-        TextField.InputStyle(rt, noteBox, NoteFocused);
-        rt.BeginParent(noteBox);
-        rt.BeginFontSize(ComponentSize.Sm);
-        rt.BeginSizeY(TextField.Rows(rt, 4));
-        var note = rt.MultilineTextField("note", Note, NoteEdit, NoteFocused, placeholder: "Hand-over note for the morning crew");
-        rt.EndSizeY();
-        rt.EndFontSize();
-        rt.EndParent(noteBox);
-        if (note.Pressed) { NoteFocused = true; SearchFocused = false; }
-
-        var night = rt.BeginParent(rt.Column().Sized(Size.Px(sideW), Size.Px(wide ? h : 520f)));
-        night.Style = CardStyle(rt);
-        CardHeader(rt, "check-square", "Tonight", $"{Checklist.Count(c => c)} of {Checklist.Length} done");
-        rt.Gap(14f);
-        Place(rt, items);
-        rt.Gap(22f);
-        Eyebrow(rt, "Conditions");
-        rt.Gap(10f);
-        Place(rt, rating.Node);
-        rt.Gap(20f);
-        Eyebrow(rt, "Hand-over");
-        rt.Gap(10f);
-        Place(rt, noteBox);
-        rt.Gap(18f);
-        Separator.Build(rt);
-        rt.Gap(6f);
-        Place(rt, summary.Node);
         rt.EndParent(night);
-
-        // Wide, the two cards side by side; narrow, stacked in the page's column.
-        Box? cards = wide ? rt.BeginParent(rt.Row()) : null;
-        LogCard(rt, logW, wide ? h : 640f, ComponentSize.Md, night: true);
-        rt.Gap(Gutter);
-        Place(rt, night);
         if (cards is not null) rt.EndParent(cards);
     }
 }

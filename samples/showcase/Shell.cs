@@ -20,19 +20,19 @@ internal sealed partial class App
 
     private void Sidebar(BibuiRuntime rt, float open, float h)
     {
-        // Ask first: the items and buttons inside, then nothing else claims here.
-        var items = new List<Box>();
-        foreach (var (page, icon, label, key) in Nav)
+        // The switch and the fold each go in one of two places, by how open the sidebar is.
+        void LiveSwitch()
         {
-            var item = NavItem(rt, "nav-" + label.ToLowerInvariant(), icon, label, key, Page == page, open);
-            if (item.Clicked) { Page = page; SearchFocused = false; }
-            items.Add((Box)item.Node);
+            if (rt.Switch("live", Live, label: open > 0.6f ? "Live feed" : null, height: 20f).Clicked) Live = !Live;
         }
-        var fold = IconButton(rt, "sidebar-fold", open > 0.5f ? "chevron-left" : "chevron-right", 30f);
-        if (fold.Clicked) SidebarWanted = !SidebarWanted;
-        var live = rt.Switch("live", Live, label: open > 0.6f ? "Live feed" : null, height: 20f);
-        if (live.Clicked) Live = !Live;
+        void Fold()
+        {
+            if (IconButton(rt, "sidebar-fold", open > 0.5f ? "chevron-left" : "chevron-right", 30f).Clicked)
+                SidebarWanted = !SidebarWanted;
+        }
 
+        // Nothing here claims but the items and buttons, which do not overlap,
+        // so they ask as they are built.
         Box side = rt.BoxFromId("sidebar", InteractionKinds.Clip);
         side.ChildLayoutAxis = LayoutAxis.Y;
         side.Sized(Size.Px(SidebarWidth(open)), Size.Px(h));
@@ -42,11 +42,12 @@ internal sealed partial class App
 
         float fade = Math.Clamp((open - 0.35f) / 0.65f, 0f, 1f);
 
-        // The asked nodes above are linked in here, in their places.
         rt.BeginParent(side);
         // The brand: a small orb painted with gradients, and the name beside it.
         var brand = rt.BeginParent(rt.Row().Sized(Size.Fill, Size.Px(44f)));
-        CentredY(rt, Orb(rt, 34f));
+        rt.BeginCenterAcross();
+        Orb(rt, 34f);
+        rt.EndCenterAcross();
         if (fade > 0f)
         {
             rt.Gap(12f);
@@ -71,23 +72,40 @@ internal sealed partial class App
         }
         else rt.Box().Sized(Size.Px(1f), Size.Px(13f));
         rt.Gap(10f);
-        foreach (var item in items)
+        foreach (var (page, icon, label, key) in Nav)
         {
-            Place(rt, item);
+            if (NavItem(rt, "nav-" + label.ToLowerInvariant(), icon, label, key, Page == page, open).Clicked)
+            {
+                Page = page;
+                SearchFocused = false;
+            }
             rt.Gap(4f);
         }
 
         rt.Spacer(Size.Fill);
 
-        if (fade > 0.6f) SiteCard(rt, live.Node).Style.Opacity = (fade - 0.6f) / 0.4f;
-        else CentredX(rt, live.Node);
+        if (fade > 0.6f)
+        {
+            var site = BeginSiteCard(rt);
+            site.Style.Opacity = (fade - 0.6f) / 0.4f;
+            LiveSwitch();
+            EndSiteCard(rt, site);
+        }
+        else
+        {
+            rt.BeginCenterAcross();
+            LiveSwitch();
+            rt.EndCenterAcross();
+        }
         rt.Gap(14f);
         Rule(rt);
         rt.Gap(14f);
 
         // Who is on shift, and the fold.
         var shift = rt.BeginParent(rt.Row().Sized(Size.Fill, Size.Px(36f)));
-        CentredY(rt, Avatar.Build(rt, "IR", 32f, ink: UiColor.AccentForeground, fontSize: ComponentSize.Sm));
+        rt.BeginCenterAcross();
+        Avatar.Build(rt, "IR", 32f, ink: UiColor.AccentForeground, fontSize: ComponentSize.Sm);
+        rt.EndCenterAcross();
         if (fade > 0f)
         {
             rt.Gap(10f);
@@ -99,13 +117,17 @@ internal sealed partial class App
             rt.EndParent(lead);
             rt.EndCenterAcross();
             rt.Spacer(Size.Fill);
-            CentredY(rt, fold.Node);
+            rt.BeginCenterAcross();
+            Fold();
+            rt.EndCenterAcross();
         }
         rt.EndParent(shift);
         if (fade <= 0f)
         {
             rt.Gap(10f);
-            CentredX(rt, fold.Node);
+            rt.BeginCenterAcross();
+            Fold();
+            rt.EndCenterAcross();
         }
         rt.EndParent(side);
     }
@@ -123,15 +145,21 @@ internal sealed partial class App
 
         float fade = Math.Clamp((open - 0.35f) / 0.65f, 0f, 1f);
         rt.BeginParent(item);
-        CentredY(rt, Icon(rt, icon, 18f, selected ? UiColor.Accent : UiColor.TextSecondary));
+        rt.BeginCenterAcross();
+        Icon(rt, icon, 18f, selected ? UiColor.Accent : UiColor.TextSecondary);
+        rt.EndCenterAcross();
         if (fade > 0f)
         {
             rt.Gap(12f);
             var text = rt.BeginParent(rt.Row().Sized(Size.Fill, Size.Fill));
             text.Style = new Style { Opacity = fade };
-            CentredY(rt, Bold(rt, label, ComponentSize.Sm, selected ? UiColor.TextPrimary : UiColor.TextSecondary));
+            rt.BeginCenterAcross();
+            Bold(rt, label, ComponentSize.Sm, selected ? UiColor.TextPrimary : UiColor.TextSecondary);
+            rt.EndCenterAcross();
             rt.Spacer(Size.Fill);
-            CentredY(rt, T(rt, key, FontSize.Px(11f), UiColor.TextDisabled));
+            rt.BeginCenterAcross();
+            T(rt, key, FontSize.Px(11f), UiColor.TextDisabled);
+            rt.EndCenterAcross();
             rt.EndParent(text);
         }
         rt.EndParent(item);
@@ -139,8 +167,8 @@ internal sealed partial class App
         return new BibuiWidget(item, i);
     }
 
-    /// <summary>The site at a glance: dome, wind and humidity, and whether the feed is live.</summary>
-    private Box SiteCard(BibuiRuntime rt, UiNode liveSwitch)
+    /// <summary>The site at a glance: dome, wind and humidity, and what is built until <see cref="EndSiteCard"/>: whether the feed is live.</summary>
+    private Box BeginSiteCard(BibuiRuntime rt)
     {
         double m = Minutes;
         float wind = Data.Wind(m), hum = Data.Humidity(m);
@@ -163,10 +191,10 @@ internal sealed partial class App
         rt.Gap(10f);
         Meter(rt, "Humidity", $"{hum:0} %", hum / 100f, UiColor.Accent);
         rt.Gap(14f);
-        Place(rt, liveSwitch);
-        rt.EndParent(card);
         return card;
     }
+
+    private static void EndSiteCard(BibuiRuntime rt, Box card) => rt.EndParent(card);
 
     /// <summary>A labelled bar, built into the column in scope.</summary>
     private static void Meter(BibuiRuntime rt, string label, string value, float share, UiColor color)
@@ -183,21 +211,20 @@ internal sealed partial class App
     /// <summary>The brand mark: an orb lit from the upper left, in the accent.</summary>
     private static Box Orb(BibuiRuntime rt, float size)
     {
-        var orb = new Box
+        var orb = rt.Box();
+        orb.Draw = (_, ctx) =>
         {
-            Draw = (_, ctx) =>
-            {
-                Rgba accent = ctx.Resolve(UiColor.Accent), deep = ctx.Resolve(UiColor.AccentActive);
-                var r = ctx.Logical;
-                float s = ctx.Scale;
-                float rad = r.Width / 2f;
-                var light = Bibui.Core.Draw.RasterShader.Radial(new System.Numerics.Vector2((r.Left + r.Width * 0.32f) * s, (r.Top + r.Height * 0.28f) * s),
-                    r.Width * s, [Rgba.White.WithAlpha(235), accent, deep], [0f, 0.42f, 1f]);
-                ctx.DrawRect(ctx.Physical(r.Left, r.Top, r.Width, r.Height), rad * s, new Paint { Fill = Rgba.White, Shader = light });
-                // A ring round it, tilted: an orbit.
-                ctx.DrawArc(r.MidX, r.MidY, rad - 6f, 1.5f, Rgba.White.WithAlpha(150), 200f, 120f);
-            },
-        }.Sized(Size.Px(size), Size.Px(size));
+            Rgba accent = ctx.Resolve(UiColor.Accent), deep = ctx.Resolve(UiColor.AccentActive);
+            var r = ctx.Logical;
+            float s = ctx.Scale;
+            float rad = r.Width / 2f;
+            var light = Bibui.Core.Draw.RasterShader.Radial(new System.Numerics.Vector2((r.Left + r.Width * 0.32f) * s, (r.Top + r.Height * 0.28f) * s),
+                r.Width * s, [Rgba.White.WithAlpha(235), accent, deep], [0f, 0.42f, 1f]);
+            ctx.DrawRect(ctx.Physical(r.Left, r.Top, r.Width, r.Height), rad * s, new Paint { Fill = Rgba.White, Shader = light });
+            // A ring round it, tilted: an orbit.
+            ctx.DrawArc(r.MidX, r.MidY, rad - 6f, 1.5f, Rgba.White.WithAlpha(150), 200f, 120f);
+        };
+        orb.Sized(Size.Px(size), Size.Px(size));
         // The glow under it falls outside the box, which clips what the draw
         // makes; a style shadow is the decoration's, drawn before the clip.
         orb.Style.CornerRadius = size / 2f;
@@ -220,11 +247,9 @@ internal sealed partial class App
             ? UiColor.Accent.WithAlpha(0.14f + 0.1f * b.HotT)
             : UiColor.SurfaceRaisedHover.WithAlpha(b.HotT * 0.9f - 0.3f * b.ActiveT);
         rt.BeginParent(b);
-        rt.BeginCenterX();
-        rt.BeginCenterY();
+        rt.BeginCenterXY();
         Icon(rt, icon, size * 0.46f, on ? UiColor.Accent : UiColor.TextPrimary);
-        rt.EndCenterY();
-        rt.EndCenterX();
+        rt.EndCenterXY();
         rt.EndParent(b);
         if (tip is not null && i.Hovering) Tooltip.Build(rt, tip, b);
         return new BibuiWidget(b, i);
@@ -257,6 +282,7 @@ internal sealed partial class App
         const float pad = 28f;
         float cw = w - 2 * pad - Scrollbar.Lane;
         float ch = h - barH - 2 * pad;
+        rt.BeginParent(view);
         var page = rt.BeginParent(rt.Column().Sized(Size.Fill));
         page.Style.Padding = new EdgeInsets(pad - 4f, pad - Scrollbar.Lane, pad, pad);
         if (Page == Page.Targets) TargetsPage(rt, cw, ch);
@@ -264,7 +290,7 @@ internal sealed partial class App
         else if (Page == Page.Journal) JournalPage(rt, cw, ch);
         else OverviewPage(rt, cw, ch);
         rt.EndParent(page);
-        UiNode.PushIntoParent(view, page);
+        rt.EndParent(view);
 
         rt.BeginParent(wrap);
         rt.Scrollbar("page-bar", view);
@@ -275,16 +301,8 @@ internal sealed partial class App
 
     private void TopBar(BibuiRuntime rt, float w, float barH)
     {
-        // Ask, front to back.
-        bool showSearch = w > 980f && Page is Page.Overview or Page.Targets;
-        Box? field = showSearch ? SearchField(rt, 280f) : null;
-        var pause = IconButton(rt, "live-toggle", Live ? "pause" : "play", tip: Live ? "Pause the feed  ·  Space" : "Resume the feed  ·  Space");
-        if (pause.Clicked) Live = !Live;
-        var mode = IconButton(rt, "mode", Dark ? "sun" : "moon", tip: Dark ? "Light mode  ·  L" : "Dark mode  ·  L");
-        if (mode.Clicked) { Dark = !Dark; ThemeFileName = null; }
-        var look = IconButton(rt, "appearance", "sliders", on: SettingsOpen, tip: "Appearance  ·  ,");
-        if (look.Clicked) SettingsOpen = !SettingsOpen;
-
+        // The controls do not overlap, so they ask as they are built. The clock
+        // chip comes before the pause button: it shows a pause a frame late.
         var bar = rt.BeginParent(rt.Row().Sized(Size.Px(w), Size.Px(barH)));
         bar.Style = new Style
         {
@@ -298,18 +316,34 @@ internal sealed partial class App
         T(rt, Subtitles[(int)Page], ComponentSize.Sm, UiColor.TextSecondary);
         rt.EndCenterAcross();
         rt.Spacer(Size.Fill);
-        if (field is not null)
+        if (w > 980f && Page is Page.Overview or Page.Targets)
         {
-            CentredY(rt, field);
+            rt.BeginCenterAcross();
+            SearchField(rt, 280f);
+            rt.EndCenterAcross();
             rt.Gap(16f);
         }
-        CentredY(rt, ClockChip(rt));
+        rt.BeginCenterAcross();
+        ClockChip(rt);
+        rt.EndCenterAcross();
         rt.Gap(16f);
-        CentredY(rt, pause.Node);
+        rt.BeginCenterAcross();
+        if (IconButton(rt, "live-toggle", Live ? "pause" : "play", tip: Live ? "Pause the feed  ·  Space" : "Resume the feed  ·  Space").Clicked)
+            Live = !Live;
+        rt.EndCenterAcross();
         rt.Gap(8f);
-        CentredY(rt, mode.Node);
+        rt.BeginCenterAcross();
+        if (IconButton(rt, "mode", Dark ? "sun" : "moon", tip: Dark ? "Light mode  ·  L" : "Dark mode  ·  L").Clicked)
+        {
+            Dark = !Dark;
+            ThemeFileName = null;
+        }
+        rt.EndCenterAcross();
         rt.Gap(8f);
-        CentredY(rt, look.Node);
+        rt.BeginCenterAcross();
+        if (IconButton(rt, "appearance", "sliders", on: SettingsOpen, tip: "Appearance  ·  ,").Clicked)
+            SettingsOpen = !SettingsOpen;
+        rt.EndCenterAcross();
         rt.EndParent(bar);
     }
 
@@ -327,13 +361,21 @@ internal sealed partial class App
             BorderColor = UiColor.Border,
             BackgroundColor = UiColor.Surface,
         };
-        CentredY(rt, Pill(rt, Live ? "LIVE" : "PAUSED", Live ? UiColor.Success : UiColor.TextSecondary, dot: true, height: 20f));
+        rt.BeginCenterAcross();
+        Pill(rt, Live ? "LIVE" : "PAUSED", Live ? UiColor.Success : UiColor.TextSecondary, dot: true, height: 20f);
+        rt.EndCenterAcross();
         rt.Gap(10f);
-        CentredY(rt, Bold(rt, Utc, ComponentSize.Sm, UiColor.TextPrimary));
+        rt.BeginCenterAcross();
+        Bold(rt, Utc, ComponentSize.Sm, UiColor.TextPrimary);
+        rt.EndCenterAcross();
         rt.Gap(6f);
-        CentredY(rt, T(rt, "UTC", FontSize.Px(11f), UiColor.TextSecondary));
+        rt.BeginCenterAcross();
+        T(rt, "UTC", FontSize.Px(11f), UiColor.TextSecondary);
+        rt.EndCenterAcross();
         rt.Gap(12f);
-        CentredY(rt, T(rt, $"LST {lh:00}:{lm:00}", ComponentSize.Sm, UiColor.TextSecondary));
+        rt.BeginCenterAcross();
+        T(rt, $"LST {lh:00}:{lm:00}", ComponentSize.Sm, UiColor.TextSecondary);
+        rt.EndCenterAcross();
         rt.EndParent(chip);
         return chip;
     }
@@ -344,18 +386,22 @@ internal sealed partial class App
         Box field = rt.BoxFromId("search-box");
         TextField.InputStyle(rt, field, SearchFocused);
         field.Sized(Size.Px(width), Size.Px(36f));
-        var line = rt.TextField("search", Search, SearchEdit, SearchFocused, placeholder: "Search targets");
-        if (line.Pressed) { SearchFocused = true; NoteFocused = false; }
         rt.BeginParent(field);
-        CentredY(rt, Icon(rt, "search", 15f, UiColor.TextSecondary));
+        rt.BeginCenterAcross();
+        Icon(rt, "search", 15f, UiColor.TextSecondary);
+        rt.EndCenterAcross();
         rt.Gap(8f);
         var input = rt.BeginParent(rt.Column().Sized(Size.Fill, Size.Fill));
         rt.BeginCenter();
-        Place(rt, line.Node.Sized(Size.Fill));
+        var line = rt.TextField("search", Search, SearchEdit, SearchFocused, placeholder: "Search targets");
+        line.Node.Sized(Size.Fill);
+        if (line.Pressed) { SearchFocused = true; NoteFocused = false; }
         rt.EndCenter();
         rt.EndParent(input);
         rt.Gap(8f);
-        CentredY(rt, KeyboardShortcut.Build(rt, "/"));
+        rt.BeginCenterAcross();
+        KeyboardShortcut.Build(rt, "/");
+        rt.EndCenterAcross();
         rt.EndParent(field);
         return field;
     }

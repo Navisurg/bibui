@@ -183,11 +183,9 @@ internal static class DemoOverlays
     private static BibuiWidget TooltipTrigger(BibuiRuntime runtime, string id, string label, float width, float height)
     {
         var area = runtime.BeginParent(runtime.Column().Sized(Size.Px(width), Size.Px(height)));
-        runtime.BeginCenterY();
-        runtime.BeginCenterX();
+        runtime.BeginCenterXY();
         var button = runtime.Button(id, label);
-        runtime.EndCenterX();
-        runtime.EndCenterY();
+        runtime.EndCenterXY();
         runtime.EndParent(area);
         return button;
     }
