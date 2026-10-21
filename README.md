@@ -5,6 +5,8 @@
   </picture>
 </p>
 
+<p align="center"><a href="https://navisurgvision.com/bibui"><b>Documentation</b></a></p>
+
 bibui is an immediate-mode UI library for .NET.
 
 The library consists of a few UI node types such as a `Box` and `Text`,
@@ -201,6 +203,10 @@ it is the route that publishes with Native AOT; Silk.NET keeps the others on the
 JIT for now.
 
 ## Documentation
+
+The documentation is online at
+[navisurgvision.com/bibui](https://navisurgvision.com/bibui). The same pages
+are in [`docs`](docs):
 
 - [Getting started](docs/getting-started.md): from an empty project to a
   component with state, a headless test and a Native AOT binary.
