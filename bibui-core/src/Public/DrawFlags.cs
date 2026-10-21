@@ -1,9 +1,9 @@
 namespace Bibui.Core;
 
 /// <summary>
-/// The theme's standard treatments, opted into per node. A node names the
-/// treatment rather than a colour, so widening what one means reaches
-/// everything that already asked for it.
+/// The theme's standard treatments, opted into per node, and how a box's own
+/// drawing is clipped. A node names the treatment rather than a colour, so
+/// widening what one means reaches everything that already asked for it.
 /// </summary>
 [Flags]
 public enum DrawFlags
@@ -33,4 +33,14 @@ public enum DrawFlags
 
     /// <summary>A fill in the theme's raised surface.</summary>
     Background = 1 << 3,
+
+    /// <summary>
+    /// The box's <see cref="Box.Draw"/> callback is not clipped to the box: its
+    /// ink may reach past it, as a text's glyphs do — a glow, a highlight
+    /// padded around a word, the soft end of a line. A box that claims
+    /// <see cref="InteractionKinds.Clip"/>, this one or an ancestor, still cuts
+    /// it; the callback can push a clip of its own for a margin. Layout and
+    /// hit-testing take the box's rect, not its ink.
+    /// </summary>
+    Unclipped = 1 << 4,
 }

@@ -770,7 +770,10 @@ frame is the same image, byte for byte, every time.
 A box can paint itself: set `Box.Draw` to a callback, and the painter calls it
 with the box and a `DrawContext` after the box's decoration and children. The
 callback draws in the box's own space: (0,0) is the box's top-left, and
-anything drawn outside the box is clipped. A clip, transform or opacity the
+anything drawn outside the box is clipped, unless the box's style asks for
+`DrawFlags.Unclipped`: then its ink may reach past the box, as a glow or a
+highlight padded around a word does, and only a box that claims `Clip` (it or
+an ancestor) cuts it. Layout and hit-testing still take the box's rect. A clip, transform or opacity the
 callback leaves pushed is popped after it, and so is a paint. `Draw` is build state like any other. Set it on the box the build
 acquired, retained or pooled. The next `BoxFromId` or `Box()` clears it, so a
 box draws only for as long as its build keeps setting the callback. A chart

@@ -3240,6 +3240,35 @@ Run("Box.Draw: a callback draws in its box's space, clipped to the box, and its 
     IsTrue(Is(70, 20, green) && Is(109, 59, green), "the next box draws whole: the clip left pushed was popped, and the extra pops undid nothing of the painter's");
 });
 
+Run("Box.Draw: Unclipped lets the callback's ink reach past the box, and a clipping ancestor still cuts it", () =>
+{
+    // A 40×40 box at (30,20) inside a 100×80 clipping box at (0,0); its
+    // callback draws a rect from (-20,-10) to (120,80) in its own space.
+    var red = new Rgba(255, 0, 0);
+    Box Drawn(bool unclipped)
+    {
+        var box = new Box { Draw = (_, ctx) => ctx.DrawRect(new RectF(-20f, -10f, 120f, 80f), 0f, Paint.Filled(red)) }
+            .Sized(Size.Px(40f), Size.Px(40f));
+        if (unclipped) box.Style.Draw = DrawFlags.Unclipped;
+        return box;
+    }
+    byte[] Frame(bool unclipped)
+    {
+        var clipper = new Box { Claims = InteractionKinds.Clip }.Sized(Size.Px(100f), Size.Px(80f)).Padded(new EdgeInsets(20f, 0f, 0f, 30f));
+        UiNode.PushIntoParent(clipper, Drawn(unclipped));
+        var root = new Box { SizeX = SemanticSize.ChildrenSum(), SizeY = SemanticSize.ChildrenSum() };
+        UiNode.PushIntoParent(root, clipper);
+        return Frames.Frame(root, new SurfaceOptions { Width = 160, Height = 120, ScaleFactor = 1f }, ThemeLoader.NeutralDark()).RawBgraBytes;
+    }
+    static bool Red(byte[] px, int x, int y) { int i = (y * 160 + x) * 4; return px[i] == 0 && px[i + 1] == 0 && px[i + 2] == 255; }
+
+    var clipped = Frame(unclipped: false);
+    IsTrue(Red(clipped, 30, 20) && !Red(clipped, 20, 15) && !Red(clipped, 80, 40), "without it, cut to the box");
+    var free = Frame(unclipped: true);
+    IsTrue(Red(free, 10, 10) && Red(free, 95, 75), "with it, the ink reaches past the box, up and left and down and right");
+    IsTrue(!Red(free, 105, 40) && !Red(free, 50, 85), "but not past the ancestor that claims Clip");
+});
+
 Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and gradients", () =>
 {
     // The former Skia escape hatch: paints are values, paths and

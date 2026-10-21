@@ -54,6 +54,10 @@ All notable changes to bibui are recorded here. The format is based on
     node's fields, set as such.
   - `Text` and `TextFromId` take a `weight`, as they take a `family`: one bold
     text is `Text(title, weight: FontWeight.Bold)`, with no face begun.
+- **`DrawFlags.Unclipped`.** A box's `Draw` callback is clipped to the box;
+  with this flag on its style, its ink may reach past it (a glow, a highlight
+  around a word), cut only by a box that claims `Clip`. Layout and
+  hit-testing still take the box's rect.
 - **Only the frame's ground is in the theme's background.** A tooltip's text
   and the active tab are drawn in `Surface`, not `Background`, so a theme
   whose background is transparent (`#00000000`) gives a transparent frame for

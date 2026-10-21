@@ -162,7 +162,8 @@ public sealed class Box : UiNode
     /// a retained one from <c>BibuiRuntime.BoxFromId</c> as readily as a keyless
     /// <c>Box()</c> — and it is cleared when the box is acquired again next
     /// frame, so a box draws only while its build keeps saying so. It runs at
-    /// paint, after the box's decoration and children; resolve theme colours
+    /// paint, after the box's decoration and children, clipped to the box
+    /// unless <see cref="Style.Draw"/> has <see cref="DrawFlags.Unclipped"/>; resolve theme colours
     /// there with <see cref="DrawContext.Resolve(UiColor)"/>, not while
     /// building, so a theme change before the paint is followed.</para>
     /// </summary>
