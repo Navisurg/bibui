@@ -151,7 +151,7 @@ public static class ScrollList
         ArgumentNullException.ThrowIfNull(runtime);
         if (runtime.ParentInScope is not Box { Claims: var claims } view || (claims & InteractionKinds.Scroll) == 0)
             throw new InvalidOperationException("EndScrollList pops the list's view, and the parent in scope is not one: a parent pushed inside the list was not popped.");
-        new BibuiRuntime.ParentScope(runtime, view).Dispose();
+        runtime.EndParent(view);
 
         float dy = runtime.InteractionsFor(view).ScrollY;
         if (dy == 0f) return;

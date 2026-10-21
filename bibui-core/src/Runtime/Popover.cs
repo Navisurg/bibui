@@ -48,7 +48,8 @@ public static class Popover
         style.Shadow = theme.Elevation.Level(ElevationTokens.Overlay);
         style.BorderColor = UiColor.Border;
         style.BackgroundColor = UiColor.SurfaceRaised;
-        return new PopoverScope(runtime, panel, runtime.Parent(panel));
+        runtime.BeginParent(panel);
+        return new PopoverScope(runtime, panel);
     }
 }
 
@@ -56,14 +57,12 @@ public static class Popover
 public readonly struct PopoverScope
 {
     private readonly BibuiRuntime _runtime;
-    private readonly Box _panel;
-    private readonly BibuiRuntime.ParentScope _inPanel;
+    private readonly Box _panel;   // begun as the parent until End
 
-    internal PopoverScope(BibuiRuntime runtime, Box panel, BibuiRuntime.ParentScope inPanel)
+    internal PopoverScope(BibuiRuntime runtime, Box panel)
     {
         _runtime = runtime;
         _panel = panel;
-        _inPanel = inPanel;
     }
 
     /// <summary>
@@ -74,7 +73,7 @@ public readonly struct PopoverScope
     /// </summary>
     public BibuiWidget End()
     {
-        _inPanel.Dispose();
+        _runtime.EndParent(_panel);
         _panel.Claims = InteractionKinds.Press;
         return new BibuiWidget(_panel, _runtime.InteractionsFor(_panel));
     }

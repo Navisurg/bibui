@@ -62,15 +62,4 @@ static class TestNodes
 
     /// <summary>A spring in <paramref name="parent"/>: a fill spacer along its axis.</summary>
     public static Box Spring(UiNode parent) => Spacer(parent, Size.Fill);
-
-    /// <summary><paramref name="node"/> pushed into <paramref name="parent"/> with a spring either side.</summary>
-    public static void Centred(UiNode parent, UiNode node)
-    {
-        Spring(parent);
-        UiNode.PushIntoParent(parent, node);
-        Spring(parent);
-    }
-
-    /// <summary><paramref name="node"/> centred across a row: a column as tall as the row, of a spring, it and a spring.</summary>
-    public static Box CentredY(UiNode node) => Group(LayoutAxis.Y, Size.Fill, node, Size.Fill).Sized(y: Size.Fill);
 }

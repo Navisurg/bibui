@@ -59,7 +59,8 @@ public static class Menu
         style.Shadow = theme.Elevation.Level(ElevationTokens.Overlay);
         style.BorderColor = UiColor.Border;
         style.BackgroundColor = UiColor.SurfaceRaised;
-        return new MenuScope(runtime, list, runtime.Parent(list));
+        runtime.BeginParent(list);
+        return new MenuScope(runtime, list);
     }
 
     /// <summary>
@@ -166,14 +167,12 @@ public static class MenuExtensions
 public readonly struct MenuScope
 {
     internal readonly BibuiRuntime _runtime;
-    internal readonly Box _list;
-    internal readonly BibuiRuntime.ParentScope _inList;
+    internal readonly Box _list;   // begun as the parent until End
 
-    internal MenuScope(BibuiRuntime runtime, Box list, BibuiRuntime.ParentScope inList)
+    internal MenuScope(BibuiRuntime runtime, Box list)
     {
         _runtime = runtime;
         _list = list;
-        _inList = inList;
     }
 
     /// <summary>
@@ -185,7 +184,7 @@ public readonly struct MenuScope
     /// </summary>
     public BibuiWidget End()
     {
-        _inList.Dispose();
+        _runtime.EndParent(_list);
         _list.Claims = InteractionKinds.Press;
         var widget = new BibuiWidget(_list, _runtime.InteractionsFor(_list));
         foreach (var ev in _runtime.UnconsumedEvents)

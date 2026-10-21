@@ -92,7 +92,8 @@ public static class Dialog
                 break;
         }
         runtime.EndParent(root);
-        return new DialogScope(runtime, root, panel, runtime.Parent(panel));
+        runtime.BeginParent(panel);
+        return new DialogScope(runtime, root, panel);
     }
 
     // The raised panel: retained, so it can be asked about and remembers its height.
@@ -118,15 +119,13 @@ public readonly struct DialogScope
 {
     private readonly BibuiRuntime _runtime;
     private readonly Box _root;
-    private readonly Box _panel;
-    private readonly BibuiRuntime.ParentScope _inPanel;
+    private readonly Box _panel;   // begun as the parent until End
 
-    internal DialogScope(BibuiRuntime runtime, Box root, Box panel, BibuiRuntime.ParentScope inPanel)
+    internal DialogScope(BibuiRuntime runtime, Box root, Box panel)
     {
         _runtime = runtime;
         _root = root;
         _panel = panel;
-        _inPanel = inPanel;
     }
 
     /// <summary>
@@ -136,7 +135,7 @@ public readonly struct DialogScope
     /// </summary>
     public DialogWidget End()
     {
-        _inPanel.Dispose();
+        _runtime.EndParent(_panel);
         _runtime.InteractionsFor(_panel);
         _root.Claims = InteractionKinds.LeftPress;
         return new DialogWidget(_panel, _runtime.InteractionsFor(_root).Clicked);

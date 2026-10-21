@@ -380,13 +380,13 @@ Run("runtime.Center / Spacer(Fill): the contents land in the middle, between two
 Run("runtime.CenterAcross: centred across a row of known height, in a cell as wide as its content", () =>
 {
     var runtime = BibuiRuntime.Create();
-    Box? row = null;
+    Box? row = null, cell = null;
     runtime.SetBuild(() =>
     {
         var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
         row = runtime.BeginParent(runtime.Row().Sized(Size.Fill, Size.Px(40f)));
         runtime.BoxFromId("tall").Sized(Size.Px(40f), Size.Px(40f));
-        runtime.BeginCenterAcross();
+        cell = runtime.BeginCenterAcross();
         runtime.BoxFromId("dot").Sized(Size.Px(16f), Size.Px(16f));
         runtime.EndCenterAcross();
         runtime.BoxFromId("after").Sized(Size.Px(10f), Size.Px(10f));
@@ -399,6 +399,8 @@ Run("runtime.CenterAcross: centred across a row of known height, in a cell as wi
     Eq((40f, 12f), (dot.Rect.X, dot.Rect.Y), "beside the tall box, 12 px down a 40 px row");
     Eq(56f, runtime.FindById("after")!.Rect.X, "the cell is as wide as the dot, so what follows comes right after it");
     Eq(3, CountChildren(row!), "the tall box, the cell, and what follows");
+    IsTrue(ReferenceEquals(dot.Parent, cell), "the cell it hands back holds what is centred");
+    Eq((16f, 40f), (cell!.Extent.X, cell.Extent.Y), "as wide as its content, as tall as the row");
 });
 
 Run("runtime.CenterX / CenterY: along or across, by the parent's axis", () =>
@@ -450,54 +452,6 @@ Run("runtime.Text weight: one text's weight, over the face in scope", () =>
     Eq(FontWeight.Bold, bold!.Weight, "weight: Bold");
     Eq(FontWeight.Regular, plain!.Weight, "no weight: the one in scope");
     Eq(FontWeight.Regular, light!.Weight, "a text's own weight wins over the face begun");
-});
-
-Run("runtime.BeginCenterAcross: hands back the cell it makes", () =>
-{
-    var runtime = BibuiRuntime.Create();
-    Box? cell = null;
-    runtime.SetBuild(() =>
-    {
-        var page = runtime.BeginParent(runtime.Column());
-        var row = runtime.BeginParent(runtime.Row().Sized(Size.Px(100f), Size.Px(40f)));
-        cell = runtime.BeginCenterAcross();
-        runtime.BoxFromId("in").Sized(Size.Px(10f), Size.Px(10f));
-        runtime.EndCenterAcross();
-        runtime.EndParent(row);
-        runtime.EndParent(page);
-        return page;
-    }, new SurfaceOptions { Width = 200, Height = 100 });
-    runtime.Step();
-    IsTrue(ReferenceEquals(runtime.FindById("in")!.Parent, cell), "what is centred is in the cell");
-    Eq((10f, 40f), (cell!.Extent.X, cell.Extent.Y), "as wide as its content, as tall as the row");
-});
-
-Run("runtime.CenterXY: centred both ways in a row and in a column, the same call", () =>
-{
-    var runtime = BibuiRuntime.Create();
-    Box? cell = null;
-    runtime.SetBuild(() =>
-    {
-        var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
-        var row = runtime.BeginParent(runtime.Row().Sized(Size.Px(100f), Size.Px(60f)));
-        cell = runtime.BeginCenterXY();
-        runtime.BoxFromId("in-row").Sized(Size.Px(20f), Size.Px(10f));
-        runtime.EndCenterXY();
-        runtime.EndParent(row);
-        var column = runtime.BeginParent(runtime.Column().Sized(Size.Px(100f), Size.Px(60f)));
-        using (runtime.CenterXY())
-            runtime.BoxFromId("in-column").Sized(Size.Px(20f), Size.Px(10f));
-        runtime.EndParent(column);
-        runtime.EndParent(page);
-        return page;
-    }, new SurfaceOptions { Width = 400, Height = 200 });
-    runtime.Step();
-    static bool Near(System.Numerics.Vector2 at, float x, float y) => MathF.Abs(at.X - x) < 0.01f && MathF.Abs(at.Y - y) < 0.01f;
-    var inRow = runtime.FindById("in-row")!.Rect;
-    IsTrue(Near(inRow, 40f, 25f), $"in a row (got {inRow})");
-    var inColumn = runtime.FindById("in-column")!.Rect;
-    IsTrue(Near(inColumn, 40f, 85f), $"in a column (got {inColumn})");
-    IsTrue(ReferenceEquals(runtime.FindById("in-row")!.Parent, cell), "the cell it hands back holds what is centred");
 });
 
 Run("runtime.Em: times the font size in scope", () =>
@@ -4756,7 +4710,7 @@ Run("PushIntoParent: Row(runtime.Text(...)) inside a BeginParent scope moves the
                     row = TestNodes.Group(LayoutAxis.X, 
                         title = runtime.Text("title"),
                         Size.Fill,
-                        TestNodes.CentredY(runtime.Box().Sized(Size.Px(10f), Size.Px(10f)))).Sized(Size.Fill, Size.Px(24f));
+                        TestNodes.Group(LayoutAxis.Y, Size.Fill, runtime.Box().Sized(Size.Px(10f), Size.Px(10f)), Size.Fill).Sized(y: Size.Fill)).Sized(Size.Fill, Size.Px(24f));
                     UiNode.PushIntoParent(card, row);
                     below = runtime.Text("below");
                 }
@@ -7818,15 +7772,6 @@ Run("Solver: text wraps at the width it is given, not the parent's", () =>
     var size = LayoutSolver.Measure(row, V(200, float.PositiveInfinity), leaf);
     Eq(V(100, 40), text.FixedSize, "two lines at its 100px share");
     Eq(40f, size.Y, "and the row is as tall as that");
-});
-
-Run("Solver: Arrange.Centred centres a node along its parent's axis", () =>
-{
-    var root = Node(null, SemanticSize.Pixels(300), SemanticSize.Pixels(100));
-    var node = new Box { SizeX = SemanticSize.Pixels(100), SizeY = SemanticSize.Pixels(20) };
-    TestNodes.Centred(root, node);
-    LayoutSolver.Layout(root, V(0, 0), V(300, 100), leaf);
-    Eq(V(100, 0), node.Rect);
 });
 
 Run("Solver: a spring pushes what follows to the end, and gives way first", () =>

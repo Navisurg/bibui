@@ -66,7 +66,7 @@ public static class Select
             chevron.Color = UiColor.TextSecondary;
         }
 
-        if (runtime.BeginDropDown(listId) is not { } list) return new SelectScope(runtime, trigger, listId, list: null, default);
+        if (runtime.BeginDropDown(listId) is not { } list) return new SelectScope(runtime, trigger, listId, list: null);
 
         // Under the trigger, where it was drawn last frame, and as wide: a
         // container may have stretched it past the width it asked for.
@@ -79,7 +79,8 @@ public static class Select
         list.Style.Shadow = theme.Elevation.Level(ElevationTokens.Overlay);
         list.Style.BorderColor = UiColor.Border;
         list.Style.BackgroundColor = UiColor.SurfaceRaised;
-        return new SelectScope(runtime, trigger, listId, list, runtime.Parent(list));
+        runtime.BeginParent(list);
+        return new SelectScope(runtime, trigger, listId, list);
     }
 
 
@@ -123,16 +124,14 @@ public readonly struct SelectScope
     internal readonly BibuiRuntime _runtime;
     internal readonly Box _trigger;
     internal readonly string _listId;
-    internal readonly Box? _list;
-    internal readonly BibuiRuntime.ParentScope _inList;
+    internal readonly Box? _list;   // when open, begun as the parent until End
 
-    internal SelectScope(BibuiRuntime runtime, Box trigger, string listId, Box? list, BibuiRuntime.ParentScope inList)
+    internal SelectScope(BibuiRuntime runtime, Box trigger, string listId, Box? list)
     {
         _runtime = runtime;
         _trigger = trigger;
         _listId = listId;
         _list = list;
-        _inList = inList;
     }
 
     /// <summary>Whether the list is open, so there is somewhere to build rows into.</summary>
@@ -150,7 +149,7 @@ public readonly struct SelectScope
     {
         if (_list is not null)
         {
-            _inList.Dispose();
+            _runtime.EndParent(_list);
             _list.Claims = InteractionKinds.Press;
             _runtime.InteractionsFor(_list);
         }
