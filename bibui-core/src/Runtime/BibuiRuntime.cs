@@ -303,7 +303,7 @@ public sealed partial class BibuiRuntime
     private float _measureScale = 1f;
 
     // What a leaf sized by what it holds measures: a text its lines, an icon
-    // its side.
+    // its side, a box what its own measure says.
     private System.Numerics.Vector2 MeasureLeaf(UiNode node, float width)
     {
         switch (node)
@@ -314,8 +314,10 @@ public sealed partial class BibuiRuntime
             case Icon icon:
                 float side = icon.Size.In(_measureTheme!);
                 return new System.Numerics.Vector2(side, side);
+            case Box { Measure: { } measure } box:
+                return measure(box, width);
             default:
-                throw new InvalidOperationException($"{node.GetType().Name} '{node.Id}' is sized by its content, and has none.");
+                throw new InvalidOperationException($"{node.GetType().Name} '{node.Id}' is sized by its content, and has none (a box says it with Measure).");
         }
     }
 

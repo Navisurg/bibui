@@ -95,6 +95,7 @@ public sealed partial class BibuiRuntime
     {
         ResetNode(box);
         box.Draw = null;
+        box.Measure = null;
     }
 
     /// <summary>What every node a build describes again starts from: no style, no links, no size.</summary>
@@ -111,6 +112,8 @@ public sealed partial class BibuiRuntime
         node.AllowOverflowX = node.AllowOverflowY = false;
         node.FloatingX = node.FloatingY = false;
         node.FixedPosition = default;
+        node.ChildGap = 0f;
+        node.ChildAlign = ChildAlignment.Start;
     }
 
     /// <summary>Links <paramref name="node"/> last under <paramref name="parent"/>, or under the parent in scope.</summary>

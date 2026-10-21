@@ -142,6 +142,20 @@ public static class Arrange
         return box;
     }
 
+    /// <summary>Space between its children along its axis (<see cref="UiNode.ChildGap"/>).</summary>
+    public static T Spaced<T>(this T node, float gap) where T : UiNode
+    {
+        node.ChildGap = gap;
+        return node;
+    }
+
+    /// <summary>Where its children sit across its axis (<see cref="UiNode.ChildAlign"/>).</summary>
+    public static T Aligned<T>(this T node, ChildAlignment align) where T : UiNode
+    {
+        node.ChildAlign = align;
+        return node;
+    }
+
     /// <summary>Padding inside the node.</summary>
     public static T Padded<T>(this T node, EdgeInsets padding) where T : UiNode
     {

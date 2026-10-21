@@ -148,7 +148,7 @@ internal static class LayoutSolver
             {
                 // Along the layout axis the children share the room: each gives
                 // up the same fraction of what it may give up.
-                float total = 0f, yieldable = 0f;
+                float total = Gaps(node, a), yieldable = 0f;
                 for (var child = node.FirstChild; child is not null; child = NextOf(child))
                 {
                     if (Floats(child, a)) continue;
@@ -196,13 +196,16 @@ internal static class LayoutSolver
         float start = Get(node.Rect, a) + PadStart(node, a) - Get(node.ViewOffset, a);
         float cursor = 0f;
         bool along = (int)node.ChildLayoutAxis == a;
+        // Across the axis, the share of the room left that goes before a child.
+        float across = along ? 0f : node.ChildAlign switch { ChildAlignment.Center => 0.5f, ChildAlignment.End => 1f, _ => 0f };
+        float room = across == 0f ? 0f : Get(node.Extent, a) - PadStart(node, a) - PadEnd(node, a);
         for (var child = node.FirstChild; child is not null; child = NextOf(child))
         {
             float s = Get(child.FixedSize, a);
             float at = Floats(child, a)
                 ? Get(node.Rect, a) + Get(child.FixedPosition, a) - Get(node.ViewOffset, a)
-                : start + (along ? cursor : 0f);
-            if (along && !Floats(child, a)) cursor += s;
+                : start + (along ? cursor : MathF.Max(0f, room - s) * across);
+            if (along && !Floats(child, a)) cursor += s + node.ChildGap;
             child.Rect = With(child.Rect, a, at);
             child.Extent = With(child.Extent, a, s);
             Position(child, a);
@@ -221,11 +224,21 @@ internal static class LayoutSolver
         throw LayoutException.NoSize(node, a);
     }
 
-    /// <summary>The children's extent along <paramref name="a"/>: summed if it is the layout axis, the largest if not.</summary>
+    /// <summary>The space <see cref="UiNode.ChildGap"/> puts between the in-flow children along <paramref name="a"/>.</summary>
+    private static float Gaps(UiNode node, int a)
+    {
+        if (node.ChildGap == 0f || (int)node.ChildLayoutAxis != a) return 0f;
+        int n = 0;
+        for (var child = node.FirstChild; child is not null; child = NextOf(child))
+            if (!Floats(child, a)) n++;
+        return n > 1 ? node.ChildGap * (n - 1) : 0f;
+    }
+
+    /// <summary>The children's extent along <paramref name="a"/>: summed with the gaps between them if it is the layout axis, the largest if not.</summary>
     private static float Extent(UiNode node, int a)
     {
         bool along = (int)node.ChildLayoutAxis == a;
-        float extent = 0f;
+        float extent = along ? Gaps(node, a) : 0f;
         for (var child = node.FirstChild; child is not null; child = NextOf(child))
         {
             if (Floats(child, a)) continue;

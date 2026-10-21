@@ -7890,6 +7890,142 @@ Run("A held Backspace keeps deleting in a text field", () =>
     Eq("a", text.ToString(), "one press and two repeats delete three characters");
 });
 
+// ── Boxes that measure themselves, gaps and cross-axis alignment ───────────
+
+Run("Box.Measure: a box sized by its content is asked for its width unbounded, then for its height at the width it got", () =>
+{
+    var rt = BibuiRuntime.Create();
+    var asked = new List<float>();
+    Box? para = null, after = null;
+    // A paragraph of 300 px of words, 20 px a line: as many lines as the width makes.
+    System.Numerics.Vector2 Words(Box _, float width)
+    {
+        asked.Add(width);
+        float w = MathF.Min(300f, width);
+        return new System.Numerics.Vector2(w, 20f * MathF.Ceiling(300f / w));
+    }
+    rt.SetBuild(() =>
+    {
+        // The frame's one top node is its root, the surface's size: the 100 px column goes inside it.
+        var root = rt.ColumnFill();
+        using (rt.PushParent(root))
+        using (rt.PushParent(rt.ColumnWidth(100f)))
+        {
+            para = rt.Box();
+            para.SizeX = SemanticSize.ParentPct(1f);
+            para.SizeY = SemanticSize.Text();
+            para.Measure = Words;
+            after = rt.Box().Px(10f, 10f);
+        }
+        return root;
+    }, new SurfaceOptions { Width = 400, Height = 400 });
+    rt.Step();
+    Eq(100f, para!.Extent.X, "a fill: the column's width");
+    Eq(60f, para.Extent.Y, "three lines at 100 px");
+    Eq(60f, after!.Rect.Y, "what follows comes after all three");
+    IsTrue(asked.Contains(100f), "measured at its final width");
+
+    // Sized by its content on both axes: unbounded first, then at the width that gave.
+    asked.Clear();
+    rt.SetBuild(() =>
+    {
+        var root = rt.ColumnFill();
+        using (rt.PushParent(root))
+        using (rt.PushParent(rt.RowFit()))
+        {
+            para = rt.Box();
+            para.SizeX = para.SizeY = SemanticSize.Text();
+            para.Measure = Words;
+        }
+        return root;
+    }, new SurfaceOptions { Width = 400, Height = 400 });
+    rt.Step();
+    Eq(float.PositiveInfinity, asked[0], "the width asked unbounded");
+    Eq(new System.Numerics.Vector2(300f, 20f), para!.Extent, "one line at its natural width");
+});
+
+Run("Box.Measure: cleared when the box is acquired again; a content-sized box without one throws as before", () =>
+{
+    var rt = BibuiRuntime.Create();
+    bool measure = true;
+    rt.SetBuild(() =>
+    {
+        var box = rt.BoxFromId("leaf");
+        box.SizeX = box.SizeY = SemanticSize.Text();
+        if (measure) box.Measure = (_, _) => new System.Numerics.Vector2(10f, 10f);
+        return box;
+    }, new SurfaceOptions { Width = 100, Height = 100 });
+    rt.Step();
+    measure = false;
+    bool threw = false;
+    try { rt.Step(); } catch (InvalidOperationException e) when (e.Message.Contains("Measure")) { threw = true; }
+    IsTrue(threw, "the measure was build state: not set this frame, none");
+});
+
+Run("ChildGap: space between children, counted in a size from the children, kept when fills share the rest", () =>
+{
+    var rt = BibuiRuntime.Create();
+    Box? fit = null, a = null, b = null, c = null, fa = null, fb = null, floater = null;
+    rt.SetBuild(() =>
+    {
+        var root = rt.ColumnFill();
+        using (rt.PushParent(root))
+        {
+            fit = rt.RowFit().Spaced(8f);
+            using (rt.PushParent(fit))
+            {
+                a = rt.Box().Px(10f, 10f);
+                floater = rt.Box().Px(5f, 5f).At(0f, 0f);
+                b = rt.Box().Px(20f, 10f);
+                c = rt.Box().Px(30f, 10f);
+            }
+            using (rt.PushParent(rt.RowFillX(20f).Spaced(10f)))
+            {
+                fa = rt.Box().FillX().Px(height: 10f);
+                fb = rt.Box().FillX().Px(height: 10f);
+            }
+        }
+        return root;
+    }, new SurfaceOptions { Width = 210, Height = 100 });
+    rt.Step();
+    Eq(10f + 20f + 30f + 2 * 8f, fit!.Extent.X, "three children and two gaps; the floating one is in neither");
+    Eq(18f, b!.Rect.X, "after the first and a gap");
+    Eq(46f, c!.Rect.X, "after the second and a gap");
+    IsTrue(MathF.Abs(fa!.Extent.X - 100f) < 0.01f && MathF.Abs(fb!.Extent.X - 100f) < 0.01f, $"two fills share what the gap leaves of 210: {fa!.Extent.X}, {fb!.Extent.X}");
+    IsTrue(MathF.Abs(fb!.Rect.X - 110f) < 0.01f, $"and the gap stands between them: {fb!.Rect.X}");
+});
+
+Run("ChildAlign: children across the axis at the start, the middle or the end of a row as tall as its tallest", () =>
+{
+    var rt = BibuiRuntime.Create();
+    var align = ChildAlignment.Start;
+    Box? row = null, tall = null, small = null;
+    rt.SetBuild(() =>
+    {
+        var root = rt.ColumnFill();
+        using (rt.PushParent(root))
+        {
+            row = rt.RowFit().Aligned(align);
+            using (rt.PushParent(row))
+            {
+                tall = rt.Box().Px(10f, 40f);
+                small = rt.Box().Px(10f, 10f);
+            }
+        }
+        return root;
+    }, new SurfaceOptions { Width = 200, Height = 200 });
+    rt.Step();
+    Eq(40f, row!.Extent.Y, "as tall as its tallest child");
+    Eq(0f, small!.Rect.Y, "start");
+    align = ChildAlignment.Center;
+    rt.Step();
+    Eq(15f, small!.Rect.Y, "centred: no ring, though the row is sized by its children");
+    Eq(0f, tall!.Rect.Y, "the tallest fills it");
+    align = ChildAlignment.End;
+    rt.Step();
+    Eq(30f, small!.Rect.Y, "end");
+});
+
 Console.WriteLine($"Results: {passed} passed, {failed} failed, {skipped} skipped"
     + (filter is null ? "" : $" ({filteredOut} not matching '{filter}')"));
 

@@ -88,6 +88,23 @@ public abstract class UiNode
     /// <summary>The axis this node lays its children out along.</summary>
     public LayoutAxis ChildLayoutAxis { get; set; }
 
+    /// <summary>
+    /// Space between one child and the next along <see cref="ChildLayoutAxis"/>,
+    /// in logical px, as CSS <c>gap</c>: counted in a size taken from the
+    /// children, never given up when they are shrunk to fit, and not put before
+    /// the first child, after the last, or beside a floating one.
+    /// </summary>
+    public float ChildGap { get; set; }
+
+    /// <summary>
+    /// Where each child sits across <see cref="ChildLayoutAxis"/> when it is
+    /// smaller than the room inside this node: at its start (the default), its
+    /// middle or its end, as CSS <c>align-items</c>. A row as tall as its tallest
+    /// child centres the others this way without a ring, which springs cannot.
+    /// Floating children are placed where they say.
+    /// </summary>
+    public ChildAlignment ChildAlign { get; set; }
+
     /// <summary>The size this node asks for along X. See <see cref="SemanticSize"/>.</summary>
     public SemanticSize SizeX { get; set; }
 
@@ -140,6 +157,9 @@ public abstract class UiNode
     public Vector2 TargetViewOffset { get; set; }
 }
 
+/// <summary>Where children sit across their parent's layout axis (<see cref="UiNode.ChildAlign"/>).</summary>
+public enum ChildAlignment { Start, Center, End }
+
 public sealed class Box : UiNode
 {
     /// <summary>
@@ -169,6 +189,21 @@ public sealed class Box : UiNode
     public DrawCallback? Draw { get; set; }
 
     /// <summary>
+    /// How large this box's own content is, for an axis sized by what it holds
+    /// (<see cref="SemanticSize.Text"/>): handed the box and the width it will
+    /// have, it answers the width and height it needs. Widths are solved before
+    /// heights, so it is asked for its width with an unbounded width, and for
+    /// its height with the width it got: a paragraph drawn by
+    /// <see cref="Draw"/> wraps at its final width and is as tall as that makes
+    /// it, in the same frame.
+    ///
+    /// <para>Build state like <see cref="Draw"/>: cleared when the box is
+    /// acquired again. A box sized by its content with no measure throws, as
+    /// before.</para>
+    /// </summary>
+    public MeasureCallback? Measure { get; set; }
+
+    /// <summary>
     /// How hovered this box is, eased 0..1. Only means
     /// anything on a box that outlives the frame, i.e. one obtained from
     /// <c>BibuiRuntime.BoxFromId</c>; a box the build function constructed
@@ -186,6 +221,13 @@ public sealed class Box : UiNode
 /// its key). See <see cref="DrawContext"/>.
 /// </summary>
 public delegate void DrawCallback(Box box, DrawContext ctx);
+
+/// <summary>
+/// The size <paramref name="box"/>'s own content needs, in logical px, given the
+/// <paramref name="width"/> it will have: <see cref="float.PositiveInfinity"/>
+/// while widths are being solved. See <see cref="Box.Measure"/>.
+/// </summary>
+public delegate System.Numerics.Vector2 MeasureCallback(Box box, float width);
 
 public sealed class Style
 {
