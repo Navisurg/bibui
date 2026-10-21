@@ -150,6 +150,7 @@ public sealed partial class BibuiRuntime
                     // FromKey decided on Ctrl and Shift; the event reports all that
                     // was held, Alt and Super included.
                     ev.Modifiers = held;
+                    ev.Repeat = e.Repeat;
                     break;
                 }
                 case WindowEventKind.KeyUp:

@@ -97,6 +97,7 @@ public sealed class SilkWindow : IDisposable
     private CursorShape _cursor;
     // Held so the GC keeps it while GLFW holds its function pointer.
     private global::Silk.NET.GLFW.GlfwCallbacks.CharCallback? _onChar;
+    private global::Silk.NET.GLFW.GlfwCallbacks.KeyCallback? _onKey;
 
     internal unsafe void WireInput()
     {
@@ -109,11 +110,6 @@ public sealed class SilkWindow : IDisposable
             mouse.MouseMove += (_, p) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseMove, p.X, p.Y, Bibui.Core.MouseButton.Unknown, HeldModifiers));
             mouse.Scroll    += (m, w) => events.Add(WindowEvent.Wheel(m.Position.X, m.Position.Y, w.X, w.Y, HeldModifiers));
         }
-        foreach (var keyboard in input.Keyboards)
-        {
-            keyboard.KeyDown += (_, y, _) => events.Add(WindowEvent.KeyPress((Bibui.Core.Key)y, HeldModifiers));
-            keyboard.KeyUp   += (_, y, _) => events.Add(WindowEvent.KeyRelease((Bibui.Core.Key)y, HeldModifiers));
-        }
         // Text straight from GLFW, not Silk.NET's KeyChar: that casts GLFW's code
         // point to a char, which turns 😀 (U+1F600) into U+F600. Taking the window's
         // char callback replaces Silk.NET's, whose only listener was KeyChar.
@@ -123,6 +119,18 @@ public sealed class SilkWindow : IDisposable
         };
         global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetCharCallback(
             (global::Silk.NET.GLFW.WindowHandle*)Native.Native!.Glfw!.Value, _onChar);
+        // Keys straight from GLFW too: Silk.NET's KeyDown drops GLFW's repeats, so
+        // a held Backspace deleted one character. bibui's Key values are GLFW's
+        // key codes, so a key converts with a cast. Taking the key callback
+        // replaces Silk.NET's, whose only listeners were KeyDown and KeyUp.
+        _onKey = (_, key, _, action, _) => events.Add(action switch
+        {
+            global::Silk.NET.GLFW.InputAction.Press  => WindowEvent.KeyPress((Bibui.Core.Key)key, HeldModifiers),
+            global::Silk.NET.GLFW.InputAction.Repeat => WindowEvent.KeyRepeat((Bibui.Core.Key)key, HeldModifiers),
+            _                                        => WindowEvent.KeyRelease((Bibui.Core.Key)key, HeldModifiers),
+        });
+        global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetKeyCallback(
+            (global::Silk.NET.GLFW.WindowHandle*)Native.Native!.Glfw!.Value, _onKey);
         _keyboard = input.Keyboards.FirstOrDefault();
         _mouse = input.Mice.FirstOrDefault();
         if (_cursor != CursorShape.Default) ApplyCursor();

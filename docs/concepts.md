@@ -467,6 +467,13 @@ Ctrl+A), `Submit` for Enter, `Edit` for Backspace, Delete, Ctrl+X and Ctrl+V,
 filters on **`BibUiEvent.IsKeyDown`**, true for all of them, and then reads
 `Key`; filtering on `Press` alone never sees ↑, ↓ or Enter.
 
+A key held down repeats at the rate the system asks for: the window sends its
+key down again, with **`BibUiEvent.Repeat`** set, and for a printable key the
+`Text` again. Every key repeats, so what a held key should do is the app's to
+decide: a list moves while ↓ is held, a field deletes while Backspace is, and
+a shortcut that should act once skips `ev.Repeat`. (A window that reports
+repeats itself, as tests do, sends `WindowEvent.KeyRepeat(key)`.)
+
 A printable key arrives twice: the key down, and a `Text` event with the
 character it typed, which is not a key down. A key that gives a field the
 keyboard must eat both, or the field, focused by the time the `Text` is read,

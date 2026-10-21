@@ -144,7 +144,7 @@ export function attach(canvas) {
     const shortcut = (e.ctrlKey || e.metaKey) && !altGraph;
     // Ctrl+V and Cmd+V: the browser fires 'paste' with the text, below.
     if (shortcut && e.code === 'KeyV') return;
-    push(KEY_DOWN, text(e.code), text(e.key), mods(e), altGraph ? 1 : 0);
+    push(KEY_DOWN, text(e.code), text(e.key), mods(e), altGraph ? 1 : 0, e.repeat ? 1 : 0);
     const types = !shortcut && [...e.key].length === 1;
     if (shortcut ? e.code === 'KeyA' : (types || KEPT.has(e.code))) e.preventDefault();
   });

@@ -16,7 +16,7 @@ namespace Bibui.Platform.Browser;
 /// <list type="table">
 /// <item><term>1 move, 2 down, 3 up</term><description>x, y (CSS pixels), DOM button, modifier bits</description></item>
 /// <item><term>4 wheel</term><description>x, y, deltaX, deltaY, deltaMode, modifier bits</description></item>
-/// <item><term>5 key down</term><description>code (string index), key (string index), modifier bits, AltGraph (0 or 1)</description></item>
+/// <item><term>5 key down</term><description>code (string index), key (string index), modifier bits, AltGraph (0 or 1), repeat (0 or 1: the browser repeating a held key)</description></item>
 /// <item><term>6 key up</term><description>code (string index), modifier bits</description></item>
 /// <item><term>7 focus lost</term><description>nothing</description></item>
 /// <item><term>8 paste</term><description>the text (string index)</description></item>
@@ -73,7 +73,7 @@ internal static class BrowserInput
                     string code = At(strings, r[1]), key = At(strings, r[2]);
                     bool altGraph = r[4] != 0;
                     var held = BrowserKeys.HeldForKey((int)r[3], altGraph);
-                    into.Add(WindowEvent.KeyPress(BrowserKeys.FromCode(code), held));
+                    into.Add(r[5] != 0 ? WindowEvent.KeyRepeat(BrowserKeys.FromCode(code), held) : WindowEvent.KeyPress(BrowserKeys.FromCode(code), held));
                     if (BrowserKeys.TextOf(key, held, altGraph) is { } typed) into.Add(WindowEvent.Text(typed));
                     break;
                 }

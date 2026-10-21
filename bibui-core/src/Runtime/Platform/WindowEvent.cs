@@ -51,6 +51,14 @@ public readonly struct WindowEvent
     /// <summary>The modifiers held when it happened, as the OS reported them then.</summary>
     public KeyModifiers Modifiers { get; private init; }
 
+    /// <summary>
+    /// A <see cref="WindowEventKind.KeyDown"/> the platform sent again because the
+    /// key is held (<see cref="KeyRepeat"/>), at the rate the OS repeats keys:
+    /// the key down a held Backspace or arrow is made of after the first. A held
+    /// printable key also types its text again, as a <see cref="WindowEventKind.KeyChar"/>.
+    /// </summary>
+    public bool Repeat { get; private init; }
+
     public static WindowEvent Mouse(WindowEventKind kind, float x, float y, MouseButton button, KeyModifiers modifiers = KeyModifiers.None)
         => new() { Kind = kind, X = x, Y = y, Button = button, Modifiers = modifiers };
 
@@ -58,6 +66,8 @@ public readonly struct WindowEvent
         => new() { Kind = WindowEventKind.Scroll, X = x, Y = y, ScrollX = scrollX, ScrollY = scrollY, Modifiers = modifiers };
 
     public static WindowEvent KeyPress(Key key, KeyModifiers modifiers = KeyModifiers.None) => new() { Kind = WindowEventKind.KeyDown, Key = key, Modifiers = modifiers };
+    /// <summary>A key held down, reported again: a <see cref="WindowEventKind.KeyDown"/> with <see cref="Repeat"/> set.</summary>
+    public static WindowEvent KeyRepeat(Key key, KeyModifiers modifiers = KeyModifiers.None) => new() { Kind = WindowEventKind.KeyDown, Key = key, Modifiers = modifiers, Repeat = true };
     public static WindowEvent KeyRelease(Key key, KeyModifiers modifiers = KeyModifiers.None) => new() { Kind = WindowEventKind.KeyUp, Key = key, Modifiers = modifiers };
     public static WindowEvent Text(Rune codePoint) => new() { Kind = WindowEventKind.KeyChar, CodePoint = codePoint };
     public static WindowEvent FocusLost() => new() { Kind = WindowEventKind.FocusLost };
