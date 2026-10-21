@@ -36,8 +36,8 @@ testing package beside it.
 
 ## Quick start
 
-With `Bibui` referenced, this is a whole app: a label and a button that counts
-its clicks ([`samples/counter`](samples/counter/Program.cs)).
+With `Bibui` referenced, [`samples/counter`](samples/counter/Program.cs) is a
+whole bibui app: a label and a button that counts its clicks.
 
 ```csharp
 using Bibui.App;
@@ -74,10 +74,16 @@ dotnet run --project samples/counter-gl
 
 ## Minimal dependencies
 
-`Bibui` brings every window and renderer, whichever the app uses. For an app
-that ships only what it runs on, reference the one app package for its window
-and renderer instead of `Bibui`. Each pulls in the core and exactly that
-window and renderer:
+bibui consists of a core part, [bibui-core](bibui-core), that defines
+how you build user interfaces with bibui through layout constraints
+and the builtin UI node typestypes.
+By itself it has no idea how to talk to the OS to get window and
+input events, or do any type of rendering of the UI.
+
+An app package references `bibui-core` and a window and renderer.
+By default `Bibui` packages the `Bibui.App.SilkSkiaGl` app package,
+but you may reference any of the below builtin app packages instead of
+`Bibui`, and get only the dependencies of its window and renderer:
 
 | Package | Window | Renderer | Native AOT |
 |---|---|---|---|
@@ -149,7 +155,7 @@ while (SilkWindow.BeginFrame(window, runtime))  // window:   wait for a frame; S
 ```
 
 Each layer sends data only to layers below it, and each layer is free to interpret that data however it likes.
-With this design, you may target a new platform, by writing a new platform layer that produces `WindowEvent`s. 
+With this design, you may target a new platform, by writing a new platform layer that produces `WindowEvent`s.
 You may be able to reuse any of the renderers, or write a new one for the platform that renders using the draw operations issued to a `DrawList`.
 
 [Bibui.Platform.Wayland](bibui-platform-wayland/) and the managed rasterizer are both built this way.
