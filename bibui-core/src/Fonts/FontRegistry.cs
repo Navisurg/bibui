@@ -29,6 +29,14 @@ public static class FontRegistry
 {
     private static readonly object Lock = new();
     private static readonly Dictionary<(string Family, int Weight), byte[]> Fonts = new();
+    private static readonly List<byte[]> FallbackFonts = [];
+    private static int s_version;
+
+    /// <summary>
+    /// Changes whenever what is registered changes, so what was measured under the
+    /// old fonts (runs, widths, lines) is dropped rather than handed out.
+    /// </summary>
+    internal static int Version => Volatile.Read(ref s_version);
 
     /// <summary>
     /// Registers raw font bytes for the given (family, weight) pair. Throws
@@ -45,7 +53,42 @@ public static class FontRegistry
 
         // A copy, so a caller reusing its buffer cannot change a registered font.
         var copy = fontData.ToArray();
-        lock (Lock) { Fonts[(family, weight)] = copy; }
+        lock (Lock) { Fonts[(family, weight)] = copy; s_version++; }
+    }
+
+    /// <summary>
+    /// Adds a font that draws what the family a text is set in has no glyph for,
+    /// after the fallbacks registered before it: a colour emoji font (Noto Color
+    /// Emoji's CBDT bitmaps, a COLR font), a font for a script, symbols. Each
+    /// character — a grapheme cluster: 👍🏽, 🧑‍🚀, 🇩🇰, 1️⃣ — is set in the first face
+    /// that has every one of its code points, the text's own family first; a cluster
+    /// that asks for emoji (U+FE0F, a keycap, a skin tone, a ZWJ sequence, a flag)
+    /// tries the colour fallbacks first. Text in a fallback is shaped with
+    /// HarfBuzz, so its ligatures (ZWJ sequences, flags, skin tones) form; text in
+    /// the family itself is measured as before.
+    ///
+    /// <para>bibui looks up no installed fonts: an app that wants the system's
+    /// emoji hands its bytes over here (fontconfig's <c>emoji:color=true</c>).
+    /// Registering the same bytes twice adds them once.</para>
+    /// </summary>
+    public static void RegisterFallback(byte[] fontData)
+    {
+        ArgumentNullException.ThrowIfNull(fontData);
+        if (!LooksLikeFont(fontData)) throw new ArgumentException(
+            "Fallback font data is not a TrueType/OpenType/WOFF font.", nameof(fontData));
+        var copy = fontData.ToArray();
+        lock (Lock)
+        {
+            foreach (var f in FallbackFonts) if (f.AsSpan().SequenceEqual(copy)) return;
+            FallbackFonts.Add(copy);
+            s_version++;
+        }
+    }
+
+    /// <summary>The fallbacks, in the order they were registered. Never mutated once registered.</summary>
+    internal static byte[][] Fallbacks()
+    {
+        lock (Lock) { return [.. FallbackFonts]; }
     }
 
     // The sfnt version tag (or container signature) every font file opens with.
@@ -88,10 +131,10 @@ public static class FontRegistry
         lock (Lock) { return Fonts.ContainsKey((family, weight)); }
     }
 
-    /// <summary>Clears all registered fonts. Test isolation only — not for app use.</summary>
+    /// <summary>Clears all registered fonts, fallbacks too. Test isolation only — not for app use.</summary>
     public static void Clear()
     {
-        lock (Lock) { Fonts.Clear(); }
+        lock (Lock) { Fonts.Clear(); FallbackFonts.Clear(); s_version++; }
     }
 
     /// <summary>The registered bytes for (family, weight), or null. Never mutated once registered.</summary>

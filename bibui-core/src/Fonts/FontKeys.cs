@@ -78,9 +78,9 @@ internal readonly record struct RunsKey(UInt128 Hash)
 /// </summary>
 internal readonly record struct ShapeKey(UInt128 Hash)
 {
-    public static ShapeKey For(ReadOnlySpan<char> text, FontFace face, float sizePhysical) =>
+    public static ShapeKey For(ReadOnlySpan<char> text, FontFace face, float sizePhysical, bool shaped = false) =>
         new(XxHash128.HashToUInt128(MemoryMarshal.AsBytes(text),
-            (long)face.Id << 32 | (uint)BitConverter.SingleToInt32Bits(sizePhysical)));
+            ((long)face.Id << 33 | (shaped ? 1L << 32 : 0L)) ^ (uint)BitConverter.SingleToInt32Bits(sizePhysical)));
 }
 
 /// <summary>

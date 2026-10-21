@@ -565,6 +565,42 @@ public sealed unsafe partial class Canvas // strokes and dashes in Stroke/Canvas
         }
     }
 
+    /// <summary>
+    /// Composites a premultiplied image whose top-left pixel is device
+    /// (<paramref name="x"/>, <paramref name="y"/>) — a colour glyph — unscaled,
+    /// through the clip, into the current layer, its alpha scaled by
+    /// <paramref name="alpha"/>. The transform is not applied: the caller places it.
+    /// <paramref name="bgra"/> is B, G, R, A bytes a pixel, row-major, stride
+    /// <c>4 × width</c>: premultiplied 0xAARRGGBB on a little-endian machine.
+    /// </summary>
+    public void DrawPremultiplied(ReadOnlySpan<byte> bgra, int width, int height, int x, int y, byte alpha = 255)
+    {
+        if (width <= 0 || height <= 0 || alpha == 0) return;
+        if (bgra.Length < width * height * 4) throw new ArgumentException("Too few pixel bytes.", nameof(bgra));
+        var b = new IRect(x, y, x + width, y + height).Intersect(_s.Clip);
+        if (b.IsEmpty) return;
+        _s.Layer?.Touch(b);
+        var px = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(bgra);
+        var t = Target();
+        var mask = _s.Mask;
+        for (int yy = b.Top; yy < b.Bottom; yy++)
+        {
+            var src = px.Slice((yy - y) * width, width);
+            uint* d = t.Origin + (long)yy * t.Stride;
+            byte* m = mask is null ? null : mask.Origin + (long)yy * mask.Stride;
+            for (int xx = b.Left; xx < b.Right; xx++)
+            {
+                uint s = src[xx - x];
+                if (s == 0) continue;
+                uint k = alpha;
+                if (m != null) k = PixelMath.MulDiv255Round(k, m[xx]);
+                if (k == 0) continue;
+                s = PixelMath.ScaleByCoverage(s, k);
+                d[xx] = PixelMath.SrcOver(s, d[xx]);
+            }
+        }
+    }
+
     // ── Cores ──────────────────────────────────────────────────────────────
 
     private void FillPathCore(Path path, in Paint paint, bool exact)

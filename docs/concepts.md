@@ -752,6 +752,28 @@ Use `runtime.BeginFontSize(...)` … `EndFontSize()` and
 `runtime.BeginFontFace(...)` … `EndFontFace()` to set the size, family and
 weight for every text built between them.
 
+### Fonts, fallback and colour emoji
+
+bibui looks up no installed fonts: text is set in the family a theme or
+`BeginFontFace` names, registered with `FontRegistry.Register`, else the built-in
+Inter. A character that family lacks is set in a **fallback**, a font the app
+hands over with `FontRegistry.RegisterFallback(bytes)` — a colour emoji font
+(fontconfig's `emoji:color=true`), a font for a script, symbols — tried in the
+order they were registered. The choice is made a grapheme cluster at a time, so
+👍🏽, 🧑‍🚀, 🇩🇰 and 1️⃣ each stay in one face; a cluster that asks for emoji
+(U+FE0F, a keycap, a skin tone, a ZWJ sequence, a flag) tries the colour
+fallbacks before the family. Runs in a fallback are shaped with HarfBuzz, so the
+emoji font's ligatures make one glyph of a sequence; text in the family is
+measured as before.
+
+A **colour face** (CBDT/CBLC bitmaps, as Noto Color Emoji has, or COLRv0
+layers) is drawn as images, not filled with the text colour: the bitmap strike
+nearest the size, scaled by area averaging, its alpha scaled by the text
+colour's. Both renderers draw them, and they are measured, wrapped, selected
+and edited like any other text — in a text field too, where the caret steps
+over a cluster whole. COLRv1 glyphs and SVG glyphs are not drawn. In the
+browser, FreeType is built without libpng, so CBDT bitmaps do not load there.
+
 ## Painting
 
 The painter draws the laid-out tree in order, depth first, so a child is drawn

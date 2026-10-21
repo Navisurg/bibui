@@ -31,6 +31,9 @@ public sealed class FontFace
     /// <summary>The weight it was registered under (400 or 600 for the built-in Inter).</summary>
     public int Weight => FreeType.Weight;
 
+    /// <summary>Whether the face has colour glyphs (emoji): drawn as images, not in the text colour.</summary>
+    public bool IsColor => FreeType.HasColor;
+
     /// <summary>Whether the face draws <paramref name="codepoint"/>.</summary>
     public bool HasGlyph(int codepoint) => FreeType.HasGlyph(codepoint);
 

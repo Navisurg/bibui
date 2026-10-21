@@ -6,6 +6,26 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Font fallback and colour emoji.** `FontRegistry.RegisterFallback(bytes)`
+  adds a font that sets what the text's family lacks, chosen a grapheme
+  cluster at a time (a cluster that asks for emoji tries the colour fallbacks
+  first) and shaped with HarfBuzz, so ZWJ sequences, flags, keycaps and skin
+  tones are one glyph. Colour faces — CBDT/CBLC bitmaps (Noto Color Emoji) and
+  COLRv0 layers — are drawn as images by Skia and by the managed rasterizer
+  (`GlyphMask.IsColor`, `GlyphMask.Pixels`, `Canvas.DrawPremultiplied`),
+  everywhere text is: labels, Markdown, text fields. `FontFace.IsColor`. See
+  *Fonts, fallback and colour emoji* in [Concepts](docs/concepts.md).
+
+### Changed
+
+- **`TextWrap.Characters` breaks between grapheme clusters**, not code points,
+  so a ZWJ sequence or a flag is never split across lines.
+- **Registering a font takes effect at once.** What was measured, wrapped and
+  shaped before a `FontRegistry.Register` or `RegisterFallback` is dropped,
+  rather than handed out under the old fonts.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning

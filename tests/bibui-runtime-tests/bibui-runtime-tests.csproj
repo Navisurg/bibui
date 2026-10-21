@@ -19,4 +19,8 @@
     <!-- The sample's own build (BibuiApp.App), which the full-app tests drive headless. -->
     <ProjectReference Include="../../samples/bibui-app/bibui-app.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Subsets of Noto Color Emoji (CBDT) and Noto Znamenny (COLR), OFL (Fixtures/OFL.txt): the colour glyph tests' fonts. -->
+    <None Include="Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

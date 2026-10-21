@@ -70,7 +70,7 @@ public sealed record ShapeOptions(ShapingMode Mode, IReadOnlyList<FontFeature> F
 
 /// <summary>
 /// The coverage of one glyph at one strike and one quarter-pixel x phase: an A8
-/// image, <see cref="Width"/> bytes per row, placed with its top-left at
+/// image — or, for a colour glyph (<see cref="IsColor"/>), its premultiplied pixels — <see cref="Width"/> bytes per row, placed with its top-left at
 /// (<c>originX + Left</c>, <c>baselineY - Top</c>). The coverage is FreeType's own,
 /// before any gamma: apply <see cref="MaskGamma.Table(TextColor)"/> when compositing.
 ///
@@ -89,15 +89,39 @@ public sealed class GlyphMask
     public int Height { get; }
 
     private readonly byte[] _coverage;
+    private readonly byte[] _pixels;
 
-    /// <summary>Row-major coverage, stride <see cref="Width"/>.</summary>
+    /// <summary>Row-major coverage, stride <see cref="Width"/>. Empty for a colour glyph.</summary>
     public ReadOnlySpan<byte> Coverage => _coverage;
+
+    /// <summary>
+    /// Whether this is a colour glyph (an emoji's bitmap, COLR layers): an image in
+    /// <see cref="Pixels"/>, drawn as it is, its alpha scaled by the text colour's,
+    /// rather than coverage filled with the text colour.
+    /// </summary>
+    public bool IsColor => _pixels.Length > 0;
+
+    /// <summary>
+    /// A colour glyph's pixels: premultiplied B, G, R, A bytes, row-major, stride
+    /// <c>4 × Width</c> — on a little-endian machine, one premultiplied 0xAARRGGBB
+    /// <see cref="uint"/> a pixel. Empty for a coverage mask.
+    /// </summary>
+    public ReadOnlySpan<byte> Pixels => _pixels;
 
     public bool IsEmpty => Width == 0 || Height == 0;
 
     internal GlyphMask(int left, int top, int width, int height, byte[] coverage)
     {
-        Left = left; Top = top; Width = width; Height = height; _coverage = coverage;
+        Left = left; Top = top; Width = width; Height = height; _coverage = coverage; _pixels = [];
+    }
+
+    /// <summary>A colour glyph: <paramref name="bgra"/> premultiplied, 4 bytes a pixel.</summary>
+    internal static GlyphMask Color(int left, int top, int width, int height, byte[] bgra)
+        => new(left, top, width, height, [], bgra);
+
+    private GlyphMask(int left, int top, int width, int height, byte[] coverage, byte[] pixels)
+    {
+        Left = left; Top = top; Width = width; Height = height; _coverage = coverage; _pixels = pixels;
     }
 }
 

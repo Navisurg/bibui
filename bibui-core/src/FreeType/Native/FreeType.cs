@@ -19,6 +19,19 @@ internal static unsafe partial class FT
     public const int LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH = 1 << 9;
     public const int LOAD_TARGET_NORMAL = 0;
     public const int LOAD_TARGET_LIGHT = 1 << 16;
+    public const int LOAD_COLOR = 1 << 20;
+
+    // FT_FaceRec.face_flags
+    public const long FACE_FLAG_SCALABLE = 1 << 0;
+    public const long FACE_FLAG_FIXED_SIZES = 1 << 1;
+    public const long FACE_FLAG_COLOR = 1 << 14;
+
+    // FT_Glyph_Format: FT_IMAGE_TAG('b', 'i', 't', 's')
+    public const uint GLYPH_FORMAT_BITMAP = 0x62697473;
+
+    // FT_Bitmap.pixel_mode
+    public const byte PIXEL_MODE_GRAY = 2;
+    public const byte PIXEL_MODE_BGRA = 7;
 
     public const int RENDER_MODE_NORMAL = 0;
 
@@ -27,7 +40,10 @@ internal static unsafe partial class FT
     private static readonly bool P64 = IntPtr.Size == 8;
 
     // FT_FaceRec
+    public static readonly int Face_FaceFlags = P64 ? 16 : 8;
     public static readonly int Face_NumGlyphs = P64 ? 32 : 16;
+    public static readonly int Face_NumFixedSizes = P64 ? 56 : 28;
+    public static readonly int Face_AvailableSizes = P64 ? 64 : 32;
     public static readonly int Face_UnitsPerEm = P64 ? 136 : 68;
     public static readonly int Face_Ascender = P64 ? 138 : 70;
     public static readonly int Face_Descender = P64 ? 140 : 72;
@@ -36,6 +52,7 @@ internal static unsafe partial class FT
 
     // FT_GlyphSlotRec
     public static readonly int Slot_LinearHoriAdvance = P64 ? 112 : 56;
+    public static readonly int Slot_Format = P64 ? 144 : 72;
     public static readonly int Slot_Bitmap = P64 ? 152 : 76;
     public static readonly int Slot_BitmapLeft = P64 ? 192 : 100;
     public static readonly int Slot_BitmapTop = P64 ? 196 : 104;
@@ -46,6 +63,11 @@ internal static unsafe partial class FT
     public const int Bitmap_Width = 4;
     public const int Bitmap_Pitch = 8;
     public static readonly int Bitmap_Buffer = P64 ? 16 : 12;
+    public static readonly int Bitmap_PixelMode = P64 ? 26 : 18;
+
+    // FT_Bitmap_Size: one entry of available_sizes
+    public static readonly int BitmapSize_Size = P64 ? 32 : 16;
+    public static readonly int BitmapSize_YPpem = P64 ? 24 : 12;
 
     [LibraryImport(Lib)] public static partial int FT_Init_FreeType(out IntPtr library);
     [LibraryImport(Lib)] public static partial int FT_Done_FreeType(IntPtr library);
@@ -54,6 +76,7 @@ internal static unsafe partial class FT
     [LibraryImport(Lib)] public static partial int FT_New_Size(IntPtr face, out IntPtr size);
     [LibraryImport(Lib)] public static partial int FT_Activate_Size(IntPtr size);
     [LibraryImport(Lib)] public static partial int FT_Set_Char_Size(IntPtr face, nint charWidth, nint charHeight, uint hres, uint vres);
+    [LibraryImport(Lib)] public static partial int FT_Select_Size(IntPtr face, int strikeIndex);
     [LibraryImport(Lib)] public static partial uint FT_Get_Char_Index(IntPtr face, nuint charcode);
     [LibraryImport(Lib)] public static partial int FT_Load_Glyph(IntPtr face, uint glyphIndex, int loadFlags);
     [LibraryImport(Lib)] public static partial int FT_Get_Advance(IntPtr face, uint glyphIndex, int loadFlags, out nint advance);

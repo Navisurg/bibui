@@ -173,6 +173,20 @@ Licence:  MIT (Emscripten is MIT or University of Illinois/NCSA, at the
 Source:   https://emscripten.org
 
 -------------------------------------------------------------------------------
+12. Noto Color Emoji and Noto Znamenny Musical Notation (test fixtures)
+-------------------------------------------------------------------------------
+What:     Subsets of the two fonts, a few glyphs each, as test fixtures for
+          font fallback and colour glyphs (CBDT bitmaps and COLRv0 layers).
+Where:    tests/bibui-runtime-tests/Fixtures/ (in the source only, not in
+          any package).
+Licence:  SIL Open Font License 1.1. The full licence is in
+          tests/bibui-runtime-tests/Fixtures/OFL.txt.
+          Copyright 2013 Google LLC (Noto Color Emoji)
+          Copyright 2022 The Noto Project Authors (Noto Znamenny)
+Source:   https://github.com/googlefonts/noto-emoji,
+          https://github.com/notofonts/znamenny
+
+-------------------------------------------------------------------------------
 Not redistributed by bibui
 -------------------------------------------------------------------------------
 These are used at run time but are not part of bibui's source or packages;

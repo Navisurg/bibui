@@ -61,6 +61,8 @@ public sealed class Fonts : IDisposable
         foreach (var endFrame in _endFrames) endFrame();
     }
 
+    private static Fonts SyncThen(Fonts fonts) { fonts.Sync(); return fonts; }
+
     public void Dispose()
     {
         foreach (var disposable in _disposables) disposable.Dispose();
@@ -83,12 +85,27 @@ public sealed class Fonts : IDisposable
     internal FontFace Regular => _provider.Regular;
 
     /// <summary>
-    /// <paramref name="text"/> split into runs of one face each. With no fallback
-    /// per character yet, that is one run in the base face. The first run, the
-    /// rest linked from it; null for empty text.
+    /// <paramref name="text"/> split into runs of one face each: the family's, and
+    /// the fallbacks' (<see cref="FontRegistry.RegisterFallback"/>) for the
+    /// characters it lacks, a grapheme cluster at a time. The first run, the rest
+    /// linked from it; null for empty text.
     /// </summary>
     internal TextRun? SplitRuns(ReadOnlySpan<char> text, string? family, int weight)
-        => _provider.SplitRuns(text, family, weight);
+    {
+        Sync();
+        return _provider.SplitRuns(text, family, weight);
+    }
+
+    // What is registered changed: every width, line and shape taken under the old
+    // fonts goes, so none is handed out against the new ones.
+    private void Sync()
+    {
+        if (!_provider.Sync()) return;
+        _metrics.Entries.Clear();
+        _measures.Entries.Clear();
+        _lines.Entries.Clear();
+        _shapes.Entries.Clear();
+    }
 
     // ── Metrics ──────────────────────────────────────────────────────────────
 
@@ -98,7 +115,7 @@ public sealed class Fonts : IDisposable
     /// font's own ascent would sit its glyphs off the line the rest sit on.
     /// </summary>
     internal TextMetrics Metrics(float logicalFontSize, string? family, int weight, float scale)
-        => _metrics.FromKey(
+        => SyncThen(this)._metrics.FromKey(
             MetricsKey.For(logicalFontSize * scale, family, weight),
             (self: this, logicalFontSize, family, weight, scale),
             static p =>
@@ -247,7 +264,11 @@ public sealed class Fonts : IDisposable
     {
         float total = 0f;
         for (var run = SplitRuns(text, family, weight); run is not null; run = run.Next)
-            total += run.Face.Strike(logicalFontSize * scale).Measure(text[run.Start..run.End]);
+        {
+            var strike = run.Face.Strike(logicalFontSize * scale);
+            var part = text[run.Start..run.End];
+            total += run.Shaped ? strike.Measure(part, ShapeOptions.HarfBuzzDefault) : strike.Measure(part);
+        }
         return total;
     }
 
@@ -255,6 +276,7 @@ public sealed class Fonts : IDisposable
     private float MeasureText(ReadOnlySpan<char> text, float logicalFontSize, float scale, string? family, int weight)
     {
         if (text.IsEmpty) return 0f;
+        Sync();
         var key = MeasureKey.For(text, logicalFontSize * scale, family, weight);
         return _measures.TryGet(key, out float width)
             ? width
@@ -267,27 +289,30 @@ public sealed class Fonts : IDisposable
     /// <summary>
     /// One run of <paramref name="text"/> as glyphs in <paramref name="face"/> at
     /// <paramref name="sizePx"/> physical px: one glyph per code point through the
-    /// face's cmap, each at the sum of the linear advances before it. Measuring
-    /// sums the same advances in the same order, so what is drawn is what was
-    /// measured. Cached, so the same text frame after frame is shaped once.
+    /// face's cmap, each at the sum of the linear advances before it — or, when
+    /// <paramref name="shaped"/> (a fallback's run, <see cref="TextRun.Shaped"/>),
+    /// HarfBuzz's glyphs at its advances and offsets. Measuring sums the same
+    /// advances in the same order, so what is drawn is what was measured. Cached,
+    /// so the same text frame after frame is shaped once.
     /// </summary>
-    internal ShapedText Shape(ReadOnlySpan<char> text, FontFace face, float sizePx)
+    internal ShapedText Shape(ReadOnlySpan<char> text, FontFace face, float sizePx, bool shaped = false)
     {
-        var key = ShapeKey.For(text, face, sizePx);
-        return _shapes.TryGet(key, out var shaped) ? shaped : _shapes.Add(key, ShapeUncached(text, face, sizePx));
+        Sync();
+        var key = ShapeKey.For(text, face, sizePx, shaped);
+        return _shapes.TryGet(key, out var result) ? result : _shapes.Add(key, ShapeUncached(text, face, sizePx, shaped));
     }
 
-    private ShapedText ShapeUncached(ReadOnlySpan<char> text, FontFace face, float sizePx)
+    private ShapedText ShapeUncached(ReadOnlySpan<char> text, FontFace face, float sizePx, bool shaped)
     {
         var run = _engine.ScratchRun;
-        face.Strike(sizePx).Shape(text, run);
+        face.Strike(sizePx).Shape(text, run, shaped ? ShapeOptions.HarfBuzzDefault : ShapeOptions.Nominal);
         var glyphs = new ushort[run.Count];
         var positions = new System.Numerics.Vector2[run.Count];
         float pen = 0f;
         for (int i = 0; i < glyphs.Length; i++)
         {
             glyphs[i] = (ushort)run.Glyphs[i];
-            positions[i] = new(pen, 0f);
+            positions[i] = new(pen + run.XOffsets[i], run.YOffsets[i]);
             pen += run.Advances[i];
         }
         run.Clear();
@@ -315,6 +340,7 @@ public sealed class Fonts : IDisposable
     public TextLine? Wrap(ReadOnlySpan<char> text, in Font font, float width, TextWrap wrap = TextWrap.Words)
     {
         if (text.IsEmpty) return null;
+        Sync();
         // The same text is wrapped several times in one frame — to measure the
         // box, and to draw it — and then identically on every frame after. The
         // key says everything that moves a line break, so a changed input is a
@@ -422,19 +448,23 @@ public sealed class Fonts : IDisposable
         }
     }
 
-    // Where the character after the one at `at` starts, no further than `end`.
+    // Where the character (grapheme cluster: 👍🏽, 🧑‍🚀, e and its accent) after the
+    // one at `at` starts, no further than `end`.
     private static int NextCharacter(ReadOnlySpan<char> text, int at, int end)
-    {
-        at++;
-        while (at < end && char.IsLowSurrogate(text[at])) at++;
-        return at;
-    }
+        => Math.Min(end, at + Math.Max(1, TextOp.ScanTextElement(text[..end], at, +1)));
 
     // The nearest character start at or before `at`, no earlier than `floor`.
     private static int CharacterStart(ReadOnlySpan<char> text, int at, int floor)
     {
-        while (at > floor && at < text.Length && char.IsLowSurrogate(text[at])) at--;
-        return at;
+        if (at <= floor) return floor;
+        if (at >= text.Length) return text.Length;
+        int boundary = floor;
+        for (int i = floor; i <= at; i = NextCharacter(text, i, text.Length))
+        {
+            boundary = i;
+            if (i >= text.Length) break;
+        }
+        return boundary;
     }
 }
 
@@ -491,9 +521,16 @@ internal sealed class ShapedText(ushort[] glyphs, System.Numerics.Vector2[] posi
     public float Width { get; } = width;
 }
 
-internal sealed class TextRun(FontFace face, int start, int end)
+internal sealed class TextRun(FontFace face, int start, int end, bool shaped)
 {
     public FontFace Face { get; } = face;
+
+    /// <summary>
+    /// Whether the run is shaped with HarfBuzz: a run in a fallback, whose ligatures
+    /// (an emoji's ZWJ sequence, a flag, a skin tone) make the glyphs. A run in the
+    /// text's own family is mapped a glyph per code point, as bibui's text always was.
+    /// </summary>
+    public bool Shaped { get; } = shaped;
     public int Start { get; } = start;
     public int End { get; } = end;
     public TextRun? Next { get; private set; }

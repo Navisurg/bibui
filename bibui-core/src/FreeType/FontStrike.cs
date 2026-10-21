@@ -21,6 +21,13 @@ namespace Bibui.Core.FreeType;
 /// rule is its raster glyph painter's: the fixture baselines are drawn by Skia,
 /// so the strike reproduces its glyphs exactly.</para>
 ///
+/// <para><b>Colour faces.</b> A face with colour glyphs is loaded with
+/// <c>FT_LOAD_COLOR</c>: CBDT bitmaps (from the strike nearest the size, picked
+/// with <c>FT_Select_Size</c> on a face with no outlines, and scaled) and COLRv0
+/// layers (blended by FreeType) come back as premultiplied BGRA masks
+/// (<see cref="GlyphMask.IsColor"/>), placed on whole pixels. A face with no
+/// outlines takes its advances from hmtx through HarfBuzz.</para>
+///
 /// <para>Owned by its engine and confined to the engine's thread. The masks it
 /// returns are immutable and may be read anywhere.</para>
 /// </summary>
@@ -43,6 +50,10 @@ public sealed unsafe class FontStrike
     private readonly IntPtr _hbFont;
     private readonly float[] _advances;   // per glyph, px; NaN = not loaded yet
     private readonly Dictionary<uint, GlyphMask> _masks = new();
+
+    // A bitmap face (CBDT emoji) has only the sizes of its strikes: the one picked,
+    // and how much its bitmaps are scaled to reach this size. 1 for an outline face.
+    private readonly float _bitmapScale = 1f;
 
     public Font Font { get; }
 
@@ -67,7 +78,22 @@ public sealed unsafe class FontStrike
         // size off the 1/64 grid (14 px at scale 1.1) one step up, and every advance
         // with it (1.8 px over a paragraph). Metrics below still use the exact size.
         nint size26 = (nint)(sizePx * 64f);
-        FT.Check(FT.FT_Set_Char_Size(_ftFace, size26, size26, 72, 72), "FT_Set_Char_Size");
+        if (!font.IsScalable && font.FixedSizes.Length > 0)
+        {
+            // The smallest strike at least this size (shrinking keeps it sharp), else the largest.
+            int pick = -1;
+            for (int i = 0; i < font.FixedSizes.Length; i++)
+            {
+                float ppem = font.FixedSizes[i];
+                if (pick < 0) { pick = i; continue; }
+                float best = font.FixedSizes[pick];
+                bool better = best < sizePx ? ppem > best : ppem >= sizePx && ppem < best;
+                if (better) pick = i;
+            }
+            FT.Check(FT.FT_Select_Size(_ftFace, pick), "FT_Select_Size");
+            _bitmapScale = sizePx / font.FixedSizes[pick];
+        }
+        else FT.Check(FT.FT_Set_Char_Size(_ftFace, size26, size26, 72, 72), "FT_Set_Char_Size");
 
         _advances = new float[font.GlyphCount];
         Array.Fill(_advances, float.NaN);
@@ -100,6 +126,13 @@ public sealed unsafe class FontStrike
         float a = _advances[glyph];
         if (!float.IsNaN(a)) return a;
         a = 0f;
+        if (!Font.IsScalable)
+        {
+            // No outlines to take a linear advance from: hmtx, through HarfBuzz at this size.
+            a = HB.hb_font_get_glyph_h_advance(_hbFont, glyph) / 65536f;
+            _advances[glyph] = a;
+            return a;
+        }
         Activate();
         // The linear advance is the unhinted one, so FreeType's fast path (hmtx,
         // scaled, 16.16) gives the same number as linearHoriAdvance after a full
@@ -199,9 +232,10 @@ public sealed unsafe class FontStrike
     /// </summary>
     public GlyphMask GetMask(uint glyph, int subpixelX)
     {
+        if (Font.HasColor) subpixelX = 0;   // a colour glyph is an image, placed on whole pixels
         uint key = glyph << 2 | (uint)(subpixelX & 3);
         if (_masks.TryGetValue(key, out var m)) return m;
-        m = RenderMask(glyph, subpixelX & 3);
+        m = Font.HasColor ? RenderColor(glyph) : RenderMask(glyph, subpixelX & 3);
         _masks[key] = m;
         return m;
     }
@@ -229,6 +263,49 @@ public sealed unsafe class FontStrike
             width, rows, coverage);
     }
 
+    // A glyph of a colour face: FreeType's BGRA bitmap (a CBDT PNG decoded, or COLR
+    // layers blended), scaled from the strike to this size by area averaging. A glyph
+    // the face has no colour for comes back as coverage, and is kept as that.
+    private GlyphMask RenderColor(uint glyph)
+    {
+        Activate();
+        int flags = FT.LOAD_COLOR | (Font.IsScalable ? FT.LOAD_NO_HINTING : 0);
+        if (FT.FT_Load_Glyph(_ftFace, glyph, flags) != 0) return GlyphMask.Empty;
+        IntPtr slot = FT.Read<IntPtr>(_ftFace, FT.Face_Glyph);
+        IntPtr bmp = slot + FT.Slot_Bitmap;
+        // A CBDT glyph loads as its bitmap; COLR layers load as an outline, and
+        // rendering it blends them into one.
+        if (FT.Read<uint>(slot, FT.Slot_Format) != FT.GLYPH_FORMAT_BITMAP && FT.FT_Render_Glyph(slot, FT.RENDER_MODE_NORMAL) != 0)
+            return GlyphMask.Empty;
+        int rows = (int)FT.Read<uint>(bmp, FT.Bitmap_Rows);
+        int width = (int)FT.Read<uint>(bmp, FT.Bitmap_Width);
+        if (rows == 0 || width == 0) return GlyphMask.Empty;
+        int pitch = FT.Read<int>(bmp, FT.Bitmap_Pitch);
+        byte mode = FT.Read<byte>(bmp, FT.Bitmap_PixelMode);
+        byte* buf = (byte*)FT.Read<IntPtr>(bmp, FT.Bitmap_Buffer);
+        if (buf == null || pitch < 0) return GlyphMask.Empty;
+        int left = FT.Read<int>(slot, FT.Slot_BitmapLeft), top = FT.Read<int>(slot, FT.Slot_BitmapTop);
+
+        if (mode != FT.PIXEL_MODE_BGRA)
+        {
+            if (mode != FT.PIXEL_MODE_GRAY) return GlyphMask.Empty;
+            var coverage = new byte[width * rows];
+            for (int y = 0; y < rows; y++)
+                new ReadOnlySpan<byte>(buf + y * pitch, width).CopyTo(coverage.AsSpan(y * width, width));
+            return new GlyphMask(left, top, width, rows, coverage);
+        }
+
+        var src = new byte[width * rows * 4];
+        for (int y = 0; y < rows; y++)
+            new ReadOnlySpan<byte>(buf + y * pitch, width * 4).CopyTo(src.AsSpan(y * width * 4, width * 4));
+        if (_bitmapScale == 1f) return GlyphMask.Color(left, top, width, rows, src);
+
+        float s = _bitmapScale;
+        int w = Math.Max(1, (int)MathF.Round(width * s)), h = Math.Max(1, (int)MathF.Round(rows * s));
+        var scaled = ColorScale.Resample(src, width, rows, w, h);
+        return GlyphMask.Color((int)MathF.Round(left * s), (int)MathF.Round(top * s), w, h, scaled);
+    }
+
     /// <summary>
     /// Where one glyph's mask lands for a glyph positioned at (<paramref name="x"/>,
     /// <paramref name="y"/>): picks the phase and the integer origin by the
@@ -236,6 +313,11 @@ public sealed unsafe class FontStrike
     /// </summary>
     public PlacedGlyph PlaceGlyph(uint glyph, float x, float y)
     {
+        if (Font.HasColor)
+        {
+            var c = GetMask(glyph, 0);
+            return new PlacedGlyph(c, (int)MathF.Floor(x + 0.5f) + c.Left, (int)MathF.Floor(y + 0.5f) - c.Top);
+        }
         float px = x + SubpixelBias;
         float ix = MathF.Floor(px);
         int sub = (int)((px - ix) * 4f) & 3;
