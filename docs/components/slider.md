@@ -74,7 +74,7 @@ sealed class VolumeControl
     {
         var slider = runtime.Slider("volume", _volume, min: 0f, max: 100f, step: 1f, label: Label);
         _volume = slider.Value;   // unchanged unless the track is being pressed or dragged
-        return slider.Node.Px(width: 320f);   // otherwise as wide as its parent
+        return slider.Node.Sized(Size.Px(320f));   // otherwise as wide as its parent
     }
 }
 ```

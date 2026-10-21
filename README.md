@@ -59,11 +59,10 @@ int count = 0;
 while (app.BeginFrame())
 {
     runtime.BeginBuild(app.Events);
-    using (runtime.PushParent(runtime.ColumnFit()))
-    {
-        runtime.Text($"Clicked {count} times");
-        if (runtime.Button("add", "Add one").Clicked) count++;
-    }
+    var column = runtime.BeginParent(runtime.Column());
+    runtime.Text($"Clicked {count} times");
+    if (runtime.Button("add", "Add one").Clicked) count++;
+    runtime.EndParent(column);
     runtime.EndBuild();
     app.EndFrame();
 }
@@ -88,25 +87,15 @@ bibui has no dedicated `Column` type that contains a list of its children.
 Instead every node (`UiNode`, which `Box` and `Text` derive from) links to its
 `Parent`, its `FirstChild`/`LastChild` and its siblings `Prev`/`Next`, so any
 box holds a subtree.
-`ColumnFit` is a fast path for a `Box` that lays its children out on the
+`Column()` is a fast path for a `Box` that lays its children out on the
 y-axis and is sized to fit its children.
 
-In the sample, we use `runtime.PushParent` to define a scope where all boxes
-built through the runtime are added as children of `column`.
+In the sample, `runtime.BeginParent(column)` and `runtime.EndParent(column)`
+bracket a scope where all boxes built through the runtime are added as
+children of `column`.
 
-You may also explicitly append the children to the `column` `Box`:
-
-```csharp
-var column = runtime.ColumnFit();
-
-var text = runtime.Text($"Clicked {count} times");
-UiNode.PushIntoParent(column, text);
-
-var button = runtime.Button(id: "add", "Add one");
-UiNode.PushIntoParent(column, button);
-```
-
-This appends each node to `column`'s children.
+Each node is built where it goes: the text, then the button, in the order
+they appear in the column.
 
 `runtime.Button` is itself a composition: a `Box` that claims left presses,
 with a `Text` inside. `button.Clicked` reports a click, so the app reacts to it

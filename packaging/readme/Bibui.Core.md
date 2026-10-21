@@ -25,7 +25,6 @@ using Bibui.Core;
 using Bibui.Raster.Skia;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
-using static Bibui.Core.Arrange;
 
 var runtime = BibuiRuntime.Create();
 int clicks = 0;
@@ -35,15 +34,12 @@ using var skia = new SkiaGlRenderer(window.Gl);   // Bibui.Raster.Skia
 while (SilkWindow.BeginFrame(window, runtime))
 {
     runtime.BeginBuild(window.Events);
-    var button = runtime.Button("hello", "Click me");
-    if (button.Clicked) clicks++;
-    UiNode.PushIntoParent(runtime.ParentInScope,
-        Column(
-            runtime.Text($"Clicked {clicks} times"),
-            Space(12f),
-            button.Node)
-        .FillX().FillY()
-        .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(24f) }));
+    var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+    page.Style = new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(24f) };
+    runtime.Text($"Clicked {clicks} times");
+    runtime.Gap(12f);
+    if (runtime.Button("hello", "Click me").Clicked) clicks++;
+    runtime.EndParent(page);
     runtime.EndBuild();
     SilkWindow.BeginDraw(window);
     skia.Draw(runtime.DrawList);

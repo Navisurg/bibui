@@ -59,7 +59,8 @@ public static class Menu
         style.Shadow = theme.Elevation.Level(ElevationTokens.Overlay);
         style.BorderColor = UiColor.Border;
         style.BackgroundColor = UiColor.SurfaceRaised;
-        return new MenuScope(runtime, list, runtime.PushParent(list));
+        runtime.BeginParent(list);
+        return new MenuScope(runtime, list);
     }
 
     /// <summary>
@@ -85,7 +86,7 @@ public static class Menu
         band.SizeX = SemanticSize.ParentPct(1f);
         band.SizeY = SemanticSize.ChildrenSum();
         band.Style.Padding = EdgeInsets.Symmetric(horizontal: RuleInset, vertical: RuleGap);
-        using (runtime.PushParent(band))
+        using (runtime.Parent(band))
         {
             Box rule = runtime.Box();
             rule.SizeX = SemanticSize.ParentPct(1f);
@@ -104,8 +105,8 @@ public static class Menu
         band.SizeX = SemanticSize.ParentPct(1f);
         band.SizeY = SemanticSize.ChildrenSum();
         band.Style.Padding = EdgeInsets.Symmetric(horizontal: ItemPadX, vertical: LabelPadY);
-        using (runtime.PushParent(band))
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(text, ComponentSize.Sm, UiColor.TextSecondary);
+        using (runtime.Parent(band))
+            using (runtime.FontFace(weight: FontWeight.Bold)) runtime.Text(text, ComponentSize.Sm, UiColor.TextSecondary);
         return band;
     }
 }
@@ -136,7 +137,7 @@ public static class MenuExtensions
         row.Style.HoverBackgroundColor = disabled ? (UiColor?)null : UiColor.SurfaceRaisedHover;
 
         UiColor ink = disabled ? UiColor.TextDisabled : UiColor.TextPrimary;
-        using (runtime.PushParent(row))
+        using (runtime.Parent(row))
         {
             if (icon is not null)
             {
@@ -144,7 +145,7 @@ public static class MenuExtensions
                 Box cell = runtime.Box();
                 cell.ChildLayoutAxis = LayoutAxis.Y;
                 cell.SizeX = cell.SizeY = SemanticSize.ChildrenSum();
-                using (runtime.PushParent(cell))
+                using (runtime.Parent(cell))
                 {
                     runtime.Gap(3f);
                     runtime.Icon(icon, IconSize).Color = ink;
@@ -154,7 +155,7 @@ public static class MenuExtensions
             runtime.Text(label, textColor: ink);
             if (!shortcut.IsEmpty)
             {
-                Arrange.Spring(row);
+                runtime.Spacer(Size.Fill);
                 runtime.Text(shortcut, ComponentSize.Sm, UiColor.TextDisabled);
             }
         }
@@ -166,14 +167,12 @@ public static class MenuExtensions
 public readonly struct MenuScope
 {
     internal readonly BibuiRuntime _runtime;
-    internal readonly Box _list;
-    internal readonly BibuiRuntime.ParentScope _inList;
+    internal readonly Box _list;   // begun as the parent until End
 
-    internal MenuScope(BibuiRuntime runtime, Box list, BibuiRuntime.ParentScope inList)
+    internal MenuScope(BibuiRuntime runtime, Box list)
     {
         _runtime = runtime;
         _list = list;
-        _inList = inList;
     }
 
     /// <summary>
@@ -185,7 +184,7 @@ public readonly struct MenuScope
     /// </summary>
     public BibuiWidget End()
     {
-        _inList.Dispose();
+        _runtime.EndParent(_list);
         _list.Claims = InteractionKinds.Press;
         var widget = new BibuiWidget(_list, _runtime.InteractionsFor(_list));
         foreach (var ev in _runtime.UnconsumedEvents)

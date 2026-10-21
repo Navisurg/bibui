@@ -124,21 +124,22 @@ internal sealed class Painter
 
         if (node is Box { Draw: { } draw } box)
         {
-            // A callback draws in its box's space, clipped to it: the painter's
-            // translation and clip are pushed around it, and its own pushes sit
-            // above them. Whatever it leaves pushed is popped, and a pop past
-            // its own does nothing, so it can neither leak state into the next
-            // draw nor undo the painter's.
+            // A callback draws in its box's space, clipped to it unless it says
+            // Unclipped: the painter's translation and clip are pushed around
+            // it, and its own pushes sit above them. Whatever it leaves pushed
+            // is popped, and a pop past its own does nothing, so it can neither
+            // leak state into the next draw nor undo the painter's.
             float s = ctx.Scale;
+            bool clipped = (box.Style.Draw & DrawFlags.Unclipped) == 0;
             ctx.PushTransform(Matrix3x2.CreateTranslation(frame.X * s, frame.Y * s));
             var local = ctx.For(frame.Width, frame.Height);
-            ctx.PushClip(local.Rect);
+            if (clipped) ctx.PushClip(local.Rect);
             int paints = _drawing.PaintDepth, floor = _drawing.StateFloor;
             _drawing.StateFloor = _drawing.StateDepth;
             draw(box, local);
             while (_drawing.StateDepth > _drawing.StateFloor) local.Pop();
             (_drawing.StateFloor, _drawing.PaintDepth) = (floor, paints);
-            ctx.PopClip();
+            if (clipped) ctx.PopClip();
             ctx.PopTransform();
         }
 

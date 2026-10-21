@@ -70,20 +70,16 @@ sealed class Counter
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        Box row = runtime.Box();
-        row.ChildLayoutAxis = LayoutAxis.X;
-        row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(row))
-        {
-            if (runtime.Button("counter-minus", Minus).Clicked) _count--;
-            runtime.Gap(8f);
-            if (runtime.Button("counter-plus", Plus).Clicked) _count++;
-            runtime.Gap(8f);
-            // Disabled at zero: still there, and a press on it reaches nothing beneath.
-            if (runtime.Button("counter-reset", Reset, ghost: true, disabled: _count == 0,
-                    size: ComponentSize.Sm).Clicked)
-                _count = 0;
-        }
+        var row = runtime.BeginParent(runtime.Row());
+        if (runtime.Button("counter-minus", Minus).Clicked) _count--;
+        runtime.Gap(8f);
+        if (runtime.Button("counter-plus", Plus).Clicked) _count++;
+        runtime.Gap(8f);
+        // Disabled at zero: still there, and a press on it reaches nothing beneath.
+        if (runtime.Button("counter-reset", Reset, ghost: true, disabled: _count == 0,
+                size: ComponentSize.Sm).Clicked)
+            _count = 0;
+        runtime.EndParent(row);
         return row;
     }
 }

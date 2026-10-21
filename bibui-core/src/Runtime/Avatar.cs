@@ -25,27 +25,15 @@ public static class Avatar
 
         Box circle = runtime.Box();
         circle.ChildLayoutAxis = LayoutAxis.X;
-        circle.Px(size, size);
+        circle.Sized(Size.Px(size), Size.Px(size));
         circle.Style.CornerRadius = size / 2f;
         circle.Style.BackgroundColor = fill ?? UiColor.Accent;
 
-        // Centred both ways: a spring either side of a column with a spring
-        // above and below the initials.
-        using (runtime.PushParent(circle))
-        {
-            Arrange.Spring(circle);
-            Box column = runtime.Box();
-            column.ChildLayoutAxis = LayoutAxis.Y;
-            column.SizeX = SemanticSize.ChildrenSum();
-            column.SizeY = SemanticSize.ParentPct(1f);
-            using (runtime.PushParent(column))
-            {
-                Arrange.Spring(column);
-                using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(initials, fontSize, ink ?? UiColor.AccentForeground);
-                Arrange.Spring(column);
-            }
-            Arrange.Spring(circle);
-        }
+        runtime.BeginParent(circle);
+        runtime.BeginCenterXY();
+        runtime.Text(initials, fontSize, ink ?? UiColor.AccentForeground, weight: FontWeight.Bold);
+        runtime.EndCenterXY();
+        runtime.EndParent(circle);
         return circle;
     }
 }

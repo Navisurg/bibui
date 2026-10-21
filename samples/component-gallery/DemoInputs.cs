@@ -81,14 +81,14 @@ internal static class DemoInputs
     {
         Heading(runtime, "Drag to select a value in a range");
         var volume = runtime.Slider("demo-slider", state.SliderValue, 0f, 100f, 5f, "Volume");
-        volume.Node.Px(width: 380f);
+        volume.Node.Sized(Size.Px(380f));
         if (volume.Value != state.SliderValue) set(state with { SliderValue = volume.Value });
 
         runtime.Gap(16f);
         runtime.Text($"Value: {volume.Value:0}", ComponentSize.Sm, TextColor.Accent);
 
         runtime.Gap(16f);
-        runtime.Slider("demo-slider-disabled", 30f, 0f, 100f, label: "Disabled", disabled: true).Node.Px(width: 380f);
+        runtime.Slider("demo-slider-disabled", 30f, 0f, 100f, label: "Disabled", disabled: true).Node.Sized(Size.Px(380f));
     }
 
     private static void SelectPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
@@ -169,15 +169,16 @@ internal static class DemoInputs
         runtime.Gap(8f);
         LiveField(runtime, "demo-textfield-multi", MultiText, MultiEdit, "Several lines", lines: true, rows: 3);
         runtime.Gap(8f);
-        using (runtime.PushParent(InputBox(runtime, "demo-textfield-readonly", Focused == "demo-textfield-readonly", lines: true)))
-        using (runtime.PushFontSize(ComponentSize.Sm))
-        using (runtime.PushSizeY(TextField.Rows(runtime, 2)))
-        {
-            var field = runtime.MultilineTextField("demo-textfield-readonly", ReadOnlyText, ReadOnlyEdit,
-                focused: Focused == "demo-textfield-readonly", events: TextField.MultiLineReadOnlyEvents,
-                textColor: TextColor.Secondary);
-            if (field.Pressed) Focused = "demo-textfield-readonly";
-        }
+        var readOnly = runtime.BeginParent(InputBox(runtime, "demo-textfield-readonly", Focused == "demo-textfield-readonly", lines: true));
+        runtime.BeginFontSize(ComponentSize.Sm);
+        runtime.BeginSizeY(TextField.Rows(runtime, 2));
+        var field = runtime.MultilineTextField("demo-textfield-readonly", ReadOnlyText, ReadOnlyEdit,
+            focused: Focused == "demo-textfield-readonly", events: TextField.MultiLineReadOnlyEvents,
+            textColor: TextColor.Secondary);
+        if (field.Pressed) Focused = "demo-textfield-readonly";
+        runtime.EndSizeY();
+        runtime.EndFontSize();
+        runtime.EndParent(readOnly);
 
         EndEditing(runtime);
         runtime.Gap(24f);
@@ -210,8 +211,9 @@ internal static class DemoInputs
     private static void DrawnState(BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit,
         bool focused, ReadOnlySpan<char> placeholder = default)
     {
-        using (runtime.PushParent(InputBox(runtime, id, focused)))
-            runtime.TextField(id, text, edit, focused, placeholder: placeholder);
+        var box = runtime.BeginParent(InputBox(runtime, id, focused));
+        runtime.TextField(id, text, edit, focused, placeholder: placeholder);
+        runtime.EndParent(box);
     }
 
     // The live fields' state: what an application would hold for them.
@@ -251,15 +253,15 @@ internal static class DemoInputs
     {
         bool focused = Focused == id;
         BibuiWidget field;
-        using (runtime.PushParent(InputBox(runtime, id, focused, width, lines)))
+        var box = runtime.BeginParent(InputBox(runtime, id, focused, width, lines));
+        if (lines)
         {
-            if (lines)
-            {
-                using (runtime.PushSizeY(TextField.Rows(runtime, rows)))
-                    field = runtime.MultilineTextField(id, text, edit, focused, placeholder: placeholder);
-            }
-            else field = runtime.TextField(id, text, edit, focused, placeholder: placeholder);
+            runtime.BeginSizeY(TextField.Rows(runtime, rows));
+            field = runtime.MultilineTextField(id, text, edit, focused, placeholder: placeholder);
+            runtime.EndSizeY();
         }
+        else field = runtime.TextField(id, text, edit, focused, placeholder: placeholder);
+        runtime.EndParent(box);
         if (field.Pressed) Focused = id;
     }
 
@@ -271,8 +273,9 @@ internal static class DemoInputs
     // input rather than use one.
     internal static void StaticInput(BibuiRuntime runtime, string id, string placeholder, float width = 320f)
     {
-        using (runtime.PushParent(InputBox(runtime, id, focused: false, width)))
-            runtime.TextField(id, new BibuiStr(16), new TextEditState(), focused: false, placeholder: placeholder);
+        var box = runtime.BeginParent(InputBox(runtime, id, focused: false, width));
+        runtime.TextField(id, new BibuiStr(16), new TextEditState(), focused: false, placeholder: placeholder);
+        runtime.EndParent(box);
     }
 
     // Escape and Submit (Enter) are the page's to read: they end editing. A
@@ -311,14 +314,16 @@ internal static class DemoInputs
 
         Heading(runtime, "Disabled");
         // Disabled: it shows its placeholder and takes nothing, so a press is swallowed, not answered.
-        using (runtime.PushParent(InputBox(runtime, "demo-input-disabled", focused: false, disabled: true)))
-            runtime.TextField("demo-input-disabled", new BibuiStr(16), new TextEditState(), focused: false,
-                events: 0, textColor: TextColor.Disabled, placeholder: "Disabled input");
+        var disabled = runtime.BeginParent(InputBox(runtime, "demo-input-disabled", focused: false, disabled: true));
+        runtime.TextField("demo-input-disabled", new BibuiStr(16), new TextEditState(), focused: false,
+            events: 0, textColor: TextColor.Disabled, placeholder: "Disabled input");
+        runtime.EndParent(disabled);
         runtime.Gap(24f);
 
         Heading(runtime, "Error");
-        using (runtime.PushParent(InputBox(runtime, "demo-input-error", focused: false, error: true)))
-            runtime.TextField("demo-input-error", BibuiStr.FromStrLit("not-an-email"), new TextEditState(), focused: false);
+        var error = runtime.BeginParent(InputBox(runtime, "demo-input-error", focused: false, error: true));
+        runtime.TextField("demo-input-error", BibuiStr.FromStrLit("not-an-email"), new TextEditState(), focused: false);
+        runtime.EndParent(error);
         runtime.Gap(16f);
         runtime.Text("Destructive border signals validation failure.", ComponentSize.Sm, TextColor.Secondary);
 
@@ -334,10 +339,12 @@ internal static class DemoInputs
         runtime.Gap(24f);
 
         Heading(runtime, "Error");
-        using (runtime.PushParent(InputBox(runtime, "demo-textarea-error", focused: false, width: 400f, lines: true, error: true)))
-        using (runtime.PushSizeY(TextField.Rows(runtime, 3)))
-            runtime.MultilineTextField("demo-textarea-error", BibuiStr.FromStrLit("too short"), new TextEditState(), focused: false,
-                placeholder: "Describe the issue");
+        var error = runtime.BeginParent(InputBox(runtime, "demo-textarea-error", focused: false, width: 400f, lines: true, error: true));
+        runtime.BeginSizeY(TextField.Rows(runtime, 3));
+        runtime.MultilineTextField("demo-textarea-error", BibuiStr.FromStrLit("too short"), new TextEditState(), focused: false,
+            placeholder: "Describe the issue");
+        runtime.EndSizeY();
+        runtime.EndParent(error);
         runtime.Gap(24f);
 
         Heading(runtime, "Multi-line content (press and drag across rows to select)");
@@ -355,17 +362,19 @@ internal static class DemoInputs
     private static Text CentredText(BibuiRuntime runtime, ReadOnlySpan<char> text, ComponentSize? size = null,
         UiColor? color = null, FontWeight weight = FontWeight.Regular)
     {
-        using (runtime.PushParent(runtime.ColumnFillY()))
-        using (runtime.PushFontFace(weight: weight))
-        using (runtime.Centred())
-            return runtime.Text(text, size, color);
+        runtime.BeginCenterAcross();
+        runtime.BeginFontFace(weight: weight);
+        Text centred = runtime.Text(text, size, color);
+        runtime.EndFontFace();
+        runtime.EndCenterAcross();
+        return centred;
     }
 
     private static void CentredIcon(BibuiRuntime runtime, string name, float size, UiColor color)
     {
-        using (runtime.PushParent(runtime.ColumnFillY()))
-        using (runtime.Centred())
-            runtime.Icon(name, size).Color = color;
+        runtime.BeginCenterAcross();
+        runtime.Icon(name, size).Color = color;
+        runtime.EndCenterAcross();
     }
 
     // ── Button ───────────────────────────────────────────────────────────────
@@ -375,80 +384,74 @@ internal static class DemoInputs
     // A caption above a row of buttons, 12 px above it.
     private static void Caption(BibuiRuntime runtime, string text, bool accent = false)
     {
-        using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(text, ComponentSize.Sm, accent ? TextColor.Accent : TextColor.Secondary);
+        Bold(runtime, text, ComponentSize.Sm, accent ? TextColor.Accent : TextColor.Secondary);
         runtime.Gap(12f);
     }
 
     private static void ButtonPage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
         Caption(runtime, "Variants");
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            DemoButton(runtime, "demo-btn-primary", "Primary", Look.Primary);
-            runtime.Gap(10f);
-            Tall(runtime, runtime.Button("demo-btn-secondary", "Secondary"));
-            runtime.Gap(10f);
-            Tall(runtime, runtime.Button("demo-btn-ghost", "Ghost", ghost: true));
-            runtime.Gap(10f);
-            Tall(runtime, runtime.Button("demo-btn-disabled", "Disabled", disabled: true));
-        }
+        var variants = runtime.BeginParent(runtime.Row());
+        DemoButton(runtime, "demo-btn-primary", "Primary", Look.Primary);
+        runtime.Gap(10f);
+        Tall(runtime, runtime.Button("demo-btn-secondary", "Secondary"));
+        runtime.Gap(10f);
+        Tall(runtime, runtime.Button("demo-btn-ghost", "Ghost", ghost: true));
+        runtime.Gap(10f);
+        Tall(runtime, runtime.Button("demo-btn-disabled", "Disabled", disabled: true));
+        runtime.EndParent(variants);
         runtime.Gap(12f);
 
         Caption(runtime, "Sizes");
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            Tall(runtime, runtime.Button("demo-btn-sm", "Small", size: ComponentSize.Sm), ComponentSize.Sm);
-            runtime.Gap(10f);
-            Tall(runtime, runtime.Button("demo-btn-md", "Medium", size: ComponentSize.Md));
-            runtime.Gap(10f);
-            Tall(runtime, runtime.Button("demo-btn-lg", "Large", size: ComponentSize.Lg), ComponentSize.Lg);
-        }
+        var sizes = runtime.BeginParent(runtime.Row());
+        Tall(runtime, runtime.Button("demo-btn-sm", "Small", size: ComponentSize.Sm), ComponentSize.Sm);
+        runtime.Gap(10f);
+        Tall(runtime, runtime.Button("demo-btn-md", "Medium", size: ComponentSize.Md));
+        runtime.Gap(10f);
+        Tall(runtime, runtime.Button("demo-btn-lg", "Large", size: ComponentSize.Lg), ComponentSize.Lg);
+        runtime.EndParent(sizes);
         runtime.Gap(12f);
 
         Caption(runtime, "With icon");
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            DemoButton(runtime, "demo-btn-add", "Add item", Look.Primary, icon: "plus");
-            runtime.Gap(10f);
-            DemoButton(runtime, "demo-btn-delete", "Delete", Look.Secondary, icon: "trash");
-        }
+        var withIcon = runtime.BeginParent(runtime.Row());
+        DemoButton(runtime, "demo-btn-add", "Add item", Look.Primary, icon: "plus");
+        runtime.Gap(10f);
+        DemoButton(runtime, "demo-btn-delete", "Delete", Look.Secondary, icon: "trash");
+        runtime.EndParent(withIcon);
         runtime.Gap(12f);
 
         Caption(runtime, "Custom colors");
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            DemoButton(runtime, "demo-btn-red", "Red", Look.Primary, fill: UiColor.Hex("#DC2626"));
-            runtime.Gap(8f);
-            DemoButton(runtime, "demo-btn-green", "Green", Look.Primary, fill: UiColor.Hex("#059669"));
-            runtime.Gap(8f);
-            DemoButton(runtime, "demo-btn-blue", "Blue", Look.Primary, fill: UiColor.Hex("#2563EB"));
-            runtime.Gap(8f);
-            DemoButton(runtime, "demo-btn-purple", "Purple", Look.Primary, fill: UiColor.Hex("#7C3AED"));
-            runtime.Gap(8f);
-            DemoButton(runtime, "demo-btn-border", "Custom border", Look.Secondary, border: UiColor.Hex("#3B82F6"));
-        }
+        var colors = runtime.BeginParent(runtime.Row());
+        DemoButton(runtime, "demo-btn-red", "Red", Look.Primary, fill: UiColor.Hex("#DC2626"));
+        runtime.Gap(8f);
+        DemoButton(runtime, "demo-btn-green", "Green", Look.Primary, fill: UiColor.Hex("#059669"));
+        runtime.Gap(8f);
+        DemoButton(runtime, "demo-btn-blue", "Blue", Look.Primary, fill: UiColor.Hex("#2563EB"));
+        runtime.Gap(8f);
+        DemoButton(runtime, "demo-btn-purple", "Purple", Look.Primary, fill: UiColor.Hex("#7C3AED"));
+        runtime.Gap(8f);
+        DemoButton(runtime, "demo-btn-border", "Custom border", Look.Secondary, border: UiColor.Hex("#3B82F6"));
+        runtime.EndParent(colors);
         runtime.Gap(12f);
 
         Caption(runtime, "Loading (new)", accent: true);
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            DemoButton(runtime, "demo-btn-saving", "Saving…", Look.Secondary, loading: true);
-            runtime.Gap(10f);
-            DemoButton(runtime, "demo-btn-uploading", "Uploading", Look.Secondary, loading: true);
-            runtime.Gap(10f);
-            DemoButton(runtime, "demo-btn-loading-icon", "With icon", Look.Secondary, icon: "plus", loading: true);
-        }
+        var loading = runtime.BeginParent(runtime.Row());
+        DemoButton(runtime, "demo-btn-saving", "Saving…", Look.Secondary, loading: true);
+        runtime.Gap(10f);
+        DemoButton(runtime, "demo-btn-uploading", "Uploading", Look.Secondary, loading: true);
+        runtime.Gap(10f);
+        DemoButton(runtime, "demo-btn-loading-icon", "With icon", Look.Secondary, icon: "plus", loading: true);
+        runtime.EndParent(loading);
         runtime.Gap(12f);
 
         Caption(runtime, "Interactive (clicks do something)", accent: true);
-        using (runtime.PushParent(runtime.RowFit()))
-        {
-            if (DemoButton(runtime, "demo-click-btn", $"Clicked {state.DemoButtonClickCount}×", Look.Primary).Clicked)
-                set(state with { DemoButtonClickCount = state.DemoButtonClickCount + 1 });
-            runtime.Gap(10f);
-            runtime.Text("Press, hold, release — watch the label count up and the fill darken while pressed.",
-                ComponentSize.Sm, TextColor.Secondary);
-        }
+        var interactive = runtime.BeginParent(runtime.Row());
+        if (DemoButton(runtime, "demo-click-btn", $"Clicked {state.DemoButtonClickCount}×", Look.Primary).Clicked)
+            set(state with { DemoButtonClickCount = state.DemoButtonClickCount + 1 });
+        runtime.Gap(10f);
+        runtime.Text("Press, hold, release — watch the label count up and the fill darken while pressed.",
+            ComponentSize.Sm, TextColor.Secondary);
+        runtime.EndParent(interactive);
     }
 
     // A runtime.Button as tall as the reference button of its size — 32, 40 or 48 —
@@ -511,24 +514,23 @@ internal static class DemoInputs
             float width = runtime.Fonts.Measure(text, runtime.FontInScope(ComponentSize.Md)) + 32f;
             if (icon is not null) width += 24f;
             box.SizeX = SemanticSize.Pixels(width);
-            using (runtime.PushParent(box))
-            using (runtime.Centred())
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                runtime.Spinner(16f);
+            runtime.BeginParent(box);
+            runtime.BeginCenterXY();
+            runtime.Spinner(16f);
+            runtime.EndCenterXY();
+            runtime.EndParent(box);
             return new BibuiWidget(box, interaction);
         }
 
         box.SizeX = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(box))
+        runtime.BeginParent(box);
+        if (icon is not null)
         {
-            if (icon is not null)
-            {
-                CentredIcon(runtime, icon, 16f, ink);
-                runtime.Gap(8f);
-            }
-            CentredText(runtime, text, color: ink);
+            CentredIcon(runtime, icon, 16f, ink);
+            runtime.Gap(8f);
         }
+        CentredText(runtime, text, color: ink);
+        runtime.EndParent(box);
         return new BibuiWidget(box, interaction);
     }
 
@@ -587,16 +589,15 @@ internal static class DemoInputs
     private static void TogglePage(BibuiRuntime runtime, InputsState state, Action<InputsState> set)
     {
         Heading(runtime, "Pressable toggle button");
-        using (runtime.PushParent(runtime.RowHeight(40f)))
-        {
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-                if (runtime.Toggle("demo-toggle", state.TogglePressed, "Star", icon: "star").Clicked)
-                    set(state with { TogglePressed = !state.TogglePressed });
-            runtime.Gap(10f);
-            CentredText(runtime, state.TogglePressed ? "Pressed" : "Not pressed", ComponentSize.Sm,
-                state.TogglePressed ? TextColor.Accent : TextColor.Secondary);
-        }
+        var row = runtime.BeginParent(runtime.Row().Sized(y: Size.Px(40f)));
+        runtime.BeginCenterAcross();
+        if (runtime.Toggle("demo-toggle", state.TogglePressed, "Star", icon: "star").Clicked)
+            set(state with { TogglePressed = !state.TogglePressed });
+        runtime.EndCenterAcross();
+        runtime.Gap(10f);
+        CentredText(runtime, state.TogglePressed ? "Pressed" : "Not pressed", ComponentSize.Sm,
+            state.TogglePressed ? TextColor.Accent : TextColor.Secondary);
+        runtime.EndParent(row);
         runtime.Gap(16f);
         runtime.Toggle("demo-toggle-disabled", false, "Disabled", disabled: true);
     }
@@ -676,47 +677,48 @@ internal static class DemoInputs
         int step = 0;
         DateOnly? picked = null;
 
-        using (runtime.PushParent(fill ? runtime.ColumnFillX() : runtime.ColumnFit()))
+        var view = runtime.BeginParent(fill ? runtime.Column().Sized(Size.Fill) : runtime.Column());
+        var caption = runtime.BeginParent(fill ? runtime.Row().Sized(Size.Fill, Size.Px(DayCell)) : runtime.Row().Sized(Size.Px(7 * DayCell), Size.Px(DayCell)));
+        if (NavButton(runtime, id + "-prev", "chevron-left")) step = -1;
+        runtime.BeginCenter();
+        CentredText(runtime, $"{month:MMMM yyyy}", weight: FontWeight.Bold);
+        runtime.EndCenter();
+        if (NavButton(runtime, id + "-next", "chevron-right")) step = 1;
+        runtime.EndParent(caption);
+        runtime.Gap(CalendarRowGap);
+
+        var weekdays = runtime.BeginParent(runtime.Row().Sized(y: Size.Px(DayCell)));
+        foreach (var day in Weekdays)
+            DayBox(runtime, runtime.Box(), day, TextColor.Primary);
+        runtime.EndParent(weekdays);
+
+        var first = new DateOnly(month.Year, month.Month, 1);
+        int lead = (int)first.DayOfWeek;
+        int days = DateTime.DaysInMonth(month.Year, month.Month);
+        for (int week = 0; week * 7 - lead < days; week++)
         {
-            using (runtime.PushParent(fill ? runtime.RowFillX(DayCell) : runtime.RowPx(7 * DayCell, DayCell)))
-            {
-                if (NavButton(runtime, id + "-prev", "chevron-left")) step = -1;
-                using (runtime.Centred())
-                    CentredText(runtime, $"{month:MMMM yyyy}", weight: FontWeight.Bold);
-                if (NavButton(runtime, id + "-next", "chevron-right")) step = 1;
-            }
             runtime.Gap(CalendarRowGap);
-
-            using (runtime.PushParent(runtime.RowHeight(DayCell)))
-                foreach (var day in Weekdays)
-                    DayBox(runtime, runtime.Box(), day, TextColor.Primary);
-
-            var first = new DateOnly(month.Year, month.Month, 1);
-            int lead = (int)first.DayOfWeek;
-            int days = DateTime.DaysInMonth(month.Year, month.Month);
-            for (int week = 0; week * 7 - lead < days; week++)
+            var weekRow = runtime.BeginParent(runtime.Row().Sized(y: Size.Px(DayCell)));
+            for (int col = 0; col < 7; col++)
             {
-                runtime.Gap(CalendarRowGap);
-                using (runtime.PushParent(runtime.RowHeight(DayCell)))
-                    for (int col = 0; col < 7; col++)
-                    {
-                        int d = week * 7 + col - lead + 1;
-                        if (d < 1 || d > days)
-                        {
-                            DayBox(runtime, runtime.Box(), default, TextColor.Primary);
-                            continue;
-                        }
-                        var date = new DateOnly(month.Year, month.Month, d);
-                        bool isSelected = date == selected;
-                        Box cell = runtime.BoxFromId($"{id}-day-{d}", InteractionKinds.LeftPress);
-                        if (runtime.InteractionsFor(cell).Clicked) picked = date;
-                        DayBox(runtime, cell, $"{d}", isSelected ? TextColor.AccentForeground : TextColor.Primary);
-                        cell.Style.CornerRadius = 6f;
-                        if (isSelected) cell.Style.BackgroundColor = UiColor.Accent;
-                        else cell.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
-                    }
+                int d = week * 7 + col - lead + 1;
+                if (d < 1 || d > days)
+                {
+                    DayBox(runtime, runtime.Box(), default, TextColor.Primary);
+                    continue;
+                }
+                var date = new DateOnly(month.Year, month.Month, d);
+                bool isSelected = date == selected;
+                Box cell = runtime.BoxFromId($"{id}-day-{d}", InteractionKinds.LeftPress);
+                if (runtime.InteractionsFor(cell).Clicked) picked = date;
+                DayBox(runtime, cell, $"{d}", isSelected ? TextColor.AccentForeground : TextColor.Primary);
+                cell.Style.CornerRadius = 6f;
+                if (isSelected) cell.Style.BackgroundColor = UiColor.Accent;
+                else cell.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
             }
+            runtime.EndParent(weekRow);
         }
+        runtime.EndParent(view);
         return new MonthResult(picked, step);
     }
 
@@ -724,28 +726,30 @@ internal static class DemoInputs
     private static void DayBox(BibuiRuntime runtime, Box box, ReadOnlySpan<char> text, UiColor color)
     {
         box.ChildLayoutAxis = LayoutAxis.X;
-        box.Px(DayCell, DayCell);
+        box.Sized(Size.Px(DayCell), Size.Px(DayCell));
         if (text.IsEmpty) return;
-        using (runtime.PushParent(box))
-        using (runtime.Centred())
-            CentredText(runtime, text, color: color);
+        runtime.BeginParent(box);
+        runtime.BeginCenter();
+        CentredText(runtime, text, color: color);
+        runtime.EndCenter();
+        runtime.EndParent(box);
     }
 
     private static bool NavButton(BibuiRuntime runtime, string id, string icon)
     {
-        using (runtime.PushParent(runtime.ColumnFillY()))
-        using (runtime.Centred())
-        {
-            Box button = runtime.BoxFromId(id, InteractionKinds.LeftPress);
-            bool clicked = runtime.InteractionsFor(button).Clicked;
-            button.ChildLayoutAxis = LayoutAxis.X;
-            button.Px(28f, 28f);
-            button.Style.CornerRadius = 6f;
-            button.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
-            button.Style.Padding = EdgeInsets.All(7f);
-            using (runtime.PushParent(button)) runtime.Icon(icon, 14f).Color = UiColor.TextPrimary;
-            return clicked;
-        }
+        runtime.BeginCenterAcross();
+        Box button = runtime.BoxFromId(id, InteractionKinds.LeftPress);
+        bool clicked = runtime.InteractionsFor(button).Clicked;
+        button.ChildLayoutAxis = LayoutAxis.X;
+        button.Sized(Size.Px(28f), Size.Px(28f));
+        button.Style.CornerRadius = 6f;
+        button.Style.HoverBackgroundColor = UiColor.SurfaceRaisedHover;
+        button.Style.Padding = EdgeInsets.All(7f);
+        runtime.BeginParent(button);
+        runtime.Icon(icon, 14f).Color = UiColor.TextPrimary;
+        runtime.EndParent(button);
+        runtime.EndCenterAcross();
+        return clicked;
     }
 
     // The month the standalone calendar shows: the page's own, so it can step
@@ -756,12 +760,12 @@ internal static class DemoInputs
     {
         Heading(runtime, "Standalone calendar picker");
         DateOnly month = CalendarMonth ?? state.CalendarSelected ?? DateOnly.FromDateTime(DateTime.Today);
-        Box frame = runtime.ColumnFillX();
+        Box frame = runtime.Column().Sized(Size.Fill);
         frame.Style.Padding = EdgeInsets.All(12f);
-        MonthResult result;
         // The caption runs the width of the page; the weeks keep their cells.
-        using (runtime.PushParent(frame))
-            result = MonthView(runtime, "demo-calendar", month, state.CalendarSelected, fill: true);
+        runtime.BeginParent(frame);
+        MonthResult result = MonthView(runtime, "demo-calendar", month, state.CalendarSelected, fill: true);
+        runtime.EndParent(frame);
         if (result.Step != 0) CalendarMonth = month.AddMonths(result.Step);
         if (result.Picked is { } day) set(state with { CalendarSelected = day });
 
@@ -779,19 +783,18 @@ internal static class DemoInputs
         Box trigger = PickerTrigger(runtime, "demo-datepicker", 240f, disabled: false, out bool toggled);
         if (toggled)
             if (runtime.IsDropDownOpen(id)) runtime.CloseDropDown(id); else runtime.OpenDropDown(id, trigger);
-        using (runtime.PushParent(trigger))
-        {
-            CentredIcon(runtime, "calendar", 16f, UiColor.TextSecondary);
-            runtime.Gap(8f);
-            CentredText(runtime, state.DatePickerValue is { } v ? $"{v:MMMM d, yyyy}" : "Pick a date",
-                color: state.DatePickerValue is null ? TextColor.Secondary : TextColor.Primary);
-        }
+        runtime.BeginParent(trigger);
+        CentredIcon(runtime, "calendar", 16f, UiColor.TextSecondary);
+        runtime.Gap(8f);
+        CentredText(runtime, state.DatePickerValue is { } v ? $"{v:MMMM d, yyyy}" : "Pick a date",
+            color: state.DatePickerValue is null ? TextColor.Secondary : TextColor.Primary);
+        runtime.EndParent(trigger);
 
         if (BeginPopup(runtime, id, trigger, padding: 12f) is { } popup)
         {
-            MonthResult result;
-            using (runtime.PushParent(popup))
-                result = MonthView(runtime, "demo-datepicker", state.DatePickerMonth, state.DatePickerValue);
+            runtime.BeginParent(popup);
+            MonthResult result = MonthView(runtime, "demo-datepicker", state.DatePickerMonth, state.DatePickerValue);
+            runtime.EndParent(popup);
             EndPopup(runtime, popup);
             if (result.Picked is { } day)
             {
@@ -820,16 +823,14 @@ internal static class DemoInputs
         if (BeginPopup(runtime, id, trigger, padding: 0f) is { } popup)
         {
             popup.SizeX = SemanticSize.Pixels(200f);
-            using (runtime.PushParent(popup))
-            {
-                using (runtime.PushParent(runtime.RowFillX()))
-                {
-                    hour = Spinner(runtime, "demo-timepicker-hour", "Hour", hour, 24, 1);
-                    Box divider = runtime.Box().Px(1f, SpinnerHeight);
-                    divider.Style.BackgroundColor = UiColor.Border;
-                    minute = Spinner(runtime, "demo-timepicker-minute", "Min", minute, 60, 5);
-                }
-            }
+            runtime.BeginParent(popup);
+            var spinners = runtime.BeginParent(runtime.Row().Sized(Size.Fill));
+            hour = Spinner(runtime, "demo-timepicker-hour", "Hour", hour, 24, 1);
+            Box divider = runtime.Box().Sized(Size.Px(1f), Size.Px(SpinnerHeight));
+            divider.Style.BackgroundColor = UiColor.Border;
+            minute = Spinner(runtime, "demo-timepicker-minute", "Min", minute, 60, 5);
+            runtime.EndParent(spinners);
+            runtime.EndParent(popup);
             EndPopup(runtime, popup);
         }
         if (hour != state.TimePickerHour || minute != state.TimePickerMinute)
@@ -849,12 +850,11 @@ internal static class DemoInputs
     private static Box TimeTrigger(BibuiRuntime runtime, string id, string text, bool disabled, out bool clicked)
     {
         Box trigger = PickerTrigger(runtime, id, 200f, disabled, out clicked);
-        using (runtime.PushParent(trigger))
-        {
-            CentredIcon(runtime, "clock", 16f, disabled ? UiColor.TextDisabled : UiColor.TextSecondary);
-            runtime.Gap(8f);
-            CentredText(runtime, text, color: disabled ? TextColor.Disabled : TextColor.Primary);
-        }
+        runtime.BeginParent(trigger);
+        CentredIcon(runtime, "clock", 16f, disabled ? UiColor.TextDisabled : UiColor.TextSecondary);
+        runtime.Gap(8f);
+        CentredText(runtime, text, color: disabled ? TextColor.Disabled : TextColor.Primary);
+        runtime.EndParent(trigger);
         return trigger;
     }
 
@@ -869,26 +869,27 @@ internal static class DemoInputs
         column.SizeX = SemanticSize.ParentPct(1f);
         column.SizeY = SemanticSize.Pixels(SpinnerHeight);
         column.Style.Padding = EdgeInsets.Symmetric(horizontal: 0f, vertical: 8f);
-        using (runtime.PushParent(column))
-        {
-            using (runtime.PushParent(runtime.RowFillX()))
-            using (runtime.Centred())
-            using (runtime.PushFontFace(weight: FontWeight.Bold))
-                runtime.Text(name, ComponentSize.Sm, TextColor.Secondary);
-            runtime.Gap(12f);
-            using (runtime.PushParent(runtime.RowFillX(28f)))
-            using (runtime.Centred())
-                if (NavButton(runtime, id + "-up", "chevron-up")) value = (value + step) % count;
-            runtime.Gap(8f);
-            using (runtime.PushParent(runtime.RowFillX()))
-            using (runtime.Centred())
-            using (runtime.PushFontFace(weight: FontWeight.Bold))
-                runtime.Text($"{value:D2}", ComponentSize.Lg);
-            runtime.Gap(8f);
-            using (runtime.PushParent(runtime.RowFillX(28f)))
-            using (runtime.Centred())
-                if (NavButton(runtime, id + "-down", "chevron-down")) value = (value - step + count) % count;
-        }
+        runtime.BeginParent(column);
+        runtime.BeginCenterAcross();
+        Bold(runtime, name, ComponentSize.Sm, TextColor.Secondary);
+        runtime.EndCenterAcross();
+        runtime.Gap(12f);
+        var up = runtime.BeginParent(runtime.Row().Sized(Size.Fill, Size.Px(28f)));
+        runtime.BeginCenter();
+        if (NavButton(runtime, id + "-up", "chevron-up")) value = (value + step) % count;
+        runtime.EndCenter();
+        runtime.EndParent(up);
+        runtime.Gap(8f);
+        runtime.BeginCenterAcross();
+        Bold(runtime, $"{value:D2}", ComponentSize.Lg);
+        runtime.EndCenterAcross();
+        runtime.Gap(8f);
+        var down = runtime.BeginParent(runtime.Row().Sized(Size.Fill, Size.Px(28f)));
+        runtime.BeginCenter();
+        if (NavButton(runtime, id + "-down", "chevron-down")) value = (value - step + count) % count;
+        runtime.EndCenter();
+        runtime.EndParent(down);
+        runtime.EndParent(column);
         return value;
     }
 
@@ -930,47 +931,44 @@ internal static class DemoInputs
         Box trigger = PickerTrigger(runtime, id, 220f, disabled, out bool toggled);
         if (toggled)
             if (runtime.IsDropDownOpen(popupId)) runtime.CloseDropDown(popupId); else runtime.OpenDropDown(popupId, trigger);
-        using (runtime.PushParent(trigger))
-        {
-            using (runtime.PushParent(runtime.ColumnFillY()))
-            using (runtime.Centred())
-            {
-                Box swatch = runtime.Box().Px(20f, 20f);
-                swatch.Style.CornerRadius = 4f;
-                swatch.Style.BackgroundColor = value is null ? UiColor.SurfaceRaised : UiColor.Hex(value);
-                if (value is null) swatch.Style.BorderColor = UiColor.Border;
-            }
-            runtime.Gap(8f);
-            CentredText(runtime, value ?? "Pick a color",
-                color: disabled ? TextColor.Disabled : value is null ? TextColor.Secondary : TextColor.Primary);
-            runtime.Spring();
-            CentredIcon(runtime, "chevron-down", 14f, UiColor.TextSecondary);
-        }
+        runtime.BeginParent(trigger);
+        runtime.BeginCenterAcross();
+        Box swatch = runtime.Box().Sized(Size.Px(20f), Size.Px(20f));
+        swatch.Style.CornerRadius = 4f;
+        swatch.Style.BackgroundColor = value is null ? UiColor.SurfaceRaised : UiColor.Hex(value);
+        if (value is null) swatch.Style.BorderColor = UiColor.Border;
+        runtime.EndCenterAcross();
+        runtime.Gap(8f);
+        CentredText(runtime, value ?? "Pick a color",
+            color: disabled ? TextColor.Disabled : value is null ? TextColor.Secondary : TextColor.Primary);
+        runtime.Spacer(Size.Fill);
+        CentredIcon(runtime, "chevron-down", 14f, UiColor.TextSecondary);
+        runtime.EndParent(trigger);
 
         string? picked = null;
         if (BeginPopup(runtime, popupId, trigger, padding: 12f) is { } popup)
         {
-            using (runtime.PushParent(popup))
+            runtime.BeginParent(popup);
+            for (int start = 0; start < palette.Count; start += 6)
             {
-                for (int start = 0; start < palette.Count; start += 6)
+                if (start > 0) runtime.Gap(6f);
+                var row = runtime.BeginParent(runtime.Row());
+                for (int i = start; i < Math.Min(start + 6, palette.Count); i++)
                 {
-                    if (start > 0) runtime.Gap(6f);
-                    using (runtime.PushParent(runtime.RowFit()))
-                        for (int i = start; i < Math.Min(start + 6, palette.Count); i++)
-                        {
-                            if (i > start) runtime.Gap(6f);
-                            string hex = palette[i];
-                            bool chosen = string.Equals(hex, value, StringComparison.OrdinalIgnoreCase);
-                            Box swatch = runtime.BoxFromId($"{id}-swatch-{i}", InteractionKinds.LeftPress);
-                            if (runtime.InteractionsFor(swatch).Clicked) picked = hex;
-                            swatch.Px(28f, 28f);
-                            swatch.Style.CornerRadius = 4f;
-                            swatch.Style.BackgroundColor = UiColor.Hex(hex);
-                            swatch.Style.BorderWidth = chosen ? 2f : 1f;
-                            swatch.Style.BorderColor = chosen ? UiColor.TextPrimary : UiColor.Border;
-                        }
+                    if (i > start) runtime.Gap(6f);
+                    string hex = palette[i];
+                    bool chosen = string.Equals(hex, value, StringComparison.OrdinalIgnoreCase);
+                    Box option = runtime.BoxFromId($"{id}-swatch-{i}", InteractionKinds.LeftPress);
+                    if (runtime.InteractionsFor(option).Clicked) picked = hex;
+                    option.Sized(Size.Px(28f), Size.Px(28f));
+                    option.Style.CornerRadius = 4f;
+                    option.Style.BackgroundColor = UiColor.Hex(hex);
+                    option.Style.BorderWidth = chosen ? 2f : 1f;
+                    option.Style.BorderColor = chosen ? UiColor.TextPrimary : UiColor.Border;
                 }
+                runtime.EndParent(row);
             }
+            runtime.EndParent(popup);
             EndPopup(runtime, popup);
         }
         if (picked is not null) runtime.CloseDropDown(popupId);

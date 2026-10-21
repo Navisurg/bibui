@@ -21,7 +21,6 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
     public static implicit operator UiNode(MarkdownWidget widget) => widget.Node;
 
     /// <summary>So it goes straight into <c>Row(...)</c> or <c>Column(...)</c>.</summary>
-    public static implicit operator Arrange.Item(MarkdownWidget widget) => widget.Node;
 }
 
 /// <summary>
@@ -93,10 +92,10 @@ public static class Markdown
 
         var writer = cache.Writer;
         writer.Begin(runtime, entry, textSize);
-        using (runtime.PushParent(root))
-        using (runtime.PushFontFace(FontSlot.Body, FontWeight.Regular))
-        using (runtime.PushSizeX(SemanticSize.Text()))
-        using (runtime.PushSizeY(SemanticSize.Text()))
+        using (runtime.Parent(root))
+        using (runtime.FontFace(FontSlot.Body, FontWeight.Regular))
+        using (runtime.SizeX(SemanticSize.Text()))
+        using (runtime.SizeY(SemanticSize.Text()))
             writer.Blocks(entry.Document!.Root.Children, room, writer.Body, tight: false);
         var result = new MarkdownWidget(root, writer.ClickedLink, writer.ToggledTask);
         writer.End();
@@ -322,7 +321,7 @@ public static class Markdown
             view.Style.CornerRadius = 6f;
 
             var code = _doc.CodeOf(block).Span;
-            using (_runtime.PushParent(view))
+            using (_runtime.Parent(view))
             {
                 int start = 0, index = 0;
                 while (true)
@@ -330,7 +329,7 @@ public static class Markdown
                     int newline = code[start..].IndexOf('\n');
                     int end = newline < 0 ? code.Length : start + newline;
                     if (index++ > 0) _runtime.Gap(advance - lineHeight);
-                    using (_runtime.PushFontFace(FontSlot.Mono, FontWeight.Regular))
+                    using (_runtime.FontFace(FontSlot.Mono, FontWeight.Regular))
                         _runtime.Text(code[start..end], mono.Size, look.Color, FontSlot.Mono);
                     if (newline < 0) break;
                     start = end + 1;
@@ -346,7 +345,7 @@ public static class Markdown
             quote.SizeY = SemanticSize.ChildrenSum();
             quote.Style.Padding = new EdgeInsets(0f, 0f, 0f, QuoteRule + QuotePad);
             quote.Style.BorderLeft = new EdgeBorder(QuoteRule, UiColor.Border);
-            using (_runtime.PushParent(quote))
+            using (_runtime.Parent(quote))
                 Blocks(block.Children, room - QuoteRule - QuotePad, look with { Color = UiColor.TextSecondary }, tight: false);
         }
 
@@ -372,7 +371,7 @@ public static class Markdown
             column.ChildLayoutAxis = LayoutAxis.Y;
             column.SizeX = SemanticSize.Pixels(room);
             column.SizeY = SemanticSize.ChildrenSum();
-            using var inColumn = _runtime.PushParent(column);
+            using var inColumn = _runtime.Parent(column);
             for (int k = 0; k < count; k++)
             {
                 var item = list.Children[k];
@@ -382,13 +381,13 @@ public static class Markdown
                 row.ChildLayoutAxis = LayoutAxis.X;
                 row.SizeX = SemanticSize.Pixels(room);
                 row.SizeY = SemanticSize.ChildrenSum();
-                using var inRow = _runtime.PushParent(row);
+                using var inRow = _runtime.Parent(row);
 
                 Box marker = _runtime.Box();
                 marker.ChildLayoutAxis = LayoutAxis.X;
                 marker.SizeX = SemanticSize.Pixels(markerWidth);
                 marker.SizeY = SemanticSize.Pixels(lineHeight);
-                using (_runtime.PushParent(marker))
+                using (_runtime.Parent(marker))
                 {
                     if (item.Task != MarkdownTask.None) Task(item, lineHeight);
                     else if (list.Ordered)
@@ -404,7 +403,7 @@ public static class Markdown
                 content.ChildLayoutAxis = LayoutAxis.Y;
                 content.SizeX = SemanticSize.Pixels(MathF.Max(0f, room - markerWidth));
                 content.SizeY = SemanticSize.ChildrenSum();
-                using (_runtime.PushParent(content))
+                using (_runtime.Parent(content))
                 {
                     _listDepth++;
                     Blocks(item.Children, MathF.Max(0f, room - markerWidth), look, list.Tight);
@@ -451,7 +450,7 @@ public static class Markdown
             box.Style.BackgroundColor = ticked ? UiColor.Accent : UiColor.Surface;
             box.Style.Padding = EdgeInsets.All(LineWidth);
             if (!ticked) return;
-            using (_runtime.PushParent(box))
+            using (_runtime.Parent(box))
                 _runtime.Icon("check", size: TaskBox - 2f).Color = UiColor.AccentForeground;
         }
 
@@ -497,7 +496,7 @@ public static class Markdown
             box.Style.Padding = EdgeInsets.All(LineWidth);   // room for the outline
             box.Style.BorderColor = UiColor.Border;
             box.Style.BorderWidth = LineWidth;
-            using var inTable = _runtime.PushParent(box);
+            using var inTable = _runtime.Parent(box);
 
             for (int r = 0; r < table.Children.Count; r++)
             {
@@ -520,7 +519,7 @@ public static class Markdown
                 row.SizeX = SemanticSize.Pixels(tableWidth);
                 row.SizeY = SemanticSize.Pixels(rowHeight + 2f * Dense(CellPadY));
                 if (r == 0) row.Style.BackgroundColor = UiColor.SurfaceRaised;
-                using var inRow = _runtime.PushParent(row);
+                using var inRow = _runtime.Parent(row);
                 for (int c = 0; c < columns; c++)
                 {
                     Box cell = _runtime.Box();
@@ -530,7 +529,7 @@ public static class Markdown
                     cell.Style.Padding = EdgeInsets.Symmetric(padX, Dense(CellPadY));
                     if (c > 0) cell.Style.BorderLeft = new EdgeBorder(LineWidth, UiColor.Border);
                     if (c >= cells.Count) continue;
-                    using (_runtime.PushParent(cell))
+                    using (_runtime.Parent(cell))
                         Inline(_doc.RunsOf(cells[c]), widths[c] - 2f * padX, cellLook, table.Aligns[c]);
                 }
             }
@@ -598,7 +597,7 @@ public static class Markdown
 
         private Font FontOf(FontSize size, FontSlot family, bool bold)
         {
-            using (_runtime.PushFontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
+            using (_runtime.FontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
                 return _runtime.FontInScope(size, family);
         }
 
@@ -810,7 +809,7 @@ public static class Markdown
                 row.ChildLayoutAxis = LayoutAxis.X;
                 row.SizeX = SemanticSize.Pixels(MathF.Max(room, 0f));
                 row.SizeY = SemanticSize.Pixels(lineHeight);
-                using var inRow = _runtime.PushParent(row);
+                using var inRow = _runtime.Parent(row);
 
                 float slack = MathF.Max(0f, room - line.Width);
                 if (align == MarkdownAlign.Center && slack > 0f) _runtime.Gap(MathF.Floor(slack / 2f));
@@ -850,7 +849,7 @@ public static class Markdown
 
             if (!code && !link && !strike && top <= 0f)
             {
-                using (_runtime.PushFontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
+                using (_runtime.FontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
                     _runtime.Text(chars, look.Size, color, family);
                 return;
             }
@@ -876,9 +875,9 @@ public static class Markdown
                 box.Style.CornerRadius = CodeRadius;
             }
 
-            using (_runtime.PushParent(box))
+            using (_runtime.Parent(box))
             {
-                using (_runtime.PushFontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
+                using (_runtime.FontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
                     _runtime.Text(chars, look.Size, color, family);
                 float width = _runtime.Fonts.Measure(chars, font);
                 if (link) Overlay(padX, top + MathF.Round(textHeight * UnderlineAt), width, hovering ? StrongLine : LineWidth, color);

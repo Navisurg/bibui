@@ -68,8 +68,8 @@ static class AppIconTests
         runtime.SetBuild(
             () =>
             {
-                var row = runtime.RowPx(40f, 40f);
-                using (runtime.PushParent(row))
+                var row = runtime.Row().Sized(Size.Px(40f), Size.Px(40f));
+                using (runtime.Parent(row))
                 {
                     runtime.Gap(8f);
                     if (icon is not null) runtime.Icon(icon, 24f);

@@ -17,7 +17,6 @@ public readonly record struct ExpanderWidget(Box Node, Box? Body, Interaction In
     public static implicit operator UiNode(ExpanderWidget widget) => widget.Node;
 
     /// <summary>So it goes straight into <c>Row(...)</c> or <c>Column(...)</c>.</summary>
-    public static implicit operator Arrange.Item(ExpanderWidget widget) => widget.Node;
 }
 
 /// <summary>
@@ -36,18 +35,6 @@ public static class Expander
     internal const float BodyTop = 8f;   // Spacing.Sm
     internal const float Radius = 6f;    // Radii.Md
     internal const float ChevronSize = 16f;
-
-
-    // A cell the header's height, under the parent in scope: what is built
-    // into it between two springs is centred down the header.
-    internal static Box Cell(BibuiRuntime runtime)
-    {
-        Box cell = runtime.Box();
-        cell.ChildLayoutAxis = LayoutAxis.Y;
-        cell.SizeX = SemanticSize.ChildrenSum();
-        cell.SizeY = SemanticSize.ParentPct(1f);
-        return cell;
-    }
 }
 
 /// <summary>The Expander component, called on the runtime that builds it.</summary>
@@ -76,7 +63,7 @@ public static class ExpanderExtensions
 
         Box? body = null;
         Interaction interaction;
-        using (runtime.PushParent(frame))
+        using (runtime.Parent(frame))
         {
             Box header = runtime.BoxFromId(id, InteractionKinds.LeftPress);
             interaction = runtime.InteractionsFor(header);
@@ -85,24 +72,16 @@ public static class ExpanderExtensions
             header.SizeY = SemanticSize.Pixels(theme.Density.Of(HeaderHeight));
             header.Style.Padding = EdgeInsets.Symmetric(horizontal: PadX, vertical: 0f);
             header.Style.CornerRadius = Radius;
-            using (runtime.PushParent(header))
+            using (runtime.Parent(header))
             {
-                Box titleCell = Cell(runtime);
-                using (runtime.PushParent(titleCell))
-                {
-                    Arrange.Spring(titleCell);
-                    using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(title, textColor: TextColor.Primary);
-                    Arrange.Spring(titleCell);
-                }
-                Arrange.Spring(header);
-                Box chevronCell = Cell(runtime);
-                using (runtime.PushParent(chevronCell))
-                {
-                    Arrange.Spring(chevronCell);
-                    Icon chevron = runtime.Icon(open ? "chevron-up" : "chevron-down", ChevronSize);
-                    chevron.Color = UiColor.TextSecondary;
-                    Arrange.Spring(chevronCell);
-                }
+                runtime.BeginCenterAcross();
+                runtime.Text(title, textColor: TextColor.Primary, weight: FontWeight.Bold);
+                runtime.EndCenterAcross();
+                runtime.Spacer(Size.Fill);
+                runtime.BeginCenterAcross();
+                Icon chevron = runtime.Icon(open ? "chevron-up" : "chevron-down", ChevronSize);
+                chevron.Color = UiColor.TextSecondary;
+                runtime.EndCenterAcross();
             }
 
             if (open)

@@ -363,8 +363,9 @@ public static BibuiWidget Build(BibuiRuntime runtime, string id, ReadOnlySpan<ch
     float t = runtime.Animate(id, "on", on ? 1f : 0f, runtime.Rates.Toggle);
     row.Style.BackgroundColor = UiColor.Accent.WithAlpha(0.2f * t);
 
-    using (runtime.PushParent(row))
-        runtime.Text(label);
+    runtime.BeginParent(row);
+    runtime.Text(label);
+    runtime.EndParent(row);
     return new BibuiWidget(row, interaction);
 }
 ```
@@ -445,12 +446,12 @@ runtime.Surface = new SurfaceOptions { Width = 360, Height = 80, ScaleFactor = 1
 const string save = "Save", sync = "Sync";
 
 runtime.BeginBuild();
-using (runtime.PushParent(runtime.RowPx(360f, 80f).Padded(EdgeInsets.All(24f))))
-{
-    runtime.Button("save", save);
-    runtime.Gap(12f);
-    runtime.Switch("sync", on: true, label: sync);
-}
+var row = runtime.BeginParent(runtime.Row().Sized(Size.Px(360f), Size.Px(80f)));
+row.Style.Padding = EdgeInsets.All(24f);
+runtime.Button("save", save);
+runtime.Gap(12f);
+runtime.Switch("sync", on: true, label: sync);
+runtime.EndParent(row);
 runtime.EndBuild();
 
 using var skia = new SkiaCpuRenderer();

@@ -295,7 +295,7 @@ static class MarkdownTests
             var source = BibuiStr.FromStrLit("Go to [the docs](https://example.com/docs) now.");
             MarkdownWidget last = default;
             var runtime = BibuiRuntime.Create();
-            runtime.SetBuild(() => runtime.Into(runtime.ColumnFill(), () => last = runtime.Markdown("md", source, width: 400f)),
+            runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () => last = runtime.Markdown("md", source, width: 400f)),
                 new SurfaceOptions { Width = 500, Height = 200, ScaleFactor = 1f });
             runtime.Step();
             runtime.Step();
@@ -311,7 +311,7 @@ static class MarkdownTests
             var source = BibuiStr.FromStrLit("- [ ] write it\n- [x] test it");
             MarkdownWidget last = default;
             var runtime = BibuiRuntime.Create();
-            runtime.SetBuild(() => runtime.Into(runtime.ColumnFill(), () => last = runtime.Markdown("tasks", source, width: 300f)),
+            runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () => last = runtime.Markdown("tasks", source, width: 300f)),
                 new SurfaceOptions { Width = 400, Height = 200, ScaleFactor = 1f });
             runtime.Step();
             runtime.Step();
@@ -335,8 +335,8 @@ static class MarkdownTests
             var runtime = BibuiRuntime.Create();
             runtime.SetBuild(() =>
             {
-                var page = runtime.ColumnFill();
-                using (runtime.PushParent(page))
+                var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+                using (runtime.Parent(page))
                     runtime.Markdown("same", source, width: 400f);
                 return page;
             }, surface);
@@ -346,9 +346,9 @@ static class MarkdownTests
             var plain = BibuiRuntime.Create();
             plain.SetBuild(() =>
             {
-                var page = plain.ColumnFill();
-                using (plain.PushParent(page))
-                using (plain.PushParent(plain.ColumnWidth(400f)))
+                var page = plain.Column().Sized(Size.Fill, Size.Fill);
+                using (plain.Parent(page))
+                using (plain.Parent(plain.Column().Sized(Size.Px(400f))))
                     foreach (var t in texts) plain.Text(t);
                 return page;
             }, surface);
@@ -378,7 +378,7 @@ static class MarkdownTests
     {
         var runtime = BibuiRuntime.Create();
         var source = BibuiStr.FromStrLit(markdown);
-        runtime.SetBuild(() => runtime.Into(runtime.ColumnFill(), () => runtime.Markdown("md", source, width: width)),
+        runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () => runtime.Markdown("md", source, width: width)),
             new SurfaceOptions { Width = (int)width + 40, Height = 1200, ScaleFactor = 1f });
         runtime.Step();
         runtime.Step();

@@ -128,7 +128,7 @@ public static class ScrollList
         if (pt.Off != 0f) runtime.RequestFrame();
 
         // The bar, before the rows: what it does moves the rows chosen below.
-        using (runtime.PushParent(area))
+        using (runtime.Parent(area))
             pt = runtime.Scrollbar(id + "-bar", pt, count, height / pitch);
         ClampTarget(ref pt, pitch, maxPx);
 
@@ -138,7 +138,7 @@ public static class ScrollList
         pt.Last = Math.Clamp(pt.First + (int)MathF.Ceiling(height / pitch) + 1, pt.First, count);
         view.ViewOffset = view.TargetViewOffset = new Vector2(0f, (top - pt.First) * pitch);
 
-        runtime.PushParent(view);   // EndScrollList pops it
+        runtime.Parent(view);   // EndScrollList pops it
     }
 
     /// <summary>
@@ -151,7 +151,7 @@ public static class ScrollList
         ArgumentNullException.ThrowIfNull(runtime);
         if (runtime.ParentInScope is not Box { Claims: var claims } view || (claims & InteractionKinds.Scroll) == 0)
             throw new InvalidOperationException("EndScrollList pops the list's view, and the parent in scope is not one: a parent pushed inside the list was not popped.");
-        new BibuiRuntime.ParentScope(runtime, view).Dispose();
+        runtime.EndParent(view);
 
         float dy = runtime.InteractionsFor(view).ScrollY;
         if (dy == 0f) return;

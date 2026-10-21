@@ -31,6 +31,38 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Changed
 
+- **Layout is said with a few fast paths over the primitives (breaking).**
+  `Arrange` and the sized rows and columns (`RowFit`, `RowFillX`, `ColumnFill`,
+  `ColumnPx`, …), `Spring` and `Centred` are gone. In their place:
+  - `Row()` and `Column()` are as large as their children on any axis no size
+    is pushed for, and `.Sized(x, y)` sets the axes it is given:
+    `Row().Sized(Size.Fill, runtime.Em(2.5f))` is a toolbar.
+  - `Size.Fit`, `Size.Fill`, `Size.Pct`, `Size.Px` and `Size.Text` name the
+    sizes, and `runtime.Em(n)` is `n` times the font size in scope.
+  - `Gap(px)` and `Spacer(size)` space along the parent's axis;
+    `Spacer(Size.Fill)` is a spring.
+  - `BeginCenter` centres along the parent's axis, `BeginCenterAcross` across
+    it (handing back the cell it makes), `BeginCenterX`/`BeginCenterY` choose
+    between them by the parent's axis, and `BeginCenterXY` centres both ways.
+  - Every scope has a `Begin`/`End` pair (`BeginParent(box)`/`EndParent(box)`,
+    `BeginAxis`, `BeginSizeX`, `BeginFontSize`, `BeginFontFace`, the centres),
+    and the scope form, named without `Begin` (`Parent(box)`, `Center()`,
+    `FontFace(...)`, …), is the `Begin` handing back a scope whose `Dispose`
+    is the `End`. `PushParent`, `PushFontSize` and the other `Push…` names
+    are gone.
+  - `.At(x, y)` floats a node; `Styled`, `Padded` and `Clipped` are the
+    node's fields, set as such.
+  - `Text` and `TextFromId` take a `weight`, as they take a `family`: one bold
+    text is `Text(title, weight: FontWeight.Bold)`, with no face begun.
+- **`DrawFlags.Unclipped`.** A box's `Draw` callback is clipped to the box;
+  with this flag on its style, its ink may reach past it (a glow, a highlight
+  around a word), cut only by a box that claims `Clip`. Layout and
+  hit-testing still take the box's rect.
+- **Only the frame's ground is in the theme's background.** A tooltip's text
+  and the active tab are drawn in `Surface`, not `Background`, so a theme
+  whose background is transparent (`#00000000`) gives a transparent frame for
+  a host to compose over its own content, and both still show. With bibui's
+  own themes, where the two are the same colour, nothing changes.
 - **The core package is `Bibui.Core` (breaking).** The package `Bibui` is
   now `Bibui.Core`, built from `bibui-core/` into the assembly
   `Bibui.Core`, and its namespaces moved under it: `Bibui` is

@@ -43,7 +43,7 @@ public static class Tooltip
         }
 
         Box pill;
-        using (runtime.PushParent(root))
+        using (runtime.Parent(root))
         {
             pill = runtime.Box();
             pill.ChildLayoutAxis = LayoutAxis.X;
@@ -52,8 +52,8 @@ public static class Tooltip
             pill.Style.CornerRadius = Radius;
             pill.Style.BackgroundColor = UiColor.TextPrimary;
             pill.Style.Shadow = runtime.Theme.Elevation.Level(ElevationTokens.Tooltip);
-            using (runtime.PushParent(pill))
-                runtime.Text(text, ComponentSize.Sm, UiColor.Background);
+            using (runtime.Parent(pill))
+                runtime.Text(text, ComponentSize.Sm, UiColor.Surface);
         }
         return pill;
     }

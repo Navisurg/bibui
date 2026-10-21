@@ -35,8 +35,8 @@ public readonly record struct TabsWidget(Box Node, string? Picked);
 | `value` | The active tab's value. |
 
 The strip is as wide as its parent. `Panel` returns a bordered, padded column as
-wide as its parent and as tall as its content. Push it and build the active
-tab's content into it.
+wide as its parent and as tall as its content. Begin it as the parent and
+build the active tab's content into it.
 
 ## Claims and reports
 
@@ -76,18 +76,14 @@ sealed class SettingsTabs
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        Box column = runtime.Box();
-        column.ChildLayoutAxis = LayoutAxis.Y;
-        column.SizeX = SemanticSize.Pixels(360f);
-        column.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(column))
-        {
-            var tabs = runtime.Tabs("settings-tabs", Items, _tab);
-            if (tabs.Picked is { } picked) _tab = picked;
-            runtime.Gap(Tabs.PanelGap);
-            using (runtime.PushParent(Tabs.Panel(runtime)))
-                runtime.Text(_tab == "account" ? AccountText : PasswordText, textColor: TextColor.Secondary);
-        }
+        var column = runtime.BeginParent(runtime.Column().Sized(Size.Px(360f)));
+        var tabs = runtime.Tabs("settings-tabs", Items, _tab);
+        if (tabs.Picked is { } picked) _tab = picked;
+        runtime.Gap(Tabs.PanelGap);
+        var panel = runtime.BeginParent(Tabs.Panel(runtime));
+        runtime.Text(_tab == "account" ? AccountText : PasswordText, textColor: TextColor.Secondary);
+        runtime.EndParent(panel);
+        runtime.EndParent(column);
         return column;
     }
 }

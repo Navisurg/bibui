@@ -46,38 +46,22 @@ public static class ToggleExtensions
 
         UiColor ink = disabled ? TextColor.Disabled : TextColor.Primary;
         bool hasLabel = !label.IsEmpty;
-        using (runtime.PushParent(box))
+        using (runtime.Parent(box))
         {
             if (icon is not null)
             {
-                using (runtime.PushParent(Cell(runtime)))
-                {
-                    Arrange.Spring(runtime.ParentInScope);
-                    runtime.Icon(icon, IconSize).Color = ink;
-                    Arrange.Spring(runtime.ParentInScope);
-                }
+                runtime.BeginCenterAcross();
+                runtime.Icon(icon, IconSize).Color = ink;
+                runtime.EndCenterAcross();
                 if (hasLabel) runtime.Gap(IconGap);
             }
             if (hasLabel)
             {
-                using (runtime.PushParent(Cell(runtime)))
-                {
-                    Arrange.Spring(runtime.ParentInScope);
-                    runtime.Text(label, textColor: ink);
-                    Arrange.Spring(runtime.ParentInScope);
-                }
+                runtime.BeginCenterAcross();
+                runtime.Text(label, textColor: ink);
+                runtime.EndCenterAcross();
             }
         }
         return new BibuiWidget(box, interaction);
-    }
-
-    // A column as tall as the toggle and as wide as what it holds.
-    private static Box Cell(BibuiRuntime runtime)
-    {
-        Box cell = runtime.Box();
-        cell.ChildLayoutAxis = LayoutAxis.Y;
-        cell.SizeX = SemanticSize.ChildrenSum();
-        cell.SizeY = SemanticSize.ParentPct(1f);
-        return cell;
     }
 }

@@ -76,11 +76,10 @@ int count = 0;
 BrowserWindow.Run(window, runtime, () =>
 {
     runtime.BeginBuild(window.Events);
-    using (runtime.PushParent(runtime.ColumnFit()))
-    {
-        runtime.Text($"Clicked {count} times");
-        if (runtime.Button("add", "Add one").Clicked) count++;
-    }
+    var column = runtime.BeginParent(runtime.Column());
+    runtime.Text($"Clicked {count} times");
+    if (runtime.Button("add", "Add one").Clicked) count++;
+    runtime.EndParent(column);
     runtime.EndBuild();
     BrowserWindow.BeginDraw(window);
     managed.Draw(runtime.DrawList);

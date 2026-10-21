@@ -61,12 +61,13 @@ static (BibuiRuntime Rt, ManagedRenderer Backend, Surface Target) Rig()
     rt.TargetHz = 60f;
     rt.SetBuild(() =>
     {
-        var page = rt.ColumnFill().Padded(EdgeInsets.All(8f));
-        using (rt.PushParent(page))
+        var page = rt.Column().Sized(Size.Fill, Size.Fill);
+        page.Style.Padding = EdgeInsets.All(8f);
+        using (rt.Parent(page))
             for (int r = 0; r < 3; r++)
             {
                 if (r > 0) rt.Gap(6f);
-                using (rt.PushParent(rt.RowFit()))
+                using (rt.Parent(rt.Row()))
                     for (int c = 0; c < 4; c++)
                     {
                         if (c > 0) rt.Gap(6f);
@@ -121,10 +122,11 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
         rt.TargetHz = 60f;
         rt.SetBuild(() =>
         {
-            var page = rt.ColumnFill().Padded(EdgeInsets.All(8f));
-            using var inPage = rt.PushParent(page);
+            var page = rt.Column().Sized(Size.Fill, Size.Fill);
+            page.Style.Padding = EdgeInsets.All(8f);
+            using var inPage = rt.Parent(page);
             var chart = rt.BoxFromId("chart", InteractionKinds.LeftPress);
-            chart.Px(120f, 60f);
+            chart.Sized(Size.Px(120f), Size.Px(60f));
             chart.Draw = (_, ctx) =>
             {
                 var r = ctx.Logical;

@@ -16,26 +16,25 @@ internal static class Charts
     /// <summary>A minimal line with a soft fill under it and a dot at its newest value.</summary>
     public static Box Sparkline(BibuiRuntime rt, float[] values, UiColor color)
     {
-        return new Box
+        var box = rt.Box();
+        box.Draw = (_, ctx) =>
         {
-            Draw = (_, ctx) =>
-            {
-                Rgba c = ctx.Resolve(color);
-                // The box clips, so the plot stops short of the right edge by
-                // the dot at its newest value.
-                var r = ctx.Logical with { Right = ctx.Logical.Right - 4f };
-                (float min, float max) = Range(values, 0.15f);
-                Span<(float X, float Y)> pts = stackalloc (float, float)[values.Length];
-                for (int i = 0; i < values.Length; i++)
-                    pts[i] = (r.Left + r.Width * i / (values.Length - 1),
-                              r.Bottom - 2f - (r.Height - 6f) * (values[i] - min) / (max - min));
-                ctx.DrawFilledPathGradient(pts, r.Top, r.Bottom, c.WithAlpha(70));
-                ctx.DrawPolyline(pts, c, 1.75f);
-                var (lx, ly) = pts[^1];
-                ctx.DrawShadow(lx - 3f, ly - 3f, 6f, 6f, 3f, 0f, 0f, 8f, 1f, c.WithAlpha(160));
-                ctx.DrawRRect(lx - 3f, ly - 3f, 6f, 6f, 3f, c, null, null);
-            },
+            Rgba c = ctx.Resolve(color);
+            // The box clips, so the plot stops short of the right edge by
+            // the dot at its newest value.
+            var r = ctx.Logical with { Right = ctx.Logical.Right - 4f };
+            (float min, float max) = Range(values, 0.15f);
+            Span<(float X, float Y)> pts = stackalloc (float, float)[values.Length];
+            for (int i = 0; i < values.Length; i++)
+                pts[i] = (r.Left + r.Width * i / (values.Length - 1),
+                          r.Bottom - 2f - (r.Height - 6f) * (values[i] - min) / (max - min));
+            ctx.DrawFilledPathGradient(pts, r.Top, r.Bottom, c.WithAlpha(70));
+            ctx.DrawPolyline(pts, c, 1.75f);
+            var (lx, ly) = pts[^1];
+            ctx.DrawShadow(lx - 3f, ly - 3f, 6f, 6f, 3f, 0f, 0f, 8f, 1f, c.WithAlpha(160));
+            ctx.DrawRRect(lx - 3f, ly - 3f, 6f, 6f, 3f, c, null, null);
         };
+        return box;
     }
 
     /// <summary>What the area chart shows, and where the pointer is over it.</summary>
@@ -98,36 +97,36 @@ internal static class Charts
                 ctx.DrawRRect(cx - 5f, cy - 5f, 10f, 10f, 5f, surface, line, 2.5f);
             }
         };
-        host.FillX().FillY();
+        host.Sized(Size.Fill, Size.Fill);
         return (host, hover);
     }
 
     /// <summary>The axis beside an area chart: its tick values, top to bottom, spread over the plot's height.</summary>
     public static void Axis(BibuiRuntime rt, Series s)
     {
-        using (rt.PushParent(rt.ColumnFillY().Px(width: 44f)))
-            for (int t = 0; t <= s.Ticks; t++)
-            {
-                if (t > 0) rt.Spring();
-                float v = s.Max - (s.Max - s.Min) * t / s.Ticks;
-                Ui.T(rt, v.ToString(s.Format, System.Globalization.CultureInfo.InvariantCulture), FontSize.Px(11f), UiColor.TextSecondary);
-            }
+        var ticks = rt.BeginParent(rt.Column().Sized(Size.Px(44f), Size.Fill));
+        for (int t = 0; t <= s.Ticks; t++)
+        {
+            if (t > 0) rt.Spacer(Size.Fill);
+            float v = s.Max - (s.Max - s.Min) * t / s.Ticks;
+            Ui.T(rt, v.ToString(s.Format, System.Globalization.CultureInfo.InvariantCulture), FontSize.Px(11f), UiColor.TextSecondary);
+        }
+        rt.EndParent(ticks);
     }
 
     /// <summary>A ring gauge: a track, an arc of <paramref name="value"/> 0..1, and nothing else.</summary>
     public static Box Ring(BibuiRuntime rt, float value, UiColor color, float size)
     {
-        return new Box
+        var box = rt.Box();
+        box.Draw = (_, ctx) =>
         {
-            Draw = (_, ctx) =>
-            {
-                Rgba c = ctx.Resolve(color), track = ctx.Resolve(UiColor.Border);
-                var r = ctx.Logical;
-                float cx = r.MidX, cy = r.MidY, rad = MathF.Min(r.Width, r.Height) / 2f - 4f;
-                ctx.DrawArc(cx, cy, rad, 5f, track, 0f, 360f);
-                ctx.DrawArc(cx, cy, rad, 5f, c, -90f, 360f * Math.Clamp(value, 0f, 1f));
-            },
-        }.Px(size, size);
+            Rgba c = ctx.Resolve(color), track = ctx.Resolve(UiColor.Border);
+            var r = ctx.Logical;
+            float cx = r.MidX, cy = r.MidY, rad = MathF.Min(r.Width, r.Height) / 2f - 4f;
+            ctx.DrawArc(cx, cy, rad, 5f, track, 0f, 360f);
+            ctx.DrawArc(cx, cy, rad, 5f, c, -90f, 360f * Math.Clamp(value, 0f, 1f));
+        };
+        return box.Sized(Size.Px(size), Size.Px(size));
     }
 
     private static (float Min, float Max) Range(ReadOnlySpan<float> values, float pad)

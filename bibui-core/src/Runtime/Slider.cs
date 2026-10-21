@@ -17,7 +17,6 @@ public readonly record struct SliderWidget(UiNode Node, float Value, Interaction
     public static implicit operator UiNode(SliderWidget widget) => widget.Node;
 
     /// <summary>So it goes straight into <c>Row(...)</c> or <c>Column(...)</c>.</summary>
-    public static implicit operator Arrange.Item(SliderWidget widget) => widget.Node;
 }
 
 /// <summary>
@@ -71,7 +70,7 @@ public static class SliderExtensions
         ArgumentNullException.ThrowIfNull(id);
 
         Box? column = !label.IsEmpty ? runtime.Box() : null;
-        using var inColumn = column is not null ? runtime.PushParent(column) : default;
+        using var inColumn = column is not null ? runtime.Parent(column) : default;
         if (column is not null)
         {
             column.ChildLayoutAxis = LayoutAxis.Y;
@@ -93,7 +92,7 @@ public static class SliderExtensions
             : value;
         float t = max > min ? Math.Clamp((live - min) / (max - min), 0f, 1f) : 0f;
 
-        using (runtime.PushParent(track))
+        using (runtime.Parent(track))
         {
             float grooveTop = (Height - GrooveHeight) / 2f;
             Pill(runtime, SemanticSize.ParentPct(1f), GrooveHeight, UiColor.SurfaceRaised).At(0f, grooveTop);

@@ -9,9 +9,9 @@ edit state (`TextEditState`). There are three kinds of field and one look:
 - `Multiline`: text wrapped at the box's width. The wheel scrolls it.
 - `InputStyle`: the padded, outlined input look, applied to a box you hold.
 
-A field draws no frame of its own. It fills the box you pushed. For an input,
-acquire a box, give it `InputStyle` and a size, push it, and build the field
-inside.
+A field draws no frame of its own. It fills the parent in scope. For an input,
+acquire a box, give it `InputStyle` and a size, begin it as the parent
+(`BeginParent`), and build the field inside.
 
 | Input | Error | Disabled |
 |---|---|---|
@@ -63,7 +63,7 @@ public const uint MultiLineEvents, MultiLineReadOnlyEvents;
 
 | Parameter | Meaning |
 |---|---|
-| `id` | The field's retained view box, inside the box you pushed. |
+| `id` | The field's retained view box, inside the parent in scope. |
 | `text` | Your buffer. A focused field edits it in place. |
 | `edit` | Your caret (`Cursor`) and selection anchor (`Mark`), as char offsets (UTF-16 code units), always on a character's boundary. A press or drag moves them. |
 | `focused` | Shows the caret and selection, and applies the frame's text events. |
@@ -74,8 +74,8 @@ public const uint MultiLineEvents, MultiLineReadOnlyEvents;
 
 Sizes: `SingleLine` is one line tall and as wide as its parent. `Ellipsis` needs
 a parent that is not sized by its children, because it measures the width that
-parent had last frame. `Multiline` is as tall as the size pushed with
-`runtime.PushSizeY`: `SemanticSize.ChildrenSum()` to fit its lines,
+parent had last frame. `Multiline` is as tall as the size begun with
+`runtime.BeginSizeY`: `SemanticSize.ChildrenSum()` to fit its lines,
 `TextField.Rows(runtime, n)` for `n` lines, or a share.
 
 `InputStyle(runtime, box, focused, error, disabled)` pads and outlines a box you
@@ -134,9 +134,9 @@ sealed class EmailInput
         frame.SizeX = SemanticSize.Pixels(240f);
         frame.SizeY = SemanticSize.ChildrenSum();
 
-        BibuiWidget line;
-        using (runtime.PushParent(frame))
-            line = runtime.TextField("email", _email, _edit, _focused, placeholder: Placeholder);
+        runtime.BeginParent(frame);
+        BibuiWidget line = runtime.TextField("email", _email, _edit, _focused, placeholder: Placeholder);
+        runtime.EndParent(frame);
         if (line.Pressed) _focused = true;
 
         // Escape or Enter ends editing.
@@ -151,7 +151,7 @@ sealed class EmailInput
 }
 ```
 
-A textarea is the same, with `Multiline` and a height pushed for it:
+A textarea is the same, with `Multiline` and a height begun for it:
 
 ```csharp
 using Bibui.Core;
@@ -173,10 +173,12 @@ sealed class MessageBox
         frame.SizeX = SemanticSize.Pixels(400f);
         frame.SizeY = SemanticSize.ChildrenSum();
 
-        using (runtime.PushParent(frame))
-        using (runtime.PushSizeY(TextField.Rows(runtime, 3)))
-            if (runtime.MultilineTextField("message", _message, _edit, _focused, placeholder: Placeholder).Pressed)
-                _focused = true;
+        runtime.BeginParent(frame);
+        runtime.BeginSizeY(TextField.Rows(runtime, 3));
+        if (runtime.MultilineTextField("message", _message, _edit, _focused, placeholder: Placeholder).Pressed)
+            _focused = true;
+        runtime.EndSizeY();
+        runtime.EndParent(frame);
         return frame;
     }
 }

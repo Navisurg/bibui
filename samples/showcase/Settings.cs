@@ -27,31 +27,28 @@ internal sealed partial class App
         float inner = width - 48f - Scrollbar.Lane - 4f;
         // A control asks while it is built, so it is built with the dialog's
         // panel (or something under it) as the parent in scope: that is how
-        // the dialog knows the press is its own. Where it is pushed afterwards,
-        // by PushIntoParent or CentredY, is free, so long as it stays inside.
+        // the dialog knows the press is its own.
         var sheet = Dialog.Begin(rt, "settings", shown, DialogSide.Right, width);
 
         // The sheet scrolls when the window is shorter than what is in it.
-        var body = rt.RowFill();
+        var body = rt.Row().Sized(Size.Fill, Size.Fill);
         Box view = rt.BoxFromId("settings-view", InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, body);
         view.ChildLayoutAxis = LayoutAxis.Y;
-        view.FillX().FillY();
+        view.Sized(Size.Fill, Size.Fill);
         view.AllowOverflowY = true;
-        var inView = rt.PushParent(view);
+        rt.BeginParent(view);
 
+        var header = rt.BeginParent(rt.Row().Sized(Size.Px(inner), Size.Px(44f)));
+        rt.BeginCenterAcross();
+        Bold(rt, "Appearance", ComponentSize.Lg, UiColor.TextPrimary);
+        rt.Gap(2f);
+        T(rt, "One seed colour, the whole theme, live", ComponentSize.Sm, UiColor.TextSecondary);
+        rt.EndCenterAcross();
+        rt.Spacer(Size.Fill);
+        rt.BeginCenterAcross();
         var close = IconButton(rt, "settings-close", "x", 30f);
-        using (rt.PushParent(rt.RowPx(inner, 44f)))
-        {
-            using (rt.PushParent(rt.ColumnFillY()))
-            using (rt.Centred())
-            {
-                Bold(rt, "Appearance", ComponentSize.Lg, UiColor.TextPrimary);
-                rt.Gap(2f);
-                T(rt, "One seed colour, the whole theme, live", ComponentSize.Sm, UiColor.TextSecondary);
-            }
-            rt.Spring();
-            CentredY(rt, close.Node);
-        }
+        rt.EndCenterAcross();
+        rt.EndParent(header);
         rt.Gap(22f);
 
         // Mode
@@ -62,16 +59,14 @@ internal sealed partial class App
 
         // Accent swatches: the seed every colour of the theme is generated from.
         Section(rt, "Accent");
-        var swatches = rt.RowHeight(34f);
-        using (rt.PushParent(swatches))
+        var swatches = rt.BeginParent(rt.Row().Sized(y: Size.Px(34f)));
+        foreach (var (hex, name) in Accents)
         {
-            foreach (var (hex, name) in Accents)
-            {
-                if (swatches.FirstChild is not null) rt.Gap(4f);
-                var sw = Swatch(rt, "swatch-" + name.ToLowerInvariant(), hex, Accent == hex && ThemeFileName is null, name);
-                if (sw.Clicked) { Accent = hex; ThemeFileName = null; }
-            }
+            if (swatches.FirstChild is not null) rt.Gap(4f);
+            var sw = Swatch(rt, "swatch-" + name.ToLowerInvariant(), hex, Accent == hex && ThemeFileName is null, name);
+            if (sw.Clicked) { Accent = hex; ThemeFileName = null; }
         }
+        rt.EndParent(swatches);
         rt.Gap(10f);
         rt.Text($"Theme.FromSeed(\"{Accent}\", mode: {(Dark ? "Dark" : "Light")})", FontSize.Px(12f), UiColor.TextSecondary, FontSlot.Mono);
         rt.Gap(22f);
@@ -93,11 +88,10 @@ internal sealed partial class App
 
         // Shape and rhythm
         Section(rt, "Corner radius");
-        using (rt.PushParent(rt.ColumnWidth(inner)))
-        {
-            var radius = rt.Slider("settings-radius", Radius, 0f, 16f, step: 1f);
-            if (MathF.Abs(radius.Value - Radius) > 0.01f) { Radius = radius.Value; ThemeFileName = null; }
-        }
+        var radiusColumn = rt.BeginParent(rt.Column().Sized(Size.Px(inner)));
+        var radius = rt.Slider("settings-radius", Radius, 0f, 16f, step: 1f);
+        if (MathF.Abs(radius.Value - Radius) > 0.01f) { Radius = radius.Value; ThemeFileName = null; }
+        rt.EndParent(radiusColumn);
         rt.Gap(6f);
         rt.Text($"{Radius:0} px  ·  Sm {Radius * 2f / 3f:0.#}, Lg {Radius * 4f / 3f:0.#}", FontSize.Px(12f), UiColor.TextSecondary);
         rt.Gap(20f);
@@ -129,17 +123,23 @@ internal sealed partial class App
 
         Section(rt, "Keyboard");
         foreach (var (keys, what) in Shortcuts)
-            using (rt.PushParent(rt.RowPx(inner, 30f)))
-            {
-                CentredY(rt, T(rt, what, ComponentSize.Sm, UiColor.TextSecondary));
-                rt.Spring();
-                CentredY(rt, KeyboardShortcut.Build(rt, keys));
-            }
+        {
+            var shortcut = rt.BeginParent(rt.Row().Sized(Size.Px(inner), Size.Px(30f)));
+            rt.BeginCenterAcross();
+            T(rt, what, ComponentSize.Sm, UiColor.TextSecondary);
+            rt.EndCenterAcross();
+            rt.Spacer(Size.Fill);
+            rt.BeginCenterAcross();
+            KeyboardShortcut.Build(rt, keys);
+            rt.EndCenterAcross();
+            rt.EndParent(shortcut);
+        }
 
         rt.Gap(8f);
-        inView.Dispose();
-        using (rt.PushParent(body))
-            rt.Scrollbar("settings-bar", view);
+        rt.EndParent(view);
+        rt.BeginParent(body);
+        rt.Scrollbar("settings-bar", view);
+        rt.EndParent(body);
         rt.InteractionsFor(view);
 
         if (sheet.End().Dismissed | close.Clicked) SettingsOpen = false;
@@ -169,22 +169,25 @@ internal sealed partial class App
     {
         Box b = rt.BoxFromId(id, InteractionKinds.LeftPress);
         Interaction i = rt.InteractionsFor(b);
-        b.Px(34f, 34f);
+        b.Sized(Size.Px(34f), Size.Px(34f));
         b.Style.CornerRadius = 17f;
         b.Style.BorderWidth = chosen ? 2f : 1.5f * b.HotT;
         b.Style.BorderColor = chosen ? UiColor.TextPrimary : UiColor.BorderHover;
         b.Style.Padding = EdgeInsets.All(3.5f);
-        using (rt.PushParent(b))
+        rt.BeginParent(b);
+        var dot = rt.Row().Sized(Size.Fill, Size.Fill);
+        dot.Style.CornerRadius = 13.5f;
+        dot.Style.BackgroundColor = hex;
+        dot.Style.Shadow = BoxShadow.Glow(hex, blur: 4f + 10f * b.HotT, spread: 0f);
+        if (chosen)
         {
-            var dot = rt.RowFill();
-            dot.Style.CornerRadius = 13.5f;
-            dot.Style.BackgroundColor = hex;
-            dot.Style.Shadow = BoxShadow.Glow(hex, blur: 4f + 10f * b.HotT, spread: 0f);
-            if (chosen)
-                using (rt.PushParent(dot))
-                using (rt.Centred())
-                    CentredY(rt, Icon(rt, "check", 15f, "#0B0D17"));
+            rt.BeginParent(dot);
+            rt.BeginCenterXY();
+            Icon(rt, "check", 15f, "#0B0D17");
+            rt.EndCenterXY();
+            rt.EndParent(dot);
         }
+        rt.EndParent(b);
         if (i.Hovering) Tooltip.Build(rt, name + "  " + hex, b);
         return new BibuiWidget(b, i);
     }
@@ -227,17 +230,15 @@ internal sealed partial class App
         }
         float qW = MathF.Round((cw - Gutter) * 0.62f), sideW = cw - Gutter - qW;
         float skyH = MathF.Round(h * 0.52f);
-        using (rt.PushParent(rt.RowFit()))
-        {
-            QueueCard(rt, qW, h);
-            rt.Gap(Gutter);
-            using (rt.PushParent(rt.ColumnFit()))
-            {
-                SkyCard(rt, sideW, skyH, glass: false);
-                rt.Gap(Gutter);
-                LogCard(rt, sideW, h - skyH - Gutter);
-            }
-        }
+        var cards = rt.BeginParent(rt.Row());
+        QueueCard(rt, qW, h);
+        rt.Gap(Gutter);
+        var side = rt.BeginParent(rt.Column());
+        SkyCard(rt, sideW, skyH, glass: false);
+        rt.Gap(Gutter);
+        LogCard(rt, sideW, h - skyH - Gutter);
+        rt.EndParent(side);
+        rt.EndParent(cards);
     }
 
     // ── Telemetry ────────────────────────────────────────────────────────────
@@ -253,17 +254,15 @@ internal sealed partial class App
         {
             float leftW = MathF.Round((cw - Gutter) * 0.62f), rightW = cw - Gutter - leftW;
             float half = (chartsH - Gutter) / 2f;
-            using (rt.PushParent(rt.RowFit()))
-            {
-                TelemetryCard(rt, "tel-seeing", leftW, chartsH, Metric.Seeing, false);
-                rt.Gap(Gutter);
-                using (rt.PushParent(rt.ColumnFit()))
-                {
-                    TelemetryCard(rt, "tel-temp", rightW, half, Metric.Temperature, false);
-                    rt.Gap(Gutter);
-                    TelemetryCard(rt, "tel-data", rightW, half, Metric.Throughput, false);
-                }
-            }
+            var cards = rt.BeginParent(rt.Row());
+            TelemetryCard(rt, "tel-seeing", leftW, chartsH, Metric.Seeing, false);
+            rt.Gap(Gutter);
+            var side = rt.BeginParent(rt.Column());
+            TelemetryCard(rt, "tel-temp", rightW, half, Metric.Temperature, false);
+            rt.Gap(Gutter);
+            TelemetryCard(rt, "tel-data", rightW, half, Metric.Throughput, false);
+            rt.EndParent(side);
+            rt.EndParent(cards);
         }
         else
         {
@@ -296,68 +295,67 @@ internal sealed partial class App
         float sideW = wide ? 320f : cw;
         float logW = wide ? cw - Gutter - sideW : cw;
 
-        // The night card: a checklist, a rating, and a collapsible summary.
+        // Wide, the two cards side by side; narrow, stacked in the page's column.
+        Box? cards = wide ? rt.BeginParent(rt.Row()) : null;
+        LogCard(rt, logW, wide ? h : 640f, ComponentSize.Md, night: true);
+        rt.Gap(Gutter);
+
+        // The night card: a checklist, a rating, and a collapsible summary. The
+        // count in its header is built before the checklist, so a tick shows
+        // there a frame late.
         float inner = sideW - 36f;
-        var items = rt.ColumnFit();
-        using (rt.PushParent(items))
-            for (int k = 0; k < ChecklistItems.Length; k++)
-            {
-                if (k > 0) rt.Gap(12f);
-                var cb = rt.Checkbox("check-" + k, Checklist[k], label: ChecklistItems[k]);
-                if (cb.Clicked) Checklist[k] = !Checklist[k];
-            }
+        var night = rt.BeginParent(rt.Column().Sized(Size.Px(sideW), Size.Px(wide ? h : 520f)));
+        night.Style = CardStyle(rt);
+        CardHeader(rt, "check-square", "Tonight", $"{Checklist.Count(c => c)} of {Checklist.Length} done");
+        rt.Gap(14f);
+        var items = rt.BeginParent(rt.Column());
+        for (int k = 0; k < ChecklistItems.Length; k++)
+        {
+            if (k > 0) rt.Gap(12f);
+            var cb = rt.Checkbox("check-" + k, Checklist[k], label: ChecklistItems[k]);
+            if (cb.Clicked) Checklist[k] = !Checklist[k];
+        }
+        rt.EndParent(items);
+        rt.Gap(22f);
+        Eyebrow(rt, "Conditions");
+        rt.Gap(10f);
         var rating = rt.RadioGroup("rating", Ratings, Rating);
         if (rating.Picked is { } r) Rating = r;
+        rt.Gap(20f);
+        Eyebrow(rt, "Hand-over");
+        rt.Gap(10f);
+        // A hand-over note: a multi-line field, four rows tall, that a press gives the keyboard.
+        var noteBox = rt.Column().Sized(Size.Px(inner));
+        TextField.InputStyle(rt, noteBox, NoteFocused);
+        rt.BeginParent(noteBox);
+        rt.BeginFontSize(ComponentSize.Sm);
+        rt.BeginSizeY(TextField.Rows(rt, 4));
+        var note = rt.MultilineTextField("note", Note, NoteEdit, NoteFocused, placeholder: "Hand-over note for the morning crew");
+        rt.EndSizeY();
+        rt.EndFontSize();
+        rt.EndParent(noteBox);
+        if (note.Pressed) { NoteFocused = true; SearchFocused = false; }
+        rt.Gap(18f);
+        Separator.Build(rt);
+        rt.Gap(6f);
         var summary = rt.Expander("night-summary", "Night summary", NightOpen);
         if (summary.Toggled) NightOpen = !NightOpen;
         if (summary.Body is { } body)
-            using (rt.PushParent(body))
-                foreach (var line in new[]
-                {
-                    $"{Data.Targets.Count(t => t.DoneMin > 0)} targets exposed, {Data.Targets.Sum(t => t.DoneMin) / 60.0:0.0} h of data",
-                    $"Seeing {Data.Seeing(Minutes):0.00}″ now, best 0.71″ at 01:52",
-                    $"{SlewCount} slews from this console",
-                })
-                {
-                    rt.Text("·  " + line, ComponentSize.Sm, UiColor.TextSecondary);
-                    rt.Gap(6f);
-                }
-        // A hand-over note: a multi-line field, four rows tall, that a press gives the keyboard.
-        var noteBox = rt.ColumnWidth(inner);
-        TextField.InputStyle(rt, noteBox, NoteFocused);
-        BibuiWidget note;
-        using (rt.PushParent(noteBox))
-        using (rt.PushFontSize(ComponentSize.Sm))
-        using (rt.PushSizeY(TextField.Rows(rt, 4)))
-            note = rt.MultilineTextField("note", Note, NoteEdit, NoteFocused, placeholder: "Hand-over note for the morning crew");
-        if (note.Pressed) { NoteFocused = true; SearchFocused = false; }
-
-        var night = rt.ColumnPx(sideW, wide ? h : 520f).Styled(CardStyle(rt));
-        using (rt.PushParent(night))
         {
-            CardHeader(rt, "check-square", "Tonight", $"{Checklist.Count(c => c)} of {Checklist.Length} done");
-            rt.Gap(14f);
-            Place(rt, items);
-            rt.Gap(22f);
-            Eyebrow(rt, "Conditions");
-            rt.Gap(10f);
-            Place(rt, rating.Node);
-            rt.Gap(20f);
-            Eyebrow(rt, "Hand-over");
-            rt.Gap(10f);
-            Place(rt, noteBox);
-            rt.Gap(18f);
-            Separator.Build(rt);
-            rt.Gap(6f);
-            Place(rt, summary.Node);
+            rt.BeginParent(body);
+            foreach (var line in new[]
+            {
+                $"{Data.Targets.Count(t => t.DoneMin > 0)} targets exposed, {Data.Targets.Sum(t => t.DoneMin) / 60.0:0.0} h of data",
+                $"Seeing {Data.Seeing(Minutes):0.00}″ now, best 0.71″ at 01:52",
+                $"{SlewCount} slews from this console",
+            })
+            {
+                rt.Text("·  " + line, ComponentSize.Sm, UiColor.TextSecondary);
+                rt.Gap(6f);
+            }
+            rt.EndParent(body);
         }
-
-        // Wide, the two cards side by side; narrow, stacked in the page's column.
-        using (wide ? rt.PushParent(rt.RowFit()) : default)
-        {
-            LogCard(rt, logW, wide ? h : 640f, ComponentSize.Md, night: true);
-            rt.Gap(Gutter);
-            Place(rt, night);
-        }
+        rt.EndParent(night);
+        if (cards is not null) rt.EndParent(cards);
     }
 }

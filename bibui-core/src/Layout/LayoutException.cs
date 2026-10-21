@@ -24,7 +24,7 @@ public sealed class LayoutException : Exception
         string along = axis == 0 ? "X" : "Y";
         return new LayoutException(
             $"No size along {along} for {Path(node)}. Every node says its size: " +
-            $"Px, FillX/FillY, sized by its children, or pushed with PushSize{along}.");
+            $".Sized(...) (Size.Px, Size.Fill, ...), sized by its children, or begun with BeginSize{along}.");
     }
 
     // The node and its ancestors up to the first one with an id, so the

@@ -29,7 +29,7 @@ public static class KeyboardShortcut
         row.ChildLayoutAxis = LayoutAxis.X;
         row.SizeX = SemanticSize.ChildrenSum();
         row.SizeY = SemanticSize.Pixels(KeyHeight);
-        using (runtime.PushParent(row))
+        using (runtime.Parent(row))
             for (int i = 0; i < keys.Length; i++)
             {
                 if (i > 0) runtime.Gap(KeyGap);
@@ -51,11 +51,10 @@ public static class KeyboardShortcut
         style.BackgroundColor = UiColor.SurfaceRaised;
         style.BorderColor = UiColor.Border;
         style.BorderWidth = runtime.Theme.Borders.Width;
-        using (runtime.PushParent(cap))
-        {
-            Arrange.Spring(cap);
-            runtime.Text(key, ComponentSize.Sm, TextColor.Primary);
-            Arrange.Spring(cap);
-        }
+        runtime.BeginParent(cap);
+        runtime.BeginCenter();
+        runtime.Text(key, ComponentSize.Sm, TextColor.Primary);
+        runtime.EndCenter();
+        runtime.EndParent(cap);
     }
 }

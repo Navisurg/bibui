@@ -29,8 +29,8 @@ static partial class IconNameTests
             runtime.SetBuild(
                 () =>
                 {
-                    var row = runtime.RowPx(100f, 40f);
-                    using (runtime.PushParent(row))
+                    var row = runtime.Row().Sized(Size.Px(100f), Size.Px(40f));
+                    using (runtime.Parent(row))
                     {
                         try { runtime.Icon("folder-open", 20f); }
                         catch (ArgumentException e) { thrown = e; }

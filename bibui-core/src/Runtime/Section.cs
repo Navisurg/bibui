@@ -24,9 +24,9 @@ public static class Section
         column.ChildLayoutAxis = LayoutAxis.Y;
         column.SizeX = SemanticSize.ParentPct(1f);
         column.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(column))
+        using (runtime.Parent(column))
         {
-            using (runtime.PushFontFace(weight: FontWeight.Bold)) runtime.Text(caption, ComponentSize.Sm, TextColor.Secondary);
+            using (runtime.FontFace(weight: FontWeight.Bold)) runtime.Text(caption, ComponentSize.Sm, TextColor.Secondary);
             runtime.Gap(Spacing);
         }
         return column;

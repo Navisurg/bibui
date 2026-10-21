@@ -64,20 +64,16 @@ sealed class NotificationSettings
 
     public UiNode Build(BibuiRuntime runtime)
     {
-        Box column = runtime.Box();
-        column.ChildLayoutAxis = LayoutAxis.Y;
-        column.SizeX = column.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(column))
-        {
-            // "All" is indeterminate while only some are on, and turns them all on or off.
-            bool some = _email != _push;
-            if (runtime.Checkbox("notify-all", _email && _push, All, indeterminate: some).Clicked)
-                _email = _push = !(_email && _push);
-            runtime.Gap(12f);
-            if (runtime.Checkbox("notify-email", _email, Email).Clicked) _email = !_email;
-            runtime.Gap(12f);
-            if (runtime.Checkbox("notify-push", _push, Push).Clicked) _push = !_push;
-        }
+        var column = runtime.BeginParent(runtime.Column());
+        // "All" is indeterminate while only some are on, and turns them all on or off.
+        bool some = _email != _push;
+        if (runtime.Checkbox("notify-all", _email && _push, All, indeterminate: some).Clicked)
+            _email = _push = !(_email && _push);
+        runtime.Gap(12f);
+        if (runtime.Checkbox("notify-email", _email, Email).Clicked) _email = !_email;
+        runtime.Gap(12f);
+        if (runtime.Checkbox("notify-push", _push, Push).Clicked) _push = !_push;
+        runtime.EndParent(column);
         return column;
     }
 }

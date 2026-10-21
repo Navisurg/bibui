@@ -13,7 +13,6 @@ public readonly record struct TabsWidget(Box Node, string? Picked)
     public static implicit operator UiNode(TabsWidget widget) => widget.Node;
 
     /// <summary>So it goes straight into <c>Row(...)</c> or <c>Column(...)</c>.</summary>
-    public static implicit operator Arrange.Item(TabsWidget widget) => widget.Node;
 }
 
 /// <summary>
@@ -86,7 +85,7 @@ public static class TabsExtensions
         strip.Style.Padding = new EdgeInsets(Inset, 4f, Inset, 4f);
 
         string? picked = null;
-        using (runtime.PushParent(strip))
+        using (runtime.Parent(strip))
         {
             for (int i = 0; i < items.Count; i++)
             {
@@ -100,16 +99,15 @@ public static class TabsExtensions
                 tab.SizeY = SemanticSize.ParentPct(1f);
                 tab.Style.Padding = EdgeInsets.Symmetric(horizontal: PadX, vertical: 0f);
                 tab.Style.CornerRadius = RadiusSm;
-                tab.Style.BackgroundColor = active ? UiColor.Background : (UiColor?)null;
+                tab.Style.BackgroundColor = active ? UiColor.Surface : (UiColor?)null;
                 tab.Style.HoverBackgroundColor = active ? (UiColor?)null : UiColor.SurfaceRaisedHover;
 
                 // Centred down the tab, which has the strip's height.
-                using (runtime.PushParent(tab))
-                {
-                    Arrange.Spring(tab);
-                    runtime.Text(items[i].Label, textColor: active ? TextColor.Primary : TextColor.Secondary);
-                    Arrange.Spring(tab);
-                }
+                runtime.BeginParent(tab);
+                runtime.BeginCenter();
+                runtime.Text(items[i].Label, textColor: active ? TextColor.Primary : TextColor.Secondary);
+                runtime.EndCenter();
+                runtime.EndParent(tab);
             }
         }
         return new TabsWidget(strip, picked);

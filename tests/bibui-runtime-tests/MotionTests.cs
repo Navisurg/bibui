@@ -28,7 +28,7 @@ static class MotionTests
         if (!value) throw new Exception(message);
     }
 
-    static Box Root() => new Box { ChildLayoutAxis = LayoutAxis.Y }.FillX().FillY();
+    static Box Root() => new Box { ChildLayoutAxis = LayoutAxis.Y }.Sized(Size.Fill, Size.Fill);
 
     /// <summary>A runtime whose build asks <paramref name="ask"/> and draws nothing else.</summary>
     static BibuiRuntime Asking(Action<BibuiRuntime> ask, float hz = 60f)
@@ -523,10 +523,10 @@ static class MotionTests
             runtime.SetBuild(() =>
             {
                 var root = Root();
-                using (runtime.PushParent(root))
+                using (runtime.Parent(root))
                 {
-                    holder = runtime.CollapseBox("row-1", progress).FillX();
-                    UiNode.PushIntoParent(holder, new Box().Px(200f, 40f));
+                    holder = runtime.CollapseBox("row-1", progress).Sized(Size.Fill);
+                    UiNode.PushIntoParent(holder, new Box().Sized(Size.Px(200f), Size.Px(40f)));
                 }
                 return root;
             }, new SurfaceOptions { Width = 200, Height = 100 });
@@ -551,8 +551,8 @@ static class MotionTests
             var runtime = BibuiRuntime.Create();
             runtime.SetBuild(() =>
             {
-                var root = new Box { Style = new Style { BackgroundColor = "#000000" } }.FillX().FillY();
-                b = new Box { Style = style }.Px(40f, 40f).At(10f, 10f);
+                var root = new Box { Style = new Style { BackgroundColor = "#000000" } }.Sized(Size.Fill, Size.Fill);
+                b = new Box { Style = style }.Sized(Size.Px(40f), Size.Px(40f)).At(10f, 10f);
                 UiNode.PushIntoParent(root, b);
                 return root;
             }, new SurfaceOptions { Width = 200, Height = 100 });
@@ -577,7 +577,7 @@ static class MotionTests
                 var root = Root();
                 var card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
                 pressed |= runtime.InteractionsFor(card).Pressed;
-                card.Px(40f, 40f).At(10f, 10f);
+                card.Sized(Size.Px(40f), Size.Px(40f)).At(10f, 10f);
                 card.Style.Translate = new Vector2(100f, 0f);
                 UiNode.PushIntoParent(root, card);
                 return root;
@@ -604,7 +604,7 @@ static class MotionTests
                 var root = Root();
                 var bar = runtime.BoxFromId("bar", InteractionKinds.LeftPress);
                 pressed |= runtime.InteractionsFor(bar).Pressed;
-                bar.Px(100f, 10f).At(50f, 45f);    // a wide bar centred on (100, 50)
+                bar.Sized(Size.Px(100f), Size.Px(10f)).At(50f, 45f);    // a wide bar centred on (100, 50)
                 bar.Style.Rotate = 90f;             // now tall
                 UiNode.PushIntoParent(root, bar);
                 return root;
@@ -635,8 +635,8 @@ static class MotionTests
                 var row = runtime.BoxFromId("row", InteractionKinds.LeftPress);
                 pressed |= runtime.InteractionsFor(row).Pressed;
                 runtime.InteractionsFor(list);
-                list.Px(100f, 50f);
-                row.Px(100f, 20f);
+                list.Sized(Size.Px(100f), Size.Px(50f));
+                row.Sized(Size.Px(100f), Size.Px(20f));
                 row.Style.Translate = new Vector2(80f, 0f);   // half of it past the list's edge
                 UiNode.PushIntoParent(list, row);
                 UiNode.PushIntoParent(root, list);
@@ -664,7 +664,7 @@ static class MotionTests
                 var root = Root();
                 var card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
                 pressed |= runtime.InteractionsFor(card).Pressed;
-                card.Px(40f, 40f).At(10f, 10f);
+                card.Sized(Size.Px(40f), Size.Px(40f)).At(10f, 10f);
                 card.Style.Translate = new Vector2(100f, 0f);
                 card.Style.Scale = new Vector2(0.5f, 0.5f);
                 UiNode.PushIntoParent(root, card);
@@ -683,7 +683,7 @@ static class MotionTests
             var dark = new ThemeTokens { Colors = new ColorTokens { Background = "#000000" } };
             var light = new ThemeTokens { Colors = new ColorTokens { Background = "#FFFFFF" } };
             var runtime = BibuiRuntime.Create();
-            runtime.SetBuild(() => new Box { Style = new Style { BackgroundColor = UiColor.Background } }.FillX().FillY(),
+            runtime.SetBuild(() => new Box { Style = new Style { BackgroundColor = UiColor.Background } }.Sized(Size.Fill, Size.Fill),
                 dark, new SurfaceOptions { Width = 20, Height = 20 });
             runtime.Step();
 

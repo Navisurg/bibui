@@ -50,33 +50,33 @@ internal static class DemoMarkdown
 
         // Side by side where they fit, the viewer under the source where they do not.
         bool sideBySide = ShellLayout.PageWidth(runtime) >= FieldWidth + 24f + ViewerWidth;
-        using (runtime.PushParent(sideBySide ? runtime.RowFit() : runtime.ColumnFit()))
-        {
-            Box frame = runtime.Box();
-            TextField.InputStyle(runtime, frame, _focused);
-            frame.SizeX = SemanticSize.Pixels(FieldWidth);
-            frame.SizeY = SemanticSize.ChildrenSum();
-            BibuiWidget field;
-            using (runtime.PushParent(frame))
-            using (runtime.PushSizeY(TextField.Rows(runtime, 26)))
-            using (runtime.PushFontSize(ComponentSize.Sm))
-                field = runtime.MultilineTextField("demo-markdown-source", Source, Edit, _focused);
-            if (field.Pressed) _focused = true;
+        var panes = runtime.BeginParent(sideBySide ? runtime.Row() : runtime.Column());
+        Box frame = runtime.Box();
+        TextField.InputStyle(runtime, frame, _focused);
+        frame.SizeX = SemanticSize.Pixels(FieldWidth);
+        frame.SizeY = SemanticSize.ChildrenSum();
+        runtime.BeginParent(frame);
+        runtime.BeginSizeY(TextField.Rows(runtime, 26));
+        runtime.BeginFontSize(ComponentSize.Sm);
+        BibuiWidget field = runtime.MultilineTextField("demo-markdown-source", Source, Edit, _focused);
+        runtime.EndFontSize();
+        runtime.EndSizeY();
+        runtime.EndParent(frame);
+        if (field.Pressed) _focused = true;
 
-            runtime.Gap(24f);
+        runtime.Gap(24f);
 
-            Box surface = runtime.ColumnWidth(ViewerWidth);
-            surface.Style.Padding = EdgeInsets.All(16f);
-            surface.Style.BorderColor = UiColor.Border;
-            surface.Style.BorderWidth = 1f;
-            surface.Style.CornerRadius = 8f;
-            using (runtime.PushParent(surface))
-            {
-                var viewer = runtime.Markdown("demo-markdown", Source, width: ViewerWidth - 32f);
-                if (viewer.LinkClicked) _lastLink = viewer.ClickedLink;
-                if (viewer.TaskClicked) Markdown.ToggleTask(Source, viewer.ToggledTask);
-            }
-        }
+        Box surface = runtime.Column().Sized(Size.Px(ViewerWidth));
+        surface.Style.Padding = EdgeInsets.All(16f);
+        surface.Style.BorderColor = UiColor.Border;
+        surface.Style.BorderWidth = 1f;
+        surface.Style.CornerRadius = 8f;
+        runtime.BeginParent(surface);
+        var viewer = runtime.Markdown("demo-markdown", Source, width: ViewerWidth - 32f);
+        if (viewer.LinkClicked) _lastLink = viewer.ClickedLink;
+        if (viewer.TaskClicked) Markdown.ToggleTask(Source, viewer.ToggledTask);
+        runtime.EndParent(surface);
+        runtime.EndParent(panes);
 
         runtime.Gap(16f);
         runtime.Text(_lastLink is null ? "Click a link in the viewer." : $"Clicked: {_lastLink}",

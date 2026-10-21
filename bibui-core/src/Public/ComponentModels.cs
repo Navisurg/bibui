@@ -25,12 +25,12 @@ public sealed class Text : UiComponent
 
     /// <summary>
     /// Its size, always said: what it was built with, or the size pushed with
-    /// <c>runtime.PushFontSize</c>, or <see cref="ComponentSize.Md"/>. Set it
+    /// <c>runtime.BeginFontSize</c>, or <see cref="ComponentSize.Md"/>. Set it
     /// on the text that came back to change it.
     /// </summary>
     public FontSize Size { get; set; } = ComponentSize.Md;
 
-    /// <summary>Its weight: the one pushed with <c>runtime.PushFontFace</c> when it was built.</summary>
+    /// <summary>Its weight: the one pushed with <c>runtime.BeginFontFace</c> when it was built.</summary>
     public FontWeight Weight { get; internal set; }
 
     /// <summary>Which of the theme's families it is set in.</summary>
@@ -69,7 +69,7 @@ public sealed class Icon : UiComponent
 
     /// <summary>
     /// Its side, always said, as a text's size is: what it was built with, or
-    /// the size pushed with <c>runtime.PushFontSize</c>, or
+    /// the size pushed with <c>runtime.BeginFontSize</c>, or
     /// <see cref="ComponentSize.Md"/> — so an icon beside a label is the label's size.
     /// </summary>
     public FontSize Size { get; set; } = ComponentSize.Md;

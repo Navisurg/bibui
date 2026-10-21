@@ -28,7 +28,7 @@ public static class Progress
         ArgumentNullException.ThrowIfNull(runtime);
 
         Box? column = !label.IsEmpty ? runtime.Box() : null;
-        using var inColumn = column is not null ? runtime.PushParent(column) : default;
+        using var inColumn = column is not null ? runtime.Parent(column) : default;
         if (column is not null)
         {
             column.ChildLayoutAxis = LayoutAxis.Y;
@@ -48,7 +48,7 @@ public static class Progress
         groove.Style.CornerRadius = height / 2f;
 
         if (share > 0f)
-            using (runtime.PushParent(groove))
+            using (runtime.Parent(groove))
             {
                 Box done = runtime.Box();
                 done.SizeX = SemanticSize.ParentPct(share);

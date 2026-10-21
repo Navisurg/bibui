@@ -15,8 +15,8 @@ All the components follow the same rules. Once you know them, a signature tells
 you most of what a component does.
 
 - **You call it from your build function, every frame.** `runtime.Checkbox(…)`
-  links the checkbox under the parent you pushed with `runtime.PushParent`, or
-  you place the node it returns yourself.
+  links the checkbox under the parent in scope (the box you began with
+  `runtime.BeginParent`), or you place the node it returns yourself.
 - **The `id` names its retained boxes.** Any part that takes a press is a
   retained box (`runtime.BoxFromId`), so it keeps its hover and press state from
   frame to frame. Ids must be unique among the boxes built in a frame. Components

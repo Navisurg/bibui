@@ -31,11 +31,13 @@ internal static class DemoScrollbar
             (row.SizeX, row.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.Pixels(28f));
             row.Style.Padding = new EdgeInsets(0, 12, 0, 12);
             row.Style.BackgroundColor = i % 2 == 0 ? (UiColor?)UiColor.Surface : null;
-            using (runtime.PushParent(row))
-                runtime.Text($"Row {i}", ComponentSize.Sm, TextColor.Primary);
+            runtime.BeginParent(row);
+            runtime.Text($"Row {i}", ComponentSize.Sm, TextColor.Primary);
+            runtime.EndParent(row);
         }
-        using (runtime.PushParent(panel))
-            runtime.Scrollbar("sb-v-bar", view, LayoutAxis.Y);
+        runtime.BeginParent(panel);
+        runtime.Scrollbar("sb-v-bar", view, LayoutAxis.Y);
+        runtime.EndParent(panel);
         runtime.InteractionsFor(view);
 
         (view.SizeX, view.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
@@ -49,18 +51,22 @@ internal static class DemoScrollbar
         panel.ChildLayoutAxis = LayoutAxis.Y;
         var view = runtime.BoxFromId("sb-h-view",
             InteractionKinds.ViewScrollX | InteractionKinds.ClampX | InteractionKinds.Clip, panel);
+        runtime.BeginParent(view);
         for (int i = 1; i <= 24; i++)
         {
-            if (i > 1) Arrange.Gap(view, 8f);
-            var card = runtime.BoxFromId($"sb-h-card-{i}", parent: view);
+            if (i > 1) runtime.Gap(8f);
+            var card = runtime.BoxFromId($"sb-h-card-{i}");
             (card.SizeX, card.SizeY) = (SemanticSize.Pixels(80f), SemanticSize.ParentPct(1f));
             card.Style.CornerRadius = 6f;
             card.Style.Draw = DrawFlags.Background;
-            using (runtime.PushParent(card))
-                runtime.Text($"Card {i}", ComponentSize.Sm, TextColor.Primary);
+            runtime.BeginParent(card);
+            runtime.Text($"Card {i}", ComponentSize.Sm, TextColor.Primary);
+            runtime.EndParent(card);
         }
-        using (runtime.PushParent(panel))
-            runtime.Scrollbar("sb-h-bar", view, LayoutAxis.X);
+        runtime.EndParent(view);
+        runtime.BeginParent(panel);
+        runtime.Scrollbar("sb-h-bar", view, LayoutAxis.X);
+        runtime.EndParent(panel);
         runtime.InteractionsFor(view);
 
         (view.SizeX, view.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));

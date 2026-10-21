@@ -120,11 +120,11 @@ internal sealed partial class App
         // Overlays ask first: they are on top.
         BuildSettings(rt);
 
-        using (rt.PushParent(rt.RowPx(w, h).Styled(new Style { BackgroundColor = UiColor.Background })))
-        {
-            Sidebar(rt, open, h);
-            Main(rt, w - SidebarWidth(open), h);
-        }
+        var frame = rt.BeginParent(rt.Row().Sized(Size.Px(w), Size.Px(h)));
+        frame.Style = new Style { BackgroundColor = UiColor.Background };
+        Sidebar(rt, open, h);
+        Main(rt, w - SidebarWidth(open), h);
+        rt.EndParent(frame);
     }
 
     /// <summary>One whole frame: BeginBuild with the frame's input (none, headless), the app, EndBuild.</summary>

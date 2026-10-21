@@ -45,7 +45,6 @@ Replace `Program.cs`:
 using Bibui.Core;
 using Bibui.App;
 using Bibui.Core.Runtime;
-using static Bibui.Core.Arrange;
 
 var runtime = BibuiRuntime.Create();
 var hello = "Hello, bibui";
@@ -54,8 +53,10 @@ using var app = BibuiApp.Open(runtime, new("Stepper", 800, 600));
 while (app.BeginFrame())
 {
     runtime.BeginBuild(app.Events);
-    UiNode.PushIntoParent(runtime.ParentInScope,
-        Column(runtime.Text(hello)).FillX().FillY().Padded(EdgeInsets.All(24f)));
+    var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+    page.Style.Padding = EdgeInsets.All(24f);
+    runtime.Text(hello);
+    runtime.EndParent(page);
     runtime.EndBuild();
     app.EndFrame();
 }
@@ -68,18 +69,20 @@ while (app.BeginFrame())
   window closes. `app.EndFrame()` draws the frame into the window, puts it on
   screen, and paces the loop.
 - Between `BeginBuild` and `EndBuild` you build one frame. The runtime owns the
-  frame's root: what you build with nothing pushed lands under it, and a tree
-  made with `Arrange` (`Column(...)`) is linked there with `PushIntoParent`.
+  frame's root: what you build with no parent begun lands under it.
   `EndBuild` lays the tree out and records it into `runtime.DrawList`.
 - `BibuiApp.Open` opens the window and makes the renderer the package names;
   bibui never looks one up at run time. `app.Window` and `app.Renderer` are
   those two, for when you need them (textures are made on the renderer). To
   write the loop from the window and renderer yourself, see the README's
   "Writing the loop yourself".
-- `Column(...)` stacks its items vertically and is as large as they are.
-  `FillX()` and `FillY()` make it fill its parent, the window.
-- Every node has a size on each axis: in pixels (`.Px(...)`), a share of its
-  parent (`.FillX()`), or the size of its content. Text is sized by its words.
+- `runtime.Column()` stacks its items vertically and is as large as they are.
+  `.Sized(Size.Fill, Size.Fill)` makes it fill its parent, the window, on both
+  axes. What is built between `BeginParent(page)` and `EndParent(page)` is
+  linked under it.
+- Every node has a size on each axis: in pixels (`Size.Px(n)`), a share of its
+  parent (`Size.Fill`, `Size.Pct(f)`), or the size of its content
+  (`Size.Fit`). Text is sized by its words.
 - Text is a plain `string`, or any `ReadOnlySpan<char>`.
 - Every frame starts cleared to the theme's background colour, so the root
   needs no background of its own. Colours are theme tokens such as
@@ -97,7 +100,6 @@ Add `Stepper.cs`, a number with a minus and a plus button:
 ```csharp
 using Bibui.Core;
 using Bibui.Core.Runtime;
-using static Bibui.Core.Arrange;
 
 /// <summary>What a stepper built this frame: its node, and the value after any press.</summary>
 public readonly record struct StepperWidget(Box Node, int Value);
@@ -109,36 +111,46 @@ public static class Stepper
 
     public static StepperWidget Build(BibuiRuntime runtime, string id, int value)
     {
-        var down = runtime.Button(id + "-down", Minus);
-        var up = runtime.Button(id + "-up", Plus);
-        if (down.Clicked) value--;
-        if (up.Clicked) value++;
+        var row = runtime.BeginParent(runtime.Row().Sized(y: Size.Px(40f)));
+        runtime.BeginCenterAcross();
+        if (runtime.Button(id + "-down", Minus).Clicked) value--;
+        runtime.EndCenterAcross();
+        runtime.Gap(12f);
 
         Span<char> digits = stackalloc char[11];
         value.TryFormat(digits, out int length);
-        var text = runtime.TextFromId(id + "-value", digits[..length], ComponentSize.Lg);
-        Box row = Row(CentredY(down), Space(12f), CentredY(text), Space(12f), CentredY(up));
-        return new(row.Px(height: 40f), value);
+        runtime.BeginCenterAcross();
+        runtime.TextFromId(id + "-value", digits[..length], ComponentSize.Lg);
+        runtime.EndCenterAcross();
+        runtime.Gap(12f);
+        runtime.BeginCenterAcross();
+        if (runtime.Button(id + "-up", Plus).Clicked) value++;
+        runtime.EndCenterAcross();
+        runtime.EndParent(row);
+        return new(row, value);
     }
 }
 ```
 
-Two things to notice:
+Three things to notice:
 
 - Button labels are plain strings; a `const` costs nothing per frame. The
   value is formatted into a stack buffer rather than a new string each frame:
   the text copies it, so the buffer can go when the call returns.
-- The row is given a height (`Px(height: 40f)`) because its items are centred
-  in it. Centring fills the parent's height, so that height cannot come from
-  the same items. A fill inside a parent sized by its children is the usual
-  cause of a `LayoutException`.
+- Each button is built where it goes, and asked as it is built. The value
+  between them shows a press on `-` in the same frame; a press on `+` is
+  answered after the value was built, so the value shows it on the next frame,
+  which every pointer event asks for.
+- The row is given a height (`.Sized(y: Size.Px(40f))`) because its items are
+  centred across it. `BeginCenterAcross` makes a cell as tall as the row, so
+  that height cannot come from the same items. A fill inside a parent sized by
+  its children is the usual cause of a `LayoutException`.
 
 The app's state is the app's own fields; bibui never holds it. Add `App.cs`:
 
 ```csharp
 using Bibui.Core;
 using Bibui.Core.Runtime;
-using static Bibui.Core.Arrange;
 
 public sealed class App
 {
@@ -150,24 +162,25 @@ public sealed class App
     /// <summary>One frame, built between the runtime's BeginBuild and EndBuild.</summary>
     public void Build(BibuiRuntime runtime)
     {
-        // Ask first: the reset box, then the stepper, which shows the value after both.
+        var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+        page.Style.Padding = EdgeInsets.All(24f);
+
+        Count = Stepper.Build(runtime, "count", Count).Value;
+        runtime.Gap(16f);
+
+        // A button of the app's own: a box that claims left presses, asked, then described.
         Box reset = runtime.BoxFromId("reset", InteractionKinds.LeftPress);
         Interaction press = runtime.InteractionsFor(reset);
         if (press.Clicked) Count = 0;
-
-        var stepper = Stepper.Build(runtime, "count", Count);
-        Count = stepper.Value;
-
-        // Then describe.
-        reset.Px(120f, 36f);
+        reset.Sized(Size.Px(120f), Size.Px(36f));
         reset.Style.CornerRadius = 8f;
         reset.Style.Padding = EdgeInsets.All(8f);
         reset.Style.BackgroundColor = press.Hovering ? UiColor.Accent : UiColor.SurfaceRaised;
-        using (runtime.PushParent(reset))
-            runtime.Text(ResetLabel, textColor: press.Hovering ? TextColor.AccentForeground : TextColor.Primary);
+        runtime.BeginParent(reset);
+        runtime.Text(ResetLabel, textColor: press.Hovering ? TextColor.AccentForeground : TextColor.Primary);
+        runtime.EndParent(reset);
 
-        UiNode.PushIntoParent(runtime.ParentInScope,
-            Column(stepper.Node, Space(16f), reset).FillX().FillY().Padded(EdgeInsets.All(24f)));
+        runtime.EndParent(page);
     }
 }
 ```

@@ -73,7 +73,7 @@ internal static unsafe class ScaleTests
         t.Run("scale: ResizeSurface at 1.25 keeps an odd logical size, and the frame is the buffer's size", () =>
         {
             var runtime = BibuiRuntime.Create();
-            runtime.SetBuild(() => Bibui.Core.Arrange.FillY(Bibui.Core.Arrange.FillX(runtime.Box())),
+            runtime.SetBuild(() => runtime.Box().Sized(Bibui.Core.Size.Fill, Bibui.Core.Size.Fill),
                 new Bibui.Core.SurfaceOptions { Width = 100, Height = 100, ScaleFactor = 1f });
             var (w, h) = WaylandWindow.FramebufferSize(1001, 202, 150);
             runtime.ResizeSurface(w, h, SurfaceScale.ToFactor(150));
@@ -267,12 +267,13 @@ internal static unsafe class ScaleTests
             using var skia = new SkiaCpuRenderer();
             runtime.SetBuild(() =>
             {
-                var box = Bibui.Core.Arrange.FillY(Bibui.Core.Arrange.FillX(runtime.Box())).Styled(new Bibui.Core.Style
+                var box = runtime.Box().Sized(Bibui.Core.Size.Fill, Bibui.Core.Size.Fill);
+                box.Style = new Bibui.Core.Style
                 {
                     BackgroundColor = Bibui.Core.UiColor.Accent, CornerRadius = 8f, Padding = new Bibui.Core.EdgeInsets(6f, 6f, 6f, 6f),
-                });
+                };
                 box.ChildLayoutAxis = Bibui.Core.LayoutAxis.Y;
-                using (runtime.PushParent(box))
+                using (runtime.Parent(box))
                 {
                     runtime.Text("Sharp at 1.25×");
                     runtime.Text("ÆØÅ fig. 0123");

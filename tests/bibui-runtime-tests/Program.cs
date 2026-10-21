@@ -96,7 +96,7 @@ static BibuiStr Str(string s) => BibuiStr.FromStrLit(s);
 // What a stack was: a box that fills its parent, its children floated with At.
 static Box Layer(string? id, params UiNode[] children)
 {
-    var box = new Box { Id = id, ChildLayoutAxis = LayoutAxis.Y }.FillX().FillY();
+    var box = new Box { Id = id, ChildLayoutAxis = LayoutAxis.Y }.Sized(Size.Fill, Size.Fill);
     foreach (var child in children) UiNode.PushIntoParent(box, child);
     return box;
 }
@@ -190,7 +190,7 @@ Run("Create: runtime.Button built while a column is pushed is inserted into it",
         column = runtime.Box();
         column.ChildLayoutAxis = LayoutAxis.Y;
         column.SizeX = column.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(column))
+        using (runtime.Parent(column))
         {
             runtime.Text("Clicked 0 times");
             runtime.Button(id: "add", "Add one");
@@ -203,23 +203,23 @@ Run("Create: runtime.Button built while a column is pushed is inserted into it",
     IsTrue(ReferenceEquals(column!.LastChild, button), "after the text, in the order built");
 });
 
-Run("runtime.ColumnFit: a box linked where it is made, and built into once pushed", () =>
+Run("runtime.Column: a box linked where it is made, and built into once begun", () =>
 {
     var runtime = BibuiRuntime.Create();
     Box? column = null, row = null, unpushed = null;
     runtime.SetBuild(() =>
     {
-        column = runtime.ColumnFit();
-        using (runtime.PushParent(column))
+        column = runtime.Column();
+        using (runtime.Parent(column))
         {
             runtime.Text("Clicked 0 times");
-            row = runtime.RowFit();
-            using (runtime.PushParent(row))
+            row = runtime.Row();
+            using (runtime.Parent(row))
             {
                 runtime.Button(id: "a", "A");
                 runtime.Button(id: "b", "B");
             }
-            unpushed = runtime.RowFit();          // made, never pushed: what follows is not in it
+            unpushed = runtime.Row();          // made, never pushed: what follows is not in it
             runtime.Button(id: "add", "Add one");
         }
         return column;
@@ -234,21 +234,21 @@ Run("runtime.ColumnFit: a box linked where it is made, and built into once pushe
     IsTrue(ReferenceEquals(unpushed!.Parent, column) && unpushed.FirstChild is null,
         "a row that is never pushed is in the column, and empty");
     IsTrue(ReferenceEquals(column.LastChild, runtime.FindById("add")), "after the row's scope, building goes back into the column");
-    Eq(SemanticSize.ChildrenSum(), column.SizeX, "ColumnFit: as wide as its children");
-    Eq(SemanticSize.ChildrenSum(), column.SizeY, "ColumnFit: as tall as its children");
+    Eq(SemanticSize.ChildrenSum(), column.SizeX, "Column(): as wide as its children");
+    Eq(SemanticSize.ChildrenSum(), column.SizeY, "Column(): as tall as its children");
     IsTrue(column.Extent.Y > row.Extent.Y, "laid out: the column holds the text, the row and a button");
 });
 
-Run("runtime.Column: sized only by what is pushed, so with nothing pushed layout refuses it", () =>
+Run("runtime.Column: sized by what is pushed, and with nothing pushed by its children", () =>
 {
     var runtime = BibuiRuntime.Create();
     Box? pushed = null;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
-        using (runtime.PushSizeX(SemanticSize.Pixels(120f)))
-        using (runtime.PushSizeY(SemanticSize.Pixels(30f)))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
+        using (runtime.SizeX(SemanticSize.Pixels(120f)))
+        using (runtime.SizeY(SemanticSize.Pixels(30f)))
             pushed = runtime.Column();
         return page;
     }, new SurfaceOptions { Width = 400, Height = 200 });
@@ -257,72 +257,75 @@ Run("runtime.Column: sized only by what is pushed, so with nothing pushed layout
     Eq(30f, pushed.Extent.Y, "the pushed height");
 
     var bare = BibuiRuntime.Create();
+    Box? fit = null;
     bare.SetBuild(() =>
     {
-        var page = bare.ColumnFill();
-        using (bare.PushParent(page))
-        using (bare.PushParent(bare.Column()))
-            bare.Text("unsized");
+        var page = bare.BeginParent(bare.Column().Sized(Size.Fill, Size.Fill));
+        fit = bare.BeginParent(bare.Column());
+        bare.BoxFromId("in").Sized(Size.Px(70f), Size.Px(15f));
+        bare.EndParent(fit);
+        bare.EndParent(page);
         return page;
     }, new SurfaceOptions { Width = 400, Height = 200 });
-    Throws<LayoutException>(() => bare.Step(), "a Column() with nothing pushed has no size");
+    bare.Step();
+    Eq((70f, 15f), (fit!.Extent.X, fit.Extent.Y), "a Column() with nothing pushed is as large as its children");
 });
 
-Run("runtime.ColumnFillX & co: each sized form sets the axes it names, and fits the rest", () =>
+Run("runtime.Row / Column + Sized: the axes given are set, the rest fit", () =>
 {
     var runtime = BibuiRuntime.Create();
     var boxes = new Dictionary<string, Box>();
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
             void Add(string name, Box box)
             {
                 boxes[name] = box;
-                using (runtime.PushParent(box)) runtime.BoxFromId("in-" + name).Px(50f, 10f);
+                using (runtime.Parent(box)) runtime.BoxFromId("in-" + name).Sized(Size.Px(50f), Size.Px(10f));
             }
-            Add("ColumnFit", runtime.ColumnFit());
-            Add("ColumnFillX", runtime.ColumnFillX());
-            Add("ColumnWidth", runtime.ColumnWidth(80f));
-            Add("ColumnPx", runtime.ColumnPx(70f, 15f));
-            Add("RowFit", runtime.RowFit());
-            Add("RowFillX", runtime.RowFillX());
-            Add("RowFillXHeight", runtime.RowFillX(12f));
-            Add("RowHeight", runtime.RowHeight(14f));
-            Add("RowPx", runtime.RowPx(60f, 11f));
+            Add("ColumnFit", runtime.Column());
+            Add("ColumnFillX", runtime.Column().Sized(Size.Fill));
+            Add("ColumnWidth", runtime.Column().Sized(Size.Px(80f)));
+            Add("ColumnPx", runtime.Column().Sized(Size.Px(70f), Size.Px(15f)));
+            Add("RowFit", runtime.Row());
+            Add("RowFillX", runtime.Row().Sized(Size.Fill));
+            Add("RowFillXHeight", runtime.Row().Sized(Size.Fill, Size.Px(12f)));
+            Add("RowHeight", runtime.Row().Sized(y: Size.Px(14f)));
+            Add("RowPx", runtime.Row().Sized(Size.Px(60f), Size.Px(11f)));
         }
         return page;
     }, new SurfaceOptions { Width = 400, Height = 300 });
     runtime.Step();
-    (float, float) Size(string n) => (boxes[n].Extent.X, boxes[n].Extent.Y);
-    Eq((50f, 10f), Size("ColumnFit"), "ColumnFit");
-    Eq((400f, 10f), Size("ColumnFillX"), "ColumnFillX");
-    Eq((80f, 10f), Size("ColumnWidth"), "ColumnWidth");
-    Eq((70f, 15f), Size("ColumnPx"), "ColumnPx");
-    Eq((50f, 10f), Size("RowFit"), "RowFit");
-    Eq((400f, 10f), Size("RowFillX"), "RowFillX");
-    Eq((400f, 12f), Size("RowFillXHeight"), "RowFillX(height)");
-    Eq((50f, 14f), Size("RowHeight"), "RowHeight");
-    Eq((60f, 11f), Size("RowPx"), "RowPx");
+    (float, float) ExtentOf(string n) => (boxes[n].Extent.X, boxes[n].Extent.Y);
+    Eq((50f, 10f), ExtentOf("ColumnFit"), "ColumnFit");
+    Eq((400f, 10f), ExtentOf("ColumnFillX"), "ColumnFillX");
+    Eq((80f, 10f), ExtentOf("ColumnWidth"), "ColumnWidth");
+    Eq((70f, 15f), ExtentOf("ColumnPx"), "ColumnPx");
+    Eq((50f, 10f), ExtentOf("RowFit"), "RowFit");
+    Eq((400f, 10f), ExtentOf("RowFillX"), "RowFillX");
+    Eq((400f, 12f), ExtentOf("RowFillXHeight"), "Row().Sized(Size.Fill, Size.Px(height))");
+    Eq((50f, 14f), ExtentOf("RowHeight"), "RowHeight");
+    Eq((60f, 11f), ExtentOf("RowPx"), "RowPx");
     Eq(LayoutAxis.Y, boxes["ColumnFillX"].ChildLayoutAxis, "a column lays out along Y");
     Eq(LayoutAxis.X, boxes["RowFillX"].ChildLayoutAxis, "a row lays out along X");
 });
 
-Run("runtime.ColumnFillY & co: the fills along Y, in a row with room to fill", () =>
+Run("runtime.Row / Column + Sized: fills along Y, in a row with room to fill", () =>
 {
     var runtime = BibuiRuntime.Create();
     var boxes = new Dictionary<string, Box>();
     runtime.SetBuild(() =>
     {
-        var page = runtime.RowFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Row().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
-            boxes["ColumnFillY"] = runtime.ColumnFillY();
-            using (runtime.PushParent(boxes["ColumnFillY"])) runtime.BoxFromId("a").Px(50f, 10f);
-            boxes["RowFillY"] = runtime.RowFillY();
-            using (runtime.PushParent(boxes["RowFillY"])) runtime.BoxFromId("b").Px(30f, 10f);
-            boxes["ColumnFill"] = runtime.ColumnFill();
+            boxes["ColumnFillY"] = runtime.Column().Sized(y: Size.Fill);
+            using (runtime.Parent(boxes["ColumnFillY"])) runtime.BoxFromId("a").Sized(Size.Px(50f), Size.Px(10f));
+            boxes["RowFillY"] = runtime.Row().Sized(y: Size.Fill);
+            using (runtime.Parent(boxes["RowFillY"])) runtime.BoxFromId("b").Sized(Size.Px(30f), Size.Px(10f));
+            boxes["ColumnFill"] = runtime.Column().Sized(Size.Fill, Size.Fill);
         }
         return page;
     }, new SurfaceOptions { Width = 400, Height = 300 });
@@ -333,33 +336,32 @@ Run("runtime.ColumnFillY & co: the fills along Y, in a row with room to fill", (
     Eq(320f, boxes["ColumnFill"].Extent.X, "and the room the row's other children leave");
 });
 
-Run("runtime.Centred / Spring: the contents land in the middle, between two springs", () =>
+Run("runtime.Center / Spacer(Fill): the contents land in the middle, between two springs", () =>
 {
     var runtime = BibuiRuntime.Create();
     Box? across = null, row = null;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
-            // What Arrange.CentredX was: a full-width row, centred in.
-            across = runtime.RowFillX();
-            using (runtime.PushParent(across))
-            using (runtime.Centred())
-                runtime.BoxFromId("mid-x").Px(100f, 20f);
+            across = runtime.Row().Sized(Size.Fill);
+            using (runtime.Parent(across))
+            using (runtime.Center())
+                runtime.BoxFromId("mid-x").Sized(Size.Px(100f), Size.Px(20f));
 
-            row = runtime.RowFillX();
-            using (runtime.PushParent(row))
+            row = runtime.Row().Sized(Size.Fill);
+            using (runtime.Parent(row))
             {
-                runtime.Box().Px(40f, 10f);
-                using (runtime.Centred()) runtime.BoxFromId("mid-row").Px(40f, 10f);
+                runtime.Box().Sized(Size.Px(40f), Size.Px(10f));
+                using (runtime.Center()) runtime.BoxFromId("mid-row").Sized(Size.Px(40f), Size.Px(10f));
             }
 
-            using (runtime.PushParent(runtime.RowFillX()))
+            using (runtime.Parent(runtime.Row().Sized(Size.Fill)))
             {
-                runtime.Box().Px(30f, 10f);
-                runtime.Spring();
-                runtime.BoxFromId("far-end").Px(30f, 10f);
+                runtime.Box().Sized(Size.Px(30f), Size.Px(10f));
+                runtime.Spacer(Size.Fill);
+                runtime.BoxFromId("far-end").Sized(Size.Px(30f), Size.Px(10f));
             }
         }
         return page;
@@ -370,9 +372,129 @@ Run("runtime.Centred / Spring: the contents land in the middle, between two spri
     Eq(150f, runtime.FindById("mid-x")!.Rect.X, "a 100 px box centred in 400 px");
     Eq(3, CountChildren(across), "spring, contents, spring");
     float midRow = runtime.FindById("mid-row")!.Rect.X;
-    IsTrue(MathF.Abs(midRow - 200f) < 0.01f, $"Centred() centres in the room the row's other children leave (got {midRow})");
+    IsTrue(MathF.Abs(midRow - 200f) < 0.01f, $"Center centres in the room the row's other children leave (got {midRow})");
     IsTrue(ReferenceEquals(runtime.FindById("mid-row")!.Parent, row), "the contents stay the row's children, in no box of their own");
     Eq(370f, runtime.FindById("far-end")!.Rect.X, "a spring pushes what follows it to the far end");
+});
+
+Run("runtime.CenterAcross: centred across a row of known height, in a cell as wide as its content", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    Box? row = null, cell = null;
+    runtime.SetBuild(() =>
+    {
+        var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+        row = runtime.BeginParent(runtime.Row().Sized(Size.Fill, Size.Px(40f)));
+        runtime.BoxFromId("tall").Sized(Size.Px(40f), Size.Px(40f));
+        cell = runtime.BeginCenterAcross();
+        runtime.BoxFromId("dot").Sized(Size.Px(16f), Size.Px(16f));
+        runtime.EndCenterAcross();
+        runtime.BoxFromId("after").Sized(Size.Px(10f), Size.Px(10f));
+        runtime.EndParent(row);
+        runtime.EndParent(page);
+        return page;
+    }, new SurfaceOptions { Width = 400, Height = 200 });
+    runtime.Step();
+    var dot = runtime.FindById("dot")!;
+    Eq((40f, 12f), (dot.Rect.X, dot.Rect.Y), "beside the tall box, 12 px down a 40 px row");
+    Eq(56f, runtime.FindById("after")!.Rect.X, "the cell is as wide as the dot, so what follows comes right after it");
+    Eq(3, CountChildren(row!), "the tall box, the cell, and what follows");
+    IsTrue(ReferenceEquals(dot.Parent, cell), "the cell it hands back holds what is centred");
+    Eq((16f, 40f), (cell!.Extent.X, cell.Extent.Y), "as wide as its content, as tall as the row");
+});
+
+Run("runtime.CenterX / CenterY: along or across, by the parent's axis", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    runtime.SetBuild(() =>
+    {
+        var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+        var box = runtime.BeginParent(runtime.Row().Sized(Size.Px(100f), Size.Px(60f)));
+        runtime.BeginCenterX();
+        runtime.BeginCenterY();
+        runtime.BoxFromId("both").Sized(Size.Px(20f), Size.Px(10f));
+        runtime.EndCenterY();
+        runtime.EndCenterX();
+        runtime.EndParent(box);
+        // Both ways, the one along the parent first: in a column, Y.
+        var column = runtime.BeginParent(runtime.Column().Sized(Size.Px(100f), Size.Px(60f)));
+        using (runtime.CenterY())
+        using (runtime.CenterX())
+            runtime.BoxFromId("both-in-column").Sized(Size.Px(20f), Size.Px(10f));
+        runtime.EndParent(column);
+        runtime.EndParent(page);
+        return page;
+    }, new SurfaceOptions { Width = 400, Height = 200 });
+    runtime.Step();
+    static bool Near(System.Numerics.Vector2 at, float x, float y) => MathF.Abs(at.X - x) < 0.01f && MathF.Abs(at.Y - y) < 0.01f;
+    var both = runtime.FindById("both")!.Rect;
+    IsTrue(Near(both, 40f, 25f), $"centred both ways in a row (got {both})");
+    var inColumn = runtime.FindById("both-in-column")!.Rect;
+    IsTrue(Near(inColumn, 40f, 85f), $"and in a column under it (got {inColumn})");
+});
+
+Run("runtime.Text weight: one text's weight, over the face in scope", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    Text? bold = null, plain = null, light = null;
+    runtime.SetBuild(() =>
+    {
+        var page = runtime.BeginParent(runtime.Column());
+        bold = runtime.Text("bold", weight: FontWeight.Bold);
+        plain = runtime.Text("plain");
+        runtime.BeginFontFace(weight: FontWeight.Bold);
+        light = runtime.TextFromId("light", "light", weight: FontWeight.Regular);
+        runtime.EndFontFace();
+        runtime.EndParent(page);
+        return page;
+    }, new SurfaceOptions { Width = 200, Height = 100 });
+    runtime.Step();
+    Eq(FontWeight.Bold, bold!.Weight, "weight: Bold");
+    Eq(FontWeight.Regular, plain!.Weight, "no weight: the one in scope");
+    Eq(FontWeight.Regular, light!.Weight, "a text's own weight wins over the face begun");
+});
+
+Run("runtime.Em: times the font size in scope", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    SemanticSize md = default, sm = default;
+    runtime.SetBuild(() =>
+    {
+        md = runtime.Em(2f);
+        runtime.BeginFontSize(ComponentSize.Sm);
+        sm = runtime.Em(2f);
+        runtime.EndFontSize();
+        return runtime.Column();
+    }, new SurfaceOptions { Width = 100, Height = 100 });
+    runtime.Step();
+    Eq(SizeKind.Pixels, md.Kind, "an em is pixels");
+    IsTrue(md.Value > sm.Value && sm.Value > 0f, $"2 em at Md ({md.Value}) is more than at Sm ({sm.Value})");
+});
+
+Run("Begin / End: an End with no Begin, or the wrong one, says so", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    var other = new Box();
+    runtime.BeginBuild([]);
+    Throws<InvalidOperationException>(() => runtime.EndAxis(), "EndAxis without a BeginAxis");
+    Throws<InvalidOperationException>(() => runtime.EndCenter(), "EndCenter without a BeginCenter");
+    var row = runtime.BeginParent(runtime.Row());
+    Throws<InvalidOperationException>(() => runtime.EndParent(other), "EndParent of a box that is not the innermost");
+    runtime.BeginCenter();
+    Throws<InvalidOperationException>(() => runtime.EndCenterAcross(), "EndCenterAcross of a BeginCenter");
+});
+
+Run("Begin without End: the build that returns with one open is an error", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    runtime.SetBuild(() =>
+    {
+        var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+        runtime.BeginCenter();
+        runtime.EndParent(page);
+        return page;
+    }, new SurfaceOptions { Width = 100, Height = 100 });
+    Throws<InvalidOperationException>(() => runtime.Step(), "a BeginCenter with no End");
 });
 
 static int CountChildren(UiNode node)
@@ -390,7 +512,7 @@ Run("Create: runtime.Button is a button the caller asks about", () =>
     {
         var add = runtime.Button(id: "add", "Add one");
         if (add.Clicked) clicks++;
-        return Layer(null, add.Node).Px(400f, 200f);
+        return Layer(null, add.Node).Sized(Size.Px(400f), Size.Px(200f));
     }, new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = 20f, Y = 20f });
@@ -408,7 +530,7 @@ Run("Counter: initial render shows 0", () =>
     var runtime = BibuiRuntime.Create();
     int count = 0;
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnFit(), () =>
+        () => runtime.Into(runtime.Column(), () =>
         {
             runtime.TextFromId("label", $"{count}");
             Btn(runtime, "inc", "+1", () => count++);
@@ -424,7 +546,7 @@ Run("Counter: click increments", () =>
     var runtime = BibuiRuntime.Create();
     int count = 0;
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnFit(), () =>
+        () => runtime.Into(runtime.Column(), () =>
         {
             runtime.TextFromId("label", $"{count}");
             Btn(runtime, "inc", "+1", () => count++);
@@ -443,7 +565,7 @@ Run("Counter: disabled button does not increment", () =>
     var runtime = BibuiRuntime.Create();
     int count = 0;
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnFit(), () =>
+        () => runtime.Into(runtime.Column(), () =>
         {
             runtime.TextFromId("label", $"{count}");
             Btn(runtime, "inc", "+1", () => count++, disabled: true);
@@ -494,7 +616,7 @@ Run("Screenshot returns non-empty PNG bytes", () =>
 Run("GetBounds returns non-zero bounds for a rendered button", () =>
 {
     var runtime = BibuiRuntime.Create();
-    runtime.SetBuild(() => Btn(runtime, "btn", "Test").Px(120f, 40f), new SurfaceOptions { Width = 200, Height = 80 });
+    runtime.SetBuild(() => Btn(runtime, "btn", "Test").Sized(Size.Px(120f), Size.Px(40f)), new SurfaceOptions { Width = 200, Height = 80 });
     using var page = BibuiPage.From(runtime, runtime.BuildTree);
 
     var bounds = page.GetBounds("btn");
@@ -523,7 +645,7 @@ Run("Animate: travels to a moved target, then settles and stops asking", () =>
         {
             Id = "anim",
             Draw = (_, ctx) => observed = ctx.Animate(key, target, Ease.Rate(12f, ctx.Dt), epsilon: 0.01f),
-        }.Px(100f, 100f),
+        }.Sized(Size.Px(100f), Size.Px(100f)),
         surface: new SurfaceOptions { Width = 100, Height = 100 });
 
     // A value asked for the first time arrives at its target, so a frame that
@@ -609,9 +731,9 @@ Run("Shares split a row's free space proportionally (4:1 → 80/20)", () =>
     using var page = BibuiPage.Launch(
         runtime =>
         {
-            var row = runtime.RowFill();
-            UiNode.PushIntoParent(row, new Box { Id = "wide",   Style = new Style { BackgroundColor = UiColor.SurfaceRaised } }.FillX(4f).FillY());
-            UiNode.PushIntoParent(row, new Box { Id = "narrow", Style = new Style { BackgroundColor = UiColor.SurfaceRaised } }.FillX(1f).FillY());
+            var row = runtime.Row().Sized(Size.Fill, Size.Fill);
+            UiNode.PushIntoParent(row, new Box { Id = "wide",   Style = new Style { BackgroundColor = UiColor.SurfaceRaised } }.Sized(Size.Pct(4f), Size.Fill));
+            UiNode.PushIntoParent(row, new Box { Id = "narrow", Style = new Style { BackgroundColor = UiColor.SurfaceRaised } }.Sized(Size.Fill, Size.Fill));
         },
         surface: new SurfaceOptions { Width = 500, Height = 100 });
 
@@ -626,10 +748,10 @@ Run("Shares split the space remaining after fixed-size siblings (3:1)", () =>
     using var page = BibuiPage.Launch(
         runtime =>
         {
-            var row = runtime.RowFill();
-            UiNode.PushIntoParent(row, new Box { Id = "fixed", Style = new Style { BackgroundColor = UiColor.SurfaceRaised } }.Px(width: 100f).FillY());
-            UiNode.PushIntoParent(row, new Box { Id = "big",   Style = new Style { BackgroundColor = UiColor.SurfaceRaised } }.FillX(3f).FillY());
-            UiNode.PushIntoParent(row, new Box { Id = "small", Style = new Style { BackgroundColor = UiColor.SurfaceRaised } }.FillX(1f).FillY());
+            var row = runtime.Row().Sized(Size.Fill, Size.Fill);
+            UiNode.PushIntoParent(row, new Box { Id = "fixed", Style = new Style { BackgroundColor = UiColor.SurfaceRaised } }.Sized(Size.Px(100f), Size.Fill));
+            UiNode.PushIntoParent(row, new Box { Id = "big",   Style = new Style { BackgroundColor = UiColor.SurfaceRaised } }.Sized(Size.Pct(3f), Size.Fill));
+            UiNode.PushIntoParent(row, new Box { Id = "small", Style = new Style { BackgroundColor = UiColor.SurfaceRaised } }.Sized(Size.Fill, Size.Fill));
         },
         surface: new SurfaceOptions { Width = 500, Height = 100 });
 
@@ -741,21 +863,21 @@ const float FormWidth   = 900f;
 const float FormHeight  = 700f;
 const float ExpectedInputWidth = FormWidth - 2f * FormPadding; // 836
 
-UiNode FormPage(BibuiRuntime runtime) => runtime.Into(runtime.ColumnFill().Padded(EdgeInsets.All(FormPadding)), () =>
+UiNode FormPage(BibuiRuntime runtime) => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill).Padded(EdgeInsets.All(FormPadding)), () =>
 {
-    using (runtime.PushParent(runtime.ColumnFillX()))
+    using (runtime.Parent(runtime.Column().Sized(Size.Fill)))
     {
-        using (runtime.PushFontFace(weight: FontWeight.Bold))
+        using (runtime.FontFace(weight: FontWeight.Bold))
             runtime.Text("Full Name".ToArray(), ComponentSize.Sm);
         runtime.Gap(8);
         // An input's place: what these tests ask is where the column puts
         // a full-width child, not anything an input does.
-        UiNode.PushIntoParent(runtime.ParentInScope, new Box { Id = "name", Style = new Style { BackgroundColor = UiColor.Surface } }.Px(height: 40f).FillX());
+        UiNode.PushIntoParent(runtime.ParentInScope, new Box { Id = "name", Style = new Style { BackgroundColor = UiColor.Surface } }.Sized(y: Size.Px(40f)).Sized(Size.Fill));
     }
     runtime.Gap(24);
-    runtime.Spring();
+    runtime.Spacer(Size.Fill);
     runtime.Gap(24);
-    Btn(runtime, "next", "Next →", () => { }).FillX();
+    Btn(runtime, "next", "Next →", () => { }).Sized(Size.Fill);
 });
 
 Run("HitTest A: input bounds fill column width", () =>
@@ -776,7 +898,7 @@ Run("HitTest A: input bounds fill column width", () =>
 Run("HitTest C: layout is in logical pixels, not physical", () =>
 {
     var runtime = BibuiRuntime.Create();
-    runtime.SetBuild(() => runtime.ColumnFill(),
+    runtime.SetBuild(() => runtime.Column().Sized(Size.Fill, Size.Fill),
         surface: new SurfaceOptions { Width = (int)FormWidth, Height = (int)FormHeight, ScaleFactor = 2f });
     runtime.Step();
 
@@ -831,11 +953,11 @@ Run("HitTest D: Next button fills column width", () =>
     {
         var frame = runtime.BoxFromId("frame");
         frame.ChildLayoutAxis = LayoutAxis.Y;
-        frame.Px(240f, 40f);
-        using (runtime.PushParent(frame))
+        frame.Sized(Size.Px(240f), Size.Px(40f));
+        using (runtime.Parent(frame))
         {
             var field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
-            using (runtime.PushParent(field)) runtime.TextField("txt", text, edit, focused: true);
+            using (runtime.Parent(field)) runtime.TextField("txt", text, edit, focused: true);
         }
         return frame;
     }, new SurfaceOptions { Width = 300, Height = 60 });
@@ -965,7 +1087,7 @@ Run("InteractiveBox: Box that claims nothing stays as Box kind", () =>
         build: () => new Box
         {
             Id = "plain-box",
-        }.Px(80f, 40f),
+        }.Sized(Size.Px(80f), Size.Px(40f)),
         surface: new SurfaceOptions { Width = 200, Height = 100 });
 
     var node = page.FindById("plain-box");
@@ -983,7 +1105,7 @@ Run("Text: keeps single-line metrics when natural width fits the parent", () =>
     // so it must render single-line just like before.
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
-        build: () => runtime.Into(runtime.RowFit(), () => runtime.TextFromId("inline", "Inline label".ToArray())),
+        build: () => runtime.Into(runtime.Row(), () => runtime.TextFromId("inline", "Inline label".ToArray())),
         surface: new SurfaceOptions { Width = 800, Height = 200 });
     using var page = BibuiPage.From(runtime, runtime.BuildTree);
 
@@ -1008,12 +1130,12 @@ Run("Clip: an oversized child is clipped", () =>
     // over whatever sits beside it.
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnFit(), () =>
+        () => runtime.Into(runtime.Column(), () =>
         {
             // A row of fixed-width children, so the content is wider than the box.
-            var card = runtime.RowPx(100f, 60f).Clipped();
-            UiNode.PushIntoParent(card, new Box { Style = new Style { BackgroundColor = "#FF0000" } }.Px(125f, 40f));
-            UiNode.PushIntoParent(card, new Box { Style = new Style { BackgroundColor = "#FF0000" } }.Px(125f, 40f));
+            var card = runtime.Row().Sized(Size.Px(100f), Size.Px(60f)).Clipped();
+            UiNode.PushIntoParent(card, new Box { Style = new Style { BackgroundColor = "#FF0000" } }.Sized(Size.Px(125f), Size.Px(40f)));
+            UiNode.PushIntoParent(card, new Box { Style = new Style { BackgroundColor = "#FF0000" } }.Sized(Size.Px(125f), Size.Px(40f)));
         }),
         surface: new SurfaceOptions { Width = 300, Height = 200, ScaleFactor = 1f });
 
@@ -1046,19 +1168,19 @@ Run("Row: a weighted child is measured at its share, not at the whole row", () =
 
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnFit(), () =>
+        () => runtime.Into(runtime.Column(), () =>
         {
-            using (runtime.PushParent(runtime.ColumnWidth(600f)))
-            using (runtime.PushParent(runtime.RowFillX()))
+            using (runtime.Parent(runtime.Column().Sized(Size.Px(600f))))
+            using (runtime.Parent(runtime.Row().Sized(Size.Fill)))
             {
-                var left = runtime.BoxFromId("left-column").FillX(1f);
+                var left = runtime.BoxFromId("left-column").Sized(Size.Fill);
                 (left.ChildLayoutAxis, left.SizeY) = (LayoutAxis.Y, SemanticSize.ChildrenSum());
-                using (runtime.PushParent(left))
+                using (runtime.Parent(left))
                 {
-                    runtime.Text(paragraph).FillX();
-                    runtime.Text(paragraph).FillX();
+                    runtime.Text(paragraph).Sized(Size.Fill);
+                    runtime.Text(paragraph).Sized(Size.Fill);
                 }
-                runtime.Box().FillX(1f).Px(height: 20f);
+                runtime.Box().Sized(Size.Fill, Size.Px(20f));
             }
         }),
         surface: new SurfaceOptions { Width = 700, Height = 400 });
@@ -1084,12 +1206,12 @@ Run("Row: a spring in a row sized by its content is an unsolvable ring", () =>
     Throws<LayoutException>(() => BibuiPage.Launch(
         runtime =>
         {
-            using (runtime.PushParent(runtime.ColumnFit()))
-            using (runtime.PushParent(runtime.RowFit()))
+            using (runtime.Parent(runtime.Column()))
+            using (runtime.Parent(runtime.Row()))
             {
-                runtime.Spring();
-                runtime.Box().Px(12f, 12f);
-                runtime.Spring();
+                runtime.Spacer(Size.Fill);
+                runtime.Box().Sized(Size.Px(12f), Size.Px(12f));
+                runtime.Spacer(Size.Fill);
             }
         },
         surface: new SurfaceOptions { Width = 900, Height = 80 }).Dispose());
@@ -1104,12 +1226,9 @@ Run("Row: a built component goes into the argument list as it is, without .Node"
     {
         BibuiWidget built = runtime.Button("ok", ok);
         SliderWidget volume = runtime.Slider("volume", 50f);
-        volume.Node.Px(width: 80f);   // a slider is otherwise as wide as its parent
+        volume.Node.Sized(Size.Px(80f));   // a slider is otherwise as wide as its parent
         (button, slider) = (built.Node, volume.Node);
-        // What is tested is Arrange.Row's own argument list, obsolete or not.
-#pragma warning disable CS0618
-        return Arrange.Row("row", built, Arrange.Space(8f), volume);
-#pragma warning restore CS0618
+        return TestNodes.Group(LayoutAxis.X, "row", built, (float)(8f), volume);
     }, new SurfaceOptions { Width = 400, Height = 80 });
     runtime.Step();
 
@@ -1128,9 +1247,9 @@ Run("Window background: the theme's Background, with no style on the root", () =
     const string hello = "Hello";
 
     var bare = BibuiRuntime.Create();
-    bare.SetBuild(() => bare.Into(bare.ColumnFill().Padded(EdgeInsets.All(12f)), () => bare.Text(hello)), theme, surface);
+    bare.SetBuild(() => bare.Into(bare.Column().Sized(Size.Fill, Size.Fill).Padded(EdgeInsets.All(12f)), () => bare.Text(hello)), theme, surface);
     var styled = BibuiRuntime.Create();
-    styled.SetBuild(() => styled.Into(styled.ColumnFill()
+    styled.SetBuild(() => styled.Into(styled.Column().Sized(Size.Fill, Size.Fill)
         .Styled(new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(12f) }), () => styled.Text(hello)), theme, surface);
 
     var a = bare.Frame();
@@ -1155,12 +1274,12 @@ Run("Clip: a clipping box paints nothing outside itself", () =>
     // box being named.
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
-        build: () => runtime.Into(runtime.RowPx(220f, 60f).Styled(new Style { BackgroundColor = "#000000" }), () =>
+        build: () => runtime.Into(runtime.Row().Sized(Size.Px(220f), Size.Px(60f)).Styled(new Style { BackgroundColor = "#000000" }), () =>
         {
             // Texts laid out at their natural widths in a box narrower
             // than they are: they walk straight out of it unless it clips.
             // That is the shape the artifact table had.
-            using (runtime.PushParent(runtime.RowPx(40f, 30f).Clipped()))
+            using (runtime.Parent(runtime.Row().Sized(Size.Px(40f), Size.Px(30f)).Clipped()))
             {
                 runtime.Text("good_skin".ToArray(), ComponentSize.Md);
                 runtime.Gap(6f);
@@ -1173,7 +1292,7 @@ Run("Clip: a clipping box paints nothing outside itself", () =>
                     // whatever escaped and the test would pass either way.
                     Id = "neighbour",
                     Style = new Style { BorderWidth = 0f },
-                }.Px(160f, 30f));
+                }.Sized(Size.Px(160f), Size.Px(30f)));
         }),
         surface: new SurfaceOptions { Width = 240, Height = 80 });
     using var page = BibuiPage.From(runtime, runtime.BuildTree);
@@ -1201,11 +1320,11 @@ Run("Text: a label that fits measures its own width", () =>
     // it swallowed every weighted sibling's share.
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
-        build: () => runtime.Into(runtime.RowFit().Px(width: 400f), () =>
+        build: () => runtime.Into(runtime.Row().Sized(Size.Px(400f)), () =>
         {
-            var flexible = runtime.BoxFromId("flexible").FillX();
+            var flexible = runtime.BoxFromId("flexible").Sized(Size.Fill);
             flexible.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.PushParent(flexible))
+            using (runtime.Parent(flexible))
                 runtime.TextFromId("name", "good_skin".ToArray());
             runtime.Gap(8f);
             runtime.TextFromId("hash", "194450e3".ToArray(), ComponentSize.Sm);
@@ -1228,9 +1347,9 @@ Run("Clip: a floating child is cut to the box that clips, like any other", () =>
     // not be what decides the clip: the claim decides it alone.
     using var page = BibuiPage.Launch(() =>
     {
-        var clipper = new Box { Style = new Style { BackgroundColor = "#000000" } }.Clipped().Px(100, 100);
-        UiNode.PushIntoParent(clipper, new Box { Style = new Style { BackgroundColor = "#FF0000" } }.Px(60, 60).At(80, 80));
-        var root = new Box { Style = new Style { BackgroundColor = "#FFFFFF" } }.Px(200, 200);
+        var clipper = new Box { Style = new Style { BackgroundColor = "#000000" } }.Clipped().Sized(Size.Px(100), Size.Px(100));
+        UiNode.PushIntoParent(clipper, new Box { Style = new Style { BackgroundColor = "#FF0000" } }.Sized(Size.Px(60), Size.Px(60)).At(80, 80));
+        var root = new Box { Style = new Style { BackgroundColor = "#FFFFFF" } }.Sized(Size.Px(200), Size.Px(200));
         UiNode.PushIntoParent(root, clipper);
         return root;
     }, new SurfaceOptions { Width = 200, Height = 200, ScaleFactor = 1f });
@@ -1243,9 +1362,9 @@ Run("Clip: a box that does not claim it lets its children run past", () =>
 {
     using var page = BibuiPage.Launch(() =>
     {
-        var open = new Box { Style = new Style { BackgroundColor = "#000000" } }.Px(100, 100);
-        UiNode.PushIntoParent(open, new Box { Style = new Style { BackgroundColor = "#FF0000" } }.Px(60, 60).At(80, 80));
-        var root = new Box { Style = new Style { BackgroundColor = "#FFFFFF" } }.Px(200, 200);
+        var open = new Box { Style = new Style { BackgroundColor = "#000000" } }.Sized(Size.Px(100), Size.Px(100));
+        UiNode.PushIntoParent(open, new Box { Style = new Style { BackgroundColor = "#FF0000" } }.Sized(Size.Px(60), Size.Px(60)).At(80, 80));
+        var root = new Box { Style = new Style { BackgroundColor = "#FFFFFF" } }.Sized(Size.Px(200), Size.Px(200));
         UiNode.PushIntoParent(root, open);
         return root;
     }, new SurfaceOptions { Width = 200, Height = 200, ScaleFactor = 1f });
@@ -1287,7 +1406,7 @@ Run("ThemeRegistry: every listed name loads and mounts by name", () =>
         runtime.Step();
         Eq(ThemeLoader.Load(name).Name, runtime.Theme.Name, $"a runtime set to \"{name}\" uses that theme");
 
-        using var page = BibuiPage.Launch(() => new Box().FillX().FillY(), surface, name);
+        using var page = BibuiPage.Launch(() => new Box().Sized(Size.Fill, Size.Fill), surface, name);
     }
 });
 
@@ -1310,7 +1429,7 @@ Run("ThemeRegistry: a theme registered outside bibui mounts by name", () =>
     Eq("#123456", runtime.Theme.Colors.Accent);
 
     Eq(name, ThemeLoader.Load(name).Name, "ThemeLoader.Load resolves it too");
-    using var page = BibuiPage.Launch(() => new Box().FillX().FillY(), new SurfaceOptions { Width = 120, Height = 40 }, name);
+    using var page = BibuiPage.Launch(() => new Box().Sized(Size.Fill, Size.Fill), new SurfaceOptions { Width = 120, Height = 40 }, name);
     IsTrue(made >= 3, "the factory runs on every load");
     IsFalse(ReferenceEquals(ThemeLoader.Load(name), ThemeLoader.Load(name)), "each load is a fresh theme");
 });
@@ -1589,7 +1708,7 @@ Run("Theme.FromSeed: changing only the accent seed restyles accent components, a
             Box root = runtime.Box();
             root.ChildLayoutAxis = LayoutAxis.Y;
             root.SizeX = root.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.PushParent(root))
+            using (runtime.Parent(root))
             {
                 runtime.Switch("sw", on: true, label: "Airplane mode");
                 runtime.Checkbox("cb", on: true, label: "Subscribe");
@@ -1877,20 +1996,20 @@ Run("Select: an item of a select nested deep, its list past every container, is 
     var state = new SelectState();
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
-            runtime.Box().FillX().Px(height: 400f);
+            runtime.Box().Sized(Size.Fill, Size.Px(400f));
             var row = runtime.Box();
             row.ChildLayoutAxis = LayoutAxis.X;
-            row.FillX().Px(height: 60f);
-            using (runtime.PushParent(row))
+            row.Sized(Size.Fill, Size.Px(60f));
+            using (runtime.Parent(row))
             {
-                runtime.Box().FillX().FillY();
+                runtime.Box().Sized(Size.Fill, Size.Fill);
                 var column = runtime.Box();
                 column.ChildLayoutAxis = LayoutAxis.Y;
-                column.Px(300f, 60f);
-                using (runtime.PushParent(column)) BuildSelect(runtime, state, "sel");
+                column.Sized(Size.Px(300f), Size.Px(60f));
+                using (runtime.Parent(column)) BuildSelect(runtime, state, "sel");
             }
         }
         return page;
@@ -1911,15 +2030,15 @@ Run("Select: its open list takes the press over a button built after it", () =>
     int buttonClicks = 0;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
             var header = runtime.Box();
             header.ChildLayoutAxis = LayoutAxis.X;
-            header.FillX().Px(height: 48f);
-            using (runtime.PushParent(header)) BuildSelect(runtime, state, "sel");
+            header.Sized(Size.Fill, Size.Px(48f));
+            using (runtime.Parent(header)) BuildSelect(runtime, state, "sel");
             var content = runtime.Button("content-btn", "Content Button");
-            content.Node.FillX().FillY();
+            content.Node.Sized(Size.Fill, Size.Fill);
             if (content.Clicked) buttonClicks++;
         }
         return page;
@@ -1938,8 +2057,8 @@ Run("Select: in a dialog, a row is picked by a press and a release in frames of 
     var state = new SelectState();
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
             var dialog = Bibui.Core.Runtime.Dialog.Begin(runtime, "sheet", shown: 1f, DialogSide.Right, width: 320f);
             BuildSelect(runtime, state, "sel");
@@ -1981,8 +2100,8 @@ Run("runtime.RadioGroup: a click on an option's label picks it", () =>
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(300f, 200f);
-            using (runtime.PushParent(column))
+            var column = runtime.Column().Sized(Size.Px(300f), Size.Px(200f));
+            using (runtime.Parent(column))
                 if (runtime.RadioGroup("rg", items, value).Picked is { } picked) value = picked;
             return column;
         },
@@ -2002,8 +2121,8 @@ Run("runtime.RadioGroup: a disabled option swallows the click", () =>
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(300f, 200f);
-            using (runtime.PushParent(column))
+            var column = runtime.Column().Sized(Size.Px(300f), Size.Px(200f));
+            using (runtime.Parent(column))
                 if (runtime.RadioGroup("rg", items, value).Picked is { } picked) value = picked;
             return column;
         },
@@ -2021,8 +2140,8 @@ Run("runtime.Toggle: a click is reported and the caller flips its state", () =>
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(300f, 100f);
-            using (runtime.PushParent(column))
+            var column = runtime.Column().Sized(Size.Px(300f), Size.Px(100f));
+            using (runtime.Parent(column))
                 if (runtime.Toggle("tog", on, "Star", icon: "star").Clicked) on = !on;
             return column;
         },
@@ -2043,8 +2162,8 @@ Run("runtime.Toggle: disabled, a click is not reported", () =>
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(300f, 100f);
-            using (runtime.PushParent(column))
+            var column = runtime.Column().Sized(Size.Px(300f), Size.Px(100f));
+            using (runtime.Parent(column))
                 clicked |= runtime.Toggle("tog", false, "Off", disabled: true).Clicked;
             return column;
         },
@@ -2063,7 +2182,7 @@ Run("Style.Shadow: paints a shadow behind the fill", () =>
     {
         var runtime = BibuiRuntime.Create();
         runtime.SetBuild(
-            () => Layer(null, new Box { Style = new Style { BackgroundColor = "#222228", CornerRadius = 12, Shadow = shadow } }.Px(120, 80).At(40, 40)),
+            () => Layer(null, new Box { Style = new Style { BackgroundColor = "#222228", CornerRadius = 12, Shadow = shadow } }.Sized(Size.Px(120), Size.Px(80)).At(40, 40)),
             new SurfaceOptions { Width = 300, Height = 200, ScaleFactor = 1f });
         return runtime.Frame();
     }
@@ -2075,7 +2194,7 @@ Run("Style.BackgroundGradient: gradient fill renders and child still lays out", 
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnPx(200, 120)
+        () => runtime.Into(runtime.Column().Sized(Size.Px(200), Size.Px(120))
             .Styled(new Style { CornerRadius = 16, BackgroundGradient = Gradient.Diagonal(new ColorStop(0f, "#2A1B2E"), new ColorStop(1f, "#E8836B")) }),
             () => runtime.TextFromId("grad-child", "On top".ToArray())),
         new SurfaceOptions { Width = 300, Height = 200, ScaleFactor = 1f });
@@ -2090,7 +2209,7 @@ Run("Gradient.Radial: brightest at its centre, where a linear one runs corner to
     Pixels Frame(Gradient gradient)
     {
         var runtime = BibuiRuntime.Create();
-        runtime.SetBuild(() => new Box { Style = new Style { BackgroundGradient = gradient } }.Px(300, 200),
+        runtime.SetBuild(() => new Box { Style = new Style { BackgroundGradient = gradient } }.Sized(Size.Px(300), Size.Px(200)),
             new SurfaceOptions { Width = 300, Height = 200, ScaleFactor = 1f });
         return runtime.Frame();
     }
@@ -2103,7 +2222,7 @@ Run("Gradient.Radial: brightest at its centre, where a linear one runs corner to
 Run("Style.Opacity: fades the subtree over what is behind it", () =>
 {
     UiNode Tree(BibuiRuntime runtime, float opacity) => runtime.Into(
-        runtime.ColumnPx(120, 80).Styled(new Style { Opacity = opacity, BackgroundColor = "#E8836B", CornerRadius = 12 }),
+        runtime.Column().Sized(Size.Px(120), Size.Px(80)).Styled(new Style { Opacity = opacity, BackgroundColor = "#E8836B", CornerRadius = 12 }),
         () => runtime.TextFromId("fade-child", "x".ToArray()));
     var opaqueRuntime = BibuiRuntime.Create();
     opaqueRuntime.SetBuild(() => Tree(opaqueRuntime, 1.0f), new SurfaceOptions { Width = 300, Height = 200, ScaleFactor = 1f });
@@ -2120,7 +2239,7 @@ Run("Style.Opacity: fades the subtree over what is behind it", () =>
 Run("Style.BorderLeft: a left-only nav active-indicator bar draws one edge, not a uniform border", () =>
 {
     var runtime = BibuiRuntime.Create();
-    runtime.SetBuild(() => new Box { Style = new Style { BorderLeft = new EdgeBorder(2f, "#FF9345") } }.Px(300, 200),
+    runtime.SetBuild(() => new Box { Style = new Style { BorderLeft = new EdgeBorder(2f, "#FF9345") } }.Sized(Size.Px(300), Size.Px(200)),
         new SurfaceOptions { Width = 300, Height = 200, ScaleFactor = 1f });
     var frame = runtime.Frame();
     var background = Rgb(UiColor.Hex(runtime.Theme.Colors.Background), runtime.Theme);
@@ -2133,7 +2252,7 @@ Run("Style.BorderLeft: a left-only nav active-indicator bar draws one edge, not 
 Run("Style.BorderBottom: a dashed edge is broken into dashes", () =>
 {
     var runtime = BibuiRuntime.Create();
-    runtime.SetBuild(() => new Box { Style = new Style { BorderBottom = new EdgeBorder(1f, "#71717A", BorderLineStyle.Dashed) } }.Px(300, 200),
+    runtime.SetBuild(() => new Box { Style = new Style { BorderBottom = new EdgeBorder(1f, "#71717A", BorderLineStyle.Dashed) } }.Sized(Size.Px(300), Size.Px(200)),
         new SurfaceOptions { Width = 300, Height = 200, ScaleFactor = 1f });
     var frame = runtime.Frame();
     var background = Rgb(UiColor.Hex(runtime.Theme.Colors.Background), runtime.Theme);
@@ -2144,7 +2263,7 @@ Run("Style.BorderBottom: a dashed edge is broken into dashes", () =>
 Run("Style.BackdropBlur: a glass chip still paints its own fill on top of the blurred region", () =>
 {
     using var page = BibuiPage.Launch(
-        () => Layer(null, new Box { Style = new Style { BackgroundGradient = Gradient.Diagonal(new ColorStop(0f, "#2A1B2E"), new ColorStop(1f, "#E8836B")) } }.Px(300, 200), new Box
+        () => Layer(null, new Box { Style = new Style { BackgroundGradient = Gradient.Diagonal(new ColorStop(0f, "#2A1B2E"), new ColorStop(1f, "#E8836B")) } }.Sized(Size.Px(300), Size.Px(200)), new Box
                 {
                     Id = "chip",
                     Style = new Style
@@ -2153,7 +2272,7 @@ Run("Style.BackdropBlur: a glass chip still paints its own fill on top of the bl
                         BackgroundColor = "#15151599",
                         CornerRadius = 6,
                     },
-                }.Px(80, 24).At(12, 12)).Px(300, 200),
+                }.Sized(Size.Px(80), Size.Px(24)).At(12, 12)).Sized(Size.Px(300), Size.Px(200)),
         new SurfaceOptions { Width = 300, Height = 200, ScaleFactor = 1f });
     IsTrue(page.IsVisible("chip"), "the glass chip itself should still render");
     using var shot = SkiaSharp.SKBitmap.Decode(page.Screenshot());
@@ -2167,7 +2286,7 @@ Run("Launch(ThemeTokens): custom accent reaches an accent fill (no reflection)",
 {
     var theme = new ThemeTokens { Name = "warm", Colors = new ColorTokens { Accent = "#E8836B", AccentForeground = "#1A1110" } };
     using var page = BibuiPage.Launch(
-        () => new Box { Id = "primary", Style = new Style { BackgroundColor = UiColor.Accent } }.Px(80f, 36f),
+        () => new Box { Id = "primary", Style = new Style { BackgroundColor = UiColor.Accent } }.Sized(Size.Px(80f), Size.Px(36f)),
         theme,
         new SurfaceOptions { Width = 300, Height = 120, ScaleFactor = 1f });
     using var shot = SkiaSharp.SKBitmap.Decode(page.Screenshot());
@@ -2178,8 +2297,8 @@ Run("Launch(ThemeTokens): custom accent reaches an accent fill (no reflection)",
 Run("Icon: standalone leaf node sizes itself to Size and resolves Color", () =>
 {
     using var page = BibuiPage.Launch(
-        runtime => UiNode.PushIntoParent(runtime.RowFit(),
-            new Icon { Id = "glyph", Name = "search", Size = FontSize.Px(24f), Color = "#FF9345" }.Px(24f, 24f)),
+        runtime => UiNode.PushIntoParent(runtime.Row(),
+            new Icon { Id = "glyph", Name = "search", Size = FontSize.Px(24f), Color = "#FF9345" }.Sized(Size.Px(24f), Size.Px(24f))),
         new SurfaceOptions { Width = 300, Height = 200, ScaleFactor = 1f });
     var frame = page.GetBounds("glyph");
     IsTrue(Math.Abs(frame.Width - 24f) < 0.5f, $"expected width≈24, got {frame.Width}");
@@ -2192,7 +2311,7 @@ Run("Icon: null Color falls back to the theme's TextPrimary", () =>
 {
     var theme = new ThemeTokens { Name = "t", Colors = new ColorTokens { TextPrimary = "#ABCDEF" } };
     using var page = BibuiPage.Launch(
-        () => new Icon { Id = "glyph", Name = "play" }.Px(24f, 24f),
+        () => new Icon { Id = "glyph", Name = "play" }.Sized(Size.Px(24f), Size.Px(24f)),
         theme,
         new SurfaceOptions { Width = 300, Height = 200, ScaleFactor = 1f });
     using var shot = SkiaSharp.SKBitmap.Decode(page.Screenshot());
@@ -2208,9 +2327,9 @@ Run("Text: a text drawn at its measured width stays on one line", () =>
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnFit(), () =>
+        () => runtime.Into(runtime.Column(), () =>
         {
-            using (runtime.PushFontFace(weight: FontWeight.Bold))
+            using (runtime.FontFace(weight: FontWeight.Bold))
                 runtime.TextFromId("title", "UTC anchored".ToArray(), ComponentSize.Xl);
             runtime.TextFromId("below", "under it".ToArray());
         }),
@@ -2240,10 +2359,10 @@ Run("Text: a label handed back its own measured width, less a padding, is drawn 
     foreach (var pad in new[] { 9f, 0.1f, 3.3f, 7.3f, 10.9f, 12.35f })
     {
         var runtime = BibuiRuntime.Create();
-        runtime.SetBuild(() => runtime.Into(runtime.ColumnFit(), () =>
+        runtime.SetBuild(() => runtime.Into(runtime.Column(), () =>
         {
             foreach (var label in labels)
-                using (runtime.PushParent(runtime.ColumnFit().Px(height: 20f)
+                using (runtime.Parent(runtime.Column().Sized(y: Size.Px(20f))
                     .Padded(EdgeInsets.Symmetric(horizontal: pad, vertical: 0f))))
                     runtime.Text(label, ComponentSize.Sm);
         }), new SurfaceOptions { Width = 400, Height = 1300, ScaleFactor = scale });
@@ -2265,17 +2384,17 @@ Run("Box: a fixed Width box holds a multi-line field wrapped at that width, not 
     const string words = "The parcel left the depot this morning and should reach the north office before noon";
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
-        () => runtime.Into(runtime.RowFit(), () =>
+        () => runtime.Into(runtime.Row(), () =>
         {
-            runtime.Spring();
+            runtime.Spacer(Size.Fill);
             var bubble = runtime.BoxFromId("bubble");
             bubble.ChildLayoutAxis = LayoutAxis.Y;
             bubble.SizeX = SemanticSize.Pixels(240f);
             bubble.SizeY = SemanticSize.ChildrenSum();
             bubble.Style.Padding = new EdgeInsets(10f, 14f, 10f, 14f);
-            using (runtime.PushParent(bubble))
-            using (runtime.PushParent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
-            using (runtime.PushSizeY(SemanticSize.ChildrenSum()))
+            using (runtime.Parent(bubble))
+            using (runtime.Parent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
+            using (runtime.SizeY(SemanticSize.ChildrenSum()))
                 runtime.MultilineTextField("words", Str(words), new TextEditState(), focused: false, events: 0);
         }),
         new SurfaceOptions { Width = 1000, Height = 300, ScaleFactor = 1f });
@@ -2298,10 +2417,10 @@ Run("runtime.MultilineTextField: wrapped by characters, a token longer than the 
     var path = "/home/ada/projects/examples/ledger-view/bin/Release/net10.0/ledger-view.dll".ToArray();
     TextWrap wrap = TextWrap.Words;
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnFit(), () =>
+        () => runtime.Into(runtime.Column(), () =>
         {
-            using (runtime.PushParent(runtime.ColumnWidth(160f)))
-            using (runtime.PushSizeY(SemanticSize.ChildrenSum()))
+            using (runtime.Parent(runtime.Column().Sized(Size.Px(160f))))
+            using (runtime.SizeY(SemanticSize.ChildrenSum()))
                 runtime.MultilineTextField("log", BibuiStr.FromStrLit(path), new TextEditState(),
                     focused: false, events: 0, wrap: wrap);
         }),
@@ -2328,16 +2447,16 @@ Run("runtime.MultilineTextField: a hard line break is laid out as a line, not on
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnFit(), () =>
+        () => runtime.Into(runtime.Column(), () =>
         {
             var draft = runtime.BoxFromId("draft");
             draft.ChildLayoutAxis = LayoutAxis.Y;
             draft.SizeX = SemanticSize.Pixels(600f);
             draft.SizeY = SemanticSize.ChildrenSum();
             draft.Style.Padding = new EdgeInsets(9f, 11f, 9f, 11f);
-            using (runtime.PushParent(draft))
-            using (runtime.PushParent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
-            using (runtime.PushSizeY(SemanticSize.ChildrenSum()))
+            using (runtime.Parent(draft))
+            using (runtime.Parent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
+            using (runtime.SizeY(SemanticSize.ChildrenSum()))
                 runtime.MultilineTextField("words",
                 BibuiStr.FromStrLit("Yes, I'll take it.\nI will send it before Friday.\r\nThanks."), new TextEditState(),
                 focused: false, events: 0);
@@ -2369,7 +2488,7 @@ Run("Text: a mono text is set and laid out in the theme's mono family", () =>
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnFit(), () =>
+        () => runtime.Into(runtime.Column(), () =>
         {
             runtime.TextFromId("body", "194450e3".ToArray());
             runtime.TextFromId("mono", "194450e3".ToArray(), family: FontSlot.Mono);
@@ -2390,7 +2509,7 @@ Run("FontSize: a text in pixels is measured and laid out at that size, between t
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnFit(), () =>
+        () => runtime.Into(runtime.Column(), () =>
         {
             runtime.TextFromId("sm", "Zoomed".ToArray(), ComponentSize.Sm);
             runtime.TextFromId("px", "Zoomed".ToArray(), FontSize.Px(21f));
@@ -2414,7 +2533,7 @@ Run("FontSize: a text's size is always said, and can be changed on the text that
         Box root = runtime.Box();
         root.ChildLayoutAxis = LayoutAxis.Y;
         root.SizeX = root.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(root))
+        using (runtime.Parent(root))
         {
             plain = runtime.TextFromId("plain", "Zoomed".ToArray());
             runtime.TextFromId("changed", "Zoomed".ToArray()).Size = FontSize.Px(26f);
@@ -2428,7 +2547,7 @@ Run("FontSize: a text's size is always said, and can be changed on the text that
         "a size set afterwards is the one laid out");
 });
 
-Run("PushFontSize: what is built in scope takes the innermost pushed size, unless it says its own", () =>
+Run("FontSize: what is built in scope takes the innermost size begun, unless it says its own", () =>
 {
     var runtime = BibuiRuntime.Create();
     Icon icon = null!;
@@ -2437,12 +2556,12 @@ Run("PushFontSize: what is built in scope takes the innermost pushed size, unles
         Box root = runtime.Box();
         root.ChildLayoutAxis = LayoutAxis.Y;
         root.SizeX = root.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(root))
+        using (runtime.Parent(root))
         {
-            using (runtime.PushFontSize(FontSize.Px(30f)))
+            using (runtime.FontSize(FontSize.Px(30f)))
             {
                 runtime.TextFromId("outer", "Zoomed".ToArray());
-                using (runtime.PushFontSize(FontSize.Px(18f)))
+                using (runtime.FontSize(FontSize.Px(18f)))
                 {
                     runtime.TextFromId("inner", "Zoomed".ToArray());
                     icon = runtime.Icon("x");
@@ -2463,18 +2582,18 @@ Run("PushFontSize: what is built in scope takes the innermost pushed size, unles
     Eq(Wide(ComponentSize.Md), page.GetBounds("after").Width, "and past the scope the default is back");
 });
 
-Run("PushFontSize: a scope left open is an error at the end of the build", () =>
+Run("BeginFontSize: a scope left open is an error at the end of the build", () =>
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() =>
     {
-        runtime.PushFontSize(FontSize.Px(20f));   // never disposed
-        return runtime.Box().Px(10f, 10f);
+        runtime.FontSize(FontSize.Px(20f));   // never disposed
+        return runtime.Box().Sized(Size.Px(10f), Size.Px(10f));
     }, new SurfaceOptions { Width = 100, Height = 100 });
     Throws<InvalidOperationException>(() => runtime.Step());
 });
 
-Run("PushFontFace: what is built in scope takes the innermost face, and an unsaid part is the outer one's", () =>
+Run("BeginFontFace: what is built in scope takes the innermost face, and an unsaid part is the outer one's", () =>
 {
     var runtime = BibuiRuntime.Create();
     var seen = new Dictionary<string, Text>();
@@ -2484,12 +2603,12 @@ Run("PushFontFace: what is built in scope takes the innermost face, and an unsai
         Box root = runtime.Box();
         root.ChildLayoutAxis = LayoutAxis.Y;
         root.SizeX = root.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(root))
+        using (runtime.Parent(root))
         {
-            using (runtime.PushFontFace(FontSlot.Mono))
+            using (runtime.FontFace(FontSlot.Mono))
             {
                 seen["mono"] = runtime.Text("a".ToArray());
-                using (runtime.PushFontFace(weight: FontWeight.Bold))
+                using (runtime.FontFace(weight: FontWeight.Bold))
                 {
                     seen["mono bold"] = runtime.Text("a".ToArray());
                     seen["own family"] = runtime.Text("a".ToArray(), family: FontSlot.Heading);
@@ -2514,13 +2633,13 @@ Run("PushFontFace: what is built in scope takes the innermost face, and an unsai
         "FontInScope measures in the face in scope");
 });
 
-Run("PushFontFace: a scope left open is an error at the end of the build", () =>
+Run("BeginFontFace: a scope left open is an error at the end of the build", () =>
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() =>
     {
-        runtime.PushFontFace(weight: FontWeight.Bold);   // never disposed
-        return runtime.Box().Px(10f, 10f);
+        runtime.FontFace(weight: FontWeight.Bold);   // never disposed
+        return runtime.Box().Sized(Size.Px(10f), Size.Px(10f));
     }, new SurfaceOptions { Width = 100, Height = 100 });
     Throws<InvalidOperationException>(() => runtime.Step());
 });
@@ -2551,7 +2670,7 @@ void StrideContract(string name, Bibui.Core.Draw.DrawToPixels draw)
 {
     const int w = 240, h = 120, stride = w * 4 + 64;
     var runtime = BibuiRuntime.Create();
-    runtime.SetBuild(() => runtime.Into(runtime.ColumnFit(), () =>
+    runtime.SetBuild(() => runtime.Into(runtime.Column(), () =>
     {
         runtime.TextFromId("title", "Straight into shared memory");
         Btn(runtime, "ok", "OK");
@@ -2722,21 +2841,21 @@ Run("DrawList: recording a frame after the first allocates nothing", () =>
     UiNode? tree = null;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFit();
-        using (runtime.PushParent(page))
+        var page = runtime.Column();
+        using (runtime.Parent(page))
         {
             runtime.Text("Recording allocates nothing");
             runtime.Icon("check", size: 18f);
             var card = runtime.Box();
-            card.Px(160f, 48f).Clipped();
+            card.Sized(Size.Px(160f), Size.Px(48f)).Clipped();
             card.Style.BackgroundColor = UiColor.SurfaceRaised;
             card.Style.BorderColor = UiColor.Border;
             card.Style.BorderWidth = 1f;
             card.Style.CornerRadius = 8f;
             card.Style.Opacity = 0.5f;
-            using (runtime.PushParent(card)) runtime.Text("inside a clipped, faded card");
+            using (runtime.Parent(card)) runtime.Text("inside a clipped, faded card");
             var drawn = runtime.Box();
-            drawn.Px(80f, 40f);
+            drawn.Sized(Size.Px(80f), Size.Px(40f));
             drawn.Draw = (_, ctx) => ctx.DrawCheckMark(0f, 0f, 20f, 20f, new Rgba(34, 197, 94), 2f);
         }
         return tree = page;
@@ -3060,8 +3179,8 @@ Run("Box.Draw: a callback draws in its box's space, clipped to the box, and its 
             ctx.PopTransform();
             ctx.PopTransform();
         },
-    }.Px(40f, 40f);
-    var after = new Box { Draw = (_, ctx) => ctx.DrawRect(ctx.Rect, 0f, Paint.Filled(green)) }.Px(40f, 40f);
+    }.Sized(Size.Px(40f), Size.Px(40f));
+    var after = new Box { Draw = (_, ctx) => ctx.DrawRect(ctx.Rect, 0f, Paint.Filled(green)) }.Sized(Size.Px(40f), Size.Px(40f));
     var root = new Box { SizeX = SemanticSize.ChildrenSum(), SizeY = SemanticSize.ChildrenSum() }.Padded(new EdgeInsets(20f, 0f, 0f, 30f));
     UiNode.PushIntoParent(root, drawn);
     UiNode.PushIntoParent(root, after);
@@ -3073,6 +3192,35 @@ Run("Box.Draw: a callback draws in its box's space, clipped to the box, and its 
     IsTrue(!Is(29, 20, red) && !Is(30, 19, red), "nothing is drawn above or left of the box");
     IsTrue(!Is(30, 60, red) && !Is(110, 40, red), "nor below or right of it: the rect is clipped to the box");
     IsTrue(Is(70, 20, green) && Is(109, 59, green), "the next box draws whole: the clip left pushed was popped, and the extra pops undid nothing of the painter's");
+});
+
+Run("Box.Draw: Unclipped lets the callback's ink reach past the box, and a clipping ancestor still cuts it", () =>
+{
+    // A 40×40 box at (30,20) inside a 100×80 clipping box at (0,0); its
+    // callback draws a rect from (-20,-10) to (120,80) in its own space.
+    var red = new Rgba(255, 0, 0);
+    Box Drawn(bool unclipped)
+    {
+        var box = new Box { Draw = (_, ctx) => ctx.DrawRect(new RectF(-20f, -10f, 120f, 80f), 0f, Paint.Filled(red)) }
+            .Sized(Size.Px(40f), Size.Px(40f));
+        if (unclipped) box.Style.Draw = DrawFlags.Unclipped;
+        return box;
+    }
+    byte[] Frame(bool unclipped)
+    {
+        var clipper = new Box { Claims = InteractionKinds.Clip }.Sized(Size.Px(100f), Size.Px(80f)).Padded(new EdgeInsets(20f, 0f, 0f, 30f));
+        UiNode.PushIntoParent(clipper, Drawn(unclipped));
+        var root = new Box { SizeX = SemanticSize.ChildrenSum(), SizeY = SemanticSize.ChildrenSum() };
+        UiNode.PushIntoParent(root, clipper);
+        return Frames.Frame(root, new SurfaceOptions { Width = 160, Height = 120, ScaleFactor = 1f }, ThemeLoader.NeutralDark()).RawBgraBytes;
+    }
+    static bool Red(byte[] px, int x, int y) { int i = (y * 160 + x) * 4; return px[i] == 0 && px[i + 1] == 0 && px[i + 2] == 255; }
+
+    var clipped = Frame(unclipped: false);
+    IsTrue(Red(clipped, 30, 20) && !Red(clipped, 20, 15) && !Red(clipped, 80, 40), "without it, cut to the box");
+    var free = Frame(unclipped: true);
+    IsTrue(Red(free, 10, 10) && Red(free, 95, 75), "with it, the ink reaches past the box, up and left and down and right");
+    IsTrue(!Red(free, 105, 40) && !Red(free, 50, 85), "but not past the ancestor that claims Clip");
 });
 
 Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and gradients", () =>
@@ -3096,7 +3244,7 @@ Run("Raster: DrawContext primitives draw with backend-neutral paints, paths and 
                 });
                 ctx.DrawPath(tri, new Paint { Stroke = Rgba.White, StrokeWidth = 2f, Dash = new Bibui.Core.Draw.DashPattern(4f, 2f) });
             },
-    }.Px(120f, 60f);
+    }.Sized(Size.Px(120f), Size.Px(60f));
     var output = Frames.Frame(root, new SurfaceOptions { Width = 120, Height = 60, ScaleFactor = 1f }, ThemeLoader.NeutralDark());
     var px = output.RawBgraBytes;
     // BGRA: left edge red-ish, right edge blue-ish, from the gradient.
@@ -3118,11 +3266,11 @@ Run("Box.Draw: a retained box draws while its build says so, and acquiring it ag
     runtime.SetBuild(() =>
     {
         var box = runtime.BoxFromId("drawn", InteractionKinds.LeftPress);
-        box.Px(60f, 60f);
+        box.Sized(Size.Px(60f), Size.Px(60f));
         if (draw) box.Draw = (_, _) => retainedCalls++;
-        using (runtime.PushParent(box))
+        using (runtime.Parent(box))
         {
-            var inner = runtime.Box().Px(20f, 20f);
+            var inner = runtime.Box().Sized(Size.Px(20f), Size.Px(20f));
             if (draw) inner.Draw = (_, _) => pooledCalls++;
             pooled = inner;
         }
@@ -3163,7 +3311,7 @@ Run("DrawContext.Resolve: follows a theme changed between the build and the pain
             faded = ctx.Resolve(UiColor.Accent.WithAlpha(0.5f));
             ctx.DrawRect(ctx.Rect, 0f, Paint.Filled(surface));
         },
-    }.Px(40f, 40f);
+    }.Sized(Size.Px(40f), Size.Px(40f));
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() => root, light, new SurfaceOptions { Width = 40, Height = 40, ScaleFactor = 1f });
     runtime.Step();                // a frame in one theme
@@ -3193,7 +3341,7 @@ Run("A box is told which gesture it was", () =>
     runtime.SetBuild(() =>
     {
         canvas = runtime.BoxFromId("canvas", InteractionKinds.All);
-        canvas.Px(100f, 100f);
+        canvas.Sized(Size.Px(100f), Size.Px(100f));
         return canvas;
     }, new SurfaceOptions { Width = 120, Height = 120, ScaleFactor = 1f });
     runtime.Step();
@@ -3221,7 +3369,7 @@ Run("A box hears the right button", () =>
     runtime.SetBuild(() =>
     {
         canvas = runtime.BoxFromId("canvas", InteractionKinds.All);
-        canvas.Px(100f, 100f);
+        canvas.Sized(Size.Px(100f), Size.Px(100f));
         return canvas;
     }, new SurfaceOptions { Width = 120, Height = 120, ScaleFactor = 1f });
     runtime.Step();
@@ -3287,7 +3435,7 @@ void WithKeyboardServer(Action<Func<object, string>, List<BibUiEvent>> body)
     {
         // Copies: an event lives until the frame ends, and the pool hands it out again.
         foreach (var ev in runtime.UnconsumedEvents) { var copy = new BibUiEvent(); copy.CopyFrom(ev); seen.Add(copy); }
-        return new Box { Id = "canvas" }.Px(100f, 100f);
+        return new Box { Id = "canvas" }.Sized(Size.Px(100f), Size.Px(100f));
     }, new SurfaceOptions { Width = 120, Height = 120, ScaleFactor = 1f });
     runtime.Step();
     seen.Clear();
@@ -3405,8 +3553,8 @@ void WithLabelServer(Action<int> body)
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() =>
     {
-        var canvas = runtime.BoxFromId("canvas", InteractionKinds.Disabled).Px(100f, 40f);
-        UiNode.PushIntoParent(canvas, runtime.Text("Tæst <&> \"q\"".ToArray()).Px(90f, 20f));
+        var canvas = runtime.BoxFromId("canvas", InteractionKinds.Disabled).Sized(Size.Px(100f), Size.Px(40f));
+        UiNode.PushIntoParent(canvas, runtime.Text("Tæst <&> \"q\"".ToArray()).Sized(Size.Px(90f), Size.Px(20f)));
         return canvas;
     }, new SurfaceOptions { Width = 120, Height = 60, ScaleFactor = 1f });
     runtime.Step();
@@ -3537,7 +3685,7 @@ Console.WriteLine("BibuiTestServer security");
 BibuiRuntime SecurityRuntime()
 {
     var runtime = BibuiRuntime.Create();
-    runtime.SetBuild(() => new Box { Id = "canvas" }.Px(40f, 40f),
+    runtime.SetBuild(() => new Box { Id = "canvas" }.Sized(Size.Px(40f), Size.Px(40f)),
         new SurfaceOptions { Width = 60, Height = 60, ScaleFactor = 1f });
     runtime.Step();
     return runtime;
@@ -3757,12 +3905,12 @@ Run("TestServer gives ffmpeg one argument per element, so a quote in a name adds
         () =>
         {
             under = runtime.BoxFromId("under", InteractionKinds.All);
-            under.Px(400f, 200f);
+            under.Sized(Size.Px(400f), Size.Px(200f));
 
             over = runtime.BoxFromId("over", InteractionKinds.All);
-            over.Px(200f, 200f).At(200f, 0f);
+            over.Sized(Size.Px(200f), Size.Px(200f)).At(200f, 0f);
 
-            return Layer(null, under, over).Px(400f, 200f);
+            return Layer(null, under, over).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();   // the scene these ask against
@@ -3823,10 +3971,10 @@ Run("InteractionsFor: a press a child took is not left for its parent", () =>
         () =>
         {
             outer = runtime.BoxFromId("outer", InteractionKinds.LeftPress);
-            outer.Px(400f, 200f);
+            outer.Sized(Size.Px(400f), Size.Px(200f));
 
             inner = runtime.BoxFromId("inner", InteractionKinds.LeftPress);
-            inner.Px(100f, 50f);
+            inner.Sized(Size.Px(100f), Size.Px(50f));
 
             UiNode.PushIntoParent(outer, inner);
             return outer;
@@ -3893,13 +4041,13 @@ Run("Separator.Build: one pixel thick, as long as its parent", () =>
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(300f, 100f);
-            using (runtime.PushParent(column))
+            var column = runtime.Column().Sized(Size.Px(300f), Size.Px(100f));
+            using (runtime.Parent(column))
             {
                 across = Bibui.Core.Runtime.Separator.Build(runtime);
                 var row = runtime.Box();
-                row.Px(300f, 40f);
-                using (runtime.PushParent(row))
+                row.Sized(Size.Px(300f), Size.Px(40f));
+                using (runtime.Parent(row))
                     down = Bibui.Core.Runtime.Separator.Build(runtime, vertical: true);
             }
             return column;
@@ -3919,9 +4067,9 @@ Run("Progress.Build: the fill is the given share of the track", () =>
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(400f, 100f);
-            using (runtime.PushParent(column))
-                bar = Bibui.Core.Runtime.Progress.Build(runtime, 65f, 100f).Px(width: 400f);
+            var column = runtime.Column().Sized(Size.Px(400f), Size.Px(100f));
+            using (runtime.Parent(column))
+                bar = Bibui.Core.Runtime.Progress.Build(runtime, 65f, 100f).Sized(Size.Px(400f));
             return column;
         },
         new SurfaceOptions { Width = 400, Height = 100 });
@@ -3944,9 +4092,9 @@ Run("Progress.Build: a label above, and nothing filled at zero or past the end c
     runtime.SetBuild(
         () =>
         {
-            var page = runtime.ColumnPx(400f, 100f);
-            using (runtime.PushParent(page))
-                column = Bibui.Core.Runtime.Progress.Build(runtime, 0f, 100f, "Upload").Px(width: 300f);
+            var page = runtime.Column().Sized(Size.Px(400f), Size.Px(100f));
+            using (runtime.Parent(page))
+                column = Bibui.Core.Runtime.Progress.Build(runtime, 0f, 100f, "Upload").Sized(Size.Px(300f));
             return page;
         },
         new SurfaceOptions { Width = 400, Height = 100 });
@@ -3965,8 +4113,8 @@ Run("Avatar.Build: a circle of the given size with the initials centred", () =>
     runtime.SetBuild(
         () =>
         {
-            var row = runtime.RowPx(200f, 100f);
-            using (runtime.PushParent(row))
+            var row = runtime.Row().Sized(Size.Px(200f), Size.Px(100f));
+            using (runtime.Parent(row))
                 circle = Bibui.Core.Runtime.Avatar.Build(runtime, "JD", 56f);
             return row;
         },
@@ -3992,8 +4140,8 @@ Run("KeyboardShortcut.Build: a keycap per key, 24 px tall, 4 px apart", () =>
     runtime.SetBuild(
         () =>
         {
-            var page = runtime.RowPx(300f, 60f);
-            using (runtime.PushParent(page))
+            var page = runtime.Row().Sized(Size.Px(300f), Size.Px(60f));
+            using (runtime.Parent(page))
                 row = Bibui.Core.Runtime.KeyboardShortcut.Build(runtime, "Ctrl", "K");
             return page;
         },
@@ -4091,7 +4239,7 @@ Run("InteractionsFor: a node that has never been painted is not interactive", ()
     runtime.SetBuild(() =>
     {
         b = runtime.BoxFromId("b", InteractionKinds.LeftPress);
-        b.Px(100f, 100f);
+        b.Sized(Size.Px(100f), Size.Px(100f));
         return b;
     }, new SurfaceOptions { Width = 200, Height = 200 });
     runtime.ProcessEvent(
@@ -4111,8 +4259,8 @@ Run("A box that claims the wheel is handed it", () =>
         () =>
         {
             scroller = runtime.BoxFromId("scroller", InteractionKinds.ViewScroll);
-            scroller.Px(200f, 200f);
-            UiNode.PushIntoParent(scroller, Layer(null).Px(200f, 800f));
+            scroller.Sized(Size.Px(200f), Size.Px(200f));
+            UiNode.PushIntoParent(scroller, Layer(null).Sized(Size.Px(200f), Size.Px(800f)));
             return scroller;
         },
         new SurfaceOptions { Width = 200, Height = 200 });
@@ -4142,8 +4290,8 @@ Run("Claims: a box takes the wheel only along the axis it claimed", () =>
             runtime.InteractionsFor(list);
             runtime.InteractionsFor(strip);
 
-            strip.Px(200f, 200f);
-            list.Px(200f, 200f);
+            strip.Sized(Size.Px(200f), Size.Px(200f));
+            list.Sized(Size.Px(200f), Size.Px(200f));
             UiNode.PushIntoParent(strip, list);
             return strip;
         },
@@ -4180,7 +4328,7 @@ Run($"Claims: {claim} takes a wheel of ({sx}, {sy}) as {want}", () =>
         {
             strip = runtime.BoxFromId("strip", claim);
             runtime.InteractionsFor(strip);
-            strip.Px(200f, 200f);
+            strip.Sized(Size.Px(200f), Size.Px(200f));
             return strip;
         },
         new SurfaceOptions { Width = 200, Height = 200 });
@@ -4203,8 +4351,8 @@ Run("Claims: Scroll reports the wheel, takes it, and leaves the view alone", () 
             under = runtime.BoxFromId("under", InteractionKinds.ViewScroll);
             got = runtime.InteractionsFor(canvas);
             runtime.InteractionsFor(under);
-            canvas.Px(200f, 200f);
-            under.Px(200f, 200f);
+            canvas.Sized(Size.Px(200f), Size.Px(200f));
+            under.Sized(Size.Px(200f), Size.Px(200f));
             UiNode.PushIntoParent(canvas, runtime.Text("content".ToArray()));
             UiNode.PushIntoParent(under, canvas);
             return under;
@@ -4230,7 +4378,7 @@ Run("runtime.Text: linked under the parent in scope and sized by its own text", 
         {
             var row = runtime.BoxFromId("row");
             row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.PushParent(row))
+            using (runtime.Parent(row))
                 text = runtime.Text("Sync".ToArray());
             return row;
         },
@@ -4250,9 +4398,9 @@ Run("runtime.Text: a pushed size wins over its own text", () =>
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(200f, 100f);
-            using (runtime.PushParent(column))
-            using (runtime.PushSizeX(SemanticSize.ParentPct(1f)))
+            var column = runtime.Column().Sized(Size.Px(200f), Size.Px(100f));
+            using (runtime.Parent(column))
+            using (runtime.SizeX(SemanticSize.ParentPct(1f)))
                 text = runtime.Text("Sync".ToArray());
             return column;
         },
@@ -4270,11 +4418,11 @@ Run("runtime.Text: keyless texts are reused frame to frame, cleared each time", 
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(200f, 100f);
-            using (runtime.PushParent(column))
+            var column = runtime.Column().Sized(Size.Px(200f), Size.Px(100f));
+            using (runtime.Parent(column))
             {
                 if (frame == 0)
-                    using (runtime.PushFontFace(FontSlot.Mono, FontWeight.Bold))
+                    using (runtime.FontFace(FontSlot.Mono, FontWeight.Bold))
                         seen.Add(runtime.Text("a".ToArray(), ComponentSize.Lg));
                 else
                     seen.Add(runtime.Text("a".ToArray()));
@@ -4300,8 +4448,8 @@ Run("runtime.Icon and runtime.Spinner: linked, sized by their call, and reused",
     runtime.SetBuild(
         () =>
         {
-            var row = runtime.RowPx(300f, 60f);
-            using (runtime.PushParent(row))
+            var row = runtime.Row().Sized(Size.Px(300f), Size.Px(60f));
+            using (runtime.Parent(row))
             {
                 var icon = runtime.Icon("plus", size: 20f);
                 icons.Add(icon);
@@ -4325,8 +4473,8 @@ Run("Badge.Build: a pill as large as its label plus padding, linked under the pa
     runtime.SetBuild(
         () =>
         {
-            var row = runtime.RowPx(300f, 60f);
-            using (runtime.PushParent(row))
+            var row = runtime.Row().Sized(Size.Px(300f), Size.Px(60f));
+            using (runtime.Parent(row))
                 pill = Bibui.Core.Runtime.Badge.Build(runtime, "Outline", BadgeVariant.Outline);
             return row;
         },
@@ -4346,8 +4494,8 @@ Run("runtime.Checkbox: the row takes the press and reports it", () =>
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(300f, 100f);
-            using (runtime.PushParent(column))
+            var column = runtime.Column().Sized(Size.Px(300f), Size.Px(100f));
+            using (runtime.Parent(column))
                 if (runtime.Checkbox("cb", on, "Subscribe").Clicked) on = !on;
             return column;
         },
@@ -4373,8 +4521,8 @@ Run("runtime.ToggleGroup: an item's press is reported as the value picked", () =
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(300f, 100f);
-            using (runtime.PushParent(column))
+            var column = runtime.Column().Sized(Size.Px(300f), Size.Px(100f));
+            using (runtime.Parent(column))
                 if (runtime.ToggleGroup("tg", items, value).Picked is { } picked) value = picked;
             return column;
         },
@@ -4403,27 +4551,27 @@ static (BibuiRuntime Runtime, Func<(int Under, int Item)> Counts, Action<bool> S
     runtime.SetBuild(
         () =>
         {
-            var page = runtime.ColumnFill();
-            using (runtime.PushParent(page))
+            var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+            using (runtime.Parent(page))
             {
                 var below = runtime.BoxFromId("under", InteractionKinds.LeftPress);
-                below.Px(200f, 200f);
+                below.Sized(Size.Px(200f), Size.Px(200f));
                 if (runtime.InteractionsFor(below).Clicked) under++;
 
                 var row = runtime.BoxFromId("row");
                 row.SizeX = row.SizeY = SemanticSize.ChildrenSum();
-                using (runtime.PushParent(row))
+                using (runtime.Parent(row))
                 {
-                    runtime.Box().Px(10f, 10f);
+                    runtime.Box().Sized(Size.Px(10f), Size.Px(10f));
                     if (open)
                     {
                         runtime.OpenDropDown("menu");
                         var dropDown = runtime.BeginDropDown("menu")!;
-                        dropDown.Px(100f, 40f).At(50f, 50f);
-                        using (runtime.PushParent(dropDown))
+                        dropDown.Sized(Size.Px(100f), Size.Px(40f)).At(50f, 50f);
+                        using (runtime.Parent(dropDown))
                         {
                             var option = runtime.BoxFromId("item", InteractionKinds.LeftPress);
-                            option.Px(100f, 40f);
+                            option.Sized(Size.Px(100f), Size.Px(40f));
                             if (runtime.InteractionsFor(option).Clicked) item++;
                         }
                     }
@@ -4542,7 +4690,7 @@ Run("PushIntoParent: a node into itself or its own descendant throws, and the tr
     Eq("", Kids(c));
 });
 
-Run("PushIntoParent: Row(runtime.Text(...)) inside a PushParent scope moves the text into the row", () =>
+Run("PushIntoParent: Row(runtime.Text(...)) inside a BeginParent scope moves the text into the row", () =>
 {
     var runtime = BibuiRuntime.Create();
     Box card = null!, row = null!;
@@ -4550,22 +4698,19 @@ Run("PushIntoParent: Row(runtime.Text(...)) inside a PushParent scope moves the 
     runtime.SetBuild(
         () =>
         {
-            var page = runtime.ColumnFill();
-            using (runtime.PushParent(page))
+            var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+            using (runtime.Parent(page))
             {
                 card = runtime.BoxFromId("card");
                 card.ChildLayoutAxis = LayoutAxis.Y;
-                card.Px(200f, 100f);
-                using (runtime.PushParent(card))
+                card.Sized(Size.Px(200f), Size.Px(100f));
+                using (runtime.Parent(card))
                 {
                     above = runtime.Text("above");
-                    // What is tested is Arrange's expression form moving runtime nodes, obsolete or not.
-#pragma warning disable CS0618
-                    row = Arrange.Row(
+                    row = TestNodes.Group(LayoutAxis.X, 
                         title = runtime.Text("title"),
-                        Arrange.Spring(),
-                        Arrange.CentredY(runtime.Box().Px(10f, 10f))).FillX().Px(height: 24f);
-#pragma warning restore CS0618
+                        Size.Fill,
+                        TestNodes.Group(LayoutAxis.Y, Size.Fill, runtime.Box().Sized(Size.Px(10f), Size.Px(10f)), Size.Fill).Sized(y: Size.Fill)).Sized(Size.Fill, Size.Px(24f));
                     UiNode.PushIntoParent(card, row);
                     below = runtime.Text("below");
                 }
@@ -4599,25 +4744,22 @@ Run("PushIntoParent: in a dropdown, a control built in expression form asks whil
     runtime.SetBuild(
         () =>
         {
-            var page = runtime.ColumnFill();
-            using (runtime.PushParent(page))
+            var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+            using (runtime.Parent(page))
             {
                 var below = runtime.BoxFromId("under", InteractionKinds.LeftPress);
-                below.Px(300f, 300f);
+                below.Sized(Size.Px(300f), Size.Px(300f));
                 if (runtime.InteractionsFor(below).Clicked) under++;
 
                 runtime.OpenDropDown("menu");
                 menu = runtime.BeginDropDown("menu")!;
-                menu.Px(200f, 60f).At(20f, 20f);
-                using (runtime.PushParent(menu))
+                menu.Sized(Size.Px(200f), Size.Px(60f)).At(20f, 20f);
+                using (runtime.Parent(menu))
                 {
-                    // What is tested is Arrange's expression form moving runtime nodes, obsolete or not.
-#pragma warning disable CS0618
-                    row = Arrange.Row(
+                    row = TestNodes.Group(LayoutAxis.X, 
                         runtime.Text("Run it"),
-                        Arrange.Spring(),
-                        (button = runtime.Button("go", "Go"))).FillX();
-#pragma warning restore CS0618
+                        Size.Fill,
+                        (button = runtime.Button("go", "Go"))).Sized(Size.Fill);
                     UiNode.PushIntoParent(menu, row);
                     if (button.Clicked) go++;
                 }
@@ -4643,33 +4785,30 @@ Run("PushIntoParent: in a Select, rows built in expression form are picked by a 
     runtime.SetBuild(
         () =>
         {
-            var page = runtime.ColumnFill();
-            using (runtime.PushParent(page))
+            var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+            using (runtime.Parent(page))
             {
                 runtime.OpenDropDown("pick-list");
                 var select = Bibui.Core.Runtime.Select.Begin(runtime, "pick", "Pick one");
                 if (select.Open)
                 {
                     // Something in the list to push into: built under the list, the parent in scope.
-                    var holder = runtime.Box().FillX();
+                    var holder = runtime.Box().Sized(Size.Fill);
                     holder.ChildLayoutAxis = LayoutAxis.Y;
                     holder.SizeY = SemanticSize.ChildrenSum();
                     BibuiWidget a = default, b = default;
-                    // What is tested is Arrange's expression form moving runtime nodes, obsolete or not.
-#pragma warning disable CS0618
-                    UiNode.PushIntoParent(holder, Arrange.Row(
+                    UiNode.PushIntoParent(holder, TestNodes.Group(LayoutAxis.X, 
                         runtime.Text("·"),
-                        Arrange.Space(6f),
-                        Arrange.Column(
+                        (float)(6f),
+                        TestNodes.Group(LayoutAxis.Y, 
                             a = runtime.SelectItem("pick-a", "Option A"),
-                            b = runtime.SelectItem("pick-b", "Option B")).FillX()).FillX());
-#pragma warning restore CS0618
+                            b = runtime.SelectItem("pick-b", "Option B")).Sized(Size.Fill)).Sized(Size.Fill));
                     if (a.Clicked) picked = "a";
                     if (b.Clicked) picked = "b";
                 }
                 select.End();
                 var below = runtime.BoxFromId("under", InteractionKinds.LeftPress);
-                below.FillX().FillY();
+                below.Sized(Size.Fill, Size.Fill);
                 if (runtime.InteractionsFor(below).Clicked) under++;
             }
             return page;
@@ -4691,20 +4830,20 @@ Run("OpenToolTip: one tooltip a frame, last in the tree, placed by its default o
     runtime.SetBuild(
         () =>
         {
-            var page = runtime.ColumnFill();
-            using (runtime.PushParent(page))
+            var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+            using (runtime.Parent(page))
             {
                 var below = runtime.BoxFromId("under", InteractionKinds.LeftPress);
-                below.Px(200f, 200f);
+                below.Sized(Size.Px(200f), Size.Px(200f));
                 if (runtime.InteractionsFor(below).Clicked) presses++;
                 runtime.OpenDropDown("menu");
-                runtime.BeginDropDown("menu")!.Px(50f, 50f).At(150f, 150f);
+                runtime.BeginDropDown("menu")!.Sized(Size.Px(50f), Size.Px(50f)).At(150f, 150f);
 
                 first = runtime.OpenToolTip();
                 runtime.DefaultToolTipOffset(first);
-                using (runtime.PushParent(first)) runtime.Text("one".ToArray());
+                using (runtime.Parent(first)) runtime.Text("one".ToArray());
                 second = runtime.OpenToolTip();
-                using (runtime.PushParent(second)) runtime.Text("two".ToArray());
+                using (runtime.Parent(second)) runtime.Text("two".ToArray());
             }
             return tree = page;
         },
@@ -4729,8 +4868,8 @@ Run("OpenToolTip: with nothing built into it, it is not in the tree", () =>
     runtime.SetBuild(
         () =>
         {
-            var page = runtime.ColumnFill();
-            using (runtime.PushParent(page)) runtime.Box().Px(10f, 10f);
+            var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+            using (runtime.Parent(page)) runtime.Box().Sized(Size.Px(10f), Size.Px(10f));
             return tree = page;
         },
         new SurfaceOptions { Width = 100, Height = 100 });
@@ -4754,8 +4893,8 @@ Run("runtime.TextFromId: retained under its id", () =>
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(200f, 100f);
-            using (runtime.PushParent(column))
+            var column = runtime.Column().Sized(Size.Px(200f), Size.Px(100f));
+            using (runtime.Parent(column))
                 seen.Add(runtime.TextFromId("title", "Cases".ToArray()));
             return column;
         },
@@ -4773,11 +4912,11 @@ Run("Box links: with no axis pushed a box lays out along X, and scopes nest", ()
     Eq(LayoutAxis.X, outer.ChildLayoutAxis, "X when the stack is empty");
 
     Box inner, leaf, after;
-    using (runtime.PushParent(outer))
+    using (runtime.Parent(outer))
     {
-        using (runtime.PushAxis(LayoutAxis.Y))
+        using (runtime.Axis(LayoutAxis.Y))
             inner = runtime.BoxFromId("inner");
-        using (runtime.PushParent(inner))
+        using (runtime.Parent(inner))
             leaf = runtime.BoxFromId("leaf");
         after = runtime.BoxFromId("after");
     }
@@ -4796,7 +4935,7 @@ Run("Box links: a parent named when acquiring wins over the stack", () =>
     var named = runtime.BoxFromId("named");
     var pushed = runtime.BoxFromId("pushed");
     Box child;
-    using (runtime.PushParent(pushed))
+    using (runtime.Parent(pushed))
         child = runtime.BoxFromId("child", parent: named);
     IsTrue(child.Parent == named && named.FirstChild == child && pushed.FirstChild is null,
         "linked under the parent it was given");
@@ -4807,7 +4946,7 @@ Run("Box links: acquiring a box clears last frame's links", () =>
     var runtime = BibuiRuntime.Create();
     var parent = runtime.BoxFromId("parent");
     Box child;
-    using (runtime.PushParent(parent))
+    using (runtime.Parent(parent))
         child = runtime.BoxFromId("child");
     IsTrue(child.Parent == parent && parent.FirstChild == child, "linked this frame");
     runtime.BoxFromId("child");
@@ -4821,16 +4960,16 @@ Run("Box links: a scope disposed out of order throws", () =>
     var runtime = BibuiRuntime.Create();
     var a = runtime.BoxFromId("a");
     var b = runtime.BoxFromId("b");
-    var outer = runtime.PushParent(a);
-    var inner = runtime.PushParent(b);
+    var outer = runtime.Parent(a);
+    var inner = runtime.Parent(b);
     bool threw = false;
     try { outer.Dispose(); } catch (InvalidOperationException) { threw = true; }
     IsTrue(threw, "popping a parent that is not on top throws");
     inner.Dispose();
     outer.Dispose();
 
-    var x = runtime.PushAxis(LayoutAxis.X);
-    var y = runtime.PushAxis(LayoutAxis.Y);
+    var x = runtime.Axis(LayoutAxis.X);
+    var y = runtime.Axis(LayoutAxis.Y);
     threw = false;
     try { x.Dispose(); } catch (InvalidOperationException) { threw = true; }
     IsTrue(threw, "and so does popping an axis that is not on top");
@@ -4844,8 +4983,8 @@ Run("Box links: a scope left open throws when the frame ends", () =>
     runtime.SetBuild(
         () =>
         {
-            var parent = runtime.BoxFromId("parent").Px(100f, 100f);
-            runtime.PushParent(parent);   // never disposed
+            var parent = runtime.BoxFromId("parent").Sized(Size.Px(100f), Size.Px(100f));
+            runtime.Parent(parent);   // never disposed
             return parent;
         },
         new SurfaceOptions { Width = 100, Height = 100 });
@@ -4863,9 +5002,9 @@ Run($"Box links: children acquired under a parent are laid out along {axis}", ()
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnFit();
-            using (runtime.PushParent(column))
-            using (runtime.PushAxis(axis))
+            var column = runtime.Column();
+            using (runtime.Parent(column))
+            using (runtime.Axis(axis))
                 parent = runtime.BoxFromId("parent");
             a = runtime.BoxFromId("a", parent: parent);
             b = runtime.BoxFromId("b", parent: parent);
@@ -4892,10 +5031,10 @@ Run("Box links: a box acquired twice under itself does not hang", () =>
         () =>
         {
             var parent = runtime.BoxFromId("parent", InteractionKinds.LeftPress);
-            using (runtime.PushParent(parent))
+            using (runtime.Parent(parent))
                 runtime.BoxFromId("parent", InteractionKinds.LeftPress);
             runtime.InteractionsFor(parent);
-            return runtime.Into(runtime.ColumnFit(), () => runtime.Box().Px(10f, 10f));
+            return runtime.Into(runtime.Column(), () => runtime.Box().Sized(Size.Px(10f), Size.Px(10f)));
         },
         new SurfaceOptions { Width = 100, Height = 100 });
     var task = Task.Run(() => { runtime.Step(); runtime.Step(); });
@@ -4914,8 +5053,8 @@ Run("Scrollbar: the thumb follows the view, and moves it", () =>
             var panel = runtime.BoxFromId("panel");
             view = runtime.BoxFromId("view", InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, panel);
             view.ChildLayoutAxis = LayoutAxis.Y;
-            runtime.BoxFromId("content", parent: view).FillX().Px(height: 800f);
-            using (runtime.PushParent(panel))
+            runtime.BoxFromId("content", parent: view).Sized(Size.Fill, Size.Px(800f));
+            using (runtime.Parent(panel))
                 runtime.Scrollbar("bar", view);
             runtime.InteractionsFor(view);
             (view.SizeX, view.SizeY) = (SemanticSize.ParentPct(1f), SemanticSize.ParentPct(1f));
@@ -4969,22 +5108,22 @@ Run($"Claims: a child scrolled out of {(clip ? "a clipping" : "a non-clipping")}
         {
             var claims = InteractionKinds.ViewScrollY | InteractionKinds.ClampY
                 | (clip ? InteractionKinds.Clip : InteractionKinds.None);
-            var column = runtime.ColumnFit();
-            UiNode.PushIntoParent(column, new Box {  }.Px(200f, 50f));
+            var column = runtime.Column();
+            UiNode.PushIntoParent(column, new Box {  }.Sized(Size.Px(200f), Size.Px(50f)));
             Box view;
-            using (runtime.PushParent(column))
-            using (runtime.PushAxis(LayoutAxis.Y))
+            using (runtime.Parent(column))
+            using (runtime.Axis(LayoutAxis.Y))
                 view = runtime.BoxFromId("view", claims);
             BibuiWidget row;
-            using (runtime.PushParent(view))
+            using (runtime.Parent(view))
             {
                 row = runtime.Button("row", "Row");
                 if (row.Clicked) clicks++;
-                runtime.BoxFromId("filler").Px(200f, 200f);
+                runtime.BoxFromId("filler").Sized(Size.Px(200f), Size.Px(200f));
             }
             runtime.InteractionsFor(view);
 
-            row.Node.Px(height: 60f);
+            row.Node.Sized(y: Size.Px(60f));
             (view.SizeX, view.SizeY) = (SemanticSize.Pixels(200), SemanticSize.Pixels(100));
             view.AllowOverflowY = true;
             return column;
@@ -5028,9 +5167,9 @@ Run("Claims: a clamped box cannot be scrolled past its content", () =>
         {
             list = runtime.BoxFromId("list", claims);
             runtime.InteractionsFor(list);
-            list.Px(200f, 200f);
+            list.Sized(Size.Px(200f), Size.Px(200f));
             list.AllowOverflowY = true;
-            UiNode.PushIntoParent(list, Layer(null).Px(200f, 800f));
+            UiNode.PushIntoParent(list, Layer(null).Sized(Size.Px(200f), Size.Px(800f)));
             return list;
         },
         new SurfaceOptions { Width = 200, Height = 200 });
@@ -5059,12 +5198,12 @@ Run("A wheel claimant inside an overflowing ancestor still gets the wheel", () =
     var runtime = BibuiRuntime.Create();
     Box canvas = null!;
     runtime.SetBuild(
-        () => runtime.Into(runtime.ColumnPx(400f, 200f), () =>
+        () => runtime.Into(runtime.Column().Sized(Size.Px(400f), Size.Px(200f)), () =>
         {
-            using (runtime.PushParent(runtime.RowFit()))
+            using (runtime.Parent(runtime.Row()))
             {
-                canvas = runtime.BoxFromId("canvas", InteractionKinds.ViewScroll).Px(200f, 200f);
-                runtime.Box().Px(200f, 900f);
+                canvas = runtime.BoxFromId("canvas", InteractionKinds.ViewScroll).Sized(Size.Px(200f), Size.Px(200f));
+                runtime.Box().Sized(Size.Px(200f), Size.Px(900f));
             }
         }),
         new SurfaceOptions { Width = 400, Height = 200 });
@@ -5089,10 +5228,10 @@ Run("Claims: a container does not take the press its card already took", () =>
         {
             canvas = runtime.BoxFromId(
                 "canvas", InteractionKinds.LeftPress | InteractionKinds.ViewScroll);
-            canvas.Px(400f, 400f);
+            canvas.Sized(Size.Px(400f), Size.Px(400f));
 
             card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            card.Px(100f, 100f);
+            card.Sized(Size.Px(100f), Size.Px(100f));
 
             UiNode.PushIntoParent(canvas, card);
             return canvas;
@@ -5121,14 +5260,14 @@ Run("Claims: a box that takes a press is told where the pointer is; one that tak
         () =>
         {
             takesAPress = runtime.BoxFromId("takes-a-press", InteractionKinds.LeftPress);
-            takesAPress.Px(100f, 100f).At(0f, 0f);
+            takesAPress.Sized(Size.Px(100f), Size.Px(100f)).At(0f, 0f);
 
             // Takes the wheel and nothing else: scrollable, not pressable, so
             // the pointer being over it is not its business.
             wheelOnly = runtime.BoxFromId("wheel-only", InteractionKinds.ViewScroll);
-            wheelOnly.Px(100f, 100f).At(200f, 0f);
+            wheelOnly.Sized(Size.Px(100f), Size.Px(100f)).At(200f, 0f);
 
-            return Layer(null, takesAPress, wheelOnly).Px(400f, 200f);
+            return Layer(null, takesAPress, wheelOnly).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
@@ -5154,10 +5293,10 @@ Run("Claims: the wheel over a card is still the canvas's", () =>
         {
             canvas = runtime.BoxFromId(
                 "canvas", InteractionKinds.LeftPress | InteractionKinds.ViewScroll);
-            canvas.Px(400f, 400f);
+            canvas.Sized(Size.Px(400f), Size.Px(400f));
 
             card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            card.Px(100f, 100f);
+            card.Sized(Size.Px(100f), Size.Px(100f));
 
             UiNode.PushIntoParent(canvas, card);
             return canvas;
@@ -5183,8 +5322,8 @@ Run("Claims: a release off the node still ends the drag that owns it", () =>
         () =>
         {
             card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            card.Px(100f, 100f).At(0f, 0f);
-            return Layer(null, card).Px(400f, 400f);
+            card.Sized(Size.Px(100f), Size.Px(100f)).At(0f, 0f);
+            return Layer(null, card).Sized(Size.Px(400f), Size.Px(400f));
         },
         new SurfaceOptions { Width = 400, Height = 400 });
     runtime.Step();
@@ -5220,8 +5359,8 @@ Run("Claims: a drag pressed and released in one frame still says where it began"
         () =>
         {
             card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            card.Px(100f, 100f).At(0f, 0f);
-            return Layer(null, card).Px(400f, 400f);
+            card.Sized(Size.Px(100f), Size.Px(100f)).At(0f, 0f);
+            return Layer(null, card).Sized(Size.Px(400f), Size.Px(400f));
         },
         new SurfaceOptions { Width = 400, Height = 400 });
     runtime.Step();
@@ -5258,10 +5397,10 @@ Run("Claims: a drag let go over nothing in particular still reaches its owner", 
         () =>
         {
             card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            card.Px(80f, 80f).At(0f, 0f);
+            card.Sized(Size.Px(80f), Size.Px(80f)).At(0f, 0f);
             return Layer(null, card, // Bare, unnamed, and covering where the gesture ends — a
                     // backdrop, not a control, and nothing anyone could ask about.
-                    new Box {  }.Px(250f, 250f).At(100f, 100f)).Px(400f, 400f);
+                    new Box {  }.Sized(Size.Px(250f), Size.Px(250f)).At(100f, 100f)).Sized(Size.Px(400f), Size.Px(400f));
         },
         new SurfaceOptions { Width = 400, Height = 400 });
     runtime.Step();
@@ -5298,8 +5437,8 @@ Run("Claims: a box that asks rather than calls back is still clickable by name",
         {
             card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
             if (runtime.InteractionsFor(card).Clicked) clicks++;
-            card.Px(100f, 60f).At(40f, 20f);
-            return Layer(null, card).Px(400f, 400f);
+            card.Sized(Size.Px(100f), Size.Px(60f)).At(40f, 20f);
+            return Layer(null, card).Sized(Size.Px(400f), Size.Px(400f));
         },
         new SurfaceOptions { Width = 400, Height = 400 });
     runtime.Step();   // the frame that gives the box a rect to aim at
@@ -5331,10 +5470,10 @@ Run("Claims: a click by name goes to the box named, not to a child under the poi
             if (runtime.InteractionsFor(inner).Clicked) innerClicks++;
             if (runtime.InteractionsFor(card).Clicked) cardClicks++;
 
-            inner.Px(100f, 100f).At(0f, 0f);
-            card.Px(100f, 100f).At(0f, 0f);
-            UiNode.PushIntoParent(card, Layer(null, inner).FillX().FillY());
-            return Layer(null, card).Px(300f, 300f);
+            inner.Sized(Size.Px(100f), Size.Px(100f)).At(0f, 0f);
+            card.Sized(Size.Px(100f), Size.Px(100f)).At(0f, 0f);
+            UiNode.PushIntoParent(card, Layer(null, inner).Sized(Size.Fill, Size.Fill));
+            return Layer(null, card).Sized(Size.Px(300f), Size.Px(300f));
         },
         new SurfaceOptions { Width = 300, Height = 300 });
     runtime.Step();
@@ -5371,8 +5510,8 @@ Run("Claims: clicking an unknown name, or a box with no rect yet, does nothing",
         {
             card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
             if (runtime.InteractionsFor(card).Clicked) clicks++;
-            card.Px(100f, 60f);
-            return Layer(null, card).Px(400f, 400f);
+            card.Sized(Size.Px(100f), Size.Px(60f));
+            return Layer(null, card).Sized(Size.Px(400f), Size.Px(400f));
         },
         new SurfaceOptions { Width = 400, Height = 400 });
 
@@ -5417,8 +5556,8 @@ Run("runtime.Tabs: clicking a tab reports its value", () =>
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(300f, 100f);
-            using (runtime.PushParent(column))
+            var column = runtime.Column().Sized(Size.Px(300f), Size.Px(100f));
+            using (runtime.Parent(column))
                 if (runtime.Tabs("tabs", items, value).Picked is { } picked) value = picked;
             return column;
         },
@@ -5434,6 +5573,51 @@ Run("runtime.Tabs: clicking a tab reports its value", () =>
     Eq("b", value, "clicking Beta picks it");
 });
 
+Run("A transparent theme background clears the frame to transparent; the active tab and a tooltip's text still show", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    var theme = runtime.Theme with { Colors = runtime.Theme.Colors with { Background = "#00000000" } };
+    TabOption[] items = [new("Alpha", "a"), new("Beta", "b")];
+    Box? pill = null, strip = null;
+    runtime.SetBuild(
+        () =>
+        {
+            var column = runtime.Column().Sized(Size.Px(300f), Size.Px(200f));
+            using (runtime.Parent(column))
+            {
+                strip = runtime.Tabs("tabs", items, "a").Node;
+                pill = Bibui.Core.Runtime.Tooltip.Build(runtime, "A hint", strip);
+                pill.Parent!.At(100f, 120f);
+            }
+            return column;
+        },
+        theme, new SurfaceOptions { Width = 300, Height = 200 });
+    runtime.Step();
+    var frame = runtime.Frame();
+    byte Alpha(float x, float y) => frame.RawBgraBytes[((int)y * frame.Width + (int)x) * 4 + 3];
+    uint Bgra(float x, float y) => BitConverter.ToUInt32(frame.RawBgraBytes, ((int)y * frame.Width + (int)x) * 4);
+
+    Eq(default(Rgba), runtime.DrawList.Ops[0].Color, "the frame opens with a transparent clear");
+    Eq((byte)0, Alpha(290f, 190f), "where nothing is drawn, the frame is transparent");
+    var alpha = BibuiPage.From(runtime, runtime.BuildTree).GetBounds("tabs-a");
+    float tabY = alpha.Y + alpha.Height / 2f;
+    IsTrue(Bgra(alpha.X + 2f, tabY) != Bgra(strip!.Rect.X + 1f, tabY), "the active tab has a fill of its own, not the strip showing through");
+
+    // The pill's inside, clear of its rounded corners: the text is drawn in a
+    // colour of its own, not in the pill's fill.
+    int x0 = (int)pill!.Rect.X + 4, y0 = (int)pill.Rect.Y + 4, x1 = (int)(pill.Rect.X + pill.Extent.X) - 4, y1 = (int)(pill.Rect.Y + pill.Extent.Y) - 4;
+    int fill = (y0 * frame.Width + x0) * 4;
+    int text = 0;
+    for (int y = y0; y < y1; y++)
+        for (int x = x0; x < x1; x++)
+        {
+            int i = (y * frame.Width + x) * 4;
+            if (frame.RawBgraBytes[i] != frame.RawBgraBytes[fill] || frame.RawBgraBytes[i + 1] != frame.RawBgraBytes[fill + 1]
+                || frame.RawBgraBytes[i + 2] != frame.RawBgraBytes[fill + 2]) text++;
+        }
+    IsTrue(text > 0, "the tooltip's text shows on its pill");
+});
+
 Run("runtime.Expander: a click on the header reports a toggle, and the body is there only while open", () =>
 {
     var runtime = BibuiRuntime.Create();
@@ -5442,13 +5626,13 @@ Run("runtime.Expander: a click on the header reports a toggle, and the body is t
     runtime.SetBuild(
         () =>
         {
-            var column = runtime.ColumnPx(300f, 200f);
-            using (runtime.PushParent(column))
+            var column = runtime.Column().Sized(Size.Px(300f), Size.Px(200f));
+            using (runtime.Parent(column))
             {
                 var expander = runtime.Expander("coll", "Title", open);
                 hadBody = expander.Body is not null;
                 if (expander.Body is { } body)
-                    using (runtime.PushParent(body)) runtime.Text("Inside".ToArray());
+                    using (runtime.Parent(body)) runtime.Text("Inside".ToArray());
                 if (expander.Toggled) open = !open;
             }
             return column;
@@ -5510,9 +5694,9 @@ BibuiRuntime Retained(Func<bool>? wantsSecond = null)
     runtime.SetBuild(
         () =>
         {
-            var children = new List<UiNode> { runtime.BoxFromId("first").Px(10f, 10f) };
-            if (wantsSecond?.Invoke() ?? false) children.Add(runtime.BoxFromId("second").Px(10f, 10f));
-            return Layer(null, [.. children]).Px(400f, 200f);
+            var children = new List<UiNode> { runtime.BoxFromId("first").Sized(Size.Px(10f), Size.Px(10f)) };
+            if (wantsSecond?.Invoke() ?? false) children.Add(runtime.BoxFromId("second").Sized(Size.Px(10f), Size.Px(10f)));
+            return Layer(null, [.. children]).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
@@ -5580,7 +5764,7 @@ Run("ResetForBuild: a retained box is cleared before it is handed back", () =>
     var runtime = Retained();
     var box = runtime.BoxFromId("first");
     box.Claims = InteractionKinds.ViewScroll;
-    box.Px(width: 999f);
+    box.Sized(Size.Px(999f));
     UiNode.PushIntoParent(box, new Box());
 
     var again = runtime.BoxFromId("first");
@@ -5666,7 +5850,7 @@ BibuiRuntime Hoverable()
         () =>
         {
             var box = runtime.BoxFromId("handle", InteractionKinds.LeftPress);
-            box.Px(100f, 100f);
+            box.Sized(Size.Px(100f), Size.Px(100f));
 
             // Asking is what makes it hot, and it is asked by the box rather
             // than by name — holding one is proof it was described.
@@ -5675,7 +5859,7 @@ BibuiRuntime Hoverable()
             // Read after, from what the last frame's step settled on.
             box.Style.Opacity = 0.6f + 0.4f * MathF.Max(box.HotT, box.ActiveT);
 
-            return Layer(null, box).Px(400f, 200f);
+            return Layer(null, box).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
@@ -5750,7 +5934,7 @@ BibuiRuntime Animated(Func<float> target)
         () =>
         {
             runtime.Animate("thing", "x", target());
-            return Layer(null).Px(400f, 200f);
+            return Layer(null).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     return runtime;
@@ -5808,7 +5992,7 @@ Run("Animate: an infinite speed closes the whole gap in one step", () =>
         () =>
         {
             runtime.Animate("thing", "x", target, rate: 1f);
-            return Layer(null).Px(400f, 200f);
+            return Layer(null).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
@@ -5830,7 +6014,7 @@ Run("Animate: separate properties of one id are separate values", () =>
         {
             runtime.Animate("thing", "x", 1f);
             runtime.Animate("thing", "y", 0f);
-            return Layer(null).Px(400f, 200f);
+            return Layer(null).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
@@ -5850,10 +6034,10 @@ Run("Claims: a disabled box is in the way, not absent", () =>
         () =>
         {
             panel = runtime.BoxFromId("panel", InteractionKinds.LeftPress);
-            panel.Px(400f, 200f);
+            panel.Sized(Size.Px(400f), Size.Px(200f));
 
             declines = runtime.BoxFromId("declines", InteractionKinds.Disabled);
-            declines.Px(100f, 100f);
+            declines.Sized(Size.Px(100f), Size.Px(100f));
 
             UiNode.PushIntoParent(panel, declines);
             return panel;
@@ -5880,12 +6064,12 @@ Run("Claims: a disabled box does not swallow someone else's release", () =>
         () =>
         {
             handle = runtime.BoxFromId("handle", InteractionKinds.LeftPress);
-            handle.Px(100f, 100f).At(0f, 0f);
+            handle.Sized(Size.Px(100f), Size.Px(100f)).At(0f, 0f);
 
             declines = runtime.BoxFromId("declines", InteractionKinds.Disabled);
-            declines.Px(100f, 100f).At(200f, 0f);
+            declines.Sized(Size.Px(100f), Size.Px(100f)).At(200f, 0f);
 
-            return Layer(null, handle, declines).Px(400f, 200f);
+            return Layer(null, handle, declines).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
@@ -5914,10 +6098,10 @@ Run("Claims: a disabled box does not stop the wheel beneath it", () =>
         () =>
         {
             canvas = runtime.BoxFromId("canvas", InteractionKinds.ViewScroll);
-            canvas.Px(400f, 200f);
+            canvas.Sized(Size.Px(400f), Size.Px(200f));
 
             declines = runtime.BoxFromId("declines", InteractionKinds.Disabled);
-            declines.Px(100f, 100f);
+            declines.Sized(Size.Px(100f), Size.Px(100f));
 
             UiNode.PushIntoParent(canvas, declines);
             return canvas;
@@ -5937,10 +6121,10 @@ Run("Claims: a disabled box does not stop the wheel beneath it", () =>
 {
     var runtime = BibuiRuntime.Create();
     float value = start;
-    runtime.SetBuild(() => runtime.Into(runtime.ColumnFit(), () =>
+    runtime.SetBuild(() => runtime.Into(runtime.Column(), () =>
     {
         var slider = runtime.Slider("s", value, 0f, 100f, step, disabled: disabled);
-        slider.Node.Px(width: 200f);
+        slider.Node.Sized(Size.Px(200f));
         value = slider.Value;
     }), new SurfaceOptions { Width = 400, Height = 100 });
     runtime.Step();
@@ -5988,7 +6172,7 @@ Run("Switch: every size scales with the height it is given", () =>
         {
             Box root = runtime.Box();
             root.SizeX = root.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.PushParent(root))
+            using (runtime.Parent(root))
                 runtime.Switch("sw", on: true, height: twice ? 48f : 24f);
             return root;
         }, new SurfaceOptions { Width = 200, Height = 100, ScaleFactor = 1f });
@@ -6016,7 +6200,7 @@ Run("Switch: a disabled switch does not flip when it is clicked", () =>
         // Wrapped: the root node is laid out at the full surface whatever its
         // own size says, so a bare switch mounted as the root would report the
         // whole window as its bounds.
-        return Layer(null, sw.Node).Px(200f, 80f);
+        return Layer(null, sw.Node).Sized(Size.Px(200f), Size.Px(80f));
     }, new SurfaceOptions { Width = 200, Height = 80 });
     runtime.Step();
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = 22f, Y = 12f });
@@ -6037,14 +6221,14 @@ Run("Claims: saying nothing takes nothing, and Disabled says it out loud", () =>
             // asks to be interacted with, not a filter on a default of
             // everything.
             silent = runtime.BoxFromId("silent");
-            silent.Px(100f, 100f).At(0f, 0f);
+            silent.Sized(Size.Px(100f), Size.Px(100f)).At(0f, 0f);
 
             // Declines out loud, which is a different thing to say and the one
             // a control uses when it must be there and take nothing.
             declines = runtime.BoxFromId("declines", InteractionKinds.Disabled);
-            declines.Px(100f, 100f).At(200f, 0f);
+            declines.Sized(Size.Px(100f), Size.Px(100f)).At(200f, 0f);
 
-            return Layer(null, silent, declines).Px(400f, 200f);
+            return Layer(null, silent, declines).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
@@ -6075,8 +6259,8 @@ Run("Claims: saying nothing takes nothing, and Disabled says it out loud", () =>
         () =>
         {
             b = runtime.BoxFromId("btn", InteractionKinds.LeftPress);
-            b.Px(100f, 100f);
-            return Layer(null, b).Px(400f, 200f);
+            b.Sized(Size.Px(100f), Size.Px(100f));
+            return Layer(null, b).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
@@ -6158,12 +6342,12 @@ Run("Clicked: pressed on it, wandered off and back, released on it, is a click",
         () =>
         {
             card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            card.Px(100f, 100f);
+            card.Sized(Size.Px(100f), Size.Px(100f));
             card.Style.Draw = draw;
             card.Style.BorderColor = resting;
             card.Style.BorderWidth = 4f;
             runtime.InteractionsFor(card);
-            return Layer(null, card).Px(400f, 200f);
+            return Layer(null, card).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
@@ -6323,7 +6507,7 @@ Run("Text.Color: a role, a token and a literal all reach the painter", () =>
         (((Text)rt.FindById(id)!).Color ?? UiColor.TextPrimary).Resolve(theme.Colors);
 
     var rt = BibuiRuntime.Create();
-    rt.SetBuild(() => rt.Into(rt.ColumnFit(), () =>
+    rt.SetBuild(() => rt.Into(rt.Column(), () =>
     {
         rt.TextFromId("role", "x".ToArray(), textColor: TextColor.Secondary);
         rt.TextFromId("token", "x".ToArray(), textColor: UiColor.TextSecondary);
@@ -6349,7 +6533,7 @@ Run("Interaction.PressCount: which press of a streak it was", () =>
         var b = runtime.BoxFromId("b", InteractionKinds.LeftPress);
         var i = runtime.InteractionsFor(b);
         if (i.Pressed) counts.Add(i.PressCount);
-        b.Px(100f, 100f);
+        b.Sized(Size.Px(100f), Size.Px(100f));
         return b;
     }, new SurfaceOptions { Width = 200, Height = 200 });
     runtime.Step();
@@ -6373,7 +6557,7 @@ Run("Interaction.PressCount: held, a double press is still a double press", () =
         var b = runtime.BoxFromId("b", InteractionKinds.LeftPress);
         var i = runtime.InteractionsFor(b);
         seen.Add($"{(i.Pressed ? "P" : i.Dragging ? "D" : "-")}{i.PressCount}");
-        b.Px(100f, 100f);
+        b.Sized(Size.Px(100f), Size.Px(100f));
         return b;
     }, new SurfaceOptions { Width = 200, Height = 200 });
     runtime.Step();
@@ -6396,8 +6580,8 @@ Run("Menu: an item clicked in an open menu reports it, and the caller closes it"
     string? picked = null;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
             var trigger = runtime.Button("menu-trigger", "Actions");
             if (trigger.Clicked) runtime.OpenDropDown("menu", trigger.Node);
@@ -6434,8 +6618,8 @@ Run("Menu: Escape closes the open menu and is eaten", () =>
     int escapesLeft = 0;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
             if (Bibui.Core.Runtime.Menu.Begin(runtime, "menu", 10f, 10f) is { } menu)
             {
@@ -6472,11 +6656,11 @@ Run("Menu: Escape closes the open menu and is eaten", () =>
     float mx = 0f, my = 0f;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
             var under = runtime.Button("under", "Beneath");
-            under.Node.Px(400f, 100f);
+            under.Node.Sized(Size.Px(400f), Size.Px(100f));
             if (under.Clicked) beneath++;
             var trigger = runtime.Button("trigger", "Actions");
             if (trigger.Clicked)
@@ -6493,7 +6677,7 @@ Run("Menu: Escape closes the open menu and is eaten", () =>
                 var row = runtime.BoxFromId(id, InteractionKinds.RightPress);
                 var i = runtime.InteractionsFor(row);
                 if (i.RightPressed) { (menuFor, mx, my) = (id, i.X, i.Y); runtime.OpenDropDown("ctx"); }
-                row.Px(400f, 40f);
+                row.Sized(Size.Px(400f), Size.Px(40f));
             }
             if (Bibui.Core.Runtime.Menu.Begin(runtime, "ctx", mx, my, 120f) is { } ctx)
             {
@@ -6597,14 +6781,14 @@ Run("Dismiss: a dropdown opened in every frame it is built is never dismissed", 
     int beneath = 0;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
             var under = runtime.Button("under", "Beneath");
-            under.Node.FillX().FillY();
+            under.Node.Sized(Size.Fill, Size.Fill);
             if (under.Clicked) beneath++;
             runtime.OpenDropDown("toast");
-            runtime.BeginDropDown("toast")!.Px(100f, 40f).At(250f, 250f);
+            runtime.BeginDropDown("toast")!.Sized(Size.Px(100f), Size.Px(40f)).At(250f, 250f);
         }
         return page;
     }, new SurfaceOptions { Width = 400, Height = 300 });
@@ -6623,13 +6807,13 @@ Run("Dismiss: opening a dropdown after it was begun asks for the frame it shows 
     runtime.WakeUp = () => wakes++;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
-            runtime.BeginDropDown("late")?.Px(50f, 50f);
+            runtime.BeginDropDown("late")?.Sized(Size.Px(50f), Size.Px(50f));
             if (openLate) runtime.OpenDropDown("late");
             runtime.OpenDropDown("always");
-            runtime.BeginDropDown("always")!.Px(50f, 50f).At(100f, 100f);
+            runtime.BeginDropDown("always")!.Sized(Size.Px(50f), Size.Px(50f)).At(100f, 100f);
         }
         return page;
     }, new SurfaceOptions { Width = 200, Height = 200 });
@@ -6650,9 +6834,9 @@ Run("Dismiss: a dropdown its caller stops building closes", () =>
     bool build = true;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
-            if (build) runtime.BeginDropDown("pop")?.Px(50f, 50f);
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
+            if (build) runtime.BeginDropDown("pop")?.Sized(Size.Px(50f), Size.Px(50f));
         return page;
     }, new SurfaceOptions { Width = 200, Height = 200 });
     runtime.OpenDropDown("pop");
@@ -6685,7 +6869,7 @@ Run("BibUiEvent.IsKeyDown: a shortcut handler sees arrows and Enter that reach t
     {
         foreach (var ev in runtime.UnconsumedEvents)
             if (ev.IsKeyDown) { seen.Add(ev.Key); ev.Eat(); }
-        return runtime.Box().Px(10f, 10f);
+        return runtime.Box().Sized(Size.Px(10f), Size.Px(10f));
     }, new SurfaceOptions { Width = 100, Height = 100 });
     runtime.Step();
     foreach (var key in new[] { Bibui.Core.Key.Down, Bibui.Core.Key.Enter, Bibui.Core.Key.G })
@@ -6702,14 +6886,14 @@ Run("Popover: its open panel blocks the box beneath it, and only there", () =>
     Box? panel = null;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
             var trigger = runtime.Button("pop-trigger", "Open");
             // Asking before the popover does, and covering the whole page under
             // the trigger: only the panel's rect being its own keeps the press from it.
             var below = runtime.Button("below", "Beneath");
-            below.Node.FillX().FillY();
+            below.Node.Sized(Size.Fill, Size.Fill);
             if (below.Clicked) beneath++;
             runtime.OpenDropDown("pop", trigger.Node);
             if (Bibui.Core.Runtime.Popover.Begin(runtime, "pop", trigger.Node, width: 200f) is { } popover)
@@ -6736,11 +6920,11 @@ Run("Tooltip: claims nothing, so a press on it reaches what is beneath", () =>
     Box? pill = null;
     runtime.SetBuild(() =>
     {
-        var page = runtime.ColumnFill();
-        using (runtime.PushParent(page))
+        var page = runtime.Column().Sized(Size.Fill, Size.Fill);
+        using (runtime.Parent(page))
         {
             var button = runtime.Button("under", "Under the tip");
-            button.Node.FillX().FillY();
+            button.Node.Sized(Size.Fill, Size.Fill);
             if (button.Clicked) clicks++;
             pill = Bibui.Core.Runtime.Tooltip.Build(runtime, "A hint", (Box)button.Node);
             pill.Parent!.At(150f, 120f);   // over the middle of the button
@@ -6793,12 +6977,12 @@ Run("Fonts.LineHeight and LineAdvance: what layout gives one line, and the next"
         column.ChildLayoutAxis = LayoutAxis.Y;
         column.SizeX = SemanticSize.Pixels(400f);
         column.SizeY = SemanticSize.ChildrenSum();
-        using (runtime.PushParent(column))
+        using (runtime.Parent(column))
         {
             one = runtime.TextFromId("one", "A line".ToArray());
             var field = FieldFrame(runtime, SemanticSize.ChildrenSum());
-            using (runtime.PushParent(field))
-            using (runtime.PushSizeY(SemanticSize.ChildrenSum()))
+            using (runtime.Parent(field))
+            using (runtime.SizeY(SemanticSize.ChildrenSum()))
                 runtime.MultilineTextField("three", BibuiStr.FromStrLit("A line\nanother\nand a third"),
                 new TextEditState(), focused: false, events: 0);
         }
@@ -6872,7 +7056,7 @@ Run("Fonts.Wrap: by characters, a line holds what fits and the next starts where
 Run("Fonts.Measure: a longer text is wider, and nothing has no width", () =>
 {
     var runtime = BibuiRuntime.Create();
-    using var bold = runtime.PushFontFace(weight: FontWeight.Bold);
+    using var bold = runtime.FontFace(weight: FontWeight.Bold);
     var font = runtime.FontInScope(ComponentSize.Lg);
     float word = runtime.Fonts.Measure("Grüße", font);
     IsTrue(word > 0f && runtime.Fonts.Measure("Grüße, wörld", font) > word, "measured over its code points");
@@ -6892,23 +7076,23 @@ Run("Fonts.Measure: a longer text is wider, and nothing has no width", () =>
     {
         var parent = runtime.BoxFromId("parent");
         parent.ChildLayoutAxis = LayoutAxis.Y;
-        parent.Px(300f, 200f);
-        using (runtime.PushParent(parent))
+        parent.Sized(Size.Px(300f), Size.Px(200f));
+        using (runtime.Parent(parent))
         {
             // As wide as the parent, and one line or three tall. The field takes its own presses.
             BibuiWidget line;
             if (multiline)
             {
                 var field = FieldFrame(runtime, SemanticSize.ChildrenSum());
-                using (runtime.PushParent(field))
-                using (runtime.PushSizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
+                using (runtime.Parent(field))
+                using (runtime.SizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
                     line = runtime.MultilineTextField("field", text, edit, focused,
                         events == uint.MaxValue ? Bibui.Core.Runtime.TextField.MultiLineEvents : events);
             }
             else
             {
                 var field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
-                using (runtime.PushParent(field)) line = runtime.TextField("field", text, edit, focused,
+                using (runtime.Parent(field)) line = runtime.TextField("field", text, edit, focused,
                     events == uint.MaxValue ? Bibui.Core.Runtime.TextField.SingleLineEvents : events);
             }
             if (line.Pressed) focused = true;
@@ -6959,12 +7143,12 @@ Run("runtime.TextField: in a padded box, a press is measured from where the text
     {
         var parent = runtime.BoxFromId("parent");
         parent.ChildLayoutAxis = LayoutAxis.Y;
-        parent.Px(300f, 200f);
-        using (runtime.PushParent(parent))
+        parent.Sized(Size.Px(300f), Size.Px(200f));
+        using (runtime.Parent(parent))
         {
             field = FieldFrame(runtime, SemanticSize.Pixels(40f));
             field.Style.Padding = new EdgeInsets(10f, 20f, 10f, 20f);
-            using (runtime.PushParent(field)) runtime.TextField("field", text, edit, focused: true);
+            using (runtime.Parent(field)) runtime.TextField("field", text, edit, focused: true);
         }
         return parent;
     }, new SurfaceOptions { Width = 400, Height = 300 });
@@ -6988,13 +7172,13 @@ Run("runtime.EllipsisTextField: a press is the field's, and being edited it scro
     var edit = new TextEditState();
     bool focused = false;
     var runtime = BibuiRuntime.Create();
-    runtime.SetBuild(() => runtime.Into(runtime.ColumnFit(), () =>
+    runtime.SetBuild(() => runtime.Into(runtime.Column(), () =>
     {
         var box = runtime.Box();
         box.SizeX = SemanticSize.Pixels(120f);
         box.SizeY = SemanticSize.ChildrenSum();
         BibuiWidget line;
-        using (runtime.PushParent(box))
+        using (runtime.Parent(box))
             line = runtime.EllipsisTextField("label", text, edit, focused, events: Bibui.Core.Runtime.TextField.SingleLineEvents);
         if (line.Pressed) focused = true;
     }), new SurfaceOptions { Width = 400, Height = 100 });
@@ -7018,14 +7202,14 @@ Run("runtime.Gap: pixels along the parent's axis, nothing across it", () =>
     {
         var column = runtime.BoxFromId("column");
         column.ChildLayoutAxis = LayoutAxis.Y;
-        column.Px(200f, 200f);
-        using (runtime.PushParent(column))
+        column.Sized(Size.Px(200f), Size.Px(200f));
+        using (runtime.Parent(column))
         {
             columnGap = runtime.Gap(12f);
             var row = runtime.BoxFromId("row");
             row.ChildLayoutAxis = LayoutAxis.X;
-            row.Px(100f, 20f);
-            using (runtime.PushParent(row)) rowGap = runtime.Gap(8f);
+            row.Sized(Size.Px(100f), Size.Px(20f));
+            using (runtime.Parent(row)) rowGap = runtime.Gap(8f);
         }
         return column;
     }, new SurfaceOptions { Width = 300, Height = 300 });
@@ -7040,12 +7224,12 @@ Run("runtime.EllipsisTextField: \"…\" only when the line is wider than its box
     {
         var runtime = BibuiRuntime.Create();
         Box box = null!;
-        runtime.SetBuild(() => runtime.Into(runtime.ColumnFit(), () =>
+        runtime.SetBuild(() => runtime.Into(runtime.Column(), () =>
         {
             box = runtime.BoxFromId("label");
             box.SizeX = SemanticSize.Pixels(120f);
             box.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.PushParent(box)) runtime.EllipsisTextField("line", Str(words), new TextEditState(), focused: false);
+            using (runtime.Parent(box)) runtime.EllipsisTextField("line", Str(words), new TextEditState(), focused: false);
         }), new SurfaceOptions { Width = 400, Height = 100 });
         runtime.Step();
         runtime.Step();   // whether it fits is told by last frame's width
@@ -7068,12 +7252,12 @@ Run("runtime.TextField: a line wider than its box scrolls to the caret, and back
     {
         var parent = runtime.BoxFromId("parent");
         parent.ChildLayoutAxis = LayoutAxis.Y;
-        parent.Px(300f, 200f);
-        using (runtime.PushParent(parent))
+        parent.Sized(Size.Px(300f), Size.Px(200f));
+        using (runtime.Parent(parent))
         {
             field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
             field.SizeX = SemanticSize.Pixels(100f);
-            using (runtime.PushParent(field))
+            using (runtime.Parent(field))
                 runtime.TextField("field", text, edit, focused: true);
         }
         return parent;
@@ -7107,10 +7291,10 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
     {
         var parent = runtime.BoxFromId("parent");
         parent.ChildLayoutAxis = LayoutAxis.Y;
-        parent.Px(300f, 200f);
-        using (runtime.PushParent(parent))
-        using (runtime.PushParent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
-        using (runtime.PushSizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
+        parent.Sized(Size.Px(300f), Size.Px(200f));
+        using (runtime.Parent(parent))
+        using (runtime.Parent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
+        using (runtime.SizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
         {
             var field = runtime.MultilineTextField("field", text, edit, focused);
             view = (Box)field.Node;
@@ -7223,7 +7407,7 @@ Run("BibuiPage.Fill types into a TextField as a person would", () =>
         {
             var button = runtime.Button("go", "Sync", ghost: ghost, disabled: disabled);
             if (button.Clicked) clicks++;
-            return Layer(null, button.Node).Px(400f, 200f);
+            return Layer(null, button.Node).Sized(Size.Px(400f), Size.Px(200f));
         },
         new SurfaceOptions { Width = 400, Height = 200 });
     runtime.Step();
@@ -7447,9 +7631,9 @@ static Box Node(UiNode? parent, SemanticSize x, SemanticSize y, LayoutAxis axis 
 static void CentredY(UiNode row, UiNode node)
 {
     var column = Node(row, SemanticSize.ChildrenSum(), SemanticSize.ParentPct(1), LayoutAxis.Y);
-    Arrange.Spring(column);
+    TestNodes.Spring(column);
     UiNode.PushIntoParent(column, node);
-    Arrange.Spring(column);
+    TestNodes.Spring(column);
 }
 // A text is had only from a runtime; with no parent in scope it links to nothing,
 // and is linked by hand like every other node here.
@@ -7590,25 +7774,13 @@ Run("Solver: text wraps at the width it is given, not the parent's", () =>
     Eq(40f, size.Y, "and the row is as tall as that");
 });
 
-Run("Solver: Arrange.Centred centres a node along its parent's axis", () =>
-{
-    var root = Node(null, SemanticSize.Pixels(300), SemanticSize.Pixels(100));
-    var node = new Box { SizeX = SemanticSize.Pixels(100), SizeY = SemanticSize.Pixels(20) };
-    // What is tested is Arrange.Centred itself, obsolete or not.
-#pragma warning disable CS0618
-    Arrange.Centred(root, node);
-#pragma warning restore CS0618
-    LayoutSolver.Layout(root, V(0, 0), V(300, 100), leaf);
-    Eq(V(100, 0), node.Rect);
-});
-
 Run("Solver: a spring pushes what follows to the end, and gives way first", () =>
 {
     foreach (var (width, wantRight, wantContent) in new[] { (300f, 240f, 300f), (100f, 60f, 120f) })
     {
         var row = Node(null, SemanticSize.Pixels(width), SemanticSize.Pixels(20));
         Node(row, SemanticSize.Pixels(60), SemanticSize.Pixels(20));
-        Arrange.Spring(row);
+        TestNodes.Spring(row);
         var right = Node(row, SemanticSize.Pixels(60), SemanticSize.Pixels(20));
         LayoutSolver.Layout(row, V(0, 0), V(width, 20), leaf);
         Eq(wantRight, right.Rect.X, $"at {width}px");
@@ -7671,8 +7843,8 @@ BibuiRuntime Themed(ThemeTokens theme, Action<BibuiRuntime> build)
     {
         Box root = runtime.Box();
         root.ChildLayoutAxis = LayoutAxis.Y;
-        root.Px(400f, 300f);
-        using (runtime.PushParent(root)) build(runtime);
+        root.Sized(Size.Px(400f), Size.Px(300f));
+        using (runtime.Parent(root)) build(runtime);
         return root;
     }, theme, new SurfaceOptions { Width = 400, Height = 300, ScaleFactor = 1f });
     runtime.Step();
@@ -7709,7 +7881,7 @@ Run("Tokens: a theme's border widths are what the outlines are drawn at", () =>
 
         panel = Bibui.Core.Runtime.Tabs.Panel(rt).Style.BorderWidth;
 
-        Box input = rt.Box().Px(100f, 30f);
+        Box input = rt.Box().Sized(Size.Px(100f), Size.Px(30f));
         Bibui.Core.Runtime.TextField.InputStyle(rt, input, focused: false);
         field = input.Style.BorderWidth;
 
@@ -7729,8 +7901,8 @@ Run("Tokens: a focused field draws the theme's focus ring as its outline", () =>
     Style focused = null!, resting = null!;
     Themed(theme, rt =>
     {
-        Box a = rt.Box().Px(100f, 30f); Bibui.Core.Runtime.TextField.InputStyle(rt, a, focused: true);
-        Box b = rt.Box().Px(100f, 30f); Bibui.Core.Runtime.TextField.InputStyle(rt, b, focused: false);
+        Box a = rt.Box().Sized(Size.Px(100f), Size.Px(30f)); Bibui.Core.Runtime.TextField.InputStyle(rt, a, focused: true);
+        Box b = rt.Box().Sized(Size.Px(100f), Size.Px(30f)); Bibui.Core.Runtime.TextField.InputStyle(rt, b, focused: false);
         (focused, resting) = (Copy(a.Style), Copy(b.Style));
     });
     Eq(2f, focused.BorderWidth, "the ring's width while focused");
@@ -7787,7 +7959,7 @@ Run("Tokens: a theme's toggle speed is how fast a switch's knob crosses", () =>
         {
             Box root = runtime.Box();
             root.SizeX = root.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.PushParent(root)) runtime.Switch("sw", on);
+            using (runtime.Parent(root)) runtime.Switch("sw", on);
             return root;
         }, new ThemeTokens { Motion = new MotionTokens { Toggle = speed } },
            new SurfaceOptions { Width = 200, Height = 100, ScaleFactor = 1f });
@@ -7809,7 +7981,7 @@ Run("Tokens: Animate with no rate takes the theme's default", () =>
         runtime.SetBuild(() =>
         {
             runtime.Animate("thing", "x", target);
-            return Layer(null).Px(100f, 100f);
+            return Layer(null).Sized(Size.Px(100f), Size.Px(100f));
         }, new ThemeTokens { Motion = new MotionTokens { Default = speed } }, new SurfaceOptions { Width = 100, Height = 100 });
         runtime.Step();
         target = 1f;
@@ -7830,8 +8002,8 @@ Run("Tokens: MotionEasing.None closes every gap in one step", () =>
         runtime.Animate("thing", "x", target, Ease.Rate(1f, runtime.Dt));   // a rate of its own, not from Rates
         Box b = runtime.BoxFromId("b", InteractionKinds.LeftPress);
         runtime.InteractionsFor(b);
-        b.Px(50f, 50f).At(0f, 0f);
-        return Layer(null, b).Px(100f, 100f);
+        b.Sized(Size.Px(50f), Size.Px(50f)).At(0f, 0f);
+        return Layer(null, b).Sized(Size.Px(100f), Size.Px(100f));
     }, new ThemeTokens { Motion = new MotionTokens { Easing = MotionEasing.None } }, new SurfaceOptions { Width = 100, Height = 100 });
     runtime.Step();
     target = 1f;
@@ -7912,7 +8084,7 @@ static class ObjectExtensions
     // `box`, with what `build` makes linked under it: a test's tree as one expression.
     public static Box Into(this BibuiRuntime runtime, Box box, Action build)
     {
-        using (runtime.PushParent(box)) build();
+        using (runtime.Parent(box)) build();
         return box;
     }
 }
