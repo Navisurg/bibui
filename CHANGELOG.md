@@ -6,6 +6,40 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **RowScrollList**: `runtime.BeginRowScrollList(id, ref scroll, pitch,
+  count, by)` and `EndRowScrollList`, the list of rows of one pitch, of which
+  only those in sight are built. It scrolls by rows, resting on a row's top
+  with the last row clipped at the end, or by pixels (`ScrollBy.Pixels`),
+  where a slow trackpad moves it a pixel at a time and the last row rests on
+  the bottom. Everything follows from the pitch, exactly; it eases.
+- **ScrollList for rows of their own heights**: `runtime.BeginScrollList(id,
+  ref scroll, count, by, rowStep)`, a loop of `ScrollRows.Next(ref scroll,
+  height)`, and `EndScrollList(ref scroll, rows)`. It holds no heights: the
+  loop hands each row's in as it reaches it, going up or down by the sign of
+  `ScrollPt.Px`, so the wheel moves exactly through rows of any height, a row
+  taller than the view included. By rows, `rowStep` pixels of wheel move it a
+  row, with no height needed to scroll.
+- **A bar for either list**: `runtime.Scrollbar(id, ref scroll, count, first,
+  last)` beside it, in a lane of `ScrollList.BarLane` (16 px) that comes
+  forward under the pointer. A press on the lane, or a drag, puts the list
+  where the pointer is.
+- `ScrollBy` (`Rows`, `Pixels`), and `ScrollPt.Target(idx)`.
+
+### Changed
+
+- The gallery's ScrollList page shows both lists, with a switch to scroll by
+  pixels; the showcase's target queue is a RowScrollList, its bar the list's.
+
+### Deprecated
+
+- `ScrollList.BeginScrollList(id, ref scroll, pitch, count)`,
+  `EndScrollList(ref scroll)` and `Scrollbar(id, scroll, count, viewRows)`,
+  and `ScrollPt.First`, `Last` and `ViewRows`: the list of rows of one pitch as
+  it was. Use `BeginRowScrollList` and `EndRowScrollList`, and
+  `Scrollbar(id, ref scroll, count, first, last)`. They work until 2.0.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning

@@ -12,6 +12,7 @@ internal sealed partial class App
     private const float Gutter = 16f;
 
     public string Filter = "all";
+    public ScrollPt Queue;   // the target queue's list, between frames
 
     // ── Overview ─────────────────────────────────────────────────────────────
 
@@ -517,7 +518,7 @@ internal sealed partial class App
         int imaging = Data.Targets.Count(t => t.Status == TargetStatus.Imaging);
         float inner = w - 2 * 18f;
         float fixedW = Columns.Sum(c => c.Width);
-        float nameW = inner - fixedW - Scrollbar.Lane - 16f;
+        float nameW = inner - fixedW - ScrollList.BarLane - 16f;
 
         var card = rt.BeginParent(rt.Column().Sized(Size.Px(w), Size.Px(h)));
         card.Style = CardStyle(rt);
@@ -562,18 +563,17 @@ internal sealed partial class App
             }
             rt.EndParent(cell);
         }
-        rt.Gap(Scrollbar.Lane);
+        rt.Gap(ScrollList.BarLane);
         rt.EndParent(head);
 
         // The rows scroll inside a frame of their own, with a bar beside them.
+        // They are all one height, so a RowScrollList builds only those in sight.
         double lst = Data.Lst(Clock);
+        float pitch = rt.Theme.Density.Of(50f);   // QueueRow's height
         Box frame = rt.BoxFromId("queue-frame").Sized(Size.Fill, Size.Fill);
-        Box list = rt.BoxFromId("queue-list", InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip, frame);
-        list.ChildLayoutAxis = LayoutAxis.Y;
-        list.Sized(Size.Fill, Size.Fill);
-        list.AllowOverflowY = true;
-        rt.BeginParent(list);
-        foreach (var t in rows) QueueRow(rt, t, lst, nameW);
+        rt.BeginParent(frame);
+        var (first, last) = rt.BeginRowScrollList("queue-list", ref Queue, pitch, rows.Count);
+        for (int i = first; i < last; i++) QueueRow(rt, rows[i], lst, nameW);
         if (rows.Count == 0)
         {
             rt.Gap(32f);
@@ -581,11 +581,9 @@ internal sealed partial class App
             T(rt, "Nothing matches. Try another filter or search.", ComponentSize.Sm, UiColor.TextSecondary);
             rt.EndCenterAcross();
         }
-        rt.EndParent(list);
-        rt.BeginParent(frame);
-        rt.Scrollbar("queue-bar", list);
+        rt.EndRowScrollList(ref Queue, pitch, rows.Count);
+        rt.Scrollbar("queue-bar", ref Queue, rows.Count, first, last);
         rt.EndParent(frame);
-        rt.InteractionsFor(list);
         rt.EndParent(card);
     }
 

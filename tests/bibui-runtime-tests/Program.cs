@@ -8027,6 +8027,7 @@ MotionTests.Register(Run);
 Console.WriteLine();
 Console.WriteLine("Scroll list");
 ScrollListTests.Register(Run);
+ScrollListDeprecatedTests.Register(Run);
 
 // ── Key repeat ──────────────────────────────────────────────────────────────
 

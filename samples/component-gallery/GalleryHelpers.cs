@@ -79,7 +79,7 @@ internal static class GalleryHelpers
     "InteractiveBox"   => "A box that claims a press: a styled container without button semantics.",
     "Section"          => "Section.Build: an uppercase caption over a column of controls.",
     "Scrollbar"        => "runtime.Scrollbar: a bar beside a scrolling view. Drag the thumb, or press the track to page.",
-    "ScrollList"       => "runtime.BeginScrollList: rows of one height, of which only those in sight are built.",
+    "ScrollList"       => "runtime.BeginRowScrollList and BeginScrollList: rows of one height or of their own, of which only those in sight are built.",
     _                  => "",
 };
 
