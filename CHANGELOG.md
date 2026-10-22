@@ -6,6 +6,16 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The managed rasterizer no longer draws far-off shapes onto the surface.**
+  In `Antialiasing.BaselineCompatible`, supersampled edges step in 16.16
+  fixed point at 4×, which wrapped past about ±8000 device px, so a long
+  list's far rows drew their dots over the visible ones. A path whose points
+  all lie off the clip now adds no edges, and one reaching past ±8000 device
+  px is scanned in floats instead, as Skia clips such a path before stepping
+  it.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning

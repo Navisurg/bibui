@@ -579,11 +579,36 @@ public sealed unsafe partial class Canvas // strokes and dashes in Stroke/Canvas
     private RasterMode LoadPath(Path path, IRect clip, bool exact)
     {
         bool compat = Antialiasing == Antialiasing.BaselineCompatible;
-        bool ssaa = compat && !UsesAnalytic(path, _s.Matrix);
+        // A path whose control points all lie off the clip covers nothing on it: no edges. And the
+        // supersampled edges step in 16.16 fixed point at 4×, which wraps past about ±8000 device
+        // px — a list's far rows drew their dots over the visible ones — so a path reaching that
+        // far is scanned in floats instead, as Skia clips such a path before stepping it.
+        var (bounds, far) = DeviceBounds(path, _s.Matrix);
+        if (bounds.Right <= clip.Left || bounds.Left >= clip.Right || bounds.Bottom <= clip.Top || bounds.Top >= clip.Bottom)
+        {
+            _raster.Reset(clip);
+            return RasterMode.Simple;
+        }
+        bool ssaa = compat && !far && !UsesAnalytic(path, _s.Matrix);
         _raster.Reset(clip, snapY: compat && !ssaa);
         if (ssaa) SupersampleEdges.Fill(path, _s.Matrix, _raster); // coarse chords, where the baselines were supersampled
         else Flatten.Fill(path, _s.Matrix, _raster);
         return ssaa ? RasterMode.Supersample : exact ? RasterMode.Exact : RasterMode.Simple;
+    }
+
+    /// <summary>Where a path's points (control points included) land in device space, and whether any lies past what fixed point holds.</summary>
+    private static (Rect Bounds, bool Far) DeviceBounds(Path path, in Matrix3x2 m)
+    {
+        float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
+        foreach (var p in path.Points)
+        {
+            var d = Vector2.Transform(p, m);
+            x0 = MathF.Min(x0, d.X); x1 = MathF.Max(x1, d.X);
+            y0 = MathF.Min(y0, d.Y); y1 = MathF.Max(y1, d.Y);
+        }
+        const float FixedLimit = 8000f;
+        bool far = x0 < -FixedLimit || y0 < -FixedLimit || x1 > FixedLimit || y1 > FixedLimit;
+        return (new Rect(x0, y0, x1, y1), far);
     }
 
     /// <summary>
