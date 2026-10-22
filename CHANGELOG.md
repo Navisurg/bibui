@@ -6,6 +6,18 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **ScrollList: rows of their own heights.** `runtime.BeginScrollList(id, ref
+  scroll, tops, count)` takes where each row starts (`tops[i]`, and
+  `tops[count]` where the last ends) in place of a pitch. The caller works the
+  heights out from what its rows hold, before building them, and builds row
+  `i` exactly `tops[i + 1] - tops[i]` tall; the list measures nothing. Only
+  the rows in sight are built. It scrolls by pixels and keeps its place by a
+  row, so rows above the view changing height move nothing in view, and its
+  bar is exact. `ScrollPt.Target(idx, px, tops)` moves the target of such a
+  list. The `pitch` overload is unchanged.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning
