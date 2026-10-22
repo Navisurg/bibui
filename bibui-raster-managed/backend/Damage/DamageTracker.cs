@@ -67,8 +67,7 @@ internal sealed class DamageTracker
 
         // Why this surface must be painted whole whatever changed.
         string? targetReason = null;
-        if (cur.Background.A != 255) targetReason = "translucent background";
-        else if (state.Frame <= 0 || frame - state.Frame > History - 1) targetReason = "surface holds an unknown frame";
+        if (state.Frame <= 0 || frame - state.Frame > History - 1) targetReason = "surface holds an unknown frame";
         else
         {
             for (long f = state.Frame + 1; f < frame; f++)

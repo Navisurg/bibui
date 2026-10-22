@@ -315,6 +315,21 @@ public sealed unsafe partial class Canvas // strokes and dashes in Stroke/Canvas
             new Span<uint>(_surface.Base + (long)y * _surface.RowPixels, _surface.Width).Fill(pm);
     }
 
+    /// <summary>
+    /// Sets the device pixels of <paramref name="rect"/> (clamped to the surface) to a
+    /// colour, translucent or not, replacing what was there: what <see cref="Clear"/> does
+    /// to the whole surface, done to part of it. The clip, the transform and any layer are
+    /// ignored: it writes the surface.
+    /// </summary>
+    public void ClearRect(IRect rect, uint argb)
+    {
+        var b = rect.Intersect(new IRect(0, 0, _surface.Width, _surface.Height));
+        if (b.IsEmpty) return;
+        uint pm = PmFor(argb);
+        for (int y = b.Top; y < b.Bottom; y++)
+            new Span<uint>(_surface.Base + (long)y * _surface.RowPixels + b.Left, b.Width).Fill(pm);
+    }
+
     public void DrawRect(Rect rect, in Paint paint)
     {
         rect = rect.Sorted();

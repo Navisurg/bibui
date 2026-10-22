@@ -44,8 +44,9 @@ public sealed record WaylandHostOptions
 /// <item><b>Drawing</b>: <see cref="Cpu"/> holds a free shm buffer from
 /// <see cref="BeginDraw"/> to <see cref="EndDraw"/>; a renderer bound to it
 /// (<c>new ManagedRenderer(window.Cpu)</c>) draws there, with no copy.
-/// <c>EndDraw</c> attaches it, damages it whole, and commits it with a frame
-/// callback, whether or not the renderer repainted all of it.</item>
+/// <c>EndDraw</c> attaches it, damages what <see cref="Bibui.Core.Draw.CpuTarget.Damage"/> names
+/// (a damage-tracked renderer names what it repainted) or else all of it, and
+/// commits it with a frame callback.</item>
 /// <item><b>Pacing</b>: <c>BeginFrame</c> waits for the previous frame's
 /// callback, so the compositor sets the frame rate and an idle window draws
 /// nothing. A pending configure skips the wait: a resize is drawn at once. The
@@ -406,9 +407,16 @@ public sealed unsafe class WaylandWindow : IDisposable
     }
 
 
+    // More damage rects than this are sent as the whole buffer.
+    private const int MaxDamageRects = 32;
+
     /// <summary>Shows the buffer <see cref="AcquireBuffer"/> took: acks a configure, attaches, damages and commits. Nothing when it took none.</summary>
     internal void Commit()
     {
+        // What changed since the frame shown before, when whoever drew said so
+        // (Cpu.Damage, buffer px); else the whole buffer. Said of this frame only.
+        var damage = Cpu.Damage;
+        Cpu.Damage = null;
         if (_buffer is not { } buffer || _display == 0 || _pool is null) return;
         _buffer = null;
         if (_ackSerial is uint serial)
@@ -417,9 +425,21 @@ public sealed unsafe class WaylandWindow : IDisposable
             _ackSerial = null;
         }
         _surface.Attach(buffer.Wl, 0, 0);
-        // The whole buffer is damaged on every commit. The compositor's copy
-        // of it costs less than finding which pixels changed would.
-        if (_surface.Version >= WlSurface.DamageBufferSince) _surface.DamageBuffer(0, 0, buffer.Width, buffer.Height);
+        if (_surface.Version >= WlSurface.DamageBufferSince)
+        {
+            // Nothing changed: one pixel still, so the compositor draws a frame and sends
+            // the frame callback the loop waits for (one that redraws nothing may never).
+            if (damage is { Count: 0 }) _surface.DamageBuffer(0, 0, 1, 1);
+            else if (damage is { Count: <= MaxDamageRects })
+            {
+                foreach (var r in damage)
+                {
+                    int l = Math.Max(0, r.Left), t = Math.Max(0, r.Top), rr = Math.Min(buffer.Width, r.Right), b = Math.Min(buffer.Height, r.Bottom);
+                    if (rr > l && b > t) _surface.DamageBuffer(l, t, rr - l, b - t);
+                }
+            }
+            else _surface.DamageBuffer(0, 0, buffer.Width, buffer.Height);
+        }
         else _surface.Damage(0, 0, _logicalW, _logicalH);
         _frameCallback = _surface.Frame();
         _frameCallback.AddListener(FrameListener, (void*)GCHandle.ToIntPtr(_self));

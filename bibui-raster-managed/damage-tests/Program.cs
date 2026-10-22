@@ -153,11 +153,71 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
     IsTrue(after.AsSpan().SequenceEqual(fpx()), "and the tracked frame equals a whole repaint");
 });
 
+Run("A frame cleared to transparent is tracked: only what changed is repainted, to transparent first", () =>
+{
+    var backend = new ManagedRenderer { DamageTracking = true };
+    var rt = BibuiRuntime.Create();
+    rt.TargetHz = 60f;
+    bool lit = false;
+    rt.SetBuild(() =>
+    {
+        var page = rt.Column().Sized(Size.Fill, Size.Fill);
+        page.Style.Padding = EdgeInsets.All(8f);
+        using (rt.Parent(page))
+        {
+            var chip = rt.BoxFromId("chip", InteractionKinds.None);
+            chip.Sized(Size.Px(40f), Size.Px(20f));
+            // Translucent: what lay under it must be cleared to transparent, not drawn over.
+            chip.Draw = (_, ctx) => { var r = ctx.Logical; ctx.DrawRect(new RectF(r.Left, r.Top, r.Right, r.Bottom), 0f, Paint.Filled(new Rgba(255, 0, 0, lit ? (byte)200 : (byte)60))); };
+            rt.Gap(8f);
+            rt.Button("still", "Unchanged");
+        }
+        return page;
+    }, DamageOracle.Transparent(ThemeLoader.BibuiDark()), new SurfaceOptions { Width = 200, Height = 100, ScaleFactor = 1f });
+    var target = new Surface(200, 100);
+    Frame(rt, backend, target);
+    Frame(rt, backend, target);
+    IsTrue(backend.LastRepaint is { Count: 0 }, $"an unchanged transparent frame repaints nothing (got {backend.LastFullRepaintReason ?? "some"})");
+    lit = true;
+    Frame(rt, backend, target);
+    IsTrue(backend.LastRepaint is { Count: > 0 } rs && rs.All(r => r.Width < 200), "a change repaints in part");
+    var tracked = new uint[200 * 100];
+    target.CopyTo(tracked);
+    var whole = new ManagedRenderer();
+    var fresh = new Surface(200, 100);
+    whole.Draw(rt.DrawList, fresh);
+    var expected = new uint[200 * 100];
+    fresh.CopyTo(expected);
+    IsTrue(tracked.AsSpan().SequenceEqual(expected), "and equals the frame drawn whole");
+    IsTrue(expected[0] == 0, "the ground is transparent");
+});
+
+Run("A renderer bound to a target says what it repainted in the target's Damage, for the platform", () =>
+{
+    var (rt, _, _) = Rig();
+    var pixels = GC.AllocateArray<byte>(400 * 160 * 4, pinned: true);
+    var target = new CpuTarget { Pixels = new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(pixels, 0), 400, 160, 400 * 4) };
+    var bound = new ManagedRenderer(target) { DamageTracking = true };
+    rt.Step(); bound.Draw(rt.DrawList);
+    IsNull(target.Damage, "a first frame is all damage");
+    rt.Step(); bound.Draw(rt.DrawList);
+    IsTrue(target.Damage is { Count: 0 }, "an unchanged frame damages nothing");
+    rt.ProcessEvent(new Bibui.Core.TextEdit.BibUiEvent { Kind = Bibui.Core.TextEdit.BibUiEventKind.MouseMove, X = 40, Y = 20 });
+    rt.Step(); bound.Draw(rt.DrawList);
+    for (int i = 0; i < 3 && target.Damage is { Count: 0 }; i++) { rt.Step(); bound.Draw(rt.DrawList); }
+    IsTrue(target.Damage is { Count: > 0 } d && d.All(r => r.Width < 400), $"a hover damages its button ({(target.Damage is null ? "all" : target.Damage.Count.ToString())}, {bound.LastFullRepaintReason})");
+    bound.DamageTracking = false;
+    rt.Step(); bound.Draw(rt.DrawList);
+    IsNull(target.Damage, "untracked, all of it");
+    GC.KeepAlive(pixels);
+});
+
+foreach (bool transparent in new[] { false, true })
 foreach (var scene in DamageOracle.Scenes())
     foreach (int ring in new[] { 1, 3 })
-        Run($"Oracle: {scene.Name}, ring {ring}: every frame equals a whole repaint", () =>
+        Run($"Oracle: {scene.Name}, ring {ring}{(transparent ? ", transparent ground" : "")}: every frame equals a whole repaint", () =>
         {
-            var r = DamageOracle.Run(scene, ring);
+            var r = DamageOracle.Run(scene, ring, transparent);
             Console.WriteLine($"         {r.Partial}/{r.Frames} frames repainted in part");
             IsTrue(r.Mismatches == 0, $"{r.Mismatches}/{r.Frames} frames differ; first at {r.FirstMismatch}");
             IsTrue(r.Partial > 0, "damage tracking repainted every frame whole");
