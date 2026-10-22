@@ -202,10 +202,33 @@ public readonly ref partial struct DrawContext
     public void PushClip(RectF rect)
     {
         List.Push(DrawOpKind.PushClip).Rect = rect;
-        _ctx.StateDepth++;
+        _ctx.Pushed();
     }
 
     public void PopClip() => Pop();
+
+    /// <summary>
+    /// The transform in force, from this context's space (physical px, (0,0) the box's
+    /// top-left) to the frame's device pixels: the painter's translation to the box, the
+    /// transforms of the nodes it lies in, and this callback's own pushes.
+    /// </summary>
+    public Matrix3x2 Transform => _ctx.Transform;
+
+    /// <summary>
+    /// <paramref name="rect"/> moved by under half a pixel each way so that its top-left
+    /// lands on a whole device pixel, its size kept; as it is when the transform is more
+    /// than a translation. A box is laid out in logical px, so at a fractional scale its
+    /// callback's (0,0) is rarely on the grid: an image drawn at its own size into a
+    /// snapped rect is drawn 1:1, copied rather than sampled, with sharp edges.
+    /// </summary>
+    public RectF Snap(RectF rect)
+    {
+        var m = _ctx.Transform;
+        if (m.M11 != 1f || m.M22 != 1f || m.M12 != 0f || m.M21 != 0f) return rect;
+        float x = rect.Left + m.M31, y = rect.Top + m.M32;
+        float dx = MathF.Round(x) - x, dy = MathF.Round(y) - y;
+        return new RectF(rect.Left + dx, rect.Top + dy, rect.Right + dx, rect.Bottom + dy);
+    }
 
     // Undoes the last clip, transform or opacity; nothing below the floor.
     internal void Pop()
@@ -223,7 +246,7 @@ public readonly ref partial struct DrawContext
     public void PushTransform(Matrix3x2 transform)
     {
         List.Push(DrawOpKind.PushTransform).Matrix = transform;
-        _ctx.StateDepth++;
+        _ctx.Pushed(transform);
     }
 
     public void PopTransform() => Pop();
@@ -250,7 +273,7 @@ public readonly ref partial struct DrawContext
     public void PushBlendMode(BlendMode mode)
     {
         List.Push(DrawOpKind.PushBlendMode).Blend = mode;
-        _ctx.StateDepth++;
+        _ctx.Pushed();
     }
 
     public void PopBlendMode() => Pop();
@@ -267,7 +290,7 @@ public readonly ref partial struct DrawContext
         if (matrix.Length != 20) throw new ArgumentException($"A colour matrix is 20 floats (4×5), not {matrix.Length}.", nameof(matrix));
         ref var op = ref List.Push(DrawOpKind.PushColorMatrix);
         (op.Start, op.Count) = (List.AddFloats(matrix), 20);
-        _ctx.StateDepth++;
+        _ctx.Pushed();
     }
 
     public void PopColorMatrix() => Pop();
