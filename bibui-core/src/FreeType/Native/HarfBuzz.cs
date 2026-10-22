@@ -29,6 +29,7 @@ internal static unsafe partial class HB
     [LibraryImport(Lib)] public static partial IntPtr hb_font_create(IntPtr face);
     [LibraryImport(Lib)] public static partial void hb_font_set_scale(IntPtr font, int xScale, int yScale);
     [LibraryImport(Lib)] public static partial void hb_font_destroy(IntPtr font);
+    [LibraryImport(Lib)] public static partial int hb_font_get_glyph_h_advance(IntPtr font, uint glyph);
     [LibraryImport(Lib)] public static partial IntPtr hb_buffer_create();
     [LibraryImport(Lib)] public static partial void hb_buffer_destroy(IntPtr buffer);
     [LibraryImport(Lib)] public static partial void hb_buffer_clear_contents(IntPtr buffer);

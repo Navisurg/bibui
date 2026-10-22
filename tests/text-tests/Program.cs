@@ -642,6 +642,32 @@ Run("Deleting a large selection triggers shrink without losing content", () =>
     ApplyAndCheck(str, state, ev, "rld", 0, 0);
 });
 
+// ── Flags, keycaps, skin tones ────────────────────────────────────────────────
+//
+// What an emoji font draws as one glyph is one text element to the caret too: a
+// flag is two regional indicators, a keycap a digit, U+FE0F and U+20E3, a skin
+// tone a hand and a modifier.
+
+foreach (var (name, emoji) in new[] { ("a flag", "🇩🇰"), ("a keycap", "1️⃣"), ("a skin tone", "👍🏽"), ("an astronaut", "🧑‍🚀") })
+{
+    Run($"Arrows and Backspace cross {name} whole", () =>
+    {
+        string text = $"a{emoji}{emoji}b";
+        int one = emoji.Length;
+        var str = BibuiStr.FromStrLit(text);
+        var state = new TextEditState { Cursor = 1, Mark = 1 };
+        var right = TextOp.FromStateAndEvent(str, state, new BibUiEvent { Delta = +1 }, charBuf);
+        Eq(1 + one, right.NewCursor, "→ lands after the first");
+
+        state = new TextEditState { Cursor = 1 + 2 * one, Mark = 1 + 2 * one };
+        var left = TextOp.FromStateAndEvent(str, state, new BibUiEvent { Delta = -1 }, charBuf);
+        Eq(1 + one, left.NewCursor, "← lands before the second, not inside it");
+
+        ApplyAndCheck(str, state, new BibUiEvent { Delta = -1, Flags = TextActionFlags.Delete | TextActionFlags.NoNavigationWithSelection },
+            $"a{emoji}b", 1 + one, 1 + one);
+    });
+}
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 Console.WriteLine();

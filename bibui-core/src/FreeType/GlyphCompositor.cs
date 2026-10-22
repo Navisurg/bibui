@@ -99,6 +99,7 @@ internal static class GlyphCompositor
         int x0 = Math.Max(clip.Left, glyph.X), x1 = Math.Min(clip.Right, glyph.X + m.Width);
         int y0 = Math.Max(clip.Top, glyph.Y), y1 = Math.Min(clip.Bottom, glyph.Y + m.Height);
         if (x0 >= x1 || y0 >= y1) return;
+        if (m.IsColor) { CompositeColor(dst, glyph, color.A, x0, x1, y0, y1); return; }
 
         // The premultiplied source colour in memory order.
         int a = color.A;
@@ -167,6 +168,34 @@ internal static class GlyphCompositor
                     Unsafe.Add(ref px, 2) = (byte)(l2 + Div255(Unsafe.Add(ref px, 2) * inv));
                     Unsafe.Add(ref px, 3) = (byte)(la + Div255(Unsafe.Add(ref px, 3) * inv));
                 }
+            }
+        }
+    }
+
+    // A colour glyph: its premultiplied pixels, scaled by the text colour's alpha, src-over:
+    // d = s·α + d·(255 − s.a·α), per channel, in memory order (B, G, R, A, or R, G, B, A).
+    private static void CompositeColor(in PixelTarget dst, in PlacedGlyph glyph, int alpha, int x0, int x1, int y0, int y1)
+    {
+        var m = glyph.Mask;
+        ReadOnlySpan<byte> src = m.Pixels;
+        bool swap = dst.Order == PixelOrder.Rgba;
+        for (int y = y0; y < y1; y++)
+        {
+            var srow = src.Slice((y - glyph.Y) * m.Width * 4);
+            Span<byte> row = dst.Pixels.Slice(y * dst.Stride);
+            for (int x = x0; x < x1; x++)
+            {
+                int si = (x - glyph.X) * 4;
+                int sb = srow[si], sg = srow[si + 1], sr = srow[si + 2], sa = srow[si + 3];
+                if (sa == 0) continue;
+                if (alpha != 255) { sb = MulDiv255Round(sb, alpha); sg = MulDiv255Round(sg, alpha); sr = MulDiv255Round(sr, alpha); sa = MulDiv255Round(sa, alpha); }
+                int c0 = swap ? sr : sb, c2 = swap ? sb : sr;
+                int inv = 255 - sa;
+                ref byte px = ref row[x * 4];
+                px = (byte)(c0 + MulDiv255Round(px, inv));
+                Unsafe.Add(ref px, 1) = (byte)(sg + MulDiv255Round(Unsafe.Add(ref px, 1), inv));
+                Unsafe.Add(ref px, 2) = (byte)(c2 + MulDiv255Round(Unsafe.Add(ref px, 2), inv));
+                Unsafe.Add(ref px, 3) = (byte)(sa + MulDiv255Round(Unsafe.Add(ref px, 3), inv));
             }
         }
     }

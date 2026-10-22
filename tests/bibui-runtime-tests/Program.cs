@@ -7371,6 +7371,58 @@ Run("TextField read-only: moves and copies, never edits", () =>
     Eq("he", copied, "the selection was copied");
 });
 
+Run("runtime.TextField with emoji: drawn in colour; ←/→, Backspace and copy take a whole cluster; the caret sits where it is measured", () =>
+    ColorGlyphTests.WithEmoji(() =>
+{
+    var text = BibuiStr.FromStrLit(ColorGlyphTests.Sample);   // "hi 🧑‍🚀 👍🏽 🇩🇰 1️⃣"
+    var edit = new TextEditState { Cursor = ColorGlyphTests.Sample.Length, Mark = ColorGlyphTests.Sample.Length };
+    var (runtime, _, _) = MountField(text, edit);
+    string copied = "";
+    runtime.ClipboardSet = t => copied = t;
+    ClickAt(runtime, 1f, 5f);   // focus it
+    runtime.Step();
+    PressKey(runtime, Bibui.Core.Key.End);
+    Eq(ColorGlyphTests.Sample.Length, edit.Cursor, "End: after the keycap");
+
+    bool colour = false;
+    var list = runtime.DrawList;
+    foreach (var op in list.Ops)
+        if (op.Kind == Bibui.Core.Draw.DrawOpKind.Glyphs && list.FaceAt(op.Resource).IsColor) colour = true;
+    IsTrue(colour, "the field draws the emoji with the colour face");
+
+    var stops = new List<int>();
+    for (int i = 0; i < 9; i++) { PressKey(runtime, Bibui.Core.Key.Left); stops.Add(edit.Cursor); }
+    var boundaries = new List<int>();
+    for (int i = 0; i < ColorGlyphTests.Sample.Length; i += System.Globalization.StringInfo.GetNextTextElementLength(ColorGlyphTests.Sample.AsSpan(i)))
+        boundaries.Add(i);
+    boundaries.Reverse();
+    Eq(string.Join(",", boundaries.Take(9)), string.Join(",", stops), $"← stops at every grapheme boundary from the end, and nowhere else: {string.Join(",", stops)}");
+
+    // The caret, once it has glided there, stands where the text before it measures.
+    edit.Cursor = edit.Mark = 3 + "🧑‍🚀".Length;
+    for (int i = 0; i < 120; i++) runtime.Step();
+    var font = runtime.FontInScope();
+    var view = (Box)runtime.FindById("field")!;
+    var caret = view.LastChild!;
+    float caretX = caret.Rect.X + Bibui.Core.Runtime.TextField.CaretWidth / 2f - view.Rect.X;
+    float measured;
+    using (runtime.FontSize(FontSize.Px(font.Size))) measured = runtime.Fonts.Measure(ColorGlyphTests.Sample.AsSpan(0, edit.Cursor), font);
+    IsTrue(Math.Abs(caretX - measured) < 0.6f, $"the caret is after the astronaut: {caretX} vs {measured}");
+
+    PressKey(runtime, Bibui.Core.Key.Left, shift: true);
+    PressKey(runtime, Bibui.Core.Key.C, ctrl: true);
+    Eq("🧑‍🚀", copied, "a selection over the astronaut copies all five code points of it");
+
+    edit.Cursor = edit.Mark = 3 + "🧑‍🚀".Length;
+    PressKey(runtime, Bibui.Core.Key.Backspace);
+    Eq("hi  👍🏽 🇩🇰 1️⃣", text.ToString(), "Backspace takes the whole sequence");
+    Eq(3, edit.Cursor);
+    PressKey(runtime, Bibui.Core.Key.Delete);
+    Eq("hi 👍🏽 🇩🇰 1️⃣", text.ToString(), "Delete takes one space");
+    PressKey(runtime, Bibui.Core.Key.Delete);
+    Eq("hi  🇩🇰 1️⃣", text.ToString(), "and then the hand with its skin tone");
+}));
+
 Run("runtime.MultilineTextField: a press on the second row lands on the second line", () =>
 {
     var text = BibuiStr.FromStrLit("first line\nsecond line");
@@ -8027,6 +8079,9 @@ MotionTests.Register(Run);
 Console.WriteLine();
 Console.WriteLine("Scroll list");
 ScrollListTests.Register(Run);
+Console.WriteLine();
+Console.WriteLine("Colour glyphs");
+ColorGlyphTests.Register(Run);
 
 // ── Key repeat ──────────────────────────────────────────────────────────────
 

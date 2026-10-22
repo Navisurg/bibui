@@ -27,7 +27,7 @@ public readonly ref partial struct DrawContext
         float sizePx = size * Scale;
         for (var run = Fonts.SplitRuns(text, family, weight); run is not null; run = run.Next)
         {
-            var shaped = Fonts.Shape(text[run.Start..run.End], run.Face, sizePx);
+            var shaped = Fonts.Shape(text[run.Start..run.End], run.Face, sizePx, run.Shaped);
             ref var op = ref List.Push(DrawOpKind.Glyphs);
             op.Resource = List.AddFace(run.Face);
             (op.A, op.B, op.C, op.Color) = (cursor, baselineY, sizePx, color);

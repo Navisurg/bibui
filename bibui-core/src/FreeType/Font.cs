@@ -36,6 +36,15 @@ public sealed unsafe class Font
     /// <summary>Number of glyphs in the face.</summary>
     public int GlyphCount { get; }
 
+    /// <summary>Whether the face has outlines that scale to any size; a bitmap font (CBDT, sbix) has only its fixed strikes.</summary>
+    public bool IsScalable { get; }
+
+    /// <summary>Whether the face has colour glyphs (CBDT bitmaps or COLR layers), drawn as images rather than coverage.</summary>
+    public bool HasColor { get; }
+
+    /// <summary>The pixel sizes of a face's embedded bitmap strikes, smallest first; empty for most fonts.</summary>
+    internal float[] FixedSizes { get; }
+
     internal short Ascender { get; }
     internal short Descender { get; }
     internal short LineHeight { get; }
@@ -53,6 +62,14 @@ public sealed unsafe class Font
         Descender = FT.Read<short>(_ftFace, FT.Face_Descender);
         LineHeight = FT.Read<short>(_ftFace, FT.Face_Height);
         _bmpCmap = new uint[65536];
+        long flags = FT.Read<nint>(_ftFace, FT.Face_FaceFlags);
+        IsScalable = (flags & FT.FACE_FLAG_SCALABLE) != 0;
+        HasColor = (flags & FT.FACE_FLAG_COLOR) != 0;
+        int fixedCount = (flags & FT.FACE_FLAG_FIXED_SIZES) != 0 ? FT.Read<int>(_ftFace, FT.Face_NumFixedSizes) : 0;
+        FixedSizes = new float[Math.Max(0, fixedCount)];
+        IntPtr sizes = FT.Read<IntPtr>(_ftFace, FT.Face_AvailableSizes);
+        for (int i = 0; i < FixedSizes.Length; i++)
+            FixedSizes[i] = FT.Read<nint>(sizes + i * FT.BitmapSize_Size, FT.BitmapSize_YPpem) / 64f;   // 26.6
 
         IntPtr blob = HB.hb_blob_create(data.Pointer, (uint)data.Length, HB.MEMORY_MODE_READONLY, 0, 0);
         HbFace = HB.hb_face_create(blob, 0);
