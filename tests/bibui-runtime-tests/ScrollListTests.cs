@@ -4,17 +4,16 @@ using Bibui.Core.Runtime.Platform;
 using Bibui.Core.Theming;
 
 /// <summary>
-/// The scroll lists: RowScrollList, rows of one pitch, and ScrollList, rows of
-/// their own heights, by rows and by pixels; and the bar beside either. Where
-/// a list rests is checked to the pixel: the heights of the rows above Idx,
-/// and Px.
+/// The scroll lists: RowScrollList, rows of one pitch, by rows and by pixels,
+/// and ScrollList, rows of their own heights, by pixels; and the bar beside
+/// either. Where a list rests is checked to the pixel: the heights of the rows
+/// above Idx, and Px.
 /// </summary>
 static class ScrollListTests
 {
     const int Count = 1000;
     const float Height = 300f;   // the surface's, and so the list's
     const float Pitch = 24f;     // RowScrollList's rows, and ScrollList's when even
-    const float RowStep = 32f;   // ScrollList by rows: a notch
 
     static void Eq<T>(T expected, T actual, string message)
     {
@@ -42,7 +41,7 @@ static class ScrollListTests
         public int First, Last;
         public float Bottom;
 
-        /// <summary>RowScrollList when <paramref name="heightOf"/> is null, else ScrollList with those heights.</summary>
+        /// <summary>RowScrollList by <paramref name="by"/> when <paramref name="heightOf"/> is null, else ScrollList with those heights.</summary>
         public Lab(ScrollBy by, Func<int, float>? heightOf = null)
         {
             HeightOf = heightOf ?? (_ => Pitch);
@@ -62,7 +61,7 @@ static class ScrollListTests
                     }
                     else
                     {
-                        var rows = Runtime.BeginScrollList("list", ref Pt, Count, by, RowStep);
+                        var rows = Runtime.BeginScrollList("list", ref Pt, Count);
                         for (int i = rows.Row; rows.More; i = rows.Row)
                         {
                             float h = heightOf(i);
@@ -143,19 +142,9 @@ static class ScrollListTests
             Near(Height, pixels.Bottom, 0.01, "the last row on the bottom");
         });
 
-        run("RowScrollList: Target eases there", () =>
-        {
-            var list = new Lab(ScrollBy.Rows);
-            list.Pt.Target(500);
-            list.Frame();
-            Eq(true, list.First < 500, "still on its way, a frame in");
-            list.Settle();
-            Eq((500, 500, 0f), (list.Pt.Idx, list.First, list.Pt.Off), "at rest on row 500");
-        });
-
         // ── ScrollList ──────────────────────────────────────────────────────
 
-        run("ScrollList by pixels: the wheel moves exactly through rows of their own heights, either way", () =>
+        run("ScrollList: the wheel moves the target exactly through rows of their own heights, either way", () =>
         {
             var list = new Lab(ScrollBy.Pixels, Uneven);
             for (int k = 0; k < 40; k++) list.Wheel(7f);
@@ -166,86 +155,66 @@ static class ScrollListTests
             Near(55, list.At(), 0.01, "25 × 9 px up");
             list.Wheel(7000f);
             list.Frame();
-            Near(7055, list.At(), 0.01, "a fling of 7,000 px down, in one frame");
+            Near(7055, list.At(), 0.01, "a fling of 7,000 px down");
             list.Wheel(-6000f);
-            list.Frame();
+            list.Settle();
             Near(1055, list.At(), 0.01, "and 6,000 px up");
-            Near(list.Pt.Px, list.ViewOffset, 0.01, "the view offset by the pixels into the row at the top");
+            Near(list.Pt.Px, list.ViewOffset, 0.01, "at rest, the view offset by the pixels into the row at the top");
         });
 
-        run("ScrollList by pixels: a row taller than the view scrolls through like any other", () =>
+        run("ScrollList: what is shown eases to the target", () =>
+        {
+            var list = new Lab(ScrollBy.Pixels, Uneven);
+            list.Wheel(200f);
+            list.Frame();
+            Near(200, list.At(), 0.01, "the target 200 px down at once");
+            double shown = list.At() + list.Pt.Off;
+            Eq(true, shown > 0 && shown < 200, $"what is shown part of the way, at {shown:F1} px");
+            list.Settle();
+            Eq(0f, list.Pt.Off, "and there once it settles");
+        });
+
+        run("ScrollList: a row taller than the view scrolls through like any other", () =>
         {
             var list = new Lab(ScrollBy.Pixels, i => i == 100 ? 100_000f : Uneven(i));
             list.Pt = new ScrollPt { Idx = 99 };
             list.Frame();
             list.Wheel(3200f);
-            list.Frame();
+            list.Settle();
             Eq(100, list.Pt.Idx, "into the tall row");
             Near(3200 - Uneven(99), list.Pt.Px, 0.01, "3,200 px from the top of row 99");
             list.Wheel(100_000f - list.Pt.Px + 5f);
-            list.Frame();
+            list.Settle();
             Eq((101, 5f), (list.Pt.Idx, list.Pt.Px), "and out of it, 5 px into the next");
         });
 
-        run("ScrollList by pixels: the end, reached by the wheel or by a target on the last row, is the last row on the bottom", () =>
+        run("ScrollList: the end, reached by the wheel or by a target on the last row, is the last row on the bottom", () =>
         {
             var wheel = new Lab(ScrollBy.Pixels, Uneven);
             for (int k = 0; k < 2000 && wheel.Last < Count; k++) wheel.Wheel(32f);
             for (int k = 0; k < 20; k++) wheel.Wheel(32f);
-            wheel.Frame();
+            wheel.Settle();
             Near(wheel.Total() - Height, wheel.At(), 0.01, "by the wheel, the last screenful, and no further");
             Near(Height, wheel.Bottom, 0.01, "the last row on the bottom");
             var target = new Lab(ScrollBy.Pixels, Uneven);
-            target.Pt = new ScrollPt { Idx = Count - 1 };
-            target.Frame();
-            target.Frame();
+            target.Pt.Target(Count - 1);
+            target.Settle();
             Near(target.Total() - Height, target.At(), 0.01, "by a target, the same");
+            Near(Height, target.Bottom, 0.01, "the last row on the bottom");
         });
 
-        run("ScrollList by rows: a row a step of the wheel, the rest held; a tall row is one step", () =>
+        run("Target shows the row at once, in either list", () =>
         {
-            var list = new Lab(ScrollBy.Rows, i => i == 10 ? 100_000f : Uneven(i));
-            for (int k = 0; k < 40; k++) list.Wheel(7f);
-            list.Frame();
-            Eq(8, list.Pt.Idx, "280 px is 8 steps of 32");
-            Near(0.75f, list.Pt.Off, 1e-4f, "and three quarters of one held");
-            Eq(0f, list.Pt.Px, "resting on a row's top");
-            list.Wheel(32f * 3.25f);
-            list.Frame();
-            Eq(12, list.Pt.Idx, "four more: past the tall row in one");
-        });
-
-        run("ScrollList by rows: the end, reached by the wheel or by a target on the last row, clips the last row, never a gap", () =>
-        {
-            var wheel = new Lab(ScrollBy.Rows, Uneven);
-            for (int k = 0; k < 1200; k++) wheel.Wheel(32f);
-            wheel.Frame();
-            int idx = wheel.Pt.Idx;
-            Eq(Count, wheel.Last, "by the wheel, the last row built");
-            Eq(true, wheel.Bottom >= Height && wheel.Bottom - Uneven(idx) < Height, "the last whole row that leaves no gap");
-            for (int k = 0; k < 20; k++) wheel.Wheel(32f);
-            wheel.Frame();
-            Eq(idx, wheel.Pt.Idx, "twenty more notches move nothing");
-            var target = new Lab(ScrollBy.Rows, Uneven);
-            target.Pt = new ScrollPt { Idx = Count - 1 };
-            target.Frame();
-            target.Frame();
-            Eq((idx, 0f), (target.Pt.Idx, target.Pt.Px), "by a target, the same row, on its top");
-        });
-
-        run("ScrollList: Target shows the row at once, by rows and by pixels", () =>
-        {
-            foreach (var by in new[] { ScrollBy.Rows, ScrollBy.Pixels })
+            foreach (var list in new[] { new Lab(ScrollBy.Rows), new Lab(ScrollBy.Pixels), new Lab(ScrollBy.Pixels, Uneven) })
             {
-                var list = new Lab(by, Uneven);
                 list.Pt.Target(500);
                 list.Frame();
                 list.Frame();
-                Eq((500, 500), (list.Pt.Idx, list.First), $"{by}: row 500 at the top, and staying");
+                Eq((500, 500, 0f), (list.Pt.Idx, list.First, list.Pt.Off), "row 500 at the top, at rest");
             }
         });
 
-        run("ScrollList: rows of one height scroll as RowScrollList's do, by pixels", () =>
+        run("ScrollList: rows of one height scroll as RowScrollList's do by pixels", () =>
         {
             var rows = new Lab(ScrollBy.Pixels);
             var heights = new Lab(ScrollBy.Pixels, _ => Pitch);

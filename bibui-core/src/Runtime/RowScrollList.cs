@@ -4,6 +4,20 @@ using Bibui.Core;
 namespace Bibui.Core.Runtime;
 
 /// <summary>
+/// What a <see cref="RowScrollList"/> scrolls by, and so where it may come to
+/// rest. Its value is the share of the target's part of a row that is shown:
+/// 0 or 1, used as a scale in the list's arithmetic.
+/// </summary>
+public enum ScrollBy
+{
+    /// <summary>Whole rows: the wheel moves the list a row at a time, and it rests on a row's top.</summary>
+    Rows = 0,
+
+    /// <summary>Pixels: the wheel slides the rows as it turns, and the list may rest part way into a row.</summary>
+    Pixels = 1,
+}
+
+/// <summary>
 /// A vertical list of rows that all have the same height, of which only the
 /// rows in sight are built. A list of a hundred thousand rows costs what its
 /// screenful does.
@@ -15,9 +29,8 @@ namespace Bibui.Core.Runtime;
 /// and is built at the first of them in sight, shifted up by the rows of it
 /// above. Rows of their own heights take <see cref="ScrollList"/>.
 ///
-/// It eases: the wheel, and a target moved with <see cref="ScrollPt.Target"/>,
-/// glide there, the list keeping what is shown where it was and easing
-/// <see cref="ScrollPt.Off"/> to 0.
+/// It eases: the wheel moves the target, and what is shown glides there, the
+/// list keeping it where it was and easing <see cref="ScrollPt.Off"/> to 0.
 ///
 /// <code>
 /// var (first, last) = runtime.BeginRowScrollList("log", ref scroll, pitch: 24f, lines.Count, ScrollBy.Pixels);
@@ -53,20 +66,13 @@ public static class RowScrollList
         (view.SizeX, view.SizeY) = (Size.Fill, Size.Fill);
         view.AllowOverflowY = true;
 
-        // Ease, once a frame however often the build runs, and to half a pixel.
-        if (pt.Stepped != runtime.FrameCount)
-        {
-            pt.Stepped = runtime.FrameCount;
-            pt.Off = Ease.Exponential(pt.Off, 0f, runtime.Rates.Follow);
-            if (MathF.Abs(pt.Off) * pitch <= 0.5f) pt.Off = 0f;
-        }
-        if (pt.Off != 0f) runtime.RequestFrame();
+        pt.Ease(runtime);
 
-        // The top shown, in rows: the target, what is still to ease, and by
-        // pixels the part of a row. Kept between the first row and the last
+        // The top shown, in rows: the target, by pixels its part of a row, and
+        // what is still to ease. Kept between the first row and the last
         // screenful, so the rows in sight and the view's offset follow from it.
         float height = view.Extent.Y > 0f ? view.Extent.Y : Unmeasured;   // last frame's
-        float top = Math.Clamp(pt.Idx + pt.Off + (float)by * pt.Px / pitch, 0f, MaxTop(height, pitch, count, by));
+        float top = Math.Clamp(pt.Idx + ((float)by * pt.Px + pt.Off) / pitch, 0f, MaxTop(height, pitch, count, by));
         int first = (int)top;
         int last = Math.Min(count, first + (int)MathF.Ceiling(height / pitch) + 1);
         view.ViewOffset = view.TargetViewOffset = new Vector2(0f, (top - first) * pitch);
@@ -90,7 +96,7 @@ public static class RowScrollList
             throw new InvalidOperationException("EndRowScrollList pops the list's view, and the parent in scope is not one: a parent pushed inside the list was not popped.");
         runtime.EndParent(view);
         float scale = (float)by, height = view.Extent.Y > 0f ? view.Extent.Y : Unmeasured;
-        float before = pt.Idx + scale * pt.Px / pitch;   // where the list comes to rest, in rows
+        double before = (double)pt.Idx * pitch + scale * pt.Px;   // where the list comes to rest, in pixels
 
         // The target in pixels, with the wheel, kept in range; whole rows of
         // it from row Idx, towards zero, are the new Idx, and the rest Px. By
@@ -99,7 +105,7 @@ public static class RowScrollList
         pt.Idx += (int)Math.Truncate((total - (double)pt.Idx * pitch) / pitch);
         pt.Px = (float)(total - (double)pt.Idx * pitch);
 
-        pt.Off += before - (pt.Idx + scale * pt.Px / pitch);   // what is shown stays put, and eases to the new target
+        pt.Off += (float)(before - ((double)pt.Idx * pitch + scale * pt.Px));   // what is shown stays put, and eases to the new target
     }
 
     // The highest the top may be, in rows: the top of the last screenful, so

@@ -5,15 +5,14 @@ namespace ComponentGallery;
 
 // Two lists of a hundred thousand rows, of which only the screenful in sight
 // is built, each with its bar beside it. RowScrollList: every row one pitch
-// tall, so everything follows from the pitch. ScrollList: rows of one to three
-// lines, each row's height asked as the list reaches it. The switch scrolls
-// both by pixels instead of by rows.
+// tall, so everything follows from the pitch; the switch scrolls it by pixels
+// instead of by rows. ScrollList: rows of one to three lines, each row's height
+// asked as the list reaches it, scrolled by pixels.
 internal static class DemoScrollList
 {
     private const int Rows = 100_000;
     private const float Pitch = 28f;     // a row of the first list: one Sm line
     private const float PadY = 6f;       // a row of the second: a Md line and up to two Sm lines, in this padding
-    private const float RowStep = 32f;   // the second list by rows: a notch of the wheel moves it a row
 
     private static ScrollPt _even, _uneven;   // the page's, between frames
     private static bool _byPixels;
@@ -24,7 +23,7 @@ internal static class DemoScrollList
 
     internal static void Build(BibuiRuntime runtime)
     {
-        if (runtime.Switch("sl-by", _byPixels, label: "Scroll by pixels").Clicked) _byPixels = !_byPixels;
+        if (runtime.Switch("sl-by", _byPixels, label: "RowScrollList by pixels").Clicked) _byPixels = !_byPixels;
         ScrollBy by = _byPixels ? ScrollBy.Pixels : ScrollBy.Rows;
         runtime.Gap(16f);
 
@@ -56,7 +55,7 @@ internal static class DemoScrollList
         Bold(runtime, $"ScrollList: {Rows:N0} rows of one to three lines, {_unevenBuilt} built.", ComponentSize.Sm, TextColor.Secondary);
         runtime.Gap(8f);
         var unevenArea = Panel(runtime, "sl-uneven-panel");
-        var rows = runtime.BeginScrollList("sl-uneven", ref _uneven, Rows, by, RowStep);
+        var rows = runtime.BeginScrollList("sl-uneven", ref _uneven, Rows);
         for (int i = rows.Row; rows.More; i = rows.Row)
         {
             float height = 2f * PadY + primary + (LinesOf(i) - 1) * secondary;

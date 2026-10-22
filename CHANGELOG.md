@@ -15,17 +15,17 @@ All notable changes to bibui are recorded here. The format is based on
   where a slow trackpad moves it a pixel at a time and the last row rests on
   the bottom. Everything follows from the pitch, exactly; it eases.
 - **ScrollList for rows of their own heights**: `runtime.BeginScrollList(id,
-  ref scroll, count, by, rowStep)`, a loop of `ScrollRows.Next(ref scroll,
-  height)`, and `EndScrollList(ref scroll, rows)`. It holds no heights: the
-  loop hands each row's in as it reaches it, going up or down by the sign of
-  `ScrollPt.Px`, so the wheel moves exactly through rows of any height, a row
-  taller than the view included. By rows, `rowStep` pixels of wheel move it a
-  row, with no height needed to scroll.
+  ref scroll, count)`, a loop of `ScrollRows.Next(ref scroll, height)`, and
+  `EndScrollList(ref scroll, rows)`, scrolled by pixels. It holds no heights:
+  the loop hands each row's in as it reaches it, going up or down from the row
+  at the top, so the wheel moves exactly through rows of any height, a row
+  taller than the view included. It eases.
 - **A bar for either list**: `runtime.Scrollbar(id, ref scroll, count, first,
   last)` beside it, in a lane of `ScrollList.BarLane` (12 px) that comes
   forward under the pointer. A press on the lane, or a drag, puts the list
   where the pointer is.
-- `ScrollBy` (`Rows`, `Pixels`), and `ScrollPt.Target(idx)`.
+- `ScrollBy` (`Rows`, `Pixels`), and `ScrollPt.Target(idx)`, which shows a
+  row at once. `ScrollPt.Off` is the pixels a list is still easing, in both.
 
 ### Changed
 
@@ -40,6 +40,7 @@ All notable changes to bibui are recorded here. The format is based on
   `ScrollPt.First`, `Last` and `ViewRows`, and `ScrollPt.Target(idx, px,
   pitch)`. Use `BeginRowScrollList` and `EndRowScrollList`, the same list,
   `Scrollbar(id, ref scroll, count, first, last)`, and `ScrollPt.Target(idx)`.
+  `ScrollPt.Off` is now pixels, not rows.
   Removed without a deprecated release first, so the next release is a major
   one.
 
