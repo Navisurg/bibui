@@ -26,6 +26,10 @@
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The damage tests turn the image fast paths off to compare, and count what they drew. -->
+    <InternalsVisibleTo Include="Bibui.Raster.Managed.DamageTests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../src/Bibui.Raster.Managed.csproj" />
     <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
   </ItemGroup>

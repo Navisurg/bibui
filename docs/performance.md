@@ -45,6 +45,10 @@ present.
   60 Hz through damage tracking (`ManagedRenderer.DamageTracking`), which repaints
   only what changed. A typical frame changes a hover colour or a caret, not the
   whole window.
+- **Images.** The managed rasterizer copies an image drawn at its own size on
+  the pixel grid row by row instead of sampling it: a page of 71 opaque and
+  translucent 48 px tiles at 1.25×, 800×500 device px, draws in about 0.1 ms
+  against 0.9–1.0 ms through the image shader, with the same bytes.
 
 ## Pixels
 

@@ -6,6 +6,16 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Images drawn 1:1 are copied, not sampled.** In the managed rasterizer a
+  texture landing on exactly its size in device pixels on the pixel grid has
+  its rows copied (opaque, at full alpha, unmasked) or blended src-over through
+  the clip and its mask (`Canvas.DrawImageAligned`), byte for byte what the
+  image shader drew, at about a tenth of the cost. The image shader knows an
+  opaque texture and reads a whole-pixel offset as rows. Scaled, rotated and
+  fractional draws, lookups, blurred images and RGBA surfaces keep the shader.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning

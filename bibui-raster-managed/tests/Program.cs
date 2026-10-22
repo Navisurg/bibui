@@ -10,7 +10,7 @@ using Bibui.Raster.Managed;
 using Path = Bibui.Raster.Managed.Path;
 
 int passed = 0, failed = 0;
-foreach (var m in typeof(Tests).GetMethods(BindingFlags.Public | BindingFlags.Static).Concat(typeof(StrokeTests).GetMethods(BindingFlags.Public | BindingFlags.Static)).Concat(typeof(EffectTests).GetMethods(BindingFlags.Public | BindingFlags.Static))) // + StrokeTests.cs; + EffectTests.cs
+foreach (var m in typeof(Tests).GetMethods(BindingFlags.Public | BindingFlags.Static).Concat(typeof(StrokeTests).GetMethods(BindingFlags.Public | BindingFlags.Static)).Concat(typeof(EffectTests).GetMethods(BindingFlags.Public | BindingFlags.Static)).Concat(typeof(ImageTests).GetMethods(BindingFlags.Public | BindingFlags.Static))) // + StrokeTests.cs; + EffectTests.cs; + ImageTests.cs
 {
     try
     {
