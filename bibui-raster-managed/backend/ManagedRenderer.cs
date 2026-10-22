@@ -59,9 +59,15 @@ public sealed class ManagedRenderer : IDisposable
     private readonly CpuTarget? _target;
 
     /// <summary>Draws <paramref name="list"/> into the memory the bound target holds now.</summary>
+    /// <remarks>With <see cref="DamageTracking"/>, what it repainted is the target's
+    /// <see cref="CpuTarget.Damage"/>, for the platform to pass on.</remarks>
     public void Draw(DrawList list)
-        => Draw(list, (_target ?? throw new InvalidOperationException(
-            "This renderer is bound to no target: draw with Draw(list, pixels).")).Pixels);
+    {
+        var target = _target ?? throw new InvalidOperationException(
+            "This renderer is bound to no target: draw with Draw(list, pixels).");
+        Draw(list, target.Pixels);
+        target.Damage = DamageTracking && LastRepaint is { } rects ? [.. rects] : null;
+    }
 
     public Antialiasing Antialiasing { get; }
 

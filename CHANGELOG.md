@@ -6,6 +6,23 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **`CpuTarget.Damage`**: where a frame's memory may differ from the frame
+  shown before it. A damage-tracked `ManagedRenderer` bound to a window's `Cpu`
+  sets it; the Wayland window damages only those rects
+  (`wl_surface.damage_buffer`) instead of the whole buffer, and one pixel when
+  nothing changed, so the frame callback still comes. A host that composes the
+  frame itself sets it to what it wrote; null, the default, is all of it.
+
+### Changed
+
+- **Damage tracking works under a transparent background.** A frame clearing
+  to a translucent colour (a theme `Background` of `#00000000`, a frame a host
+  composes over its own ground) was painted whole every time; it is now
+  tracked like any other, each repainted rect set to the background first
+  (`Canvas.ClearRect`).
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning

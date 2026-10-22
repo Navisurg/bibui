@@ -983,10 +983,15 @@ With `new ManagedRenderer { DamageTracking = true }` (or `BIBUI_DAMAGE=1`),
 the renderer compares each `DrawList` draw by draw with the one before, and rasterises only the
 rectangles that differ onto a surface that still holds an earlier frame, such
 as the Wayland window's shared-memory buffers. Nothing above the rasterizer
-changes: every frame is still built, laid out and recorded whole, and the window
-still tells the compositor the whole surface changed. The result is
+changes: every frame is still built, laid out and recorded whole. The result is
 byte-identical to a full repaint, and past half the surface the whole frame is
-drawn. Skia always draws whole frames. See [Performance](performance.md) for
+drawn. A frame that clears to a translucent or transparent background (a theme
+`Background` of `#00000000`, for a frame a host composes over its own ground) is
+tracked too: each repainted rect is set to the background first. A renderer
+bound to a window's `Cpu` target says what it repainted in `CpuTarget.Damage`,
+and the Wayland window passes that to the compositor (`wl_surface.damage_buffer`)
+instead of the whole buffer; a host that composes the frame itself sets `Damage`
+to what it wrote, or leaves it null for all of it. Skia always draws whole frames. See [Performance](performance.md) for
 measurements.
 
 A Wayland window can also draw with Skia (`new SkiaCpuRenderer(window.Cpu)`), and

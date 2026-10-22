@@ -43,7 +43,8 @@ present.
   time, GL costs about 1.0 ms (GPU time not counted), Wayland shared memory
   about 2.4 ms and the Skia CPU fallback about 4.3 ms. A CPU-only stack holds
   60 Hz through damage tracking (`ManagedRenderer.DamageTracking`), which repaints
-  only what changed. A typical frame changes a hover colour or a caret, not the
+  only what changed, under an opaque or a transparent background, and tells the
+  compositor only that. A typical frame changes a hover colour or a caret, not the
   whole window.
 
 ## Pixels

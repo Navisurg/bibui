@@ -610,26 +610,19 @@ internal sealed class DamageFrame
     /// <summary>
     /// Draws <paramref name="list"/>, the frame this signs, onto
     /// <paramref name="c"/>, which must hold a frame that equals this one outside
-    /// <paramref name="rects"/>: each rect is cleared to the (opaque) background
-    /// and repainted on its own.
+    /// <paramref name="rects"/>: each rect is set to the background — translucent
+    /// or not, as the frame's clear writes it — and repainted on its own.
     /// </summary>
     internal void Replay(ManagedRenderer renderer, DrawList list, Canvas c, IReadOnlyList<PixelRect> rects)
     {
         var ops = list.Ops;
-        var clear = new Paint { Color = Background.Argb, Style = PaintStyle.Fill, Aliased = true };
         foreach (var r in rects)
         {
             if (r.Width <= 0 || r.Height <= 0) continue;
             var rect = new Rect(r.Left, r.Top, r.Right, r.Bottom);
             // Nothing drawn before the last op that covers all of r shows in r.
             int from = CoveredUpTo(r);
-            if (from == 0)
-            {
-                c.Save();
-                c.ClipRect(rect);
-                c.DrawRoundRect(rect.Sorted(), 0f, 0f, clear);
-                c.Restore();
-            }
+            if (from == 0) c.ClearRect(new IRect(r.Left, r.Top, r.Right, r.Bottom), Background.Argb);
             for (int k = 0; k < OpCount; k++)
             {
                 ref var op = ref Ops[k];

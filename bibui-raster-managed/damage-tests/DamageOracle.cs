@@ -27,12 +27,16 @@ internal static class DamageOracle
 
     internal sealed record Result(int Frames, int Mismatches, int Partial, string? FirstMismatch);
 
-    internal static Result Run(Scene scene, int ring)
+    /// <summary>
+    /// <paramref name="transparent"/>: the theme's background is <c>#00000000</c>, so each
+    /// frame clears to transparent (a frame a host composes over its own ground).
+    /// </summary>
+    internal static Result Run(Scene scene, int ring, bool transparent = false)
     {
         var fullRenderer = new ManagedRenderer();
         var dmgRenderer = new ManagedRenderer { DamageTracking = true };
-        var full = Make(scene, fullRenderer, out var stepFull);
-        var dmg = Make(scene, dmgRenderer, out var stepDmg);
+        var full = Make(scene, fullRenderer, out var stepFull, transparent);
+        var dmg = Make(scene, dmgRenderer, out var stepDmg, transparent);
 
         Surface? sf = null;
         var sd = new Surface?[ring];
@@ -71,12 +75,16 @@ internal static class DamageOracle
         return new Result(scene.Frames, mismatches, partial, first);
     }
 
-    private static BibuiRuntime Make(Scene scene, ManagedRenderer renderer, out Action<int> step)
+    /// <summary><paramref name="theme"/> with a transparent background: frames clear to <c>#00000000</c>.</summary>
+    internal static ThemeTokens Transparent(ThemeTokens theme) => theme with { Colors = theme.Colors with { Background = "#00000000" } };
+
+    internal static BibuiRuntime Make(Scene scene, ManagedRenderer renderer, out Action<int> step, bool transparent = false)
     {
         var rt = BibuiRuntime.Create();
         rt.TargetHz = 60f;
         var (build, s) = scene.Setup(rt, renderer);
-        rt.SetBuild(build, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = scene.Width, Height = scene.Height, ScaleFactor = scene.Scale });
+        var theme = transparent ? Transparent(ThemeLoader.BibuiDark()) : ThemeLoader.BibuiDark();
+        rt.SetBuild(build, theme, new SurfaceOptions { Width = scene.Width, Height = scene.Height, ScaleFactor = scene.Scale });
         step = s;
         return rt;
     }
