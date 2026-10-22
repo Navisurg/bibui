@@ -7760,6 +7760,24 @@ Run("Solver: a floating child is placed where it says and not counted", () =>
     Eq(V(107, 109), floating.Rect);
 });
 
+Run("Solver: a floating share is a share of the parent's final size", () =>
+{
+    // A fill gives up 28 px to a status bar, and a box floating over it fills it: the overlay is
+    // as tall as the fill ends, not as tall as the fill was before it gave room up. Across, the
+    // same: a column cut to its 200 px parent cuts its floating fill with it.
+    var root = Node(null, SemanticSize.Pixels(200), SemanticSize.Pixels(600), LayoutAxis.Y);
+    var content = Node(root, SemanticSize.Pixels(300, 0f), SemanticSize.ParentPct(1), LayoutAxis.Y);
+    Node(root, SemanticSize.ParentPct(1), SemanticSize.Pixels(28));
+    var overlay = Node(content, SemanticSize.ParentPct(1), SemanticSize.ParentPct(1));
+    overlay.FloatingX = overlay.FloatingY = true;
+    var half = Node(content, SemanticSize.ParentPct(0.5f), SemanticSize.ParentPct(0.5f));
+    half.FloatingX = half.FloatingY = true;
+    LayoutSolver.Layout(root, V(0, 0), V(200, 600), leaf);
+    Eq(V(200, 572), content.Extent, "the fill gives the status bar its 28 px and is cut to the root");
+    Eq(V(200, 572), overlay.Extent, "the floating fill is the fill's final size");
+    Eq(V(100, 286), half.Extent, "and a floating half is half of it");
+});
+
 Run("Solver: text wraps at the width it is given, not the parent's", () =>
 {
     var row = Node(null, SemanticSize.Pixels(200), SemanticSize.ChildrenSum());

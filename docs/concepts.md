@@ -128,6 +128,9 @@ How the solver uses those sizes:
   parent.
 - **Floating nodes** (`.At(x, y)`) are out of the flow. They sit at that offset
   from the parent's top-left corner, and the parent's size does not count them.
+  A floating `Size.Fill` or `Size.Pct` is a share of the parent's final size,
+  after the parent has given up room to its siblings or been cut to its own
+  parent.
 - **The root** is always the size of the surface, whatever it asks for. Its
   children can fill it.
 

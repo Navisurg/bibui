@@ -6,6 +6,17 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **A floating share is a share of its parent's final size.** A floating
+  child (`.At(x, y)`) sized `Size.Fill` or `Size.Pct` took its share of the
+  parent before the constraints shrank the parent, and kept it: in a 600 px
+  column of `[content: Size.Fill][status bar: Size.Px(28f)]`, the content is
+  572 px tall but an overlay floating over it with `Size.Fill` stayed 600 px
+  and ran over the status bar. The share is now taken again of the parent's
+  size once its own parent has constrained it, along the layout axis and
+  across it. Children in the flow are unchanged.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning
