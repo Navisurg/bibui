@@ -8,39 +8,26 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
-- **RowScrollList**: `runtime.BeginRowScrollList(id, ref scroll, pitch,
-  count, by)` and `EndRowScrollList`, the list of rows of one pitch, of which
-  only those in sight are built. It scrolls by rows, resting on a row's top
-  with the last row clipped at the end, or by pixels (`ScrollBy.Pixels`),
-  where a slow trackpad moves it a pixel at a time and the last row rests on
-  the bottom. Everything follows from the pitch, exactly; it eases.
-- **ScrollList for rows of their own heights**: `runtime.BeginScrollList(id,
-  ref scroll, count)`, a loop of `ScrollRows.Next(ref scroll, height)`, and
-  `EndScrollList(ref scroll, rows)`, scrolled by pixels. It holds no heights:
-  the loop hands each row's in as it reaches it, going up or down from the row
-  at the top, so the wheel moves exactly through rows of any height, a row
-  taller than the view included. It eases.
-- **A bar for either list**: `runtime.Scrollbar(id, ref scroll, count, first,
-  last)` beside it, in a lane of `ScrollList.BarLane` (12 px) that comes
-  forward under the pointer. A press on the lane, or a drag, puts the list
-  where the pointer is.
-- `ScrollBy` (`Rows`, `Pixels`), and `ScrollPt.Target(idx)`, which shows a
-  row at once. `ScrollPt.Off` is the pixels a list is still easing, in both.
+- **RowScrollList** (`runtime.BeginRowScrollList`, `EndRowScrollList`): the
+  list of rows of one pitch, building only those in sight, by rows or by
+  pixels (`ScrollBy`). It eases.
+- **ScrollList** (`runtime.BeginScrollList(id, ref scroll, count)`, a loop of
+  `ScrollRows.Next`, `EndScrollList`): rows of their own heights, by pixels.
+  It holds no heights; the loop hands each in as the list reaches the row, so
+  the wheel moves exactly through rows of any height. It eases.
+- `runtime.Scrollbar(id, ref scroll, count, first, last)`, a bar for either.
 
 ### Changed
 
-- The gallery's ScrollList page shows both lists, with a switch to scroll by
-  pixels; the showcase's target queue is a RowScrollList, its bar the list's.
+- The gallery's ScrollList page shows both lists; the showcase's target queue
+  is a RowScrollList.
 
 ### Removed
 
-- **Breaking:** the list of rows of one pitch as it was:
-  `ScrollList.BeginScrollList(id, ref scroll, pitch, count)`,
-  `EndScrollList(ref scroll)` and `Scrollbar(id, scroll, count, viewRows)`,
-  `ScrollPt.First`, `Last` and `ViewRows`, and `ScrollPt.Target(idx, px,
-  pitch)`. Use `BeginRowScrollList` and `EndRowScrollList`, the same list,
-  `Scrollbar(id, ref scroll, count, first, last)`, and `ScrollPt.Target(idx)`.
-  `ScrollPt.Off` is now pixels, not rows.
+- **Breaking:** the pitch overloads `BeginScrollList(id, ref scroll, pitch,
+  count)`, `EndScrollList(ref scroll)` and `Scrollbar(id, scroll, count,
+  viewRows)`, `ScrollPt.First`, `Last`, `ViewRows` and `Target(idx, px,
+  pitch)`. Use RowScrollList, the same list. `ScrollPt.Off` is now pixels.
   Removed without a deprecated release first, so the next release is a major
   one.
 

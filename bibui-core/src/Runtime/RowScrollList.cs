@@ -3,11 +3,7 @@ using Bibui.Core;
 
 namespace Bibui.Core.Runtime;
 
-/// <summary>
-/// What a <see cref="RowScrollList"/> scrolls by, and so where it may come to
-/// rest. Its value is the share of the target's part of a row that is shown:
-/// 0 or 1, used as a scale in the list's arithmetic.
-/// </summary>
+/// <summary>What a <see cref="RowScrollList"/> scrolls by. Its value, 0 or 1, is a scale in the list's arithmetic.</summary>
 public enum ScrollBy
 {
     /// <summary>Whole rows: the wheel moves the list a row at a time, and it rests on a row's top.</summary>
@@ -18,20 +14,10 @@ public enum ScrollBy
 }
 
 /// <summary>
-/// A vertical list of rows that all have the same height, of which only the
-/// rows in sight are built. A list of a hundred thousand rows costs what its
-/// screenful does.
-///
-/// Every row is <c>pitch</c> apart, top to top, so where a row and a pixel are,
-/// which rows are in sight and where the list ends all follow from the pitch:
-/// nothing is walked and nothing is estimated. Something several rows tall is
-/// the caller's to map onto whole rows: it covers rows <c>i</c> to <c>i + n</c>,
-/// and is built at the first of them in sight, shifted up by the rows of it
-/// above. Rows of their own heights take <see cref="ScrollList"/>.
-///
-/// It eases: the wheel moves the target, and what is shown glides there, the
-/// list keeping it where it was and easing <see cref="ScrollPt.Off"/> to 0.
-///
+/// A vertical list of rows of one height, <c>pitch</c> apart, of which only
+/// those in sight are built; everything follows from the pitch. Something
+/// several rows tall is the caller's to map onto whole rows. Rows of their own
+/// heights take <see cref="ScrollList"/>.
 /// <code>
 /// var (first, last) = runtime.BeginRowScrollList("log", ref scroll, pitch: 24f, lines.Count, ScrollBy.Pixels);
 /// for (int i = first; i &lt; last; i++) Line(lines[i]);
@@ -46,15 +32,10 @@ public static class RowScrollList
     private const float Unmeasured = 4096f;
 
     /// <summary>
-    /// Builds the view named <paramref name="id"/>, filling what the parent
-    /// leaves, eases <paramref name="pt"/> a frame, and pushes the view for the
-    /// rows. Returns the rows in sight: build [First, Last), each
-    /// <paramref name="pitch"/> tall, then call <see cref="EndRowScrollList"/>
-    /// with the same pitch, count and <paramref name="by"/>.
+    /// Builds and pushes the view named <paramref name="id"/>, filling the
+    /// parent, and returns the rows in sight: build [First, Last), each
+    /// <paramref name="pitch"/> tall.
     /// </summary>
-    /// <param name="pitch">The distance from the top of one row to the top of the next.</param>
-    /// <param name="count">How many rows there are.</param>
-    /// <param name="by">Whether the list rests on whole rows or may rest part way into one.</param>
     public static (int First, int Last) BeginRowScrollList(this BibuiRuntime runtime, string id, ref ScrollPt pt, float pitch, int count, ScrollBy by = ScrollBy.Rows)
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -68,9 +49,7 @@ public static class RowScrollList
 
         pt.Ease(runtime);
 
-        // The top shown, in rows: the target, by pixels its part of a row, and
-        // what is still to ease. Kept between the first row and the last
-        // screenful, so the rows in sight and the view's offset follow from it.
+        // The top shown, in rows, kept between the first row and the last screenful.
         float height = view.Extent.Y > 0f ? view.Extent.Y : Unmeasured;   // last frame's
         float top = Math.Clamp(pt.Idx + ((float)by * pt.Px + pt.Off) / pitch, 0f, MaxTop(height, pitch, count, by));
         int first = (int)top;
@@ -81,14 +60,7 @@ public static class RowScrollList
         return (first, last);
     }
 
-    /// <summary>
-    /// Pops the view <see cref="BeginRowScrollList"/> pushed, the parent in
-    /// scope, then spends the wheel over it. Its pixels move the target, kept
-    /// between the first row and the last screenful: whole rows into
-    /// <see cref="ScrollPt.Idx"/>, the rest into <see cref="ScrollPt.Px"/>.
-    /// What is shown stays put and eases to the new target, so by rows a row
-    /// moved eases, and by pixels the glide does.
-    /// </summary>
+    /// <summary>Pops the view and moves the target by the wheel over it, kept between the first row and the last screenful.</summary>
     public static void EndRowScrollList(this BibuiRuntime runtime, ref ScrollPt pt, float pitch, int count, ScrollBy by = ScrollBy.Rows)
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -98,9 +70,8 @@ public static class RowScrollList
         float scale = (float)by, height = view.Extent.Y > 0f ? view.Extent.Y : Unmeasured;
         double before = (double)pt.Idx * pitch + scale * pt.Px;   // where the list comes to rest, in pixels
 
-        // The target in pixels, with the wheel, kept in range; whole rows of
-        // it from row Idx, towards zero, are the new Idx, and the rest Px. By
-        // rows the wheel held past either end is clamped away with it.
+        // The target in pixels, with the wheel, kept in range: whole rows of it
+        // are Idx, the rest Px.
         double total = Math.Clamp((double)pt.Idx * pitch + pt.Px + runtime.InteractionsFor(view).ScrollY, 0, MaxTop(height, pitch, count, by) * pitch);
         pt.Idx += (int)Math.Truncate((total - (double)pt.Idx * pitch) / pitch);
         pt.Px = (float)(total - (double)pt.Idx * pitch);
@@ -108,9 +79,8 @@ public static class RowScrollList
         pt.Off += (float)(before - ((double)pt.Idx * pitch + scale * pt.Px));   // what is shown stays put, and eases to the new target
     }
 
-    // The highest the top may be, in rows: the top of the last screenful, so
-    // the last row is on the bottom. By rows, the whole row at or above it, so
-    // the target is a row and the last row is clipped rather than a gap left.
+    // The highest the top may be, in rows: by pixels the last row on the
+    // bottom, by rows the whole row above that, the last row clipped.
     private static float MaxTop(float height, float pitch, int count, ScrollBy by)
     {
         float top = MathF.Max(0f, count - height / pitch);

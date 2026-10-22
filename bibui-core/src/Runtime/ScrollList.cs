@@ -4,31 +4,17 @@ using Bibui.Core;
 namespace Bibui.Core.Runtime;
 
 /// <summary>
-/// Where a scroll list is scrolled to, in pixels from the top of a row. The
-/// caller keeps it between frames, beside the rows it scrolls, and hands it by
-/// reference to a list's Begin and End and to its <see cref="ScrollList.Scrollbar"/>:
-/// it is all a list keeps from one frame to the next.
-///
-/// <see cref="Idx"/> and <see cref="Px"/> are the target, where the list
-/// comes to rest: <see cref="Px"/> pixels below the top of row <see cref="Idx"/>.
-/// <see cref="Off"/> is how far what is shown still is from it, in pixels,
-/// eased to 0 once a frame: the top shown is <c>Px + Off</c> below the top of
-/// row Idx. A list moving the target keeps what is shown where it was, by
-/// putting the difference into Off, so it eases there. Setting
-/// <see cref="Idx"/> (with Px and Off 0), or <see cref="Target"/>, shows a row
-/// at once.
+/// Where a <see cref="ScrollList"/> or <see cref="RowScrollList"/> is
+/// scrolled to: all it keeps between frames, kept by the caller. The target
+/// is <see cref="Px"/> pixels below the top of row <see cref="Idx"/>; what is
+/// shown is <see cref="Off"/> pixels from it, easing to 0.
 /// </summary>
 public struct ScrollPt
 {
     /// <summary>The row the position is measured from: at rest, the row at the top.</summary>
     public int Idx;
 
-    /// <summary>
-    /// The target: how far below row <see cref="Idx"/>'s top the top of the
-    /// view comes to rest, in pixels. At rest, inside row Idx. A
-    /// <see cref="RowScrollList"/> by rows rests on a row's top and holds the
-    /// wheel not yet a row here, unseen.
-    /// </summary>
+    /// <summary>The target, in pixels below row <see cref="Idx"/>'s top. By rows, a <see cref="RowScrollList"/> holds the wheel not yet a row here, unseen.</summary>
     public float Px;
 
     /// <summary>How far, in pixels, what is shown still is from the target. Eased to 0 once a frame.</summary>
@@ -39,8 +25,7 @@ public struct ScrollPt
     /// <summary>Shows row <paramref name="idx"/> at the top, at once.</summary>
     public void Target(int idx) => (Idx, Px, Off) = (idx, 0f, 0f);
 
-    // Eases Off a frame, once a frame however often the build runs, and to
-    // half a pixel; asks for another frame while it moves.
+    // Once a frame however often the build runs, to half a pixel.
     internal void Ease(BibuiRuntime runtime)
     {
         if (Stepped != runtime.FrameCount)
@@ -53,17 +38,7 @@ public struct ScrollPt
     }
 }
 
-/// <summary>
-/// One frame's loop over a <see cref="ScrollList"/>: which row's height it
-/// wants next, whether it wants another, and how far the building has got.
-/// <see cref="ScrollList.BeginScrollList"/> returns it.
-/// <code>
-/// var rows = runtime.BeginScrollList("inbox", ref scroll, messages.Count);
-/// for (int i = rows.Row; rows.More; i = rows.Row)
-///     if (rows.Next(ref scroll, HeightOf(i))) Message(i);
-/// runtime.EndScrollList(ref scroll, rows);
-/// </code>
-/// </summary>
+/// <summary>One frame's loop over a <see cref="ScrollList"/>, from <see cref="ScrollList.BeginScrollList"/>.</summary>
 public struct ScrollRows
 {
     /// <summary>The row whose height <see cref="Next"/> wants next.</summary>
@@ -81,17 +56,13 @@ public struct ScrollRows
     internal Box View;         // the list's, for its offset
 
     /// <summary>
-    /// Row <see cref="Row"/> is <paramref name="height"/> tall: moves
-    /// <paramref name="pt"/> onto it or past it as the top shown needs, and
-    /// says whether to build it now, exactly <paramref name="height"/> tall.
-    /// Rows are asked for in the order the top needs: up while it is above row
-    /// Idx, then down from the row at the top.
+    /// Row <see cref="Row"/> is <paramref name="height"/> tall: steps
+    /// <paramref name="pt"/> onto it or past it, or says to build it, exactly
+    /// that tall.
     /// </summary>
     public bool Next(ref ScrollPt pt, float height)
     {
-        // Up: the top shown is above row Idx, and this is the row above. Onto
-        // it, the target measured from it too; the row above that next if the
-        // top is above it as well, else the way down from it, where it is built.
+        // Up: the top shown is above row Idx, and this is the row above.
         if (pt.Px + pt.Off < 0f)
         {
             pt.Idx = Row;
@@ -101,8 +72,7 @@ public struct ScrollRows
             return false;
         }
 
-        // Down: nothing built yet, and the top shown is past this row: past it,
-        // so the next is the top. Never past the last row.
+        // Down: nothing built yet, and the top shown is past this row.
         if (Built == 0 && pt.Px + pt.Off >= height && pt.Idx < Count - 1)
         {
             pt.Idx++;
@@ -111,8 +81,7 @@ public struct ScrollRows
             return false;
         }
 
-        // In view: built. The first sets the view's offset, how far past its
-        // top the view shows.
+        // In view. The first row built sets the view's offset.
         if (Built == 0)
         {
             View.ViewOffset = View.TargetViewOffset = new Vector2(0f, pt.Px + pt.Off);
@@ -134,19 +103,17 @@ public struct ScrollRows
 }
 
 /// <summary>
-/// A vertical list of rows of any height, scrolled by pixels, of which only
-/// the rows in sight are built. It holds no heights: one loop hands them in as
-/// it needs them (<see cref="ScrollRows.Next"/>), and the top shown says which
-/// way to go: up while it is above row Idx, past the rows scrolled past, then
-/// down through the view, building what is in it. Each height is asked of the
-/// caller as the list reaches the row, so it must be known before the row is
-/// built (from what the row holds: a line height per line, and padding).
-///
-/// The wheel moves the target exactly through the heights of the rows it
-/// passes, however tall: a row taller than the view scrolls through like any
-/// other. What is shown eases there. At the end the last row comes to rest on
-/// the bottom. Rows all of one height, or a list to step through by rows,
-/// take <see cref="RowScrollList"/>.
+/// A vertical list of rows of their own heights, scrolled by pixels, of which
+/// only those in sight are built. It holds no heights: the loop hands each in
+/// as the list reaches the row, going up or down from the row at the top, so
+/// the wheel moves exactly through rows of any height. Rows of one height take
+/// <see cref="RowScrollList"/>.
+/// <code>
+/// var rows = runtime.BeginScrollList("inbox", ref scroll, messages.Count);
+/// for (int i = rows.Row; rows.More; i = rows.Row)
+///     if (rows.Next(ref scroll, HeightOf(i))) Message(i);
+/// runtime.EndScrollList(ref scroll, rows);
+/// </code>
 /// </summary>
 public static class ScrollList
 {
@@ -160,14 +127,7 @@ public static class ScrollList
     // The thumb's thickness in its lane, and the least it is along it.
     private const float BarThickness = 6f, BarMinThumb = 24f;
 
-    /// <summary>
-    /// Builds the view named <paramref name="id"/>, filling what the parent
-    /// leaves, eases <paramref name="pt"/> a frame, and pushes the view for
-    /// the rows. Returns the loop: while <see cref="ScrollRows.More"/>, hand
-    /// <see cref="ScrollRows.Next"/> the height of <see cref="ScrollRows.Row"/>,
-    /// and build that row when it says so; then call <see cref="EndScrollList"/>.
-    /// Ask the count first: no height is asked past it.
-    /// </summary>
+    /// <summary>Builds and pushes the view named <paramref name="id"/>, filling the parent, and returns the loop.</summary>
     public static ScrollRows BeginScrollList(this BibuiRuntime runtime, string id, ref ScrollPt pt, int count)
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -194,13 +154,7 @@ public static class ScrollList
         };
     }
 
-    /// <summary>
-    /// Pops the view <see cref="BeginScrollList"/> pushed, the parent in scope,
-    /// then moves the target by the wheel over it, keeping what is shown where
-    /// it is, so it eases there. Once the last row was built the room left
-    /// under the view is exact: the target goes no further than to rest the
-    /// last row on the bottom, and a gap shown there closes at once.
-    /// </summary>
+    /// <summary>Pops the view and moves the target by the wheel over it, no further than to rest the last row on the bottom.</summary>
     public static void EndScrollList(this BibuiRuntime runtime, ref ScrollPt pt, in ScrollRows rows)
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -209,13 +163,11 @@ public static class ScrollList
         runtime.EndParent(view);
         float dy = runtime.InteractionsFor(view).ScrollY;
 
-        // The room left under the view as shown, exact once the last row was
-        // built: below 0 a gap. The target's is that and what is still to ease.
+        // The room under the view, exact once the last row was built; below 0 a gap.
         bool sawEnd = rows.Built > 0 && pt.Idx + rows.Built == rows.Count;
         float room = sawEnd ? rows.Y - rows.Height : float.PositiveInfinity;
 
-        // The wheel moves the target, no further than the end; what is shown
-        // stays put and eases there. A gap shown closes at once.
+        // What is shown stays put and eases to the target; a gap closes at once.
         dy = MathF.Min(dy, room + pt.Off);
         pt.Px += dy;
         pt.Off -= dy;
@@ -226,18 +178,10 @@ public static class ScrollList
     }
 
     /// <summary>
-    /// Builds the bar named <paramref name="id"/> in the parent in scope, beside
-    /// a list of <paramref name="count"/> rows that showed rows
-    /// <paramref name="first"/> up to <paramref name="last"/> this frame: a
-    /// <see cref="ScrollList"/> or a <see cref="RowScrollList"/>. Lay the list
-    /// and the bar out in a row; the bar takes <see cref="BarLane"/>.
-    ///
-    /// It knows rows, not their heights: the thumb is the share of the rows
-    /// shown, placed by the rows above the first shown against those after the
-    /// last, so it is at the top at the first row and at the bottom at the end.
-    /// A press on the lane, or a drag from the lane or the thumb, shows the row
-    /// that puts the thumb's centre under the pointer, at once; a press on the
-    /// thumb alone moves nothing.
+    /// Builds the bar named <paramref name="id"/> beside a list that showed rows
+    /// <paramref name="first"/> up to <paramref name="last"/> of <paramref name="count"/>
+    /// this frame. It counts rows, not heights. A press or a drag on it shows
+    /// the row that puts the thumb's centre under the pointer.
     /// </summary>
     public static void Scrollbar(this BibuiRuntime runtime, string id, ref ScrollPt pt, int count, int first, int last)
     {
@@ -246,11 +190,6 @@ public static class ScrollList
         Box lane = runtime.BoxFromId(id, InteractionKinds.LeftPress);
 
         // ── Track: where the thumb is, in rows ───────────────────────────────
-        // Above: the rows above the first shown. Below: the rows after the last
-        // shown. So each is 0 at its end of the list. The thumb is the share of
-        // the rows shown, along the lane as it was last laid out.
-        // NOTE(k): rows, not heights: the thumb moves a row at a time, and a
-        // row of any height is one row of the bar.
         float above = first, below = count - last;
         float range = above + below;   // 0: all of it in view
         float t = range > 0f ? Math.Clamp(above / range, 0f, 1f) : 0f;
@@ -266,9 +205,7 @@ public static class ScrollList
         lane.Style.CornerRadius = BarLane / 2f;
         if (range <= 0f) return;
 
-        // The lane is the one box that takes the pointer, so it stays hot over
-        // the thumb too. The thumb is drawn only: a step brighter than the lane
-        // under the pointer, and again while held.
+        // The lane alone takes the pointer, so it stays hot over the thumb.
         Interaction onLane = runtime.InteractionsFor(lane);
         bool held = onLane.Pressed || lane.ActiveT >= 1f;   // pressed, and held since: the lane is the active box
         Box thumb = runtime.BoxFromId(id + "-thumb", parent: lane);
@@ -278,10 +215,7 @@ public static class ScrollList
         thumb.Style.CornerRadius = BarThickness / 2f;
         thumb.Style.BackgroundColor = held ? UiColor.SurfaceRaisedActive : onLane.Hovering ? UiColor.SurfaceRaisedHover : UiColor.SurfaceRaised;
 
-        // A press on the lane, or a drag: the thumb's centre under the pointer,
-        // as a share of its travel, and the row that share of the range is. A
-        // press on the thumb, as it was drawn, moves nothing until the pointer
-        // does (Dragging is the button held, moved or not).
+        // A press on the thumb alone moves nothing until the pointer does.
         bool onThumb = onLane.Y >= thumb.Rect.Y && onLane.Y <= thumb.Rect.Y + thumb.Extent.Y;
         bool moved = onLane.Dragging && onLane.DragDeltaY != 0f;
         if (!(onLane.Pressed && !onThumb || moved)) return;
