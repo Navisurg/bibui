@@ -6,6 +6,14 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Damage tracking repaints a draw whose bounds are not numbers.** A draw
+  whose top or bottom is NaN or infinite (a series with a missing sample, a
+  run of text in a face whose metrics are NaN) was given empty bounds and left
+  out of a partial repaint, so it kept its old pixels; it now repaints its
+  whole clip, as one whose left or right is not a number already did.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning

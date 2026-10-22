@@ -153,6 +153,58 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
     IsTrue(after.AsSpan().SequenceEqual(fpx()), "and the tracked frame equals a whole repaint");
 });
 
+Run("A draw whose bounds are not numbers top to bottom is repainted, not skipped", () =>
+{
+    // A series with a missing sample: the segment to the NaN draws nothing, the
+    // others do, and the op's vertical extent is NaN while its horizontal one
+    // is a number. (A run of text in a face whose metrics are NaN is the same.)
+    (Action Step, Func<uint[]> Pixels, ManagedRenderer Backend) Chart(bool tracked, Func<Rgba> colour)
+    {
+        var backend = new ManagedRenderer { DamageTracking = tracked };
+        var rt = BibuiRuntime.Create();
+        rt.TargetHz = 60f;
+        rt.SetBuild(() =>
+        {
+            var page = rt.Column().Sized(Size.Fill, Size.Fill);
+            page.Style.Padding = EdgeInsets.All(8f);
+            using var inPage = rt.Parent(page);
+            var chart = rt.BoxFromId("series", InteractionKinds.None);
+            chart.Sized(Size.Px(120f), Size.Px(60f));
+            chart.Draw = (_, ctx) =>
+            {
+                var r = ctx.Logical;
+                ReadOnlySpan<System.Numerics.Vector2> series =
+                [
+                    new(r.Left + 4f, r.Top + 10f), new(r.Left + 40f, r.Bottom - 10f),
+                    new(r.Left + 40f, r.Bottom - 10f), new(r.Left + 70f, float.NaN),
+                    new(r.Left + 80f, r.Top + 20f), new(r.Right - 4f, r.MidY),
+                ];
+                // A plot clips to its area: the whole clip is what such a draw repaints.
+                ctx.PushClip(r);
+                ctx.DrawPoints(PointMode.Lines, series, Paint.Stroked(colour(), 3f));
+                ctx.PopClip();
+            };
+            return page;
+        }, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = 320, Height = 160, ScaleFactor = 1f });
+        var target = new Surface(320, 160);
+        return (() => Frame(rt, backend, target), () => { var px = new uint[320 * 160]; target.CopyTo(px); return px; }, backend);
+    }
+
+    var colour = new Rgba(80, 200, 120);
+    var (dmg, dpx, backend) = Chart(tracked: true, () => colour);
+    var (full, fpx, _) = Chart(tracked: false, () => colour);
+    dmg(); full();
+    dmg(); full();
+    var before = dpx();
+    IsTrue(before.AsSpan().SequenceEqual(fpx()), "tracked and whole agree before the change");
+
+    colour = new Rgba(230, 60, 60);
+    dmg(); full();
+    IsTrue(backend.LastRepaint is { Count: > 0 }, $"the change is repainted in part ({backend.LastFullRepaintReason})");
+    IsTrue(!fpx().AsSpan().SequenceEqual(before), "the series drew in its new colour");
+    IsTrue(dpx().AsSpan().SequenceEqual(fpx()), "and the tracked frame equals a whole repaint");
+});
+
 foreach (var scene in DamageOracle.Scenes())
     foreach (int ring in new[] { 1, 3 })
         Run($"Oracle: {scene.Name}, ring {ring}: every frame equals a whole repaint", () =>

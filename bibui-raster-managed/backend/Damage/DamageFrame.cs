@@ -397,7 +397,9 @@ internal sealed class DamageFrame
         // geometry touches, so half a pixel and rounding out is conservative.
         // A blur spreads 3 sigma.
         float grow = 0.5f + (blur > 0f ? (3f * blur + 1f) * MathF.Max(1f, MatrixScale) : 0f);
-        if (float.IsNaN(d.Left) || float.IsInfinity(d.Left) || float.IsNaN(d.Right) || float.IsInfinity(d.Right))
+        // Bounds that are not numbers (a NaN point, a font with no metrics) may be
+        // anywhere: the whole clip, never nothing.
+        if (!float.IsFinite(d.Left) || !float.IsFinite(d.Right) || !float.IsFinite(d.Top) || !float.IsFinite(d.Bottom))
             return new PixelRect((int)_s.CL, (int)_s.CT, (int)_s.CR, (int)_s.CB);
         return new PixelRect(
             (int)MathF.Floor(MathF.Max(-1e6f, d.Left - grow)), (int)MathF.Floor(MathF.Max(-1e6f, d.Top - grow)),
