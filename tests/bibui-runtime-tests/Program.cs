@@ -8062,6 +8062,41 @@ Run("A held Backspace keeps deleting in a text field", () =>
     Eq("a", text.ToString(), "one press and two repeats delete three characters");
 });
 
+Run("DrawContext.Transform says where a callback lands; Snap puts a rect's corner on a whole pixel", () =>
+{
+    // At 1.25 a box 9 logical px in lands at 11.25 device px: off the grid.
+    System.Numerics.Matrix3x2 seen = default, pushed = default, popped = default;
+    RectF snapped = default, kept = default;
+    var drawn = new Box
+    {
+        Draw = (_, ctx) =>
+        {
+            seen = ctx.Transform;
+            snapped = ctx.Snap(new RectF(2f, 3.5f, 42f, 33.5f));
+            ctx.PushTransform(System.Numerics.Matrix3x2.CreateTranslation(0.5f, 0f));
+            ctx.PushClip(new RectF(0f, 0f, 10f, 10f));
+            pushed = ctx.Transform;
+            ctx.PopClip();
+            ctx.PushTransform(System.Numerics.Matrix3x2.CreateScale(2f));
+            kept = ctx.Snap(new RectF(0.3f, 0.3f, 1f, 1f));
+            ctx.PopTransform();
+            ctx.PopTransform();
+            popped = ctx.Transform;
+        },
+    }.Sized(Size.Px(40f), Size.Px(40f));
+    var root = new Box { SizeX = SemanticSize.ChildrenSum(), SizeY = SemanticSize.ChildrenSum() }.Padded(new EdgeInsets(5f, 0f, 0f, 9f));
+    UiNode.PushIntoParent(root, drawn);
+    Frames.Frame(root, new SurfaceOptions { Width = 100, Height = 80, ScaleFactor = 1.25f }, ThemeLoader.NeutralDark());
+    Eq(11.25f, seen.M31, "the painter's translation to the box, in device px");
+    Eq(6.25f, seen.M32, "both ways");
+    Eq(11.75f, pushed.M31, "a callback's own transform after it, a clip changing nothing");
+    Eq(11.25f, popped.M31, "and popped again");
+    Eq(13f, snapped.Left + seen.M31, "the snapped rect's left lands on a whole pixel");
+    Eq(10f, snapped.Top + seen.M32, "and its top");
+    Eq(40f, snapped.Width, "its size kept");
+    Eq(0.3f, kept.Left, "under a scale a rect is as it was");
+});
+
 Console.WriteLine($"Results: {passed} passed, {failed} failed, {skipped} skipped"
     + (filter is null ? "" : $" ({filteredOut} not matching '{filter}')"));
 

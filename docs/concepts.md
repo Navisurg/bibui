@@ -820,6 +820,21 @@ callback draws the handle with `ctx.DrawTexture`.
   `rowBytes`.
 - Textures are made, updated and released on the thread that draws.
 
+An image drawn at its own size in device pixels is sharp only when it lands on
+the pixel grid. A callback's (0,0) is its box's top-left, laid out in logical
+px, so at a fractional scale (1.25) it is rarely a whole device pixel, and the
+image is sampled between pixels, its edges blended. `ctx.Transform` is the
+transform in force, from the callback's space to the frame's device pixels (the
+painter's translation to the box, the transforms of the nodes it lies in, and
+the callback's own pushes); `ctx.Snap(rect)` moves a rect by under half a pixel
+so that its top-left lands on a whole device pixel, its size kept (under
+anything but a translation it is returned as it was):
+
+```csharp
+// The callback draws in physical px: a 96 x 96 texture at its own size, on the grid.
+ctx.DrawTexture(thumb, ctx.Snap(new RectF(0f, 0f, 96f, 96f)));
+```
+
 ## Hosts and renderers
 
 The runtime is independent of the window and of the rasterizer. It holds no

@@ -1,3 +1,4 @@
+using System.Numerics;
 using Bibui.Core;
 using Bibui.Core.Draw;
 using Bibui.Core.Theming;
@@ -38,6 +39,23 @@ internal sealed class DrawingContext
         SurfaceHeight = height;
         PaintDepth = 0;
         (StateDepth, StateFloor) = (0, 0);
+        _transforms[0] = Matrix3x2.Identity;
+    }
+
+    // The transform in force at each depth of the state stack, so a draw can know
+    // where it lands (DrawContext.Transform). A pop needs nothing: the depth is the index.
+    private Matrix3x2[] _transforms = new Matrix3x2[16];
+
+    /// <summary>The transform the recorded pushes leave in force: local physical px to device px.</summary>
+    internal Matrix3x2 Transform => _transforms[StateDepth];
+
+    /// <summary>A clip, transform or layer was pushed: one deeper, through <paramref name="by"/> when it is a transform.</summary>
+    internal void Pushed(in Matrix3x2? by = null)
+    {
+        if (StateDepth + 1 == _transforms.Length) Array.Resize(ref _transforms, _transforms.Length * 2);
+        var m = _transforms[StateDepth];
+        _transforms[StateDepth + 1] = by is { } t ? t * m : m;
+        StateDepth++;
     }
 
     // The clip/transform/opacity stack's depth, and the depth a pop may not go

@@ -6,6 +6,15 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **`DrawContext.Transform` and `DrawContext.Snap`.** A `Box.Draw` callback can
+  read the transform in force (where its (0,0) lands in device pixels: the
+  painter's translation to the box, enclosing transforms, its own pushes), and
+  `Snap(rect)` moves a rect by under half a pixel so its corner lands on a whole
+  device pixel. At a fractional scale a box's origin is rarely on the grid; an
+  image drawn at its own size into a snapped rect lands on it, sharp.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning
