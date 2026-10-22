@@ -153,7 +153,7 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
     IsTrue(after.AsSpan().SequenceEqual(fpx()), "and the tracked frame equals a whole repaint");
 });
 
-foreach (var scene in DamageOracle.Scenes())
+foreach (var scene in DamageOracle.Scenes().Append(DamageOracle.ImageGrid("images-1to1", fractional: false)))
     foreach (int ring in new[] { 1, 3 })
         Run($"Oracle: {scene.Name}, ring {ring}: every frame equals a whole repaint", () =>
         {
@@ -162,6 +162,33 @@ foreach (var scene in DamageOracle.Scenes())
             IsTrue(r.Mismatches == 0, $"{r.Mismatches}/{r.Frames} frames differ; first at {r.FirstMismatch}");
             IsTrue(r.Partial > 0, "damage tracking repainted every frame whole");
         });
+
+foreach (bool transparent in new[] { false, true })
+{
+    string ground = transparent ? ", transparent ground" : "";
+    Run($"Images on the pixel grid are drawn 1:1, byte for byte what the image shader draws{ground}", () =>
+    {
+        var r = DamageOracle.CompareFast(DamageOracle.ImageGrid("images-1to1", fractional: false), transparent);
+        Console.WriteLine($"         {r.Aligned} images drawn 1:1 over {r.Frames} frames");
+        IsTrue(r.Mismatches == 0, $"{r.Mismatches}/{r.Frames} frames differ; first at {r.FirstMismatch}");
+        IsTrue(r.Aligned > r.Frames * 50, "the fast path drew few images 1:1");
+    });
+    Run($"On an RGBA surface the image shader draws whole-pixel offsets and opaque images as it did{ground}", () =>
+    {
+        foreach (bool fractional in new[] { false, true })
+        {
+            var r = DamageOracle.CompareFast(DamageOracle.ImageGrid("images-rgba", fractional), transparent, rgba: true);
+            IsTrue(r.Mismatches == 0, $"{(fractional ? "off the grid" : "on the grid")}: {r.Mismatches}/{r.Frames} frames differ; first at {r.FirstMismatch}");
+            IsTrue(r.Aligned == 0, "the canvas drew 1:1 onto an RGBA surface");
+        }
+    });
+    Run($"Images off the pixel grid or scaled go through the image shader{ground}", () =>
+    {
+        var r = DamageOracle.CompareFast(DamageOracle.ImageGrid("images-fractional", fractional: true), transparent);
+        IsTrue(r.Mismatches == 0, $"{r.Mismatches}/{r.Frames} frames differ; first at {r.FirstMismatch}");
+        IsTrue(r.Aligned == 0, $"{r.Aligned} images off the grid were drawn 1:1");
+    });
+}
 
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;

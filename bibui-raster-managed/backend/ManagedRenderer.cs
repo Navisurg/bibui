@@ -281,6 +281,16 @@ public sealed class ManagedRenderer : IDisposable
     // ── Ops ──────────────────────────────────────────────────────────────────
 
     private readonly ImageShader _imageShader = new();
+
+    /// <summary>
+    /// Images that land 1:1 on the pixel grid are drawn as row copies or blends rather than
+    /// through the image shader (<see cref="Canvas.DrawImageAligned"/>): the same bytes, a
+    /// fraction of the time. On by default; tests turn it off to compare.
+    /// </summary>
+    internal bool ImageFastPaths { get; set; } = Environment.GetEnvironmentVariable("BIBUI_IMAGE_FAST") != "0";
+
+    /// <summary>Images drawn 1:1 by <see cref="ImageFastPaths"/> since this renderer was made (tests).</summary>
+    internal int AlignedImageDraws { get; private set; }
     private PlacedGlyph[] _placed = new PlacedGlyph[64];
 
     // Gradient shaders by content, so a gradient drawn every frame is built once.
@@ -378,8 +388,19 @@ public sealed class ManagedRenderer : IDisposable
         var d = ToRect(op.Rect);
         if (d.IsEmpty) return;
         var (pixels, width, height) = (texture.Argb, texture.Width, texture.Height);
-        if (op.ImageBlurSigma > 0) (pixels, width, height, d) = BlurBitmap(c, pixels, width, height, d, op.ImageBlurSigma);
-        _imageShader.Set(pixels, width, height, d, op.Paint.FilterQuality != FilterQuality.None);
+        bool opaque = texture.Opaque;
+        if (op.ImageBlurSigma > 0)
+        {
+            (pixels, width, height, d) = BlurBitmap(c, pixels, width, height, d, op.ImageBlurSigma);
+            opaque = false;   // transparent beyond the edges
+        }
+        // Drawn 1:1 on the pixel grid, a plain image is rows copied or blended, nothing sampled.
+        if (table is null && ImageFastPaths && c.DrawImageAligned(pixels, width, height, d, op.Paint.Color.A, opaque))
+        {
+            AlignedImageDraws++;
+            return;
+        }
+        _imageShader.Set(pixels, width, height, d, op.Paint.FilterQuality != FilterQuality.None, opaque, ImageFastPaths);
         if (table is not null) _imageShader.SetLookup(texture.Format, lookup, table);
         // The paint's alpha modulates the image, as an SKPaint's does.
         var p = new Paint { Color = op.Paint.Color.Argb | 0x00FFFFFFu, Shader = _imageShader };
@@ -524,6 +545,9 @@ internal sealed class ManagedTexture(TextureFormat format, TextureKind kind, int
     public readonly int Width = width, Height = height;
     public readonly uint[] Argb = new uint[width * height];
 
+    /// <summary>Every pixel's alpha is 255 (R8 and RG8 always; the others as written).</summary>
+    public bool Opaque { get; private set; }
+
     /// <summary>Takes <paramref name="pixels"/>, rows <paramref name="rowBytes"/> apart, into <see cref="Argb"/>.</summary>
     public void Write(ReadOnlySpan<byte> pixels, int rowBytes)
     {
@@ -554,6 +578,22 @@ internal sealed class ManagedTexture(TextureFormat format, TextureKind kind, int
                     break;
             }
         }
+        Opaque = Format is TextureFormat.R8 or TextureFormat.RG8 || AllOpaque(Argb);
+    }
+
+    private static bool AllOpaque(ReadOnlySpan<uint> px)
+    {
+        int i = 0;
+        if (Vector.IsHardwareAccelerated && px.Length >= Vector<uint>.Count)
+        {
+            var and = new Vector<uint>(0xFFFFFFFFu);
+            var v = System.Runtime.InteropServices.MemoryMarshal.Cast<uint, Vector<uint>>(px);
+            foreach (var x in v) and &= x;
+            for (int k = 0; k < Vector<uint>.Count; k++) if (and[k] >> 24 != 255) return false;
+            i = v.Length * Vector<uint>.Count;
+        }
+        for (; i < px.Length; i++) if (px[i] >> 24 != 255) return false;
+        return true;
     }
 }
 
@@ -571,6 +611,10 @@ internal sealed class ImageShader : Shader
     private Rect _dest;
     private bool _bilinear;
     private Matrix3x2 _deviceToImage;
+    private bool _opaque;        // every pixel's alpha is 255
+    private bool _integer;       // device → image is a whole-pixel translation: every sample is a pixel as it is
+    private int _tx, _ty;        // that translation
+    private bool _fast;          // the two above may be used
 
     // The lookup, when there is one: _table is null for a plain draw.
     private uint[]? _table;
@@ -579,8 +623,11 @@ internal sealed class ImageShader : Shader
     private bool _straight;         // RGBA8/BGRA8: un-premultiply before reading
     private int _xShift, _yShift;   // bit position of the picking channel in ARGB; -1 picks entry 0
 
-    public void Set(uint[] pixels, int width, int height, Rect dest, bool bilinear)
+    /// <param name="fast">Whether <see cref="IsOpaque"/> may say so and a whole-pixel offset be read as rows (off: every pixel sampled and blended, as before either).</param>
+    public void Set(uint[] pixels, int width, int height, Rect dest, bool bilinear, bool opaque = false, bool fast = true)
     {
+        _opaque = opaque && fast;
+        _fast = fast;
         _px = pixels;
         _w = width;
         _h = height;
@@ -620,10 +667,34 @@ internal sealed class ImageShader : Shader
         var localToImage = Matrix3x2.CreateTranslation(-_dest.Left, -_dest.Top)
                            * Matrix3x2.CreateScale(_w / _dest.Width, _h / _dest.Height);
         _deviceToImage = deviceToLocal * localToImage;
+        var m = _deviceToImage;
+        // At a whole-pixel offset and scale 1 a pixel centre samples one image pixel at its
+        // centre, and the bilinear weights are all on it: both filters give that pixel.
+        _integer = _fast && m.M11 == 1f && m.M22 == 1f && m.M12 == 0f && m.M21 == 0f
+                   && m.M31 == MathF.Floor(m.M31) && m.M32 == MathF.Floor(m.M32)
+                   && MathF.Abs(m.M31) < 1 << 24 && MathF.Abs(m.M32) < 1 << 24;
+        if (_integer) (_tx, _ty) = ((int)m.M31, (int)m.M32);
     }
+
+    /// <summary>
+    /// Opaque when every pixel is and none is mixed with another: nearest sampling, or
+    /// 1:1 at a whole-pixel offset. A bilinear mix of opaque pixels can come out at 254.
+    /// </summary>
+    public override bool IsOpaque => _opaque && _table is null && (!_bilinear || _integer);
 
     public override void ShadeSpan(int x, int y, Span<uint> dst)
     {
+        if (_integer && _table is null)
+        {
+            // Rows of the image as they are, clamped at its edges.
+            var row = _px.AsSpan(Math.Clamp(y + _ty, 0, _h - 1) * _w, _w);
+            int sx = x + _tx, i = 0;
+            for (; i < dst.Length && sx + i < 0; i++) dst[i] = row[0];
+            int run = Math.Min(dst.Length - i, _w - (sx + i));
+            if (run > 0) { row.Slice(sx + i, run).CopyTo(dst.Slice(i)); i += run; }
+            for (; i < dst.Length; i++) dst[i] = row[_w - 1];
+            return;
+        }
         var m = _deviceToImage;
         for (int i = 0; i < dst.Length; i++)
         {

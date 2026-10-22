@@ -989,6 +989,18 @@ byte-identical to a full repaint, and past half the surface the whole frame is
 drawn. Skia always draws whole frames. See [Performance](performance.md) for
 measurements.
 
+**Images drawn 1:1.** In the managed rasterizer a texture whose destination
+lands on exactly its own size in device pixels, on the pixel grid (an
+axis-aligned, unflipped transform; edges within 1/1024 px of whole pixels), is
+not sampled: its rows are copied, when every pixel is opaque, the paint's alpha
+is full and nothing masks it, or blended src-over through the clip and its
+mask (`Canvas.DrawImageAligned`). The bytes are those the image shader draws.
+Scaled, rotated or fractional draws, lookups, blurred images and RGBA surfaces
+still go through the shader, which itself reads a whole-pixel offset as rows
+and knows when an image is opaque. An image drawn at its own size in a
+`Box.Draw` callback lands on the grid when the box does: at a fractional scale
+a box's top-left is rarely a whole device pixel.
+
 A Wayland window can also draw with Skia (`new SkiaCpuRenderer(window.Cpu)`), and
 a headless program (tests, a command-line tool that writes PNGs) needs no window
 at all. It builds between `runtime.BeginBuild()` and `runtime.EndBuild()` and
