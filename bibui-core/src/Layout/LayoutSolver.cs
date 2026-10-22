@@ -144,6 +144,12 @@ internal static class LayoutSolver
 
         if (!AllowsOverflow(node, a))
         {
+            // A floating child is out of the flow, so nothing below shrinks it: its share of this
+            // node is taken again of the size this node now has, which its own parent may have cut.
+            for (var child = node.FirstChild; child is not null; child = NextOf(child))
+                if (Floats(child, a) && Sem(child, a) is { Kind: SizeKind.ParentPct } share)
+                    child.FixedSize = With(child.FixedSize, a, inner * share.Value);
+
             if ((int)node.ChildLayoutAxis == a)
             {
                 // Along the layout axis the children share the room: each gives
