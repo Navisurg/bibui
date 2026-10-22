@@ -166,6 +166,44 @@ static class ColorGlyphTests
                 premultiplied &= mask.Pixels[i] <= mask.Pixels[i + 3] && mask.Pixels[i + 1] <= mask.Pixels[i + 3] && mask.Pixels[i + 2] <= mask.Pixels[i + 3];
             Check(premultiplied, "no channel above its alpha");
         }));
+
+        run("Colour glyphs: a bitmap-only face's metrics are its strike's, scaled, not 0 over 0", () => WithEmoji(() =>
+        {
+            using var fonts = new Fonts();
+            var face = fonts.SplitRuns("😀", null, 400)!.Face;
+            Check(face.FreeType.UnitsPerEm == 0, "FreeType gives a CBDT face no units per em");
+            var m = face.Strike(20f).Metrics;
+            Check(float.IsFinite(m.Ascent) && float.IsFinite(m.Descent) && float.IsFinite(m.Leading), $"finite: {m}");
+            Check(m.Ascent is < -14f and > -26f && m.Descent is > 2f and < 10f, $"about an em above the baseline and a little below: {m}");
+        }));
+
+        run("Colour glyphs: an emoji that appears in a damage-tracked frame is drawn, as in a whole one", () => WithEmoji(() =>
+        {
+            var runtime = BibuiRuntime.Create();
+            bool shown = false;
+            runtime.SetBuild(() =>
+            {
+                var row = runtime.Row().Sized(Size.Px(240f), Size.Px(40f));
+                row.Style.BackgroundColor = UiColor.Rgba(255, 255, 255, 255);
+                using (runtime.Parent(row)) runtime.Text(shown ? "ab 😀 👍🏽 x" : "ab x");
+                return row;
+            }, new SurfaceOptions { Width = 240, Height = 40, ScaleFactor = 2f });
+            int w = 480, h = 80;
+            var bytes = GC.AllocateArray<byte>(w * h * 4, pinned: true);
+            var target = new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bytes, 0), w, h, w * 4);
+            var tracked = new ManagedRenderer { DamageTracking = true };
+            runtime.Step();
+            tracked.Draw(runtime.DrawList, target);
+            shown = true;
+            runtime.Step();
+            tracked.Draw(runtime.DrawList, target);
+            Check(tracked.LastRepaint is { Count: > 0 }, $"the second frame was repainted in part ({tracked.LastFullRepaintReason})");
+            var whole = runtime.LastFrame(new ManagedRenderer().Draw).RawBgraBytes;
+            int differ = 0;
+            for (int i = 0; i < whole.Length; i += 4)
+                if (BitConverter.ToUInt32(bytes, i) != BitConverter.ToUInt32(whole, i)) differ++;
+            Check(differ == 0, $"{differ} px differ from a whole draw: the emoji were left out of the repaint");
+        }));
     }
 
     /// <summary>A COLRv0 face (layers of outlines, each in its palette colour): drawn as an image too.</summary>

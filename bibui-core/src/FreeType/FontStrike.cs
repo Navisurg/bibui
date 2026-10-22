@@ -100,11 +100,26 @@ public sealed unsafe class FontStrike
 
         // SkScalerContext_FreeType::generateFontMetrics, scalable branch: design
         // units over the em, then times the size, in that order.
+        // A bitmap-only face (CBDT colour emoji) has no units per em: FreeType leaves it and the
+        // face's ascender and descender 0. Its metrics are the selected strike's, in 26.6 pixels,
+        // scaled to this size, as Skia's bitmap branch takes them.
         float upem = font.UnitsPerEm;
-        float ascent = -(float)font.Ascender / upem;
-        float descent = -(float)font.Descender / upem;
-        float leading = (float)(font.LineHeight + (font.Descender - font.Ascender)) / upem;
-        Metrics = new FontMetrics(ascent * sizePx, descent * sizePx, leading * sizePx);
+        if (upem > 0f)
+        {
+            float ascent = -(float)font.Ascender / upem;
+            float descent = -(float)font.Descender / upem;
+            float leading = (float)(font.LineHeight + (font.Descender - font.Ascender)) / upem;
+            Metrics = new FontMetrics(ascent * sizePx, descent * sizePx, leading * sizePx);
+        }
+        else
+        {
+            float k = _bitmapScale / 64f;
+            float asc = FT.Read<nint>(_ftSize, FT.Size_Ascender) * k, desc = FT.Read<nint>(_ftSize, FT.Size_Descender) * k;
+            float height = FT.Read<nint>(_ftSize, FT.Size_Height) * k;
+            Metrics = asc > 0f
+                ? new FontMetrics(-asc, -desc, height - (asc - desc))
+                : new FontMetrics(-sizePx, sizePx * 0.25f, 0f);   // no strike metrics either: an em above the baseline, a quarter below
+        }
 
         _hbFont = HB.hb_font_create(font.HbFace);
         // The same truncated 26.6 size FreeType has, in 16.16, so shaped advances agree with linear ones.

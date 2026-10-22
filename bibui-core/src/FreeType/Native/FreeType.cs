@@ -65,6 +65,11 @@ internal static unsafe partial class FT
     public static readonly int Bitmap_Buffer = P64 ? 16 : 12;
     public static readonly int Bitmap_PixelMode = P64 ? 26 : 18;
 
+    // FT_SizeRec.metrics (FT_Size_Metrics): the active size's, in 26.6 pixels
+    public static readonly int Size_Ascender = P64 ? 48 : 24;
+    public static readonly int Size_Descender = P64 ? 56 : 28;
+    public static readonly int Size_Height = P64 ? 64 : 32;
+
     // FT_Bitmap_Size: one entry of available_sizes
     public static readonly int BitmapSize_Size = P64 ? 32 : 16;
     public static readonly int BitmapSize_YPpem = P64 ? 24 : 12;

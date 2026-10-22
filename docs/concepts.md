@@ -769,7 +769,8 @@ measured as before.
 A **colour face** (CBDT/CBLC bitmaps, as Noto Color Emoji has, or COLRv0
 layers) is drawn as images, not filled with the text colour: the bitmap strike
 nearest the size, scaled by area averaging, its alpha scaled by the text
-colour's. Both renderers draw them, and they are measured, wrapped, selected
+colour's. Such a face has no units per em, so its ascent, descent and line
+gap are the selected bitmap size's, scaled the same way. Both renderers draw them, and they are measured, wrapped, selected
 and edited like any other text — in a text field too, where the caret steps
 over a cluster whole. COLRv1 glyphs and SVG glyphs are not drawn. In the
 browser, FreeType is built without libpng, so CBDT bitmaps do not load there.

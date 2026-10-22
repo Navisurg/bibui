@@ -26,6 +26,15 @@ All notable changes to bibui are recorded here. The format is based on
   shaped before a `FontRegistry.Register` or `RegisterFallback` is dropped,
   rather than handed out under the old fonts.
 
+### Fixed
+
+- **A bitmap-only font has a line height.** FreeType gives a face with no
+  outlines (Noto Color Emoji's CBDT) no units per em, ascender or descender,
+  so its strike's ascent, descent and leading were 0 over 0, NaN, and the
+  managed rasterizer's damage tracking left glyphs in that face out of a
+  partial repaint. The strike now takes them from the bitmap size it selected
+  (FreeType's `FT_Size_Metrics`), scaled as its glyphs are.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning
