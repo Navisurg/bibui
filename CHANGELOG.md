@@ -22,7 +22,7 @@ All notable changes to bibui are recorded here. The format is based on
   taller than the view included. By rows, `rowStep` pixels of wheel move it a
   row, with no height needed to scroll.
 - **A bar for either list**: `runtime.Scrollbar(id, ref scroll, count, first,
-  last)` beside it, in a lane of `ScrollList.BarLane` (16 px) that comes
+  last)` beside it, in a lane of `ScrollList.BarLane` (12 px) that comes
   forward under the pointer. A press on the lane, or a drag, puts the list
   where the pointer is.
 - `ScrollBy` (`Rows`, `Pixels`), and `ScrollPt.Target(idx)`.
@@ -32,13 +32,16 @@ All notable changes to bibui are recorded here. The format is based on
 - The gallery's ScrollList page shows both lists, with a switch to scroll by
   pixels; the showcase's target queue is a RowScrollList, its bar the list's.
 
-### Deprecated
+### Removed
 
-- `ScrollList.BeginScrollList(id, ref scroll, pitch, count)`,
+- **Breaking:** the list of rows of one pitch as it was:
+  `ScrollList.BeginScrollList(id, ref scroll, pitch, count)`,
   `EndScrollList(ref scroll)` and `Scrollbar(id, scroll, count, viewRows)`,
-  and `ScrollPt.First`, `Last` and `ViewRows`: the list of rows of one pitch as
-  it was. Use `BeginRowScrollList` and `EndRowScrollList`, and
-  `Scrollbar(id, ref scroll, count, first, last)`. They work until 2.0.
+  `ScrollPt.First`, `Last` and `ViewRows`, and `ScrollPt.Target(idx, px,
+  pitch)`. Use `BeginRowScrollList` and `EndRowScrollList`, the same list,
+  `Scrollbar(id, ref scroll, count, first, last)`, and `ScrollPt.Target(idx)`.
+  Removed without a deprecated release first, so the next release is a major
+  one.
 
 ## [1.0.0] - 2026-10-21
 

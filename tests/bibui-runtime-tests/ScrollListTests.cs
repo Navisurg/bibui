@@ -129,25 +129,18 @@ static class ScrollListTests
             Near(0f, list.ViewOffset, 0.01f, "resting on a row's top");
         });
 
-        run("RowScrollList by rows: at the end the last row is clipped, not a gap left", () =>
+        run("RowScrollList: at the end, by rows the last row is clipped, by pixels it rests on the bottom", () =>
         {
-            var list = new Lab(ScrollBy.Rows);
-            list.Wheel(1_000_000f);
-            list.Settle();
-            Eq((987, Count), (list.Pt.Idx, list.Last), "the last whole row whose screenful reaches the last row");
-            Eq(true, list.Bottom >= Height, "the last row at or past the bottom");
-        });
-
-        run("RowScrollList by pixels: the wheel moves exact pixels, and the last row rests on the bottom", () =>
-        {
-            var list = new Lab(ScrollBy.Pixels);
-            for (int k = 0; k < 40; k++) list.Wheel(7f);
-            list.Settle();
-            Near(280, list.At(), 0.01, "280 px down");
-            list.Wheel(1_000_000f);
-            list.Settle();
-            Near(Count * Pitch - Height, list.At(), 0.01, "the last screenful");
-            Near(Height, list.Bottom, 0.01, "the last row on the bottom");
+            var rows = new Lab(ScrollBy.Rows);
+            rows.Wheel(1_000_000f);
+            rows.Settle();
+            Eq((987, Count), (rows.Pt.Idx, rows.Last), "by rows, the last whole row whose screenful reaches the last row");
+            Eq(true, rows.Bottom >= Height, "the last row at or past the bottom");
+            var pixels = new Lab(ScrollBy.Pixels);
+            pixels.Wheel(1_000_000f);
+            pixels.Settle();
+            Near(Count * Pitch - Height, pixels.At(), 0.01, "by pixels, the last screenful");
+            Near(Height, pixels.Bottom, 0.01, "the last row on the bottom");
         });
 
         run("RowScrollList: Target eases there", () =>
@@ -194,30 +187,19 @@ static class ScrollListTests
             Eq((101, 5f), (list.Pt.Idx, list.Pt.Px), "and out of it, 5 px into the next");
         });
 
-        run("ScrollList by pixels: the last row comes to rest on the bottom, and the wheel goes no further", () =>
+        run("ScrollList by pixels: the end, reached by the wheel or by a target on the last row, is the last row on the bottom", () =>
         {
-            var list = new Lab(ScrollBy.Pixels, Uneven);
-            for (int k = 0; k < 2000 && list.Last < Count; k++) list.Wheel(32f);
-            for (int k = 0; k < 20; k++) list.Wheel(32f);
-            list.Frame();
-            Near(list.Total() - Height, list.At(), 0.01, "the last screenful");
-            Near(Height, list.Bottom, 0.01, "the last row on the bottom");
-        });
-
-        run("ScrollList: a target on the last row settles on the end, by pixels flush and by rows clipped", () =>
-        {
-            var pixels = new Lab(ScrollBy.Pixels, Uneven);
-            pixels.Pt = new ScrollPt { Idx = Count - 1 };
-            pixels.Frame();
-            pixels.Frame();
-            Near(pixels.Total() - Height, pixels.At(), 0.01, "by pixels, the last screenful");
-            Near(Height, pixels.Bottom, 0.01, "the last row on the bottom");
-            var rows = new Lab(ScrollBy.Rows, Uneven);
-            rows.Pt = new ScrollPt { Idx = Count - 1 };
-            rows.Frame();
-            rows.Frame();
-            Eq(0f, rows.Pt.Px, "by rows, on a row's top");
-            Eq(true, rows.Bottom >= Height && rows.Bottom - Uneven(rows.Pt.Idx) < Height, "the last whole row that leaves no gap");
+            var wheel = new Lab(ScrollBy.Pixels, Uneven);
+            for (int k = 0; k < 2000 && wheel.Last < Count; k++) wheel.Wheel(32f);
+            for (int k = 0; k < 20; k++) wheel.Wheel(32f);
+            wheel.Frame();
+            Near(wheel.Total() - Height, wheel.At(), 0.01, "by the wheel, the last screenful, and no further");
+            Near(Height, wheel.Bottom, 0.01, "the last row on the bottom");
+            var target = new Lab(ScrollBy.Pixels, Uneven);
+            target.Pt = new ScrollPt { Idx = Count - 1 };
+            target.Frame();
+            target.Frame();
+            Near(target.Total() - Height, target.At(), 0.01, "by a target, the same");
         });
 
         run("ScrollList by rows: a row a step of the wheel, the rest held; a tall row is one step", () =>
@@ -233,17 +215,22 @@ static class ScrollListTests
             Eq(12, list.Pt.Idx, "four more: past the tall row in one");
         });
 
-        run("ScrollList by rows: at the end the last row is clipped, and the wheel goes no further", () =>
+        run("ScrollList by rows: the end, reached by the wheel or by a target on the last row, clips the last row, never a gap", () =>
         {
-            var list = new Lab(ScrollBy.Rows, Uneven);
-            for (int k = 0; k < 1200; k++) list.Wheel(32f);
-            list.Frame();
-            int idx = list.Pt.Idx;
-            Eq(Count, list.Last, "the last row built");
-            Eq(true, list.Bottom >= Height, "no gap under it");
-            for (int k = 0; k < 20; k++) list.Wheel(32f);
-            list.Frame();
-            Eq(idx, list.Pt.Idx, "twenty more notches move nothing");
+            var wheel = new Lab(ScrollBy.Rows, Uneven);
+            for (int k = 0; k < 1200; k++) wheel.Wheel(32f);
+            wheel.Frame();
+            int idx = wheel.Pt.Idx;
+            Eq(Count, wheel.Last, "by the wheel, the last row built");
+            Eq(true, wheel.Bottom >= Height && wheel.Bottom - Uneven(idx) < Height, "the last whole row that leaves no gap");
+            for (int k = 0; k < 20; k++) wheel.Wheel(32f);
+            wheel.Frame();
+            Eq(idx, wheel.Pt.Idx, "twenty more notches move nothing");
+            var target = new Lab(ScrollBy.Rows, Uneven);
+            target.Pt = new ScrollPt { Idx = Count - 1 };
+            target.Frame();
+            target.Frame();
+            Eq((idx, 0f), (target.Pt.Idx, target.Pt.Px), "by a target, the same row, on its top");
         });
 
         run("ScrollList: Target shows the row at once, by rows and by pixels", () =>

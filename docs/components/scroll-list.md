@@ -27,7 +27,7 @@ public static void EndScrollList(this BibuiRuntime runtime, ref ScrollPt pt, in 
 
 // The bar, beside either
 public static void Scrollbar(this BibuiRuntime runtime, string id, ref ScrollPt pt, int count, int first, int last)
-public const float ScrollList.BarLane = 16f;
+public const float ScrollList.BarLane = 12f;
 ```
 
 | Parameter | Meaning |
@@ -99,9 +99,8 @@ the wheel not yet a whole step in it.
 - The thumb: `SurfaceRaised`, `SurfaceRaisedHover` under the pointer, and
   `SurfaceRaisedActive` while held.
 
-## Deprecated
+## Replaces
 
-`BeginScrollList(id, ref pt, pitch, count)`, `EndScrollList(ref pt)`,
-`Scrollbar(id, pt, count, viewRows)` and `ScrollPt.First`, `Last` and `ViewRows`
-are the list of rows of one pitch as it was before RowScrollList. They work
-until 2.0; use `BeginRowScrollList` and `EndRowScrollList`, and the bar above.
+The list of rows of one pitch as it was, `BeginScrollList(id, ref pt, pitch,
+count)`, `EndScrollList(ref pt)` and `Scrollbar(id, pt, count, viewRows)`, is
+removed: it is RowScrollList, which also scrolls by pixels.

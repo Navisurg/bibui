@@ -35,22 +35,7 @@ public struct ScrollPt
     /// </summary>
     public float Off;
 
-    /// <summary>The first row in sight, as the deprecated pitch overload of <see cref="ScrollList.BeginScrollList(BibuiRuntime, string, ref ScrollPt, float, int)"/> sets it.</summary>
-    [Obsolete("Set only by the deprecated BeginScrollList(id, ref pt, pitch, count). BeginRowScrollList returns the rows in sight. Removed in 2.0.")]
-    public int First { readonly get; internal set; }
-
-    /// <summary>One past the last row in sight, as the deprecated pitch overload sets it.</summary>
-    [Obsolete("Set only by the deprecated BeginScrollList(id, ref pt, pitch, count). BeginRowScrollList returns the rows in sight. Removed in 2.0.")]
-    public int Last { readonly get; internal set; }
-
-    /// <summary>How many whole rows the view held, as the deprecated pitch overload sets it.</summary>
-    [Obsolete("Set only by the deprecated BeginScrollList(id, ref pt, pitch, count). Removed in 2.0.")]
-    public int ViewRows { readonly get; internal set; }
-
     internal long Stepped;    // RowScrollList's: the frame Off was last eased in, so a build run twice eases once
-    internal float Grab;      // the deprecated list's bar: the top row shown when its thumb was pressed
-    internal float Pitch;     // the deprecated list's, Begin's for End
-    internal float MaxPx;     // the deprecated list's, Begin's for End: the furthest the target goes
 
     /// <summary>
     /// Moves the target to row <paramref name="idx"/>, at its top, keeping the
@@ -62,18 +47,6 @@ public struct ScrollPt
     {
         Off += Idx - idx;
         (Idx, Px) = (idx, 0f);
-    }
-
-    /// <summary>
-    /// Moves the target to row <paramref name="idx"/>, <paramref name="px"/>
-    /// pixels into it, rows being <paramref name="pitch"/> apart, keeping the
-    /// rows shown where they are, so a <see cref="RowScrollList"/> eases there.
-    /// </summary>
-    public void Target(int idx, float px, float pitch)
-    {
-        Off += (Idx - idx) + (Px - px) / pitch;
-        Idx = idx;
-        Px = px;
     }
 }
 
@@ -188,17 +161,17 @@ public struct ScrollRows
 ///
 /// It does not ease: the wheel and a target moved are shown on the next frame.
 /// </summary>
-public static partial class ScrollList
+public static class ScrollList
 {
     // A view not laid out yet has no height. Build as if for a tall screen, so
     // its first frame is not a single row.
     private const float Unmeasured = 4096f;
 
     /// <summary>The width of the lane <see cref="Scrollbar"/> takes beside a list.</summary>
-    public const float BarLane = 16f;
+    public const float BarLane = 12f;
 
     // The thumb's thickness in its lane, and the least it is along it.
-    private const float BarThickness = 10f, BarMinThumb = 24f;
+    private const float BarThickness = 6f, BarMinThumb = 24f;
 
     /// <summary>
     /// Builds the view named <paramref name="id"/>, filling what the parent
