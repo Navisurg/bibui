@@ -84,7 +84,7 @@ if (options.FirstFrame)
     return;
 }
 
-// A test port, off unless asked for: BIBUI_TEST_PORT=1 (test_all_pages.py says how).
+// A test port, off unless asked for: BIBUI_TEST_PORT=1 (test_all_pages.sh says how).
 // Its screenshots draw with a CPU renderer of their own: the window's draws on the
 // GPU, or keeps damage state for the window's buffers.
 using var testPort = Environment.GetEnvironmentVariable("BIBUI_TEST_PORT") == "1"

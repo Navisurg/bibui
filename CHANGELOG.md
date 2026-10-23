@@ -24,7 +24,9 @@ All notable changes to bibui are recorded here. The format is based on
   milliseconds, for scripts and agents. It finds the app's socket, prints the
   tree as an outline (`tree`, `find`), clicks a node by id once it holds still
   and is scrolled into view (`click add`), and sends the app's commands
-  (`cmd counter.set Value=10`), `state`, `schema` and `screenshot`.
+  (`cmd counter.set Value=10`), `state`, `schema` and `screenshot`. The
+  gallery's page walk, `samples/component-gallery/test_all_pages.sh`, is a
+  shell script on it.
 - **RowScrollList** (`runtime.BeginRowScrollList`, `EndRowScrollList`): the
   list of rows of one pitch, building only those in sight, by rows or by
   pixels (`ScrollBy`). It eases.
@@ -71,7 +73,7 @@ All notable changes to bibui are recorded here. The format is based on
   `BibuiAppOptions.TestServer` and `TestServerPort`, and `BibuiApp.TestServer`.
   A `BibuiApp` opens no port: an app that wants one references `Bibui.Automation`
   and opens a `TestPort`. The samples open one with `BIBUI_TEST_PORT=1`, and the
-  gallery's page walk is `samples/component-gallery/test_all_pages.py`.
+  gallery's page walk is `samples/component-gallery/test_all_pages.sh`.
 - **Breaking: the test server no longer records video.** `start_recording` and
   `stop_recording` are gone from `BibuiTestServer`, and `StartRecording` and
   `StopRecording` from `WorkflowClient`. Encoding video is not the test
