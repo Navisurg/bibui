@@ -9,8 +9,9 @@ namespace Bibui.Raster.Skia;
 /// <summary>
 /// What both Skia renderers draw with: a <see cref="DrawList"/> onto an
 /// <see cref="SKSurface"/>, op by op, and what that keeps — paints by content,
-/// text paints and fonts per face and size, a typeface per bibui face, a native
-/// path per kept <see cref="VectorPath"/>, each touch-evicted when frames stop
+/// text paints and fonts per face and size, a text blob per glyph run, a typeface
+/// per bibui face, a native path per kept <see cref="VectorPath"/>, each
+/// touch-evicted when frames stop
 /// drawing it — and the renderer's textures by handle, which the renderer that
 /// owns this makes. Not thread-safe: one thread draws at a time.
 /// </summary>
@@ -34,6 +35,16 @@ internal sealed class SkiaOps : IDisposable
     private readonly SKPathBuilder _builder = new();
     // What every glyph run's blob is built with: Build() leaves it empty again.
     private readonly SKTextBlobBuilder _blobBuilder = new();
+
+    // Each run's blob, kept across frames under a 64-bit hash of what it holds
+    // (face, size, glyph count, glyphs), so a run drawn again reuses
+    // the blob, and Skia its own work for it: Skia keeps a blob's glyph lookups
+    // and, on the GPU, its vertex data under the blob's identity, so a new blob
+    // per run per frame was work redone every frame. Positions are from the
+    // run's start and colour is the paint's, so one blob draws anywhere in any
+    // colour. Touch-evicted.
+    private readonly ResourceCache<ulong, SKTextBlob> _blobs = new();
+    private readonly System.IO.Hashing.XxHash3 _runHash = new();
 
     // Skia's face for each of bibui's, made from its font file once: the glyph
     // ids FreeType resolves belong to that file, so Skia draws the same glyphs.
@@ -89,6 +100,7 @@ internal sealed class SkiaOps : IDisposable
         _paints.EndFrame();
         _textPaints.EndFrame();
         _textFonts.EndFrame();
+        _blobs.EndFrame();
         _paths.EndFrame();
         _payloadPaths.EndFrame();
         _lookupShaders.EndFrame();
@@ -286,9 +298,32 @@ internal sealed class SkiaOps : IDisposable
             ForceAutoHinting = true,
             Hinting = SKFontHinting.Full,
         });
-        _blobBuilder.AddPositionedRun(glyphs, font, positions.AsSk());
-        using var blob = _blobBuilder.Build();
-        if (blob is not null) canvas.DrawText(blob, x, baselineY, paint);
+        ulong run = RunKey(face.Id, sizePx, glyphs);
+        if (!_blobs.TryGet(run, out var blob))
+        {
+            _blobBuilder.AddPositionedRun(glyphs, font, positions.AsSk());
+            blob = _blobBuilder.Build();
+            if (blob is null) return;
+            _blobs.Add(run, blob);
+        }
+        canvas.DrawText(blob, x, baselineY, paint);
+    }
+
+    // The positions are not in the key: a run's are its glyphs' advances summed
+    // in order, so the face, the size and the glyphs decide them. That is the
+    // core's promise, written where Glyphs ops are made (NOTE(positions) at
+    // DrawContext.PushGlyphs, with an example); a run shaped by HarfBuzz breaks
+    // it and would have to add its positions here. A collision would draw
+    // another run's glyphs until it is evicted: 64 bits put that around n / 2^64
+    // per new run with n kept, and the glyph count in the key rules out the
+    // likeliest.
+    private ulong RunKey(int faceId, float sizePx, ReadOnlySpan<ushort> glyphs)
+    {
+        Span<int> head = [faceId, BitConverter.SingleToInt32Bits(sizePx), glyphs.Length];
+        _runHash.Reset();
+        _runHash.Append(MemoryMarshal.AsBytes(head));
+        _runHash.Append(MemoryMarshal.AsBytes(glyphs));
+        return _runHash.GetCurrentHashAsUInt64();
     }
 
     private SKTypeface Typeface(FontFace face)
@@ -435,6 +470,7 @@ internal sealed class SkiaOps : IDisposable
         _payloadPaths.Dispose();
         _builder.Dispose();
         _blobBuilder.Dispose();
+        _blobs.Dispose();
         _lookupShaders.Dispose();
         _matrixPaints.Dispose();
         foreach (var paint in _blendPaints) paint?.Dispose();

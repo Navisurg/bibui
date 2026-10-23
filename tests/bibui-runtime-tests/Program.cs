@@ -2474,14 +2474,14 @@ Run("runtime.MultilineTextField: a hard line break is laid out as a line, not on
         $"every line inside the box ({box.Y}+{box.Height}); lines end at {string.Join(", ", lines.Select(l => l.Y + l.Height))}");
 });
 
-Run("Text: with no theme family tokens set, the drawn family stays null", () =>
+Run("Text: with no theme family tokens set, text is set in the built-in Inter", () =>
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(
         () => runtime.TextFromId("plain", "Hello".ToArray()),
         new SurfaceOptions { Width = 300, Height = 80, ScaleFactor = 1f });
     runtime.Step();
-    Eq(null, runtime.FontInScope().Family);
+    Eq("", runtime.FontInScope().Face.Family, "the built-in Inter's family is empty");
 });
 
 Run("Text: a mono text is set and laid out in the theme's mono family", () =>
@@ -2498,7 +2498,7 @@ Run("Text: a mono text is set and laid out in the theme's mono family", () =>
     using var page = BibuiPage.From(runtime, runtime.BuildTree);
 
     var mono = runtime.FontInScope(family: FontSlot.Mono);
-    Eq("IBM Plex Mono", mono.Family);
+    Eq("", mono.Face.Family, "the theme's mono family is not registered here: the built-in Inter");
     // Laid out at what the mono family measures. Not compared with the body
     // family's width: where neither family is installed both fall back to the
     // same face, and the two widths agree.
@@ -2629,7 +2629,7 @@ Run("BeginFontFace: what is built in scope takes the innermost face, and an unsa
     Eq("Mono Regular", Face(seen["mono again"]), "the inner scope ends");
     Eq("Body Regular", Face(seen["after"]), "and past them the default is back");
     var regular = runtime.FontInScope(family: FontSlot.Mono);
-    IsTrue(inScope.Family == regular.Family && inScope.Weight > regular.Weight,
+    IsTrue(inScope.Face.Family == regular.Face.Family && inScope.Face.Weight > regular.Face.Weight,
         "FontInScope measures in the face in scope");
 });
 
@@ -2700,14 +2700,16 @@ Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string
     // must land exactly where Skia's own string drawing puts them, with the
     // paint bibui draws text with, so the move to glyphs moved no pixel.
     using var fonts = new Fonts();
-    var face = fonts.Face();
+    var face = fonts.BuiltIn(400);
     IsTrue(face.HasGlyph('A') && !face.HasGlyph(0x10FFFD), "glyph coverage is the face's own");
 
     const float size = 17.5f;
     const string text = "Shaped runs, glyph by glyph — 0.5 ffi";
-    var shaped = fonts.Shape(text, face, size);
-    Eq(text.Length, shaped.Glyphs.Length, "one glyph per char for this text (no ligatures)");
-    Eq(face.Strike(size).Measure(text), shaped.Width, "the shaped run is as wide as measuring says");
+    var glyphIds = new ushort[text.Length];
+    var positions = new System.Numerics.Vector2[text.Length];
+    int count = face.Strike(size).Glyphs(text, glyphIds, positions, out float width);
+    Eq(text.Length, count, "one glyph per char for this text (no ligatures)");
+    Eq(face.Strike(size).Measure(text), width, "the walked run is as wide as measuring says");
 
     var info = new SkiaSharp.SKImageInfo(360, 48, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
     static byte[] Read(SkiaSharp.SKSurface surface)
@@ -2733,15 +2735,15 @@ Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string
         surface.Canvas.Clear(SkiaSharp.SKColors.White);
         surface.Canvas.DrawText(text, 6.25f, 32f, SkiaSharp.SKTextAlign.Left, font, paint);
         fromString = Read(surface);
-        Eq(font.MeasureText(text), shaped.Width, $"Skia measures the string as FreeType does (Skia {font.MeasureText(text)}, FreeType {shaped.Width})");
+        Eq(font.MeasureText(text), width, $"Skia measures the string as FreeType does (Skia {font.MeasureText(text)}, FreeType {width})");
     }
 
     var list = new Bibui.Core.Draw.DrawList();
     list.Push(Bibui.Core.Draw.DrawOpKind.Clear).Color = Rgba.White;
     ref var glyphs = ref list.Push(Bibui.Core.Draw.DrawOpKind.Glyphs);
     (glyphs.Resource, glyphs.C, glyphs.A, glyphs.B, glyphs.Color) = (list.AddFace(face), size, 6.25f, 32f, Rgba.Black);
-    (glyphs.Start, glyphs.Count) = (list.AddGlyphs(shaped.Glyphs), shaped.Glyphs.Length);
-    glyphs.Start2 = list.AddPoints(shaped.Positions);
+    (glyphs.Start, glyphs.Count) = (list.AddGlyphs(glyphIds.AsSpan(0, count)), count);
+    glyphs.Start2 = list.AddPoints(positions.AsSpan(0, count));
     var fromGlyphs = Pixels.Of(list, 360, 48, Frames.Skia.Draw).RawBgraBytes;
 
     IsTrue(fromString.AsSpan().SequenceEqual(fromGlyphs), "glyph pixels must equal Skia's string pixels");
