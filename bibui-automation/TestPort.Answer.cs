@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Net.Sockets;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Bibui.Core;
@@ -159,10 +158,9 @@ public sealed partial class TestPort
     private string? Screenshot()
     {
         if (_draw is null || _runtime is null) return "This app's port has no renderer to draw a screenshot with.";
-        var path = Encoding.UTF8.GetString(_heldPathIn.AsSpan(_heldPathStart, _heldPathLength));
         try
         {
-            File.WriteAllBytes(path, FramePixels.Png(_runtime, _draw));
+            File.WriteAllBytes(_heldPath!, FramePixels.Png(_runtime, _draw));
             return null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)

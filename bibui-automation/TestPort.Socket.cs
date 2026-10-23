@@ -1,5 +1,4 @@
 using System.Net.Sockets;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Schema;
 using Bibui.Core.Runtime;
@@ -35,7 +34,7 @@ public sealed partial class TestPort : IDisposable
     {
         ArgumentNullException.ThrowIfNull(runtime);
         options ??= new TestPortOptions();
-        var port = new TestPort(options.RequestBytes, options.MaxEvents)
+        var port = new TestPort(options.RequestBytes)
         {
             _runtime = runtime,
             _draw = options.Draw,
@@ -155,8 +154,8 @@ public sealed partial class TestPort : IDisposable
         return chars.Length == 0 ? "app" : new string(chars);
     }
 
-    // test.schema's answer, made once: a request is any of the test.* commands, or one
-    // of the app's.
+    // test.schema's answer, made once from the records the requests are read into:
+    // a request is any of the test.* commands, or one of the app's.
     private static byte[] SchemaBytes(TestPortOptions options)
     {
         var buffer = new System.Buffers.ArrayBufferWriter<byte>();
@@ -164,28 +163,11 @@ public sealed partial class TestPort : IDisposable
         {
             writer.WriteStartObject();
             writer.WriteStartArray("anyOf");
-            using (var test = JsonDocument.Parse(TestCommandsSchema.ToArray()))
-                foreach (var command in test.RootElement.EnumerateArray()) command.WriteTo(writer);
-            if (options.Commands is { } commands) commands.GetJsonSchemaAsNode().WriteTo(writer);
+            TestRequestJson.Default.TestRequest.GetJsonSchemaAsNode().WriteTo(writer);
+            options.Commands?.GetJsonSchemaAsNode().WriteTo(writer);
             writer.WriteEndArray();
             writer.WriteEndObject();
         }
         return buffer.WrittenSpan.ToArray();
     }
-
-    // The test.* commands, as JSON schemas, one per command: what test.schema says of the port.
-    private static ReadOnlySpan<byte> TestCommandsSchema => """
-        [
-          {"type":"object","required":["$cmd","events"],"properties":{"$cmd":{"const":"test.events"},
-            "events":{"type":"array","items":{"type":"object","required":["kind"],"properties":{
-              "kind":{"enum":["mouse_move","mouse_down","mouse_up","scroll","key_down","key_up","key_char","focus_lost"]},
-              "x":{"type":"number"},"y":{"type":"number"},"dx":{"type":"number"},"dy":{"type":"number"},
-              "button":{"enum":["left","right","middle"]},"key":{"type":"string"},"char":{"type":"string"},
-              "modifiers":{"type":"array","items":{"enum":["ctrl","shift","alt","super"]}}}}}}},
-          {"type":"object","required":["$cmd"],"properties":{"$cmd":{"const":"test.tree"}}},
-          {"type":"object","required":["$cmd"],"properties":{"$cmd":{"const":"test.state"}}},
-          {"type":"object","required":["$cmd"],"properties":{"$cmd":{"const":"test.schema"}}},
-          {"type":"object","required":["$cmd","path"],"properties":{"$cmd":{"const":"test.screenshot"},"path":{"type":"string"}}}
-        ]
-        """u8;
 }

@@ -35,9 +35,6 @@ public sealed class TestPortOptions
     /// <summary>The request buffer: the longest line a client may send.</summary>
     public int RequestBytes { get; init; } = 1 << 20;
 
-    /// <summary>The most events one <c>test.events</c> may carry.</summary>
-    public int MaxEvents { get; init; } = 256;
-
     /// <summary>
     /// How long an answer may wait for a client that does not read it before the
     /// client is dropped. The frame waits at most this long, once.

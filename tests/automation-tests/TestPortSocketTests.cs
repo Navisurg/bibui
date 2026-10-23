@@ -61,7 +61,7 @@ static class TestPortSocketTests
             Eq(5, client.Ask("{\"$cmd\":\"test.state\"}")["result"]!["Count"]!.GetValue<int>(), "and its effect");
 
             var unknown = client.Ask("{\"$cmd\":\"test.nope\"}");
-            IsTrue(!Ok(unknown) && unknown["error"]!.GetValue<string>().Contains("Unknown test command"), "a refusal");
+            IsTrue(!Ok(unknown) && unknown["error"]!.GetValue<string>().Contains("test.nope"), $"a refusal naming the command: {unknown.ToJsonString()}");
             var notTheApps = client.Ask("{\"$cmd\":\"counter.nope\"}");
             IsTrue(!Ok(notTheApps) && notTheApps["error"]!.GetValue<string>().Contains("counter.nope"), $"an app command the app cannot read: {notTheApps.ToJsonString()}");
 
@@ -114,16 +114,6 @@ static class TestPortSocketTests
             IsTrue(Ok(client.Ask("{\"$cmd\":\"test.state\"}")), "the next request");
         });
 
-        run("TestPort: a tree of several 64 KB pieces is one line", () =>
-        {
-            using var app = new CounterApp(rows: 3000);
-            using var client = app.Connect();
-            client.Send("{\"$cmd\":\"test.tree\"}\n");
-            var line = client.ReadLine();
-            IsTrue(line.Length > 4 * 64 * 1024, $"larger than four pieces: {line.Length} bytes");
-            IsTrue(Ok(JsonNode.Parse(line)!), "and one well-formed answer");
-        });
-
         run("TestPort: a client that stops reading is dropped after the send timeout, and the loop goes on", () =>
         {
             using var app = new CounterApp(rows: 40000, sendTimeout: TimeSpan.FromMilliseconds(200));
@@ -136,17 +126,10 @@ static class TestPortSocketTests
             stalled.Dispose();
         });
 
-        run("TestPort: a client that leaves mid-request does not stop the next", () =>
+        run("TestPort: one client at a time: a second waits, and one leaving mid-request does not stop the next", () =>
         {
             using var app = new CounterApp();
             using (var leaving = app.Connect()) leaving.Send("{\"$cmd\":\"test.tree\"}\n");
-            using var next = app.Connect();
-            IsTrue(Ok(next.Ask("{\"$cmd\":\"test.state\"}")), "served");
-        });
-
-        run("TestPort: a second client waits while one is connected", () =>
-        {
-            using var app = new CounterApp();
             var first = app.Connect();
             IsTrue(Ok(first.Ask("{\"$cmd\":\"test.state\"}")), "the first is served");
             using var second = app.Connect();
@@ -168,7 +151,7 @@ static class TestPortSocketTests
             IsTrue(refused, "nobody listens");
         });
 
-        run("TestPort.AnswerCmds: how long the frame spends answering", () =>
+        run("TestPort.AnswerCmds: a big tree is one line, sent in 64 KB pieces, and how long answers take", () =>
         {
             using var app = new CounterApp(rows: 8000);
             using var client = app.Connect();
@@ -176,6 +159,7 @@ static class TestPortSocketTests
             var small = app.Time(client, "{\"$cmd\":\"test.state\"}", out _);
             var big = app.Time(client, "{\"$cmd\":\"test.tree\"}", out var answer);
             var tree = answer.ToJsonString().Length;
+            IsTrue(tree > 4 * 64 * 1024 && Ok(answer), $"one well-formed answer, larger than four pieces: {tree} bytes");
             Console.WriteLine($"         measured: a small answer {small.TotalMilliseconds:F3} ms; a {tree / 1024} KB tree {big.TotalMilliseconds:F2} ms");
             IsTrue(small < TimeSpan.FromMilliseconds(5), "a small answer is far inside a frame");
             IsTrue(big < TimeSpan.FromMilliseconds(100), "a megabyte tree takes a few frames' time at most");
