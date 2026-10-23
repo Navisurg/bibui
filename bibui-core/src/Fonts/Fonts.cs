@@ -346,9 +346,28 @@ public sealed class Fonts : IDisposable
         return _lines.TryGet(key, out var lines) ? lines : _lines.Add(key, WrapUncached(text, width, style, font.Scale, wrap));
     }
 
+    // Each char's advance, for the text being wrapped: grown, never shrunk.
+    private float[] _advances = new float[1024];
+
+    /// <summary>
+    /// Room for <paramref name="length"/> char advances (<see cref="FontStrike.CharAdvances"/>),
+    /// reused: valid until the next call.
+    /// </summary>
+    internal Span<float> Advances(int length)
+    {
+        if (_advances.Length < length) _advances = new float[Math.Max(length, _advances.Length * 2)];
+        return _advances.AsSpan(0, length);
+    }
+
+    // The text's advances, walked once; every line break below is then decided
+    // by adding them up, never by measuring a slice again. Added from a line's
+    // first char in order, they give what measuring that line gives, to the bit,
+    // so the breaks are the ones measuring each candidate made.
     private TextLine WrapUncached(ReadOnlySpan<char> text, float maxWidth, FontStyle style, float scale, TextWrap wrap)
     {
         var result = new Lines();
+        var adv = Advances(text.Length);
+        style.Strike.CharAdvances(text, adv);
 
         int idx = 0;
         while (idx <= text.Length)
@@ -358,8 +377,8 @@ public sealed class Fonts : IDisposable
             int segEnd = idx;
 
             var before = result.Last;
-            if (wrap == TextWrap.Characters) WrapCharacters(text, segStart, segEnd, maxWidth, style, scale, ref result);
-            else WrapSegment(text, segStart, segEnd, maxWidth, style, scale, ref result);
+            if (wrap == TextWrap.Characters) WrapCharacters(text, adv, segStart, segEnd, maxWidth, scale, ref result);
+            else WrapSegment(text, adv, segStart, segEnd, maxWidth, scale, ref result);
             // Always emit ≥1 entry per logical line so blank lines (\n\n, trailing \n)
             // produce empty lines that line up with what is drawn.
             if (result.Last == before)
@@ -387,12 +406,13 @@ public sealed class Fonts : IDisposable
     // spaces make empty words. A line's text is every word from its first
     // non-empty one to the last that fits, with the spaces between them as they
     // stand in the text — so a candidate line is one slice of it, never built.
-    private void WrapSegment(ReadOnlySpan<char> text, int segStart, int segEnd, float maxWidth, FontStyle style,
-                             float scale, ref Lines result)
+    private static void WrapSegment(ReadOnlySpan<char> text, ReadOnlySpan<float> adv, int segStart, int segEnd,
+                                    float maxWidth, float scale, ref Lines result)
     {
         int lineStart = segStart;   // where the line's range starts: its first word
         int textStart = -1;         // where its text starts: its first non-empty word, or none yet
         int lastEnd = segStart;     // the end of the last word that fit
+        float width = 0f;           // [textStart, lastEnd) summed from textStart: what measuring it gives
 
         int i = segStart;
         while (i <= segEnd)
@@ -401,17 +421,19 @@ public sealed class Fonts : IDisposable
             while (i < segEnd && text[i] != ' ') i++;
             int wordEnd = i;
 
-            var candidate = textStart < 0 ? text[wordStart..wordEnd] : text[textStart..wordEnd];
-            float w = style.Strike.Measure(candidate) / scale;
-            if (!Fits(w, maxWidth) && textStart >= 0)
+            // The candidate line, [textStart or wordStart, wordEnd), summed from its start.
+            float w = textStart < 0 ? Sum(adv, wordStart, wordEnd, 0f) : Sum(adv, lastEnd, wordEnd, width);
+            if (!Fits(w / scale, maxWidth) && textStart >= 0)
             {
                 result.Add(new TextLine(lineStart, lastEnd));
                 lineStart = wordStart;
                 textStart = wordEnd > wordStart ? wordStart : -1;
+                width = Sum(adv, wordStart, wordEnd, 0f);
             }
-            else if (textStart < 0 && wordEnd > wordStart)
+            else
             {
-                textStart = wordStart;
+                if (textStart < 0 && wordEnd > wordStart) textStart = wordStart;
+                width = w;
             }
             lastEnd = wordEnd;
 
@@ -424,25 +446,34 @@ public sealed class Fonts : IDisposable
 
     // One logical line, [segStart, segEnd), cut into the longest runs of
     // characters that fit, each at least one character long.
-    private void WrapCharacters(ReadOnlySpan<char> text, int segStart, int segEnd, float maxWidth, FontStyle style,
-                                float scale, ref Lines result)
+    // A line grows a character at a time while it fits: advances are never
+    // negative, so its width only grows, and the first character that doesn't
+    // fit ends it (the longest prefix that fits, as a search over prefixes found).
+    private static void WrapCharacters(ReadOnlySpan<char> text, ReadOnlySpan<float> adv, int segStart, int segEnd,
+                                       float maxWidth, float scale, ref Lines result)
     {
         int start = segStart;
         while (start < segEnd)
         {
-            // Invariant: [start, lo) fits, or is the first character; nothing past hi does.
-            int lo = NextCharacter(text, start, segEnd), hi = segEnd;
-            while (lo < hi)
+            int end = NextCharacter(text, start, segEnd);
+            float w = Sum(adv, start, end, 0f);
+            while (end < segEnd)
             {
-                int mid = CharacterStart(text, (lo + hi + 1) / 2, lo);
-                if (mid <= lo) mid = NextCharacter(text, lo, segEnd);
-                float w = style.Strike.Measure(text[start..mid]) / scale;
-                if (Fits(w, maxWidth)) lo = mid;
-                else hi = CharacterStart(text, mid - 1, lo);
+                int next = NextCharacter(text, end, segEnd);
+                float wider = Sum(adv, end, next, w);
+                if (!Fits(wider / scale, maxWidth)) break;
+                (end, w) = (next, wider);
             }
-            result.Add(new TextLine(start, lo));
-            start = lo;
+            result.Add(new TextLine(start, end));
+            start = end;
         }
+    }
+
+    /// <summary>advances[from..to) added to <paramref name="sum"/>, in order: measuring goes the same way.</summary>
+    internal static float Sum(ReadOnlySpan<float> advances, int from, int to, float sum)
+    {
+        for (int k = from; k < to; k++) sum += advances[k];
+        return sum;
     }
 
     // Where the character after the one at `at` starts, no further than `end`.
@@ -450,13 +481,6 @@ public sealed class Fonts : IDisposable
     {
         at++;
         while (at < end && char.IsLowSurrogate(text[at])) at++;
-        return at;
-    }
-
-    // The nearest character start at or before `at`, no earlier than `floor`.
-    private static int CharacterStart(ReadOnlySpan<char> text, int at, int floor)
-    {
-        while (at > floor && at < text.Length && char.IsLowSurrogate(text[at])) at--;
         return at;
     }
 }
