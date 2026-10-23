@@ -22,7 +22,7 @@ while (app.BeginFrame())
         switch (cmd.Kind)
         {
             case TestCmdKind.Events: app.Events.AddRange(cmd.Events); break;
-            case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, cpu.Draw)); break;
+            case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, cpu.Draw, cmd.Region)); break;
             case TestCmdKind.App: /* the app's own command: cmd.Json */ break;
         }
 
@@ -64,7 +64,8 @@ One JSON line per request, one answer line back:
 | `{"$cmd":"test.state"}` | the app's state |
 | `{"$cmd":"test.schema"}` | a JSON schema of every request: the `test.*` ones and the app's |
 | `{"$cmd":"test.events","events":[…]}` | `{"ok":true}`, once the events and what they set off have run |
-| `{"$cmd":"test.screenshot","path":"/tmp/frame.png"}` | `{"ok":true}`, the PNG written by the app |
+| `{"$cmd":"test.screenshot","path":"/tmp/frame.png"}` | `{"ok":true}`, the PNG written by the app; with `"id"`, only that node's rect (`cmd.Region`) |
+| `{"$cmd":"test.idle","timeout":10}` | `{"ok":true}` once the app has settled and nothing is moving (`runtime.IsAnimating`); refused after `timeout` seconds, since a spinner never stops |
 | an app command, e.g. `{"$cmd":"counter.set","Value":10}` | `{"ok":true}`, once it has run |
 
 An event is `{"kind":…}` with what its kind needs: `mouse_move` (`x`, `y`),
@@ -94,15 +95,35 @@ cuts its children to it, so a node is in view when its centre is inside every
 ancestor claiming `Clip`.
 
 `bibui-port` (`tools/bibui-port`) is a native command-line client: it finds the
-socket, builds the JSON, and clicks a node by id, scrolled into view first.
+socket, builds the JSON, and acts on a node by id, once it holds still and
+scrolled into view first.
 
 ```sh
-bibui-port tree --depth 2          # an outline: kind, id, rect, claims, text
-bibui-port find "Add one"          # the nodes holding a text, and the id to click
-bibui-port click add
+bibui-port tree --depth 2              # an outline: kind, id, rect, claims, text
+bibui-port find "Add one"              # the nodes holding a text, and the id to click
+bibui-port click add                   # --right, --middle
+bibui-port hover help-button           # a move, no press
+bibui-port drag slider 320 140         # from a node, or: drag x y x y
+bibui-port scroll list -3
+bibui-port type "Hello"                # into what has the keyboard
+bibui-port key Left --shift --repeat 5
 bibui-port cmd counter.set Value=10
-bibui-port state
+bibui-port --idle state                # once nothing is moving
+bibui-port screenshot field.png --id email
 ```
+
+## Making an app easy to drive
+
+A client finds what to act on in the tree, and the tree holds only what the
+runtime knows: boxes and texts, where they were laid out, and their claims. So:
+
+- **Give every box a client acts on an id**, stable from frame to frame, naming
+  what it is for (`settings-save`, `nav-inbox`), with its label as a text inside
+  it: `find "Save"` then leads to the id.
+- **Keyboard focus, a text field's caret and selection, and what kind of control
+  a box is are the app's**, not the runtime's: a text field is edited when its
+  caller says so. An app whose client should check them puts them in its state
+  (`test.state`), or takes its own commands for them.
 
 ## Showing the agent
 

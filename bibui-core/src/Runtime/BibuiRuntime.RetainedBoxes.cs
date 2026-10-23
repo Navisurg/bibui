@@ -192,6 +192,7 @@ public sealed partial class BibuiRuntime
         _eased.EndFrame();
         _motion.EndFrame();
         _lists.EndFrame();
+        _stepping = animating;
         if (animating) RequestFrame();
     }
 

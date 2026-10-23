@@ -270,7 +270,7 @@ static class TestPortSocketTests
                         case TestCmdKind.Screenshot:
                             // The last frame's draw list is still the runtime's: the frame on screen.
                             if (_cpu is null) Port.RefuseCmd("This app takes no screenshots.");
-                            else File.WriteAllBytes(cmd.Path!, FramePixels.Png(_runtime, _cpu.Draw));
+                            else File.WriteAllBytes(cmd.Path!, FramePixels.Png(_runtime, _cpu.Draw, cmd.Region));
                             break;
                         case TestCmdKind.App:
                             try { _pending.Add(JsonSerializer.Deserialize(cmd.Json, CounterJson.Default.CounterCmd)!); }

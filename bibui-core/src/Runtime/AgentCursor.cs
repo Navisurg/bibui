@@ -57,6 +57,7 @@ public struct AgentCursor
 public static class AgentCursorUi
 {
     private const float Glide = 0.3f;     // seconds to a new point: short, since the app has the event already
+    private const float Drag = 0.04f;     // seconds to a new point while a button is held: a drag is many small moves
     private const float Fade = 0.25f;     // seconds to show or hide
     private const float Linger = 2f;      // seconds shown after Connected goes false: an agent may reconnect for every request
     private const float Ripple = 0.4f;    // seconds a click's ring grows and fades
@@ -89,7 +90,7 @@ public static class AgentCursorUi
 
         //- the animations, asked for every frame so they are kept while hidden
         var to = new Vector2(cursor.X, cursor.Y);
-        var at = runtime.Animate("agent-cursor", "at", to, Transition.Timed(Glide));
+        var at = runtime.Animate("agent-cursor", "at", to, Transition.Timed(cursor.Pressed ? Drag : Glide));
         float shown = cursor.Connected ? 1f : 0f;
         var fade = cursor.Connected ? Transition.Timed(Fade) : Transition.Timed(Fade).WithDelay(Linger);
         float opacity = runtime.Animate("agent-cursor", "opacity", shown, fade);
