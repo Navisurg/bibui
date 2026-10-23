@@ -92,6 +92,9 @@ using var testPort = Environment.GetEnvironmentVariable("BIBUI_TEST_PORT") == "1
 DrawToPixels? shots = testPort is null ? null
     : options.Raster == GalleryRaster.Managed ? new ManagedRenderer().Draw : new SkiaCpuRenderer().Draw;
 if (testPort is not null) Console.Error.WriteLine($"Test port: {testPort.SocketPath}");
+// The agent driving the gallery through its port, drawn over it while one is connected:
+// folded from the events it sends.
+var agent = AgentCursor.Start("Agent", UiColor.Hex("#3B82F6"));
 
 // A test port's request, at the top of the frame: its events join the window's;
 // the frame on screen is still the runtime's draw list, so a screenshot is drawn from it.
@@ -101,10 +104,22 @@ void PullTestCmds(List<WindowEvent> events)
     while (testPort.TryPullCmd(out var cmd))
         switch (cmd.Kind)
         {
-            case TestCmdKind.Events: events.AddRange(cmd.Events); break;
+            case TestCmdKind.Events:
+                events.AddRange(cmd.Events);
+                agent = AgentCursor.FromWindowEvents(agent, cmd.Events);
+                break;
             case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, shots!)); break;
             case TestCmdKind.App: testPort.RefuseCmd("The gallery has no commands of its own."); break;
         }
+}
+
+// The agent's cursor, last in the frame so it is over everything; whether it has
+// shown what the agent did, so the port's answer waits for a person watching.
+bool BuildAgentCursor()
+{
+    if (testPort is null) return true;
+    agent.Connected = testPort.HasClient;
+    return AgentCursorUi.Build(runtime, agent, size: 1.5f);
 }
 
 var size = new PlatformWindowOptions("Component Gallery", Surface().Width, Surface().Height);
@@ -125,8 +140,9 @@ if (options.Host == GalleryHost.Wayland)
         PullTestCmds(window.Events);
         runtime.BeginBuild(window.Events);
         BuildGallery(runtime, gallery);
+        bool agentSettled = BuildAgentCursor();
         runtime.EndBuild();
-        testPort?.AnswerCmds();
+        testPort?.AnswerCmds(agentSettled);
         WaylandWindow.BeginDraw(window);
         if (skia is not null) skia.Draw(runtime.DrawList);
         else managed!.Draw(runtime.DrawList);
@@ -149,8 +165,9 @@ else
         PullTestCmds(window.Events);
         runtime.BeginBuild(window.Events);
         BuildGallery(runtime, gallery);
+        bool agentSettled = BuildAgentCursor();
         runtime.EndBuild();
-        testPort?.AnswerCmds();
+        testPort?.AnswerCmds(agentSettled);
         SilkWindow.BeginDraw(window);
         skia.Draw(runtime.DrawList);
         SilkWindow.EndDraw(window);

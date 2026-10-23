@@ -22,6 +22,7 @@ public static class PortTool
           state                         the app's state (JSON)
           schema                        a JSON schema of every request the app takes
           click <id>                    scroll into view if hidden, then click at the centre
+          move <x> <y>                  move the pointer there, in logical pixels
           cmd <name> [key=value...]     an app command: {"$cmd":name, key:value...}; numbers, true,
                                         false, null and JSON values ({..} [..] "..") as such
           screenshot <path>             the frame on screen, as a PNG the app writes
@@ -52,7 +53,7 @@ public static class PortTool
         if (depth < 0) return Fail(error, "--depth takes a number.");
         if (rest.Count == 0 || rest[0] == "help") { output.Write(Usage); return rest.Count == 0 ? 1 : 0; }
         var (command, argv) = (rest[0], rest.GetRange(1, rest.Count - 1));
-        var needs = command switch { "find" => "a text", "click" => "an id", "cmd" => "a command's name", "screenshot" => "a path", _ => null };
+        var needs = command switch { "find" => "a text", "click" => "an id", "move" => "x and y", "cmd" => "a command's name", "screenshot" => "a path", _ => null };
         if (needs is not null && argv.Count == 0) return Fail(error, $"{command} takes {needs}.");
 
         try
@@ -96,6 +97,12 @@ public static class PortTool
                 case "click":
                     var (x, y) = port.Click(argv[0]).Centre;
                     output.WriteLine(string.Create(CultureInfo.InvariantCulture, $"clicked #{argv[0]} at {x:0.#},{y:0.#}"));
+                    return 0;
+
+                case "move":
+                    if (argv.Count < 2 || !float.TryParse(argv[0], CultureInfo.InvariantCulture, out var mx) || !float.TryParse(argv[1], CultureInfo.InvariantCulture, out var my))
+                        return Fail(error, "move takes x and y, in logical pixels.");
+                    port.Ask(new JsonObject { ["$cmd"] = "test.events", ["events"] = new JsonArray(new JsonObject { ["kind"] = "mouse_move", ["x"] = mx, ["y"] = my }) });
                     return 0;
 
                 case "cmd":

@@ -27,6 +27,13 @@ All notable changes to bibui are recorded here. The format is based on
   (`cmd counter.set Value=10`), `state`, `schema` and `screenshot`. The
   gallery's page walk, `samples/component-gallery/test_all_pages.sh`, is a
   shell script on it.
+- **`AgentCursor`: what an agent driving the app does, drawn for a person
+  watching.** `AgentCursor.FromWindowEvents` folds the agent's pointer from the
+  events it sends; `AgentCursorUi.Build(runtime, cursor, size)` draws an arrow
+  there with a tag naming the agent and a ring on each click, gliding, fading in
+  while `TestPort.HasClient` and out a while after, and says when it has shown
+  what the agent did. `bibui-port move` moves the pointer without a click. The
+  gallery draws it when started with its test port.
 - **RowScrollList** (`runtime.BeginRowScrollList`, `EndRowScrollList`): the
   list of rows of one pitch, building only those in sight, by rows or by
   pixels (`ScrollBy`). It eases.

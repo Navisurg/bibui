@@ -104,5 +104,30 @@ bibui-port cmd counter.set Value=10
 bibui-port state
 ```
 
+## Showing the agent
+
+`AgentCursor` (in `Bibui.Core.Runtime`) draws what an agent driving the app does,
+for a person watching: an arrow at its pointer, a tag with its name, a ring on each
+click. Nothing is kept: the pointer is folded from the events the agent sends, and
+it is shown while `port.HasClient`.
+
+```csharp
+var agent = AgentCursor.Start("Agent", UiColor.Hex("#3B82F6"));    // before the loop
+...
+case TestCmdKind.Events:
+    app.Events.AddRange(cmd.Events);
+    agent = AgentCursor.FromWindowEvents(agent, cmd.Events);
+    break;
+...
+agent.Connected = port.HasClient;                                  // last in the build
+bool agentSettled = AgentCursorUi.Build(runtime, agent, size: 1.5f);
+runtime.EndBuild();
+port.AnswerCmds(agentSettled);
+```
+
+It glides to each point and shows each click, and `Build` says when it has: held
+until then, an answer makes the agent's next event wait for the person watching.
+`bibui-port move <x> <y>` moves it without a click.
+
 Part of bibui, a code-first native UI library for .NET:
 <https://github.com/Navisurg/bibui>. Licensed under Apache-2.0.
