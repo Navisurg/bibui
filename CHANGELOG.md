@@ -21,6 +21,14 @@ All notable changes to bibui are recorded here. The format is based on
 
 - The gallery's ScrollList page shows both lists; the showcase's target queue
   is a RowScrollList.
+- Text finds its face by the theme's slot and its size by the face's id, so
+  measuring and drawing a line no longer hash a family's name: a frame of 256
+  lines records about a third faster.
+- **Breaking:** `Font` holds the `Face` it is set in instead of `Family` and
+  `Weight`, and has no public constructor. Get one from
+  `runtime.FontInScope()`: a font is always one the theme provides.
+- **Breaking:** `DrawContext.FontMetrics` takes a `Font` instead of a size,
+  family and weight.
 
 ### Removed
 
@@ -30,6 +38,9 @@ All notable changes to bibui are recorded here. The format is based on
   pitch)`. Use RowScrollList, the same list. `ScrollPt.Off` is now pixels.
   Removed without a deprecated release first, so the next release is a major
   one.
+- **Breaking:** `Fonts.Face(family, weight)`, and `DrawContext.LineBox` and
+  `BlockHeight`, which took a family's name. Use `Fonts.LineHeight(font)` with
+  a font from `runtime.FontInScope()`.
 
 ## [1.0.0] - 2026-10-21
 

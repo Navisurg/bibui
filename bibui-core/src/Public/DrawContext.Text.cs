@@ -13,19 +13,17 @@ namespace Bibui.Core;
 public readonly ref partial struct DrawContext
 {
     /// <summary>
-    /// Draws one line of <paramref name="text"/> with its baseline at
-    /// <paramref name="baselineY"/>. Position is physical; <paramref name="size"/>
-    /// is logical, as everywhere a font size is named.
+    /// Draws one line of <paramref name="text"/> in <paramref name="style"/> with
+    /// its baseline at <paramref name="baselineY"/>, in physical px.
     ///
     /// Each run is shaped by <see cref="Fonts"/> and handed to the canvas as
     /// glyphs, so the backend draws exactly what was measured.
     /// </summary>
-    private void DrawRuns(ReadOnlySpan<char> text, float x, float baselineY,
-        float size, Rgba color, string? family, int weight)
+    private void DrawRuns(ReadOnlySpan<char> text, float x, float baselineY, FontStyle style, Rgba color)
     {
         float cursor = x;
-        float sizePx = size * Scale;
-        for (var run = Fonts.SplitRuns(text, family, weight); run is not null; run = run.Next)
+        float sizePx = style.Strike.Size;
+        for (var run = Fonts.SplitRuns(text, style.Face); run is not null; run = run.Next)
         {
             var shaped = Fonts.Shape(text[run.Start..run.End], run.Face, sizePx);
             ref var op = ref List.Push(DrawOpKind.Glyphs);
@@ -36,30 +34,17 @@ public readonly ref partial struct DrawContext
         }
     }
 
-    /// <summary>Ascent and descent of the base font — one baseline for every run.</summary>
-    public TextMetrics FontMetrics(float size, string? family = null, int weight = 400)
-        => _ctx.Metrics(size, family, weight);
-
     /// <summary>
-    /// The height one line of text occupies, in logical px: the font's own em box,
-    /// ascent to descent, and nothing else. Successive lines of a paragraph are
-    /// spaced <see cref="LineAdvance"/> apart.
+    /// Ascent and descent of <paramref name="font"/> at this canvas's scale, in
+    /// physical px: one baseline for every run of a text.
     /// </summary>
-    public float LineBox(float fontSize, string? family = null, int weight = 400)
-        => Fonts.LineBox(fontSize, family, weight, Scale);
+    public TextMetrics FontMetrics(in Font font) => Fonts.StyleOf(font, Scale).Metrics;
 
     /// <summary>
     /// Baseline-to-baseline distance between wrapped lines, in logical px — the
-    /// leading that <see cref="LineBox"/> no longer bakes into a single line.
+    /// leading that <see cref="Fonts.LineHeight"/> does not bake into a single line.
     /// </summary>
     public static float LineAdvance(float fontSize) => Bibui.Core.Fonts.LineAdvance(fontSize);
-
-    /// <summary>
-    /// Total height of <paramref name="lines"/> stacked lines: the last line's em box
-    /// plus one advance for every line above it. One line is exactly its em box.
-    /// </summary>
-    public float BlockHeight(int lines, float fontSize, string? family = null, int weight = 400)
-        => Fonts.BlockHeight(lines, fontSize, family, weight, Scale);
 
     /// <summary>
     /// One line of <paramref name="text"/> in <paramref name="font"/>, its
@@ -77,22 +62,23 @@ public readonly ref partial struct DrawContext
     public void DrawText(ReadOnlySpan<char> text, float x, float top, in Font font, Rgba color)
     {
         if (text.IsEmpty) return;
-        float baselineY = top - FontMetrics(font.Size, font.Family, font.Weight).Ascent;
-        DrawRuns(text, x, baselineY, font.Size, color, font.Family, font.Weight);
+        var style = Fonts.StyleOf(font, Scale);
+        DrawRuns(text, x, top - style.Metrics.Ascent, style, color);
     }
 
-    // An icon with no path: one glyph, centred in the logical rect.
+    // An icon with no path: one glyph in the built-in Inter's SemiBold, centred
+    // in the logical rect.
     private void DrawGlyphCentered(ReadOnlySpan<char> text, float rectX, float rectY, float rectW, float rectH,
         float fontSize, Rgba color)
     {
-        const int weight = 600;
-        var metrics = FontMetrics(fontSize, null, weight);
-        float textWidth = _ctx.MeasureRuns(text, fontSize, null, weight);
+        var style = Fonts.StyleOf(Fonts.BuiltIn(600), fontSize * Scale);
+        var metrics = style.Metrics;
+        float textWidth = Fonts.MeasureRuns(text, style);
         float textHeight = metrics.Descent - metrics.Ascent;
         float textX = (rectX * Scale) + ((rectW * Scale) - textWidth) / 2f;
         float baselineY = (rectY * Scale) + ((rectH * Scale) - textHeight) / 2f - metrics.Ascent;
 
-        DrawRuns(text, textX, baselineY, fontSize, color, null, weight);
+        DrawRuns(text, textX, baselineY, style, color);
     }
 
     /// <summary>
