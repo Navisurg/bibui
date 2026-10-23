@@ -31,6 +31,9 @@
          Fold, the window's pointer bookkeeping and the only part of the input
          path that is pure enough to test directly. -->
     <InternalsVisibleTo Include="bibui-runtime-tests" />
+    <!-- Bibui.Automation's test port writes the tree the last frame laid out
+         (LastTree), as the test server in core reads it. -->
+    <InternalsVisibleTo Include="Bibui.Automation" />
   </ItemGroup>
 
   <ItemGroup>
