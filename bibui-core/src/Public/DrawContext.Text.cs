@@ -22,7 +22,7 @@ public readonly ref partial struct DrawContext
     {
         var glyphs = List.ReserveGlyphs(text.Length, out int glyphStart);
         var points = List.ReservePoints(text.Length, out int pointStart);
-        int count = style.Glyphs(text, glyphs, points, out _);
+        int count = style.Strike.Glyphs(text, glyphs, points, out _);
         List.ReturnGlyphs(text.Length - count);
         List.ReturnPoints(text.Length - count);
         PushGlyphs(style, x, baselineY, color, glyphStart, count, pointStart);
@@ -90,7 +90,7 @@ public readonly ref partial struct DrawContext
     {
         var style = Fonts.StyleOf(Fonts.BuiltIn(600), fontSize * Scale);
         var metrics = style.Metrics;
-        float textWidth = style.Measure(text);
+        float textWidth = style.Strike.Measure(text);
         float textHeight = metrics.Descent - metrics.Ascent;
         float textX = (rectX * Scale) + ((rectW * Scale) - textWidth) / 2f;
         float baselineY = (rectY * Scale) + ((rectH * Scale) - textHeight) / 2f - metrics.Ascent;

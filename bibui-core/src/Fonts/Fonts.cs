@@ -10,7 +10,7 @@ namespace Bibui.Core;
 /// metrics, how wide a text is, its glyphs, and where it breaks into lines at a
 /// width. Text is UTF-16 throughout. Layout, the painter and the runtime all ask
 /// this one instance, so what is drawn is what was measured: a text's glyphs are
-/// walked from per-character tables (<see cref="FontStyle"/>), and a
+/// walked from per-character tables (<see cref="FontStrike"/>), and a
 /// <see cref="Text"/> layout walked is drawn from that walk.
 ///
 /// <para>It knows nothing about a canvas, and nothing about a raster backend:
@@ -198,7 +198,7 @@ public sealed class Fonts : IDisposable
     /// text with that content, from the same cache.
     /// </summary>
     public float Measure(ReadOnlySpan<char> text, in Font font)
-        => text.IsEmpty ? 0f : StyleOf(font, font.Scale).Measure(text) / font.Scale;
+        => text.IsEmpty ? 0f : StyleOf(font, font.Scale).Strike.Measure(text) / font.Scale;
 
     // ── A frame's runs ───────────────────────────────────────────────────────
 
@@ -240,7 +240,7 @@ public sealed class Fonts : IDisposable
             Array.Resize(ref _runGlyphs, size);
             Array.Resize(ref _runPoints, size);
         }
-        int count = style.Glyphs(content, _runGlyphs.AsSpan(_runCount, content.Length),
+        int count = style.Strike.Glyphs(content, _runGlyphs.AsSpan(_runCount, content.Length),
             _runPoints.AsSpan(_runCount, content.Length), out float width);
         (text.RunStart, text.RunCount, text.RunWidth, text.RunStyle, text.RunFrame)
             = (_runCount, count, width / font.Scale, style, RunFrame);
@@ -388,7 +388,7 @@ public sealed class Fonts : IDisposable
             int wordEnd = i;
 
             var candidate = textStart < 0 ? text[wordStart..wordEnd] : text[textStart..wordEnd];
-            float w = style.Measure(candidate) / scale;
+            float w = style.Strike.Measure(candidate) / scale;
             if (!Fits(w, maxWidth) && textStart >= 0)
             {
                 result.Add(new TextLine(lineStart, lastEnd));
@@ -422,7 +422,7 @@ public sealed class Fonts : IDisposable
             {
                 int mid = CharacterStart(text, (lo + hi + 1) / 2, lo);
                 if (mid <= lo) mid = NextCharacter(text, lo, segEnd);
-                float w = style.Measure(text[start..mid]) / scale;
+                float w = style.Strike.Measure(text[start..mid]) / scale;
                 if (Fits(w, maxWidth)) lo = mid;
                 else hi = CharacterStart(text, mid - 1, lo);
             }
@@ -488,105 +488,6 @@ internal sealed class FontStyle(ulong key, FontFace face, FontStrike strike, Tex
     public FontFace Face { get; } = face;
     public FontStrike Strike { get; } = strike;
     public TextMetrics Metrics { get; } = metrics;
-
-    // For chars below 256, the glyph and its advance side by side, filled on
-    // first use (rad's utf8_class1_direct_map): a walk reads one entry per char.
-    // Anything else goes through the font's cmap and the strike's advances.
-    private readonly DirectGlyph[] _direct = new DirectGlyph[256];
-
-    private struct DirectGlyph
-    {
-        public ushort Glyph;
-        public bool Filled;
-        public float Advance;
-    }
-
-    // The walks below keep their index, count and pen in registers, which is
-    // most of their speed: nothing of theirs is passed by ref (a char is
-    // decoded by value, Next returning where the next starts), and the hot loop
-    // of Glyphs is a method of its own with no call in it. With either, the JIT
-    // sends them through the stack every char, about three times slower.
-
-    /// <summary>
-    /// The width of <paramref name="text"/> in physical px: one glyph per code
-    /// point through the cmap, linear advances summed in order, as
-    /// <see cref="FontStrike.Measure(ReadOnlySpan{char})"/> sums them.
-    /// </summary>
-    public float Measure(ReadOnlySpan<char> text)
-    {
-        var direct = _direct;
-        float total = 0f;
-        int i = 0;
-        while (i < text.Length)
-        {
-            for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++)
-                total += direct[c].Advance;
-            if (i == text.Length) break;
-            var (_, advance, next) = Next(text, i);
-            total += advance;
-            i = next;
-        }
-        return total;
-    }
-
-    /// <summary>
-    /// <paramref name="text"/>'s glyphs into <paramref name="glyphs"/> and their
-    /// pen positions from its start into <paramref name="points"/>: what
-    /// <see cref="FontStrike.Shape"/> makes in its nominal mode. Both spans hold
-    /// at least one entry per char. Returns how many glyphs; <paramref name="width"/>
-    /// is the last pen position, as <see cref="Measure"/> answers.
-    /// </summary>
-    public int Glyphs(ReadOnlySpan<char> text, Span<ushort> glyphs, Span<System.Numerics.Vector2> points, out float width)
-    {
-        int n = 0, i = 0;
-        float pen = 0f;
-        while (i < text.Length)
-        {
-            (i, n, pen) = GlyphsDirect(text, i, _direct, glyphs, points, n, pen);
-            if (i == text.Length) break;
-            var (glyph, advance, next) = Next(text, i);
-            glyphs[n] = glyph;
-            points[n] = new(pen, 0f);
-            pen += advance;
-            n++;
-            i = next;
-        }
-        width = pen;
-        return n;
-    }
-
-    // Glyphs' hot loop: while the chars have filled direct entries.
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static (int I, int N, float Pen) GlyphsDirect(ReadOnlySpan<char> text, int i, DirectGlyph[] direct,
-        Span<ushort> glyphs, Span<System.Numerics.Vector2> points, int n, float pen)
-    {
-        for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++, n++)
-        {
-            glyphs[n] = direct[c].Glyph;
-            points[n] = new(pen, 0f);
-            pen += direct[c].Advance;
-        }
-        return (i, n, pen);
-    }
-
-    // The char at i the hot loops did not take: below 256, its direct entry
-    // filled; above, its code point (a surrogate pair is one) looked up the slow
-    // way. Its glyph, its advance, and where the next char starts.
-    private (ushort Glyph, float Advance, int Next) Next(ReadOnlySpan<char> text, int i)
-    {
-        char c = text[i];
-        if (c < 256)
-        {
-            uint g = Strike.Font.GlyphIndex(c);
-            _direct[c] = new DirectGlyph { Glyph = (ushort)g, Filled = true, Advance = Strike.Advance(g) };
-            return (_direct[c].Glyph, _direct[c].Advance, i + 1);
-        }
-        int cp = c, next = i + 1;
-        if (char.IsHighSurrogate(c) && next < text.Length && char.IsLowSurrogate(text[next]))
-            cp = char.ConvertToUtf32(c, text[next++]);
-        uint glyph = Strike.Font.GlyphIndex(cp);
-        return ((ushort)glyph, Strike.Advance(glyph), next);
-    }
 }
 
 /// <summary>

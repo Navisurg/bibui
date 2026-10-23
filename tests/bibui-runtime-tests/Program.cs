@@ -2707,7 +2707,7 @@ Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string
     const string text = "Shaped runs, glyph by glyph — 0.5 ffi";
     var glyphIds = new ushort[text.Length];
     var positions = new System.Numerics.Vector2[text.Length];
-    int count = fonts.StyleOf(face, size).Glyphs(text, glyphIds, positions, out float width);
+    int count = face.Strike(size).Glyphs(text, glyphIds, positions, out float width);
     Eq(text.Length, count, "one glyph per char for this text (no ligatures)");
     Eq(face.Strike(size).Measure(text), width, "the walked run is as wide as measuring says");
 
