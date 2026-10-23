@@ -49,6 +49,11 @@ All notable changes to bibui are recorded here. The format is based on
 - **Breaking:** `Fonts.Face(family, weight)`, and `DrawContext.LineBox` and
   `BlockHeight`, which took a family's name. Use `Fonts.LineHeight(font)` with
   a font from `runtime.FontInScope()`.
+- **Breaking: the test server no longer records video.** `start_recording` and
+  `stop_recording` are gone from `BibuiTestServer`, and `StartRecording` and
+  `StopRecording` from `WorkflowClient`. Encoding video is not the test
+  server's job: an app that wants a recording takes screenshots, or captures
+  its window with a tool of its own.
 
 ## [1.0.0] - 2026-10-21
 
