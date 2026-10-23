@@ -28,6 +28,10 @@ All notable changes to bibui are recorded here. The format is based on
   caches keyed by a hash of its chars, and a text layout walked is drawn from
   that walk: a frame of 256 lines records about a third faster again, and a
   line that changes costs no more than one that doesn't.
+- The Skia renderers keep each glyph run's text blob across frames instead of
+  building a new one per run per frame, so Skia reuses its own work for text
+  it has drawn before: on the GPU a frame of 256 lines draws in about half the
+  time, and a frame allocates about 20 KB less.
 - **Breaking:** `Font` holds the `Face` it is set in instead of `Family` and
   `Weight`, and has no public constructor. Get one from
   `runtime.FontInScope()`: a font is always one the theme provides.
