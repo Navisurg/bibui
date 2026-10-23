@@ -17,6 +17,14 @@ public sealed class Text : UiComponent
     // to frame, so it is allocated again only for a longer text.
     internal readonly BibuiStr ContentStr = new(0);
 
+    // This frame's run, written by layout's walk (Fonts.MeasureRun): where its
+    // glyphs and positions are in the fonts' run buffer, its width, and the
+    // style and frame they were walked for. The painter copies them when both
+    // still match, and walks the chars itself when not.
+    internal int RunStart, RunCount, RunFrame;
+    internal float RunWidth;
+    internal FontStyle? RunStyle;
+
     /// <summary>
     /// What it shows: a copy of the text it was built with, so what the
     /// caller passed may change as soon as the call returns.

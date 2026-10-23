@@ -250,6 +250,7 @@ public sealed partial class BibuiRuntime
         // Every rect is solved before anything is recorded. A text measures
         // itself in this runtime's fonts.
         (_measureTheme, _measureScale) = (theme, surface.ScaleFactor);
+        _fonts.BeginFrameRuns();
         LayoutSolver.Layout(tree, System.Numerics.Vector2.Zero,
             new System.Numerics.Vector2(surface.Width, surface.Height), _measure);
         var pointerTransforms = transformed ? PointerTransforms(tree) : null;

@@ -21,6 +21,22 @@ All notable changes to bibui are recorded here. The format is based on
 
 - The gallery's ScrollList page shows both lists; the showcase's target queue
   is a RowScrollList.
+- Text finds its face by the theme's slot and its size by the face's id, so
+  measuring and drawing a line no longer hash a family's name: a frame of 256
+  lines records about a third faster.
+- Text is walked from per-character tables each frame instead of looked up in
+  caches keyed by a hash of its chars, and a text layout walked is drawn from
+  that walk: a frame of 256 lines records about a third faster again, and a
+  line that changes costs no more than one that doesn't.
+- The Skia renderers keep each glyph run's text blob across frames instead of
+  building a new one per run per frame, so Skia reuses its own work for text
+  it has drawn before: on the GPU a frame of 256 lines draws in about half the
+  time, and a frame allocates about 20 KB less.
+- **Breaking:** `Font` holds the `Face` it is set in instead of `Family` and
+  `Weight`, and has no public constructor. Get one from
+  `runtime.FontInScope()`: a font is always one the theme provides.
+- **Breaking:** `DrawContext.FontMetrics` takes a `Font` instead of a size,
+  family and weight.
 
 ### Removed
 
@@ -30,6 +46,9 @@ All notable changes to bibui are recorded here. The format is based on
   pitch)`. Use RowScrollList, the same list. `ScrollPt.Off` is now pixels.
   Removed without a deprecated release first, so the next release is a major
   one.
+- **Breaking:** `Fonts.Face(family, weight)`, and `DrawContext.LineBox` and
+  `BlockHeight`, which took a family's name. Use `Fonts.LineHeight(font)` with
+  a font from `runtime.FontInScope()`.
 - **Breaking: the test server no longer records video.** `start_recording` and
   `stop_recording` are gone from `BibuiTestServer`, and `StartRecording` and
   `StopRecording` from `WorkflowClient`. Encoding video is not the test

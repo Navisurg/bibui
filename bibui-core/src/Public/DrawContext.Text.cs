@@ -13,60 +13,81 @@ namespace Bibui.Core;
 public readonly ref partial struct DrawContext
 {
     /// <summary>
-    /// Draws one line of <paramref name="text"/> with its baseline at
-    /// <paramref name="baselineY"/>. Position is physical; <paramref name="size"/>
-    /// is logical, as everywhere a font size is named.
-    ///
-    /// Each run is shaped by <see cref="Fonts"/> and handed to the canvas as
-    /// glyphs, so the backend draws exactly what was measured.
+    /// Draws one line of <paramref name="text"/> in <paramref name="style"/> with
+    /// its baseline at <paramref name="baselineY"/>, in physical px: its glyphs
+    /// walked straight into the list, so the backend draws exactly what was
+    /// measured.
     /// </summary>
-    private void DrawRuns(ReadOnlySpan<char> text, float x, float baselineY,
-        float size, Rgba color, string? family, int weight)
+    private void DrawRuns(ReadOnlySpan<char> text, float x, float baselineY, FontStyle style, Rgba color)
     {
-        float cursor = x;
-        float sizePx = size * Scale;
-        for (var run = Fonts.SplitRuns(text, family, weight); run is not null; run = run.Next)
-        {
-            var shaped = Fonts.Shape(text[run.Start..run.End], run.Face, sizePx);
-            ref var op = ref List.Push(DrawOpKind.Glyphs);
-            op.Resource = List.AddFace(run.Face);
-            (op.A, op.B, op.C, op.Color) = (cursor, baselineY, sizePx, color);
-            (op.Start, op.Count, op.Start2) = (List.AddGlyphs(shaped.Glyphs), shaped.Glyphs.Length, List.AddPoints(shaped.Positions));
-            cursor += shaped.Width;
-        }
+        var glyphs = List.ReserveGlyphs(text.Length, out int glyphStart);
+        var points = List.ReservePoints(text.Length, out int pointStart);
+        int count = style.Strike.Glyphs(text, glyphs, points, out _);
+        List.ReturnGlyphs(text.Length - count);
+        List.ReturnPoints(text.Length - count);
+        PushGlyphs(style, x, baselineY, color, glyphStart, count, pointStart);
     }
 
-    /// <summary>Ascent and descent of the base font — one baseline for every run.</summary>
-    public TextMetrics FontMetrics(float size, string? family = null, int weight = 400)
-        => _ctx.Metrics(size, family, weight);
+    // The op for a run whose glyphs and positions are in the list already.
+    //
+    // NOTE(positions): a run's positions are where each glyph sits from the
+    // run's start, and here they follow from its face, size and glyphs alone.
+    // The walk (FontStrike.Glyphs) puts the first glyph at 0 and moves the pen by
+    // each glyph's advance, which is the strike's for that glyph: one number per
+    // glyph of a font at a pixel size. "Hi!" at 16 px:
+    //
+    //     glyphs:     H         i          !
+    //     positions:  (0, 0)    (11.6, 0)  (16.0, 0)
+    //                 └─ +11.6 ─┘└─ +4.4 ──┘   each step the previous glyph's advance
+    //
+    // So the same face, size and glyphs always have the same positions, and the
+    // Skia renderers rely on that: they key the text blob they keep for a run by
+    // face, size and glyphs, without the positions (SkiaOps.RunKey), which reads
+    // a fifth of the bytes a key with them would. Shaping breaks it: kerning
+    // pulls "AV" together, and HarfBuzz places marks and the parts of an emoji
+    // sequence, so the positions depend on more than the advances. A run made
+    // that way (fallback runs shaped by HarfBuzz would be) must not reach this op with only
+    // its glyphs to tell it apart: its positions go back into the renderers' key.
+    private void PushGlyphs(FontStyle style, float x, float baselineY, Rgba color, int glyphStart, int count, int pointStart)
+    {
+        ref var op = ref List.Push(DrawOpKind.Glyphs);
+        op.Resource = List.AddFace(style.Face);
+        (op.A, op.B, op.C, op.Color) = (x, baselineY, style.Strike.Size, color);
+        (op.Start, op.Count, op.Start2) = (glyphStart, count, pointStart);
+    }
 
     /// <summary>
-    /// The height one line of text occupies, in logical px: the font's own em box,
-    /// ascent to descent, and nothing else. Successive lines of a paragraph are
-    /// spaced <see cref="LineAdvance"/> apart.
+    /// Ascent and descent of <paramref name="font"/> at this canvas's scale, in
+    /// physical px: one baseline for every run of a text.
     /// </summary>
-    public float LineBox(float fontSize, string? family = null, int weight = 400)
-        => Fonts.LineBox(fontSize, family, weight, Scale);
+    public TextMetrics FontMetrics(in Font font) => Fonts.StyleOf(font, Scale).Metrics;
 
     /// <summary>
     /// Baseline-to-baseline distance between wrapped lines, in logical px — the
-    /// leading that <see cref="LineBox"/> no longer bakes into a single line.
+    /// leading that <see cref="Fonts.LineHeight"/> does not bake into a single line.
     /// </summary>
     public static float LineAdvance(float fontSize) => Bibui.Core.Fonts.LineAdvance(fontSize);
 
     /// <summary>
-    /// Total height of <paramref name="lines"/> stacked lines: the last line's em box
-    /// plus one advance for every line above it. One line is exactly its em box.
+    /// <paramref name="text"/> in <paramref name="font"/>, its ascent at
+    /// <paramref name="top"/>: drawn from the run layout walked it into this
+    /// frame, copied into the list, or walked again when it has none, or one
+    /// walked in another style.
     /// </summary>
-    public float BlockHeight(int lines, float fontSize, string? family = null, int weight = 400)
-        => Fonts.BlockHeight(lines, fontSize, family, weight, Scale);
-
-    /// <summary>
-    /// One line of <paramref name="text"/> in <paramref name="font"/>, its
-    /// ascent at <paramref name="top"/>. What a <see cref="Text"/> is drawn with.
-    /// </summary>
-    internal void DrawTextTop(ReadOnlySpan<char> text, float x, float top, in Font font, ReadOnlySpan<char> color)
-        => DrawText(text, x * Scale, top * Scale, font, Color(color));
+    internal void DrawTextTop(Text text, float x, float top, in Font font, ReadOnlySpan<char> color)
+    {
+        if (text.Content.IsEmpty) return;
+        var style = Fonts.StyleOf(font, Scale);
+        var rgba = Color(color);
+        float baselineY = top * Scale - style.Metrics.Ascent;
+        if (text.RunFrame != Fonts.RunFrame || text.RunStyle != style)
+        {
+            DrawRuns(text.Content, x * Scale, baselineY, style, rgba);
+            return;
+        }
+        PushGlyphs(style, x * Scale, baselineY, rgba,
+            List.AddGlyphs(Fonts.RunGlyphs(text)), text.RunCount, List.AddPoints(Fonts.RunPoints(text)));
+    }
 
     /// <summary>
     /// One line of <paramref name="text"/> in <paramref name="font"/>, drawn as a
@@ -77,22 +98,23 @@ public readonly ref partial struct DrawContext
     public void DrawText(ReadOnlySpan<char> text, float x, float top, in Font font, Rgba color)
     {
         if (text.IsEmpty) return;
-        float baselineY = top - FontMetrics(font.Size, font.Family, font.Weight).Ascent;
-        DrawRuns(text, x, baselineY, font.Size, color, font.Family, font.Weight);
+        var style = Fonts.StyleOf(font, Scale);
+        DrawRuns(text, x, top - style.Metrics.Ascent, style, color);
     }
 
-    // An icon with no path: one glyph, centred in the logical rect.
+    // An icon with no path: one glyph in the built-in Inter's SemiBold, centred
+    // in the logical rect.
     private void DrawGlyphCentered(ReadOnlySpan<char> text, float rectX, float rectY, float rectW, float rectH,
         float fontSize, Rgba color)
     {
-        const int weight = 600;
-        var metrics = FontMetrics(fontSize, null, weight);
-        float textWidth = _ctx.MeasureRuns(text, fontSize, null, weight);
+        var style = Fonts.StyleOf(Fonts.BuiltIn(600), fontSize * Scale);
+        var metrics = style.Metrics;
+        float textWidth = style.Strike.Measure(text);
         float textHeight = metrics.Descent - metrics.Ascent;
         float textX = (rectX * Scale) + ((rectW * Scale) - textWidth) / 2f;
         float baselineY = (rectY * Scale) + ((rectH * Scale) - textHeight) / 2f - metrics.Ascent;
 
-        DrawRuns(text, textX, baselineY, fontSize, color, null, weight);
+        DrawRuns(text, textX, baselineY, style, color);
     }
 
     /// <summary>
