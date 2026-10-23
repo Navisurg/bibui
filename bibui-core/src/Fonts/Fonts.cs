@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Bibui.Core.Draw;
 using Bibui.Core.Theming;
 using Bibui.Core.FreeType;
@@ -26,34 +27,21 @@ namespace Bibui.Core;
 /// </summary>
 public sealed class Fonts : IDisposable
 {
-    private readonly List<Action> _endFrames = [];
-    private readonly List<IDisposable> _disposables = [];
-
     // The one text engine every configuration measures with, whatever draws:
     // confined to the rendering thread, as Fonts is.
     private readonly TextEngine _engine = new();
     private readonly FontProvider _provider;
-    private readonly ResourceCache<WrapKey, TextLine> _lines;
 
     /// <summary>Fonts on a text engine of their own, which the renderer owns with them.</summary>
     internal Fonts()
     {
         _provider = new FontProvider(_engine);
-        _lines = Create<WrapKey, TextLine>();
-    }
-
-    private ResourceCache<TKey, TValue> Create<TKey, TValue>() where TKey : notnull
-    {
-        var cache = new ResourceCache<TKey, TValue>(keepFrames: 60);
-        _endFrames.Add(cache.EndFrame);
-        _disposables.Add(cache);
-        return cache;
     }
 
     /// <summary>Evicts what was not asked for; called once per frame, with the renderer's own caches.</summary>
     internal void EndFrame()
     {
-        foreach (var endFrame in _endFrames) endFrame();
+        EvictWraps();
         // The slots resolve again next frame, so the next frame's typography is
         // what they hold. The faces they resolve to come from FontProvider's
         // cache, which keeps what a (family, weight) first resolved to: a family
@@ -63,7 +51,6 @@ public sealed class Fonts : IDisposable
 
     public void Dispose()
     {
-        foreach (var disposable in _disposables) disposable.Dispose();
         _engine.Dispose();
     }
 
@@ -343,7 +330,70 @@ public sealed class Fonts : IDisposable
         // different key rather than a stale one.
         var style = StyleOf(font, font.Scale);
         var key = WrapKey.For(text, width, style.Key, font.Scale, wrap);
-        return _lines.TryGet(key, out var lines) ? lines : _lines.Add(key, WrapUncached(text, width, style, font.Scale, wrap));
+        ref var node = ref CollectionsMarshal.GetValueRefOrAddDefault(_wraps, key, out bool found);
+        if (!found)
+        {
+            node = _firstFreeWrap ?? new WrapNode();
+            _firstFreeWrap = node.NextFree;
+            node.NextFree = null;
+            node.First = WrapUncached(text, width, style, font.Scale, wrap);
+        }
+        node!.Touched = _wrapFrame;
+        return node.First;
+    }
+
+    // ── The wraps kept ───────────────────────────────────────────────────────
+
+    // rad's shape: a key space (WrapKey), a node store, and a tick (EvictWraps).
+    // A wrap's lines live as long as its node: until it goes KeepWrapFrames
+    // frames unasked, when the node and every line in it go on the free lists
+    // and the next miss builds from them, so once the largest working set has
+    // been seen a wrap allocates nothing. NOTE(k): a TextLine handed out is
+    // good while its wrap is kept, at least KeepWrapFrames frames after it was
+    // last asked for; one held past that is some other wrap's line.
+    private const ulong KeepWrapFrames = 60;
+    private readonly Dictionary<WrapKey, WrapNode> _wraps = [];
+    private readonly List<WrapKey> _staleWraps = [];   // EvictWraps' scratch
+    private ulong _wrapFrame;
+    private WrapNode? _firstFreeWrap;   // nodes no key holds, linked by NextFree
+    private TextLine? _firstFreeLine;   // lines no wrap holds, linked by NextFree
+
+    private sealed class WrapNode
+    {
+        public TextLine? First;      // the wrap's lines, linked by Next
+        public ulong Touched;        // the frame it was last asked for
+        public WrapNode? NextFree;   // in _firstFreeWrap, while no key holds it
+    }
+
+    // Once a frame: every wrap unasked for too long goes back, with its lines.
+    private void EvictWraps()
+    {
+        foreach (var (key, node) in _wraps)
+            if (_wrapFrame - node.Touched > KeepWrapFrames) _staleWraps.Add(key);
+        foreach (var key in _staleWraps)
+        {
+            _wraps.Remove(key, out var node);
+            for (var line = node!.First; line is not null;)
+            {
+                var next = line.Next;
+                line.NextFree = _firstFreeLine;
+                _firstFreeLine = line;
+                line = next;
+            }
+            node.First = null;
+            node.NextFree = _firstFreeWrap;
+            _firstFreeWrap = node;
+        }
+        _staleWraps.Clear();
+        _wrapFrame++;
+    }
+
+    private TextLine TakeLine(int start, int end)
+    {
+        var line = _firstFreeLine ?? new TextLine(0, 0);
+        _firstFreeLine = line.NextFree;
+        (line.Start, line.End, line.Next, line.Prev, line.NextFree) = (start, end, null, null, null);
+        return line;
     }
 
     // Each char's advance, for the text being wrapped: grown, never shrunk.
@@ -365,7 +415,7 @@ public sealed class Fonts : IDisposable
     // so the breaks are the ones measuring each candidate made.
     private TextLine WrapUncached(ReadOnlySpan<char> text, float maxWidth, FontStyle style, float scale, TextWrap wrap)
     {
-        var result = new Lines();
+        var result = new Lines { Fonts = this };
         var adv = Advances(text.Length);
         style.Strike.CharAdvances(text, adv);
 
@@ -382,7 +432,7 @@ public sealed class Fonts : IDisposable
             // Always emit ≥1 entry per logical line so blank lines (\n\n, trailing \n)
             // produce empty lines that line up with what is drawn.
             if (result.Last == before)
-                result.Add(new TextLine(segStart, segStart));
+                result.Add(segStart, segStart);
 
             if (idx >= text.Length) break;
             // Consume the line break — \r\n counts as one.
@@ -393,13 +443,18 @@ public sealed class Fonts : IDisposable
         return result.First!;
     }
 
-    // The chain being built: its first line, which is what is kept, and its last, which is appended to.
+    // The chain being built, from the free lines: its first line, which Wrap returns, and its last, which is appended to.
     private struct Lines
     {
+        public Fonts Fonts;
         public TextLine? First;
         public TextLine? Last;
 
-        public void Add(TextLine line) => Last = First is null ? First = line : Last!.Append(line);
+        public void Add(int start, int end)
+        {
+            var line = Fonts.TakeLine(start, end);
+            Last = First is null ? First = line : Last!.Append(line);
+        }
     }
 
     // One logical line, [segStart, segEnd), broken at single spaces. Adjacent
@@ -425,7 +480,7 @@ public sealed class Fonts : IDisposable
             float w = textStart < 0 ? Sum(adv, wordStart, wordEnd, 0f) : Sum(adv, lastEnd, wordEnd, width);
             if (!Fits(w / scale, maxWidth) && textStart >= 0)
             {
-                result.Add(new TextLine(lineStart, lastEnd));
+                result.Add(lineStart, lastEnd);
                 lineStart = wordStart;
                 textStart = wordEnd > wordStart ? wordStart : -1;
                 width = Sum(adv, wordStart, wordEnd, 0f);
@@ -441,7 +496,7 @@ public sealed class Fonts : IDisposable
             i++; // skip the space separator
         }
         if (textStart >= 0)
-            result.Add(new TextLine(lineStart, lastEnd));
+            result.Add(lineStart, lastEnd);
     }
 
     // One logical line, [segStart, segEnd), cut into the longest runs of
@@ -464,7 +519,7 @@ public sealed class Fonts : IDisposable
                 if (!Fits(wider / scale, maxWidth)) break;
                 (end, w) = (next, wider);
             }
-            result.Add(new TextLine(start, end));
+            result.Add(start, end);
             start = end;
         }
     }
@@ -538,13 +593,16 @@ public sealed class TextLine
     internal TextLine(int start, int end) { Start = start; End = end; }
 
     /// <summary>Where the line starts in its text.</summary>
-    public int Start { get; }
+    public int Start { get; internal set; }
 
     /// <summary>Where it ends: the offset after its last character.</summary>
-    public int End { get; }
+    public int End { get; internal set; }
 
-    public TextLine? Next { get; private set; }
-    public TextLine? Prev { get; private set; }
+    public TextLine? Next { get; internal set; }
+    public TextLine? Prev { get; internal set; }
+
+    // In Fonts' free list, while no wrap holds the line.
+    internal TextLine? NextFree;
 
     internal TextLine Append(TextLine line)
     {
