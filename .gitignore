@@ -26,6 +26,6 @@ tests/*/artifacts/
 samples/component-gallery/reference-seed/
 
 # Component gallery pictures, rendered on demand and not committed:
-# test_all_pages.py's screenshots and `component-gallery -- reference`'s pages.
+# test_all_pages.sh's screenshots and `component-gallery -- reference`'s pages.
 samples/component-gallery/gallery-test-screenshots/
 samples/component-gallery/reference/
