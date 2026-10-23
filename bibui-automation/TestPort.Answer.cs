@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using Bibui.Core;
 using Bibui.Core.Draw;
 using Bibui.Core.Runtime;
 
@@ -85,7 +86,7 @@ public sealed partial class TestPort
                 case TestCmdKind.Tree:
                     json.WriteBoolean("ok", true);
                     json.WritePropertyName("result");
-                    TestTree.Write(json, _runtime?.LastTree);
+                    WriteTree(json, _runtime?.LastTree);
                     break;
                 case TestCmdKind.State:
                     if (stateType is null) { Error(json, "This app reports no state."); break; }
@@ -120,6 +121,36 @@ public sealed partial class TestPort
             json.WriteBoolean("ok", false);
             json.WriteString("error", error);
         }
+    }
+
+    // test.tree: the tree the last frame laid out, walked as it is (the runtime keeps
+    // it; nothing is copied), each node saying what it is, where it was laid out and
+    // what it holds, leaving out what is empty or false:
+    // {"kind":"box","id":"add","x":10,"y":40,"w":80,"h":24,"clickable":true,"children":[...]}
+    private static void WriteTree(Utf8JsonWriter json, UiNode? node)
+    {
+        if (node is null) { json.WriteNullValue(); return; }
+        json.WriteStartObject();
+        json.WriteString("kind", node switch { Box => "box", Text => "text", _ => "node" });
+        if (node.Id is { } id) json.WriteString("id", id);
+        json.WriteNumber("x", node.Rect.X);
+        json.WriteNumber("y", node.Rect.Y);
+        json.WriteNumber("w", node.Extent.X);
+        json.WriteNumber("h", node.Extent.Y);
+        if (node is Text text) json.WriteString("text", text.Content);
+        if (node is Box box)
+        {
+            if ((box.Claims & InteractionKinds.Press) != 0) json.WriteBoolean("clickable", true);
+            if ((box.Claims & InteractionKinds.Disabled) != 0) json.WriteBoolean("disabled", true);
+        }
+        if (node.FirstChild is not null)
+        {
+            json.WriteStartArray("children");
+            for (var child = node.FirstChild; child is not null; child = child.Next == child ? null : child.Next)
+                WriteTree(json, child);
+            json.WriteEndArray();
+        }
+        json.WriteEndObject();
     }
 
     // test.screenshot: this frame, drawn on the CPU, as a PNG at the path the request
