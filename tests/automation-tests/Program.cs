@@ -1,4 +1,4 @@
-// Bibui.Automation's tests: TestPort, without a socket or a window.
+// Bibui.Automation's tests: TestPort, and bibui-port driving a headless app through it.
 // Run with: dotnet run --project tests/automation-tests
 
 int passed = 0, failed = 0;
@@ -26,6 +26,9 @@ TestPortTests.Register(Run);
 Console.WriteLine();
 Console.WriteLine("Test port: the socket, the port thread and answers");
 TestPortSocketTests.Register(Run);
+Console.WriteLine();
+Console.WriteLine("bibui-port");
+BibuiPortTests.Register(Run);
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 

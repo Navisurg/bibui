@@ -10,6 +10,9 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../bibui-automation/bibui-automation.csproj" />
+    <!-- bibui-port's commands, run in-process against the headless app. -->
+    <Compile Include="../../tools/bibui-port/Port.cs" Link="BibuiPort/Port.cs" />
+    <Compile Include="../../tools/bibui-port/PortTool.cs" Link="BibuiPort/PortTool.cs" />
     <!-- Skia on the CPU: what the test app draws its screenshots with. -->
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
   </ItemGroup>
