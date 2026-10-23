@@ -27,7 +27,6 @@ public enum GalleryRaster
 public sealed record GalleryOptions(
     GalleryHost Host,
     GalleryRaster Raster,
-    int Port,
     bool Reference,
     bool Check,
     IReadOnlyList<(int Width, int Height)> Sizes,
@@ -44,7 +43,7 @@ public sealed record GalleryOptions(
         Usage: component-gallery [reference|check] [--size WxH]... [--out DIR]
                                  [--host silk|wayland] [--raster skia|managed]
                                  [--accent #RRGGBB [--mode dark|light]]
-                                 [--port N] [--first-frame] [--dry-run] [--help]
+                                 [--first-frame] [--dry-run] [--help]
 
           (no arguments)      opens the gallery on the Silk host (GLFW + GL) with Skia
           reference           renders every page, and its open state, to reference/
@@ -66,8 +65,6 @@ public sealed record GalleryOptions(
                               instead of neutral-dark; with reference, written to
                               reference-seed/ rather than over reference/
           --mode dark|light   the generated theme's mode (default dark); needs --accent
-          --port N            the BibuiTestServer port (default 44334); the server
-                              runs only with BIBUI_TEST_SERVER=1 in the environment
           --first-frame       render the first frame headless on the chosen backend, and exit
           --dry-run           print the host and backend that would be used, and exit
           --help              print this and exit
@@ -85,7 +82,6 @@ public sealed record GalleryOptions(
         error = null;
         GalleryHost? host = null;
         GalleryRaster? raster = null;
-        int port = 44334;
         bool reference = false, check = false, help = false, dryRun = false, firstFrame = false, deprecatedAlias = false;
         string? accent = null;
         ThemeMode? mode = null;
@@ -147,9 +143,6 @@ public sealed record GalleryOptions(
                         default: error = $"Unknown --mode '{args[i]}': expected dark or light."; return null;
                     }
                     break;
-                case "--port":
-                    if (i + 1 < args.Count && int.TryParse(args[i + 1], out int p)) { port = p; i++; }
-                    break;
             }
         }
 
@@ -181,7 +174,7 @@ public sealed record GalleryOptions(
             return null;
         }
 
-        return new GalleryOptions(h, r, port, reference, check, sizes, outDir, help, dryRun, notices,
+        return new GalleryOptions(h, r, reference, check, sizes, outDir, help, dryRun, notices,
             accent, mode ?? ThemeMode.Dark, firstFrame);
     }
 
@@ -204,6 +197,6 @@ public sealed record GalleryOptions(
 
     /// <summary>A one-line description of the host and backend, for --dry-run.</summary>
     public string Describe() =>
-        $"host: {Host.ToString().ToLowerInvariant()}, raster: {Raster.ToString().ToLowerInvariant()}, port: {Port}"
+        $"host: {Host.ToString().ToLowerInvariant()}, raster: {Raster.ToString().ToLowerInvariant()}"
         + (Accent is null ? "" : $", accent: {Accent}, mode: {Mode.ToString().ToLowerInvariant()}");
 }

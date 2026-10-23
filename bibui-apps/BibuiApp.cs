@@ -9,15 +9,6 @@ namespace Bibui.App;
 /// </summary>
 public sealed record BibuiAppOptions
 {
-    /// <summary>
-    /// Starts the test server. It also starts when the environment variable
-    /// <c>BIBUI_TEST_SERVER=1</c> is set; otherwise it is off.
-    /// </summary>
-    public bool TestServer { get; init; }
-
-    /// <summary>The port the test server listens on, on 127.0.0.1.</summary>
-    public int TestServerPort { get; init; } = BibuiTestServer.DefaultPort;
-
     /// <summary>The application id a Wayland compositor groups and themes the window by; the Silk window has none.</summary>
     public string AppId { get; init; } = "bibui";
 }
@@ -55,12 +46,11 @@ public sealed partial class BibuiApp : IDisposable
     /// </summary>
     public readonly AppRenderer Renderer;
 
-    /// <summary>The test server, when it was started (<see cref="BibuiAppOptions.TestServer"/>); null otherwise.</summary>
-    public readonly BibuiTestServer? TestServer;
 
     /// <summary>
-    /// This frame's input, for <c>runtime.BeginBuild</c>: the window's events, or,
-    /// while a test-server command runs, the server's. Set by <see cref="BeginFrame"/>.
+    /// This frame's input, for <c>runtime.BeginBuild</c>: the window's events. Set by
+    /// <see cref="BeginFrame"/>. An app driven by a test port adds the port's events
+    /// to it.
     /// </summary>
     public List<WindowEvent> Events { get; private set; } = [];
 
@@ -69,7 +59,6 @@ public sealed partial class BibuiApp : IDisposable
         Runtime = runtime;
         Window = window;
         Renderer = MakeRenderer();
-        if (options.TestServer || BibuiTestServer.IsEnabled) TestServer = StartTestServer(runtime, options.TestServerPort);
     }
 
     /// <summary>Opens the window and makes the renderer on it.</summary>
@@ -87,7 +76,7 @@ public sealed partial class BibuiApp : IDisposable
     public bool BeginFrame()
     {
         if (!BeginWindowFrame()) return false;
-        Events = TestServer?.Step(Window.Events) ?? Window.Events;
+        Events = Window.Events;
         return true;
     }
 
@@ -98,32 +87,19 @@ public sealed partial class BibuiApp : IDisposable
         EndWindowFrame();
     }
 
-    // The server, with screenshots drawn as this combination can draw into memory.
-    private BibuiTestServer StartTestServer(BibuiRuntime runtime, int port)
-    {
-        var output = Environment.GetEnvironmentVariable(BibuiTestServer.OutputVariable);
-        if (string.IsNullOrWhiteSpace(output)) output = Path.Combine(Directory.GetCurrentDirectory(), "bibui-test-output");
-        var server = new BibuiTestServer(runtime, output, port, draw: ScreenshotDraw());
-        server.Start();
-        Console.Error.WriteLine($"[BibuiTestServer] listening on 127.0.0.1:{port}; token in {server.TokenFile}; output in {server.OutputDirectory}");
-        return server;
-    }
-
-    /// <summary>Stops the test server, then frees the renderer, then the window: GPU resources before the context they live on.</summary>
+    /// <summary>Frees the renderer, then the window: GPU resources before the context they live on.</summary>
     public void Dispose()
     {
-        TestServer?.Dispose();
         DisposeRenderer();
         Window.Dispose();
     }
 
-    // What each combination says: how its window opens, its renderer is made and
-    // a frame is drawn into it, and what draws a test-server screenshot.
+    // What each combination says: how its window opens, and its renderer is made
+    // and a frame is drawn into it.
     private static partial AppWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options);
     private partial AppRenderer MakeRenderer();
     private partial bool BeginWindowFrame();
     private partial void Present();
     private partial void EndWindowFrame();
-    private partial Bibui.Core.Draw.DrawToPixels ScreenshotDraw();
     private partial void DisposeRenderer();
 }

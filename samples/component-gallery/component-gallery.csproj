@@ -10,6 +10,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
+    <!-- The test port, opened when BIBUI_TEST_PORT=1 (test_all_pages.py). -->
+    <ProjectReference Include="../../bibui-automation/bibui-automation.csproj" />
     <!-- The cross-platform host (GLFW + GL): SilkWindow.Open(runtime, ...) opens on it. -->
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />

@@ -13,5 +13,7 @@
     <!-- The window (GLFW + GL) and the renderer that draws into it. -->
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
+    <!-- The test port, opened when BIBUI_TEST_PORT=1. -->
+    <ProjectReference Include="../../bibui-automation/bibui-automation.csproj" />
   </ItemGroup>
 </Project>

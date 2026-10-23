@@ -1,3 +1,4 @@
+using Bibui.Automation;
 using Bibui.Core;
 using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
@@ -83,11 +84,28 @@ if (options.FirstFrame)
     return;
 }
 
-// Off unless asked for: BIBUI_TEST_SERVER=1 (test_all_pages.sh says how); the
-// loop steps it. Its screenshots draw with a CPU renderer of their own: the
-// window's draws on the GPU, or keeps damage state for the window's buffers.
-using var testServer = BibuiTestServer.StartIfEnabled(runtime, options.Port,
-    options.Raster == GalleryRaster.Managed ? new ManagedRenderer().Draw : new SkiaCpuRenderer().Draw);
+// A test port, off unless asked for: BIBUI_TEST_PORT=1 (test_all_pages.py says how).
+// Its screenshots draw with a CPU renderer of their own: the window's draws on the
+// GPU, or keeps damage state for the window's buffers.
+using var testPort = Environment.GetEnvironmentVariable("BIBUI_TEST_PORT") == "1"
+    ? TestPort.Open(runtime, new TestPortOptions { Name = "component-gallery" }) : null;
+DrawToPixels? shots = testPort is null ? null
+    : options.Raster == GalleryRaster.Managed ? new ManagedRenderer().Draw : new SkiaCpuRenderer().Draw;
+if (testPort is not null) Console.Error.WriteLine($"Test port: {testPort.SocketPath}");
+
+// A test port's request, at the top of the frame: its events join the window's;
+// the frame on screen is still the runtime's draw list, so a screenshot is drawn from it.
+void PullTestCmds(List<WindowEvent> events)
+{
+    if (testPort is null) return;
+    while (testPort.TryPullCmd(out var cmd))
+        switch (cmd.Kind)
+        {
+            case TestCmdKind.Events: events.AddRange(cmd.Events); break;
+            case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, shots!)); break;
+            case TestCmdKind.App: testPort.RefuseCmd("The gallery has no commands of its own."); break;
+        }
+}
 
 var size = new PlatformWindowOptions("Component Gallery", Surface().Width, Surface().Height);
 if (options.Host == GalleryHost.Wayland)
@@ -104,10 +122,11 @@ if (options.Host == GalleryHost.Wayland)
     (DemoTexture.SkiaCpu, DemoTexture.Managed) = (skia, managed);
     while (WaylandWindow.BeginFrame(window, runtime))
     {
-        // While a test-server command runs, the server is the keyboard and mouse.
-        runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
+        PullTestCmds(window.Events);
+        runtime.BeginBuild(window.Events);
         BuildGallery(runtime, gallery);
         runtime.EndBuild();
+        testPort?.AnswerCmds();
         WaylandWindow.BeginDraw(window);
         if (skia is not null) skia.Draw(runtime.DrawList);
         else managed!.Draw(runtime.DrawList);
@@ -127,10 +146,11 @@ else
 
     void Frame()
     {
-        // While a test-server command runs, the server is the keyboard and mouse.
-        runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
+        PullTestCmds(window.Events);
+        runtime.BeginBuild(window.Events);
         BuildGallery(runtime, gallery);
         runtime.EndBuild();
+        testPort?.AnswerCmds();
         SilkWindow.BeginDraw(window);
         skia.Draw(runtime.DrawList);
         SilkWindow.EndDraw(window);

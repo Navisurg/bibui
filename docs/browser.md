@@ -217,9 +217,9 @@ publish trims what the app does not use.
   `touch-action: none`. There are no gestures.
 - **The GPU.** Frames are drawn on the CPU; there is no WebGL or WebGPU renderer.
 - **Accessibility.** A canvas is one image to a screen reader.
-- **The test server and `Bibui.App`.** The test server listens on a socket, and
-  `BibuiApp`'s blocking loop cannot run in a page, so there is no
-  `Bibui.App` package for the browser ([Bibui.App packages](app-packages.md)).
+- **A test port and `Bibui.App`.** A test port listens on a Unix socket, which a
+  page cannot open, and `BibuiApp`'s blocking loop cannot run in a page, so
+  there is no `Bibui.App` package for the browser ([Bibui.App packages](app-packages.md)).
 - **Threads.** The app runs on the page's one thread; a frame that takes long
   holds the page up for that long.
 - **Emscripten version.** FreeType and HarfBuzz are built for .NET 10's

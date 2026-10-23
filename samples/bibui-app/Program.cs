@@ -3,7 +3,9 @@
 //
 //   dotnet run --project samples/bibui-app
 //   dotnet run --project samples/bibui-app -- --first-frame   # one frame headless, then exit (CI)
+//   BIBUI_TEST_PORT=1 dotnet run --project samples/bibui-app  # with a test port (Bibui.Automation)
 
+using Bibui.Automation;
 using Bibui.Core;
 using Bibui.Raster.Skia;
 using Bibui.Core.Runtime;
@@ -29,19 +31,34 @@ if (args.Contains("--first-frame"))
 using var window = SilkWindow.Open(runtime, new("bibui — interactive demo", 720, 1200));
 using var skia = new SkiaGlRenderer(window.Gl);
 
-// Off unless asked for (BIBUI_TEST_SERVER=1); the loop steps it. Its screenshots
-// draw on the CPU, with a renderer of their own beside the window's GPU one.
-using var testServer = BibuiTestServer.StartIfEnabled(runtime, draw: new SkiaCpuRenderer().Draw);
+// A test port, off unless asked for (BIBUI_TEST_PORT=1): a client drives the app
+// through its socket. Its screenshots are drawn on the CPU, with a renderer of
+// their own beside the window's GPU one.
+using var testPort = Environment.GetEnvironmentVariable("BIBUI_TEST_PORT") == "1"
+    ? TestPort.Open(runtime, new TestPortOptions { Name = "bibui-app" }) : null;
+using var shots = testPort is null ? null : new SkiaCpuRenderer();
+if (testPort is not null) Console.Error.WriteLine($"Test port: {testPort.SocketPath}");
 
 window.OnRefresh = Frame;   // keeps drawing during a resize on Windows and macOS
 while (SilkWindow.BeginFrame(window, runtime)) Frame();
 
 void Frame()
 {
-    // While a test-server command runs, the server is the keyboard and mouse.
-    runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
+    // A test port's request: its events join the window's; the frame on screen is
+    // still the runtime's draw list here, so a screenshot is drawn from it.
+    if (testPort is not null)
+        while (testPort.TryPullCmd(out var cmd))
+            switch (cmd.Kind)
+            {
+                case TestCmdKind.Events: window.Events.AddRange(cmd.Events); break;
+                case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, shots!.Draw)); break;
+                case TestCmdKind.App: testPort.RefuseCmd("This demo has no commands of its own."); break;
+            }
+
+    runtime.BeginBuild(window.Events);
     Demo.Build(runtime, state);
     runtime.EndBuild();
+    testPort?.AnswerCmds();   // no state to report, and nothing pending to wait for
     SilkWindow.BeginDraw(window);
     skia.Draw(runtime.DrawList);
     SilkWindow.EndDraw(window);
