@@ -37,7 +37,7 @@ internal sealed class SkiaOps : IDisposable
     private readonly SKTextBlobBuilder _blobBuilder = new();
 
     // Each run's blob, kept across frames under a 64-bit hash of what it holds
-    // (face, size, glyph count, glyphs, positions), so a run drawn again reuses
+    // (face, size, glyph count, glyphs), so a run drawn again reuses
     // the blob, and Skia its own work for it: Skia keeps a blob's glyph lookups
     // and, on the GPU, its vertex data under the blob's identity, so a new blob
     // per run per frame was work redone every frame. Positions are from the
@@ -298,7 +298,7 @@ internal sealed class SkiaOps : IDisposable
             ForceAutoHinting = true,
             Hinting = SKFontHinting.Full,
         });
-        ulong run = RunKey(face.Id, sizePx, glyphs, positions);
+        ulong run = RunKey(face.Id, sizePx, glyphs);
         if (!_blobs.TryGet(run, out var blob))
         {
             _blobBuilder.AddPositionedRun(glyphs, font, positions.AsSk());
@@ -309,16 +309,18 @@ internal sealed class SkiaOps : IDisposable
         canvas.DrawText(blob, x, baselineY, paint);
     }
 
-    // A collision would draw another run's glyphs until it is evicted: 64 bits
-    // put that around n / 2^64 per new run with n kept, and the glyph count in
-    // the key rules out the likeliest.
-    private ulong RunKey(int faceId, float sizePx, ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions)
+    // The positions are not in the key: a run's are its glyphs' advances summed
+    // in order, so the face, the size and the glyphs decide them. (A run shaped
+    // by HarfBuzz, whose positions depend on more, would have to add them.) A
+    // collision would draw another run's glyphs until it is evicted: 64 bits put
+    // that around n / 2^64 per new run with n kept, and the glyph count in the
+    // key rules out the likeliest.
+    private ulong RunKey(int faceId, float sizePx, ReadOnlySpan<ushort> glyphs)
     {
         Span<int> head = [faceId, BitConverter.SingleToInt32Bits(sizePx), glyphs.Length];
         _runHash.Reset();
         _runHash.Append(MemoryMarshal.AsBytes(head));
         _runHash.Append(MemoryMarshal.AsBytes(glyphs));
-        _runHash.Append(MemoryMarshal.AsBytes(positions));
         return _runHash.GetCurrentHashAsUInt64();
     }
 
