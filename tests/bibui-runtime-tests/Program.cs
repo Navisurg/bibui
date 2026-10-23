@@ -3639,8 +3639,6 @@ Run("WorkflowClient requests are byte-identical to the reflection-serialised for
             client.IsVisible("v");
             client.IsDisabled("d");
             Eq<string?>(null, client.GetText("t"), "a null result reads back as null");
-            client.StartRecording("out.mp4");
-            client.StopRecording();
         }
         serverThread.Join(2000);
 
@@ -3657,8 +3655,6 @@ Run("WorkflowClient requests are byte-identical to the reflection-serialised for
             Old(new { cmd = "is_visible", id = "v" }),
             Old(new { cmd = "is_disabled", id = "d" }),
             Old(new { cmd = "get_text", id = "t" }),
-            Old(new { cmd = "start_recording", output = "out.mp4" }),
-            Old(new { cmd = "stop_recording" }),
         ];
         lock (lines)
         {
@@ -3674,8 +3670,8 @@ Run("WorkflowClient requests are byte-identical to the reflection-serialised for
 // A loopback port is reachable from any local process and, through a
 // cross-protocol POST, from any web page the user has open. So the server is
 // off unless asked for, every request carries a token, anything HTTP-shaped
-// ends the connection before a later line can run, files land only in the
-// output directory, and ffmpeg gets its arguments one by one.
+// ends the connection before a later line can run, and files land only in the
+// output directory.
 
 Console.WriteLine();
 Console.WriteLine("BibuiTestServer security");
@@ -3842,9 +3838,6 @@ Run("TestServer writes only inside its output directory", () =>
         IsTrue(!File.Exists(Path.Combine(outside, "escape.png")), "nothing was written beside the output directory");
         IsTrue(!File.Exists("/tmp/bibui-absolute.png"), "nor at an absolute path");
 
-        var recording = Exchange(port, Authorised("{\"cmd\":\"start_recording\",\"output\":\"../escape.mp4\"}")).Single();
-        IsTrue(recording.Contains("Refused"), $"a recording is held to it too, got {recording}");
-
         // A link inside the directory to a directory outside it.
         var target = TestServerOut();
         Directory.CreateDirectory(target);
@@ -3864,26 +3857,6 @@ Run("TestServer writes only inside its output directory", () =>
         var ok = Exchange(port, Authorised("{\"cmd\":\"screenshot\",\"path\":\"sub/dir/ok.png\"}")).Single();
         Eq("{\"ok\":true}", ok, "a relative path inside it is written");
         IsTrue(File.Exists(Path.Combine(server.OutputDirectory, "sub", "dir", "ok.png")), "where it says");
-    }));
-
-Run("TestServer gives ffmpeg one argument per element, so a quote in a name adds none", () =>
-    WithSecurityServer((port, server) =>
-    {
-        var name = "clip\" -i /etc/passwd -f data \"stolen.mp4";
-        var path = server.ResolveOutputPath(name);
-        Eq(Path.Combine(server.OutputDirectory, name), path, "the name stays one file in the output directory");
-
-        var psi = BibuiTestServer.FfmpegStartInfo(64, 48, path);
-        Eq("", psi.Arguments, "no argument string to be split");
-        Eq(path, psi.ArgumentList[^1], "the whole name, quote and all, is the last argument");
-        Eq(1, psi.ArgumentList.Count(a => a == "-i"), "the only input is the frame pipe");
-        Eq("pipe:0", psi.ArgumentList[psi.ArgumentList.IndexOf("-i") + 1], "which is stdin");
-        Eq(20, psi.ArgumentList.Count, "and the count is fixed");
-        IsTrue(!psi.UseShellExecute, "and no shell");
-
-        var threw = false;
-        try { BibuiTestServer.FfmpegStartInfo(64, 48, "-i"); } catch (ArgumentException) { threw = true; }
-        IsTrue(threw, "an output that is not a full path cannot reach ffmpeg, where it could pass for an option");
     }));
 
 // ── InteractionsFor ───────────────────────────────────────────────────────────

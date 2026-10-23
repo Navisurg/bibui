@@ -28,10 +28,10 @@ runs, the server is the keyboard and mouse:
 runtime.BeginBuild(server?.Step(window.Events) ?? window.Events);
 ```
 
-Its screenshots and recordings are drawn with the function you pass, on the
+Its screenshots are drawn with the function you pass, on the
 loop. The client sends the server's token with every
 request, reading it from the file the server writes for the user alone, and
-screenshot and recording paths are relative to the server's output directory
+screenshot paths are relative to the server's output directory
 (`BIBUI_TEST_SERVER_OUT`):
 
 ```csharp

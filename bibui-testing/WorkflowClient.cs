@@ -18,7 +18,7 @@ namespace Bibui.Testing;
 /// <para>Every request carries the server's token. Give it, or leave it null to
 /// read it from the server's token file (<c>BibuiTestServer.TokenFilePath(port)</c>),
 /// which the server writes when it starts. Paths given to <see cref="Screenshot"/>
-/// and <see cref="StartRecording"/> are relative to the server's output directory.</para>
+/// are relative to the server's output directory.</para>
 /// </summary>
 public sealed class WorkflowClient : IDisposable
 {
@@ -135,12 +135,6 @@ public sealed class WorkflowClient : IDisposable
     public string? GetText(string id)
         => SendResult(new IdRequest("get_text", id), J.IdRequest, J.String);
 
-    public void StartRecording(string outputPath)
-        => SendOk(new RecordingRequest("start_recording", outputPath), J.RecordingRequest);
-
-    public void StopRecording()
-        => SendOk(new CmdRequest("stop_recording"), J.CmdRequest);
-
     // ── Polling ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -178,7 +172,6 @@ internal sealed record PointRequest(string Cmd, float X, float Y);
 internal sealed record ScrollRequest(string Cmd, float X, float Y, float Dy);
 internal sealed record PathRequest(string Cmd, string Path);
 internal sealed record FillRequest(string Cmd, string Id, string Value);
-internal sealed record RecordingRequest(string Cmd, string Output);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(CmdRequest))]
@@ -187,7 +180,6 @@ internal sealed record RecordingRequest(string Cmd, string Output);
 [JsonSerializable(typeof(ScrollRequest))]
 [JsonSerializable(typeof(PathRequest))]
 [JsonSerializable(typeof(FillRequest))]
-[JsonSerializable(typeof(RecordingRequest))]
 [JsonSerializable(typeof(bool))]
 [JsonSerializable(typeof(string))]
 internal sealed partial class WorkflowJson : JsonSerializerContext;

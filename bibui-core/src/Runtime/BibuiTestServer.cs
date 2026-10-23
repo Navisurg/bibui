@@ -14,8 +14,7 @@ namespace Bibui.Core.Runtime;
 
 /// <summary>
 /// A TCP test server that exposes <see cref="BibuiRuntime"/> as a line-delimited
-/// JSON command API on the loopback interface, for workflow automation and video
-/// recording. The app holds it and steps it from its loop:
+/// JSON command API on the loopback interface, for workflow automation. The app holds it and steps it from its loop:
 /// <code>
 /// using var server = BibuiTestServer.StartIfEnabled(runtime, draw: renderer.Draw);
 /// while (SilkWindow.BeginFrame(window, runtime))
@@ -34,22 +33,21 @@ namespace Bibui.Core.Runtime;
 /// value per server, written to <see cref="TokenFile"/>, a file only the user can
 /// read. A request without it, a line that is not a JSON object, and anything
 /// that looks like HTTP are refused, and the connection is closed. Files are
-/// written only inside <see cref="OutputDirectory"/>: <c>screenshot</c> and
-/// <c>start_recording</c> take paths relative to it.</para>
+/// written only inside <see cref="OutputDirectory"/>: <c>screenshot</c> takes
+/// paths relative to it.</para>
 ///
 /// <para>The server builds no frames and touches the runtime from no thread but
 /// the loop's. A client's thread only queues its command and waits; the loop
 /// runs it in <see cref="Step"/>, a frame at a time, as a hand would: a click is a
 /// move, then a press, then a release, each in a frame of its own. The reply goes
-/// back once the frames the command waits for are built. Screenshots and
-/// recordings draw the runtime's <see cref="BibuiRuntime.DrawList"/> there too,
+/// back once the frames the command waits for are built. Screenshots
+/// draw the runtime's <see cref="BibuiRuntime.DrawList"/> there too,
 /// with the function the server was given (null refuses them): the app's
 /// renderer when it draws into memory, so the textures the app made on it are in
 /// them, or a CPU renderer of its own beside a GPU one.</para>
 ///
 /// <para>Protocol: each request and response is a single JSON line, the response
-/// sent once the command has run. The <c>start_recording</c> command begins
-/// streaming frames to FFmpeg; <c>stop_recording</c> finalises the video.</para>
+/// sent once the command has run.</para>
 /// </summary>
 public sealed class BibuiTestServer : IDisposable
 {
@@ -63,7 +61,7 @@ public sealed class BibuiTestServer : IDisposable
     public const string OutputVariable = "BIBUI_TEST_SERVER_OUT";
 
     private readonly BibuiRuntime _runtime;
-    // What a screenshot and a recording draw the frame's list with; null refuses both.
+    // What a screenshot draws the frame's list with; null refuses it.
     private readonly DrawToPixels? _draw;
     private readonly int _port;
     private readonly string _outputDir;
@@ -97,16 +95,6 @@ public sealed class BibuiTestServer : IDisposable
     // Where the server's pointer is: a release given no point lands here.
     private float _pointerX, _pointerY;
 
-    // ── Recording ──────────────────────────────────────────────────────────
-    // The loop draws each new frame for the record thread (_latest, under
-    // _latestLock); the record thread writes the latest at 30 fps.
-    private volatile bool _recording;
-    private Thread? _recordThread;
-    private long _recordedFrame = -1;
-    private readonly object _latestLock = new();
-    private byte[]? _latest;
-    private int _latestW, _latestH;
-
     /// <summary>
     /// A server on <paramref name="runtime"/> that writes only inside
     /// <paramref name="outputDirectory"/> (created on <see cref="Start"/>). Nothing
@@ -118,8 +106,8 @@ public sealed class BibuiTestServer : IDisposable
     /// <param name="token">The token a request must carry, 16 characters or more; null for a random one.</param>
     /// <param name="writeTokenFile">Whether <see cref="Start"/> writes the token to <see cref="TokenFile"/>.</param>
     /// <param name="draw">
-    /// Draws a frame's list into pixels, for <c>screenshot</c> and <c>start_recording</c>:
-    /// the app's renderer, on the CPU. Null refuses both.
+    /// Draws a frame's list into pixels, for <c>screenshot</c>:
+    /// the app's renderer, on the CPU. Null refuses it.
     /// </param>
     public BibuiTestServer(BibuiRuntime runtime, string outputDirectory, int port = DefaultPort,
         string? token = null, bool writeTokenFile = true, DrawToPixels? draw = null)
@@ -144,7 +132,7 @@ public sealed class BibuiTestServer : IDisposable
     /// <summary>The port it listens on, on 127.0.0.1.</summary>
     public int Port => _port;
 
-    /// <summary>The one directory <c>screenshot</c> and <c>start_recording</c> write in.</summary>
+    /// <summary>The one directory <c>screenshot</c> writes in.</summary>
     public string OutputDirectory => _outputDir;
 
     /// <summary>Where <see cref="Start"/> writes the token, readable by the user only.</summary>
@@ -371,7 +359,6 @@ public sealed class BibuiTestServer : IDisposable
     /// </summary>
     public List<WindowEvent> Step(List<WindowEvent> windowEvents)
     {
-        CaptureForRecording();
         if (_running is null)
         {
             if (!_queue.TryDequeue(out var next)) return windowEvents;
@@ -417,8 +404,6 @@ public sealed class BibuiTestServer : IDisposable
             "is_disabled"     => Query(node, n => OkResult(n is Box box && (box.Claims & InteractionKinds.Disabled) != 0)),
             "get_text"        => GetText(node),
             "screenshot"      => Screenshot(node),
-            "start_recording" => StartRecording(node),
-            "stop_recording"  => StopRecording(),
             _                 => Refuse($"Unknown command: {cmd}"),
         };
     }
@@ -727,140 +712,6 @@ public sealed class BibuiTestServer : IDisposable
             if (i < segments.Length - 1) Directory.CreateDirectory(step);
         }
         return full;
-    }
-
-    // ── Recording ──────────────────────────────────────────────────────────
-
-    private IEnumerable<bool> StartRecording(JsonNode node)
-    {
-        var outputPath = ResolveOutputPath(node["output"]?.GetValue<string>() ?? "recording.mp4");
-        if (_recording) { _reply = Err("Already recording"); yield break; }
-        if (_draw is null) { _reply = Err("This server was started without a renderer to record with"); yield break; }
-        yield return true;
-
-        // The recording's size is the frame's now; frames after a resize are scaled to it.
-        _recordedFrame = -1;
-        _recording = true;
-        CaptureForRecording();
-        int width, height;
-        lock (_latestLock) (width, height) = (_latestW, _latestH);
-
-        _recordThread = new Thread(() =>
-        {
-            try { RecordLoop(width, height, outputPath); }
-            catch (Exception ex)
-            {
-                // A recorder failure (ffmpeg died, pipe broke) must never take
-                // down the app from a background thread.
-                Console.Error.WriteLine($"[BibuiTestServer] recording failed: {ex.Message}");
-                _recording = false;
-            }
-        })
-        {
-            IsBackground = true,
-            Name = "test-server-record"
-        };
-        _recordThread.Start();
-    }
-
-    // Waits, a frame at a time, for the record thread to close ffmpeg and finalise the file.
-    private IEnumerable<bool> StopRecording()
-    {
-        if (!_recording) { _reply = Err("Not recording"); yield break; }
-        _recording = false;
-        while (_recordThread is { IsAlive: true }) yield return true;
-        _recordThread = null;
-    }
-
-    // Each frame the loop builds while recording, drawn once for the record thread.
-    private void CaptureForRecording()
-    {
-        if (!_recording || _runtime.FrameCount == _recordedFrame) return;
-        _recordedFrame = _runtime.FrameCount;
-        var bgra = FramePixels.Bgra(_runtime, _draw!, out int w, out int h);
-        lock (_latestLock) (_latest, _latestW, _latestH) = (bgra, w, h);
-    }
-
-    // ── Frame capture & encode ─────────────────────────────────────────────
-
-    /// <summary>
-    /// ffmpeg reading raw RGBA frames on stdin and writing <paramref name="outputPath"/>.
-    /// One argument per element, never a string to be split, so nothing in the
-    /// path can add an argument; the path is a full one (it starts with the output
-    /// directory), so ffmpeg cannot take it for an option or a protocol either.
-    /// </summary>
-    internal static ProcessStartInfo FfmpegStartInfo(int width, int height, string outputPath)
-    {
-        if (!Path.IsPathFullyQualified(outputPath))
-            throw new ArgumentException("ffmpeg's output must be a full path", nameof(outputPath));
-
-        var psi = new ProcessStartInfo("ffmpeg")
-        {
-            RedirectStandardInput = true,
-            UseShellExecute       = false,
-            CreateNoWindow        = true,
-        };
-        foreach (var arg in (ReadOnlySpan<string>)[
-            "-y", "-loglevel", "quiet",
-            "-f", "rawvideo", "-pixel_format", "rgba",
-            "-video_size", $"{width}x{height}", "-framerate", "30",
-            "-i", "pipe:0",
-            "-vf", "format=yuv420p", "-c:v", "libx264", "-preset", "fast",
-            outputPath])
-            psi.ArgumentList.Add(arg);
-        return psi;
-    }
-
-    private void RecordLoop(int width, int height, string outputPath)
-    {
-        var psi = FfmpegStartInfo(width, height, outputPath);
-
-        using var proc  = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start ffmpeg");
-        var       stdin = proc.StandardInput.BaseStream;
-
-        const int frameMs = 1000 / 30;
-        while (_recording)
-        {
-            // The frame the loop last built, written again while nothing changes:
-            // recording adds no frames of its own, so it does not speed up what it records.
-            byte[]? bgra;
-            int srcW, srcH;
-            lock (_latestLock) (bgra, srcW, srcH) = (_latest, _latestW, _latestH);
-            if (bgra is null) { Thread.Sleep(frameMs); continue; }
-            var rgba = BgraToRgba(bgra, srcW, srcH, width, height);
-            stdin.Write(rgba, 0, rgba.Length);
-            Thread.Sleep(frameMs);
-        }
-
-        stdin.Close();
-        proc.WaitForExit();
-    }
-
-    /// <summary>
-    /// The frame as the RGBA ffmpeg is told to expect, nearest-neighbour scaled
-    /// to the recording size when the window has since been resized. Straight
-    /// off the frame's own pixels, no PNG round trip.
-    /// </summary>
-    private static byte[] BgraToRgba(byte[] bgra, int srcW, int srcH, int width, int height)
-    {
-        var rgba = new byte[width * height * 4];
-        if (srcW <= 0 || srcH <= 0 || bgra.Length < srcW * srcH * 4) return rgba;
-
-        for (int y = 0; y < height; y++)
-        {
-            int sy = (int)((long)y * srcH / height);
-            for (int x = 0; x < width; x++)
-            {
-                int sx = (int)((long)x * srcW / width);
-                int s = (sy * srcW + sx) * 4;
-                int d = (y * width + x) * 4;
-                rgba[d]     = bgra[s + 2];
-                rgba[d + 1] = bgra[s + 1];
-                rgba[d + 2] = bgra[s];
-                rgba[d + 3] = bgra[s + 3];
-            }
-        }
-        return rgba;
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
