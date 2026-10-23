@@ -54,8 +54,10 @@ public sealed class Fonts : IDisposable
     internal void EndFrame()
     {
         foreach (var endFrame in _endFrames) endFrame();
-        // The slots resolve again next frame, so a font registered in between
-        // is picked up without anything to invalidate.
+        // The slots resolve again next frame, so the next frame's typography is
+        // what they hold. The faces they resolve to come from FontProvider's
+        // cache, which keeps what a (family, weight) first resolved to: a family
+        // registered after it was first asked for still gets the face it got then.
         _slotTypography = null;
     }
 
@@ -115,14 +117,24 @@ public sealed class Fonts : IDisposable
     // by the engine for its life anyway.
     private readonly Dictionary<ulong, FontStyle> _styles = new();
 
+    // The style asked for last: a text asks for its style up to five times (its
+    // width and line height in layout, once per axis, then its baseline in the
+    // painter), and texts next to each other mostly share one, so most asks
+    // compare one key and skip the dictionary.
+    private FontStyle? _lastStyle;
+
     /// <summary>The style of <paramref name="face"/> at <paramref name="sizePx"/> physical px.</summary>
     internal FontStyle StyleOf(FontFace face, float sizePx)
     {
         ulong key = (ulong)(uint)face.Id << 32 | (uint)BitConverter.SingleToInt32Bits(sizePx);
-        if (_styles.TryGetValue(key, out var style)) return style;
-        var strike = face.Strike(sizePx);
-        var m = strike.Metrics;
-        return _styles[key] = new FontStyle(key, face, strike, new TextMetrics(m.Ascent, m.Descent, m.Leading));
+        if (_lastStyle is { } last && last.Key == key) return last;
+        if (!_styles.TryGetValue(key, out var style))
+        {
+            var strike = face.Strike(sizePx);
+            var m = strike.Metrics;
+            _styles[key] = style = new FontStyle(key, face, strike, new TextMetrics(m.Ascent, m.Descent, m.Leading));
+        }
+        return _lastStyle = style;
     }
 
     /// <summary>
@@ -231,6 +243,8 @@ public sealed class Fonts : IDisposable
     /// </summary>
     internal float MeasureRun(Text text, in Font font)
     {
+        // Empty text is no run: nothing to walk and nothing for the painter to draw.
+        if (text.Content.IsEmpty) return 0f;
         var style = StyleOf(font, font.Scale);
         if (text.RunFrame == RunFrame && text.RunStyle == style) return text.RunWidth;
         var content = text.Content;
