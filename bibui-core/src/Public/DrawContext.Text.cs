@@ -29,6 +29,25 @@ public readonly ref partial struct DrawContext
     }
 
     // The op for a run whose glyphs and positions are in the list already.
+    //
+    // NOTE(positions): a run's positions are where each glyph sits from the
+    // run's start, and here they follow from its face, size and glyphs alone.
+    // The walk (FontStrike.Glyphs) puts the first glyph at 0 and moves the pen by
+    // each glyph's advance, which is the strike's for that glyph: one number per
+    // glyph of a font at a pixel size. "Hi!" at 16 px:
+    //
+    //     glyphs:     H         i          !
+    //     positions:  (0, 0)    (11.6, 0)  (16.0, 0)
+    //                 └─ +11.6 ─┘└─ +4.4 ──┘   each step the previous glyph's advance
+    //
+    // So the same face, size and glyphs always have the same positions, and the
+    // Skia renderers rely on that: they key the text blob they keep for a run by
+    // face, size and glyphs, without the positions (SkiaOps.RunKey), which reads
+    // a fifth of the bytes a key with them would. Shaping breaks it: kerning
+    // pulls "AV" together, and HarfBuzz places marks and the parts of an emoji
+    // sequence, so the positions depend on more than the advances. A run made
+    // that way (fallback runs shaped by HarfBuzz would be) must not reach this op with only
+    // its glyphs to tell it apart: its positions go back into the renderers' key.
     private void PushGlyphs(FontStyle style, float x, float baselineY, Rgba color, int glyphStart, int count, int pointStart)
     {
         ref var op = ref List.Push(DrawOpKind.Glyphs);
