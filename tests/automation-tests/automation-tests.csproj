@@ -10,5 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../bibui-automation/bibui-automation.csproj" />
+    <!-- Skia on the CPU: what the test app draws its screenshots with. -->
+    <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
   </ItemGroup>
 </Project>

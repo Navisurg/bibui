@@ -23,6 +23,9 @@ void Run(string name, Action test)
 
 Console.WriteLine("Test port: requests");
 TestPortTests.Register(Run);
+Console.WriteLine();
+Console.WriteLine("Test port: the socket, the port thread and answers");
+TestPortSocketTests.Register(Run);
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 

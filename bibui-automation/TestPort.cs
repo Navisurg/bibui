@@ -72,8 +72,11 @@ public readonly ref struct TestCmd
 /// the loop's, from <see cref="TryPullCmd"/> until the request is answered, when the
 /// length goes back to 0. So a <see cref="TestCmd"/>'s spans stay put for the
 /// whole request.</para>
+///
+/// <para>An app opens one with <see cref="Open"/>, and calls two things a frame:
+/// <see cref="TryPullCmd"/> at its top and <see cref="AnswerCmds"/> at its end.</para>
 /// </summary>
-public sealed class TestPort
+public sealed partial class TestPort
 {
     /// <summary>The length the port thread publishes for a line longer than the request buffer.</summary>
     internal const int Oversized = -1;
@@ -83,20 +86,27 @@ public sealed class TestPort
     // allocated once, for the port's life.
     private readonly byte[] _request;
     private int _requestLength;
+    private readonly ManualResetEventSlim _bufferFree;       // set while the length is 0: the port thread waits on it
     private readonly WindowEvent[] _events;                  // a test.events request's events
     private readonly byte[] _scratch;                        // an escaped path, unescaped
     private int _scratchUsed;
 
-    // The loop's: whether the request in hand has been handed out.
+    // The loop's, about the request in hand: whether it has been handed out, and
+    // what AnswerCmds needs of it at the end of the frame.
     private bool _pulled;
+    private TestCmdKind _heldKind;
+    private string? _heldError;                              // None: why it was refused
+    private byte[]? _heldPathIn;                             // Screenshot: where to write, as UTF-8 in
+    private int _heldPathStart, _heldPathLength;             // the request buffer or the scratch space
 
-    /// <param name="requestBytes">The request buffer: the longest line a client may send.</param>
-    /// <param name="maxEvents">The most events one <c>test.events</c> may carry.</param>
-    public TestPort(int requestBytes = 1 << 20, int maxEvents = 256)
+    // A port with no socket: the request buffer and what reads it, for Open, and for
+    // tests that publish lines themselves.
+    internal TestPort(int requestBytes = 1 << 20, int maxEvents = 256)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(requestBytes, 16);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxEvents, 1);
         _request = new byte[requestBytes];
+        _bufferFree = new ManualResetEventSlim(initialState: true);
         _events = new WindowEvent[maxEvents];
         _scratch = new byte[4096];
     }
@@ -128,10 +138,19 @@ public sealed class TestPort
     {
         if (Volatile.Read(ref _requestLength) != 0)
             throw new InvalidOperationException("The request buffer is the loop's until its request is answered.");
-        if (line.Length > _request.Length) { Volatile.Write(ref _requestLength, Oversized); return; }
+        if (line.Length > _request.Length) { PublishLength(Oversized); return; }
         if (line.IsEmpty) return;
         line.CopyTo(_request);
-        Volatile.Write(ref _requestLength, line.Length);
+        PublishLength(line.Length);
+    }
+
+    // The line is in the buffer (or Oversized): the buffer is the loop's from here.
+    // Marked taken before the length is written, so the loop cannot hand it back
+    // before the port thread has stopped thinking it free.
+    private void PublishLength(int length)
+    {
+        _bufferFree.Reset();
+        Volatile.Write(ref _requestLength, length);
     }
 
     // ── The loop's side ────────────────────────────────────────────────────
@@ -151,12 +170,22 @@ public sealed class TestPort
         _pulled = true;
 
         if (length == Oversized)
-        {
             cmd = Refused($"The request is longer than the request buffer ({_request.Length} bytes).");
-            return true;
+        else
+        {
+            try { cmd = Read(_request.AsSpan(0, length)); }
+            catch (JsonException e) { cmd = Refused($"Not JSON: {e.Message}"); }
         }
-        try { cmd = Read(_request.AsSpan(0, length)); }
-        catch (JsonException e) { cmd = Refused($"Not JSON: {e.Message}"); }
+        _heldKind = cmd.Kind;
+        _heldError = cmd.Error;
+        _heldPathIn = null;
+        if (cmd.Kind == TestCmdKind.Screenshot)
+        {
+            // The path is a slice of one of the two: say which, and where in it.
+            _heldPathIn = ((ReadOnlySpan<byte>)_request).Overlaps(cmd.Path, out _heldPathStart) ? _request : _scratch;
+            if (_heldPathIn == _scratch) ((ReadOnlySpan<byte>)_scratch).Overlaps(cmd.Path, out _heldPathStart);
+            _heldPathLength = cmd.Path.Length;
+        }
         return true;
     }
 
@@ -168,7 +197,9 @@ public sealed class TestPort
     {
         _pulled = false;
         _scratchUsed = 0;
+        (_heldKind, _heldError, _heldPathIn) = (TestCmdKind.None, null, null);
         Volatile.Write(ref _requestLength, 0);
+        _bufferFree.Set();
     }
 
     // ── Reading a request ──────────────────────────────────────────────────
