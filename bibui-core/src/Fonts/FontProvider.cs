@@ -26,7 +26,7 @@ internal sealed class FontProvider
     // One FontFace per engine font, so runs compare faces by reference.
     private readonly Dictionary<FtFont, FontFace> _faces = new(ReferenceEqualityComparer.Instance);
 
-    // Typeface runs, addressed by a content hash of (text, family, weight) — see RunsKey.
+    // Typeface runs, addressed by a content hash of (text, face) — see RunsKey.
     // Touch-evicted, because its keys come from arbitrary UI text: text that stops
     // being drawn falls out on its own. Made by Fonts, which is what ticks it —
     // this class has no EndFrame of its own to be called out of step.
@@ -37,8 +37,6 @@ internal sealed class FontProvider
         _engine = engine;
         _runs = runs;
     }
-
-    public FontFace Regular => Resolve(null, 400);
 
     public FontFace Resolve(string? family, int weight)
     {
@@ -64,10 +62,10 @@ internal sealed class FontProvider
         return face;
     }
 
-    internal TextRun? SplitRuns(ReadOnlySpan<char> text, string? family, int weight)
+    internal TextRun? SplitRuns(ReadOnlySpan<char> text, FontFace face)
     {
         if (text.IsEmpty) return null;
-        var key = RunsKey.For(text, family, weight);
-        return _runs.TryGet(key, out var runs) ? runs : _runs.Add(key, new TextRun(Resolve(family, weight), 0, text.Length));
+        var key = RunsKey.For(text, face);
+        return _runs.TryGet(key, out var runs) ? runs : _runs.Add(key, new TextRun(face, 0, text.Length));
     }
 }
