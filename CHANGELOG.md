@@ -19,6 +19,12 @@ All notable changes to bibui are recorded here. The format is based on
   settled. An app that does not reference the package ships none of it. See
   `packaging/readme/Bibui.Automation.md`.
 
+- **`bibui-port`: the test port from a shell.** `tools/bibui-port`, a
+  command-line client published with Native AOT: one native file that starts in
+  milliseconds, for scripts and agents. It finds the app's socket, prints the
+  tree as an outline (`tree`, `find`), clicks a node by id once it holds still
+  and is scrolled into view (`click add`), and sends the app's commands
+  (`cmd counter.set Value=10`), `state`, `schema` and `screenshot`.
 - **RowScrollList** (`runtime.BeginRowScrollList`, `EndRowScrollList`): the
   list of rows of one pitch, building only those in sight, by rows or by
   pixels (`ScrollBy`). It eases.

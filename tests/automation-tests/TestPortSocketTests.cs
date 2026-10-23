@@ -199,7 +199,7 @@ static class TestPortSocketTests
     /// A counter app with no window: a runtime, its port, and its frame loop on a
     /// thread of its own, as an app's loop runs a frame whenever one is owed.
     /// </summary>
-    sealed class CounterApp : IDisposable
+    internal sealed class CounterApp : IDisposable
     {
         public readonly string Folder = Path.Combine(Path.GetTempPath(), "bibui-at-" + Guid.NewGuid().ToString("N")[..8]);
         public readonly TestPort Port;
@@ -230,7 +230,7 @@ static class TestPortSocketTests
         private volatile bool _stopping;
 
         // list: a scrolling list of buttons below the counter, 100 px tall and far
-        // taller inside.
+        // taller inside: row-i sets the count to 100 + i.
         public CounterApp(bool draw = true, bool state = true, int requestBytes = 1 << 16, int rows = 0, TimeSpan? sendTimeout = null, bool list = false)
         {
             (_rows, _list, _reportsState, _cpu) = (rows, list, state, draw ? new SkiaCpuRenderer() : null);
@@ -292,7 +292,8 @@ static class TestPortSocketTests
                     var list = _runtime.BoxFromId("list", InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip);
                     list.ChildLayoutAxis = LayoutAxis.Y;
                     _runtime.BeginParent(list);
-                    for (int i = 0; i < 30; i++) _runtime.Button($"row-{i}", $"Row {i}");
+                    for (int i = 0; i < 30; i++)
+                        if (_runtime.Button($"row-{i}", $"Row {i}").Clicked) _pending.Add(new CounterCmd.Set(100 + i));
                     _runtime.EndParent(list);
                     _runtime.InteractionsFor(list);
                     (list.SizeX, list.SizeY) = (SemanticSize.Pixels(200), SemanticSize.Pixels(100));
@@ -323,7 +324,7 @@ static class TestPortSocketTests
     }
 
     /// <summary>A client of the port: lines out, lines in, over the Unix socket.</summary>
-    sealed class Client : IDisposable
+    internal sealed class Client : IDisposable
     {
         private readonly Socket _socket = new(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         private readonly StreamReader _reader;

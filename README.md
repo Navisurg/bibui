@@ -180,6 +180,15 @@ and `AnswerCmds` at its end; a client sends one JSON line per request:
 echo '{"$cmd":"test.tree"}' | socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/bibui/<app>-<pid>.sock
 ```
 
+`bibui-port` (`tools/bibui-port`, a native command-line tool) does the same in a
+word, and clicks a node by id, scrolled into view first:
+
+```sh
+bibui-port tree --depth 2
+bibui-port click add
+bibui-port cmd counter.set Value=10
+```
+
 A `BibuiApp` opens none: an app that does not reference `Bibui.Automation` ships
 no automation code. [Its README](packaging/readme/Bibui.Automation.md) has the loop, the requests, and a click from a shell.
 
