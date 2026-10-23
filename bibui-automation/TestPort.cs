@@ -26,7 +26,7 @@ public enum TestCmdKind
 
 /// <summary>
 /// One request from a client, as the frame loop sees it: taken from the
-/// <see cref="TestPort"/>'s request buffer by <see cref="TestPort.TryPull"/> at the
+/// <see cref="TestPort"/>'s request buffer by <see cref="TestPort.TryPullCmd"/> at the
 /// top of the frame, and answered at its end. A fat struct on purpose: every
 /// request has one shape, so it is read with one switch and allocates nothing.
 /// Each field means something for the kinds noted beside it, and nothing for the rest.
@@ -68,11 +68,11 @@ public readonly ref struct TestCmd
 ///
 /// <para>The request buffer has one owner at a time, and its length says which:
 /// 0, the port thread's, which writes a line into it and then the length; above 0,
-/// the loop's, from <see cref="TryPull"/> until the request is answered, when the
+/// the loop's, from <see cref="TryPullCmd"/> until the request is answered, when the
 /// length goes back to 0. So a <see cref="TestCmd"/>'s spans stay put for the
 /// whole request.</para>
 ///
-/// <para>The loop drains <see cref="TryPull"/> at the top of each frame, and it hands
+/// <para>The loop drains <see cref="TryPullCmd"/> at the top of each frame, and it hands
 /// out what can run in that frame, in the order a frame runs it: the app's commands
 /// (run before the build), then at most one frame of events (seen by the build),
 /// then queries (answered after it). A step that would break that order waits for
@@ -158,9 +158,9 @@ public sealed class TestPort
     /// The next step that can run in this frame, if there is one: a single command,
     /// or a batch's next. False when nothing is published, every step has been
     /// handed out, or the next must wait for a later frame. The loop's, at the top
-    /// of the frame: <c>while (port.TryPull(out var cmd)) { ... }</c>.
+    /// of the frame: <c>while (port.TryPullCmd(out var cmd)) { ... }</c>.
     /// </summary>
-    public bool TryPull(out TestCmd cmd)
+    public bool TryPullCmd(out TestCmd cmd)
     {
         cmd = default;
         if (_ended) return false;
@@ -202,14 +202,14 @@ public sealed class TestPort
     }
 
     /// <summary>
-    /// The batch step <see cref="TryPull"/> last handed out (0 up), or -1 for a single
+    /// The batch step <see cref="TryPullCmd"/> last handed out (0 up), or -1 for a single
     /// command or a request refused as a whole: what a refusal's answer names as failed.
     /// </summary>
     internal int Step => _isBatch && _stepCount > 0 ? Math.Min(_next, _stepCount - 1) : -1;
 
     /// <summary>
-    /// The frame is over: the next <see cref="TryPull"/> starts a new one. Called when
-    /// the frame's steps are answered.
+    /// The frame is over: the next <see cref="TryPullCmd"/> starts a new one. Called by
+    /// AnswerCmds, when the frame's steps are answered.
     /// </summary>
     internal void EndFrame()
     {
@@ -219,7 +219,7 @@ public sealed class TestPort
 
     /// <summary>
     /// The request is answered: the buffer goes back to the port thread (the length
-    /// last), and the next request starts fresh.
+    /// last), and the next request starts fresh. Called by AnswerCmds.
     /// </summary>
     internal void Release()
     {

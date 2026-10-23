@@ -21,7 +21,7 @@
     <ProjectReference Include="../bibui-core/bibui-core.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <!-- The port thread's and Answer's steps (Publish, EndFrame, Release) are
+    <!-- The port thread's and AnswerCmds' steps (Publish, EndFrame, Release) are
          tested directly, in place of a socket. -->
     <InternalsVisibleTo Include="automation-tests" />
   </ItemGroup>

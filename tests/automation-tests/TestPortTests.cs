@@ -34,10 +34,10 @@ static class TestPortTests
     static void Refused(string line, string what, int maxEvents = 256)
     {
         var port = Port(line, maxEvents: maxEvents);
-        IsTrue(port.TryPull(out var cmd), $"{line}: something to pull");
+        IsTrue(port.TryPullCmd(out var cmd), $"{line}: something to pull");
         Eq(TestCmdKind.None, cmd.Kind, $"{line}: refused");
         IsTrue(cmd.Error!.Contains(what, StringComparison.OrdinalIgnoreCase), $"{line}: the error says '{what}', got '{cmd.Error}'");
-        IsTrue(!port.TryPull(out _), $"{line}: nothing after a refusal");
+        IsTrue(!port.TryPullCmd(out _), $"{line}: nothing after a refusal");
     }
 
     public static void Register(Action<string, Action> run)
@@ -45,7 +45,7 @@ static class TestPortTests
         run("TestPort: with nothing published there is nothing to pull", () =>
         {
             var port = new TestPort();
-            IsTrue(!port.TryPull(out _), "nothing");
+            IsTrue(!port.TryPullCmd(out _), "nothing");
         });
 
         run("TestPort: each test.* command is its kind", () =>
@@ -53,18 +53,18 @@ static class TestPortTests
             foreach (var kind in new[] { TestCmdKind.Tree, TestCmdKind.State, TestCmdKind.Schema })
             {
                 var port = Port($"{{\"$cmd\":\"{Str(TestPort.NameOf(kind))}\"}}");
-                IsTrue(port.TryPull(out var cmd), $"{kind}: pulled");
+                IsTrue(port.TryPullCmd(out var cmd), $"{kind}: pulled");
                 Eq(kind, cmd.Kind, $"{kind}: kind");
                 IsTrue(cmd.Events.IsEmpty && cmd.Path.IsEmpty && cmd.Json.IsEmpty && cmd.Error is null, $"{kind}: no fields");
             }
 
             var shot = Port("{\"$cmd\":\"test.screenshot\",\"path\":\"shots/a.png\"}");
-            IsTrue(shot.TryPull(out var s), "screenshot pulled");
+            IsTrue(shot.TryPullCmd(out var s), "screenshot pulled");
             Eq(TestCmdKind.Screenshot, s.Kind, "screenshot kind");
             Eq("shots/a.png", Str(s.Path), "its path");
 
             var events = Port("{\"$cmd\":\"test.events\",\"events\":[{\"kind\":\"mouse_move\",\"x\":1,\"y\":2}]}");
-            IsTrue(events.TryPull(out var e), "events pulled");
+            IsTrue(events.TryPullCmd(out var e), "events pulled");
             Eq(TestCmdKind.Events, e.Kind, "events kind");
             Eq(1, e.Events.Length, "one event");
         });
@@ -73,7 +73,7 @@ static class TestPortTests
         {
             const string line = "{\"$cmd\":\"counter.set\",\"Value\":3}";
             var port = Port(line);
-            IsTrue(port.TryPull(out var cmd), "pulled");
+            IsTrue(port.TryPullCmd(out var cmd), "pulled");
             Eq(TestCmdKind.App, cmd.Kind, "an app command");
             Eq(line, Str(cmd.Json), "its bytes, unchanged");
         });
@@ -81,19 +81,19 @@ static class TestPortTests
         run("TestPort: $cmd may come anywhere, and is compared unescaped", () =>
         {
             var last = Port("{\"x\":{\"$cmd\":\"nested, not this\"},\"$cmd\":\"test.tree\"}");
-            IsTrue(last.TryPull(out var a), "pulled");
+            IsTrue(last.TryPullCmd(out var a), "pulled");
             Eq(TestCmdKind.Tree, a.Kind, "$cmd last, and a nested $cmd ignored");
 
             var escaped = Port("{\"$cmd\":\"test.\\u0074ree\"}");
-            IsTrue(escaped.TryPull(out var b), "pulled");
+            IsTrue(escaped.TryPullCmd(out var b), "pulled");
             Eq(TestCmdKind.Tree, b.Kind, "an escaped test name");
 
             var escapedTest = Port("{\"$cmd\":\"\\u0074est.nope\"}");
-            IsTrue(escapedTest.TryPull(out var c), "pulled");
+            IsTrue(escapedTest.TryPullCmd(out var c), "pulled");
             Eq(TestCmdKind.None, c.Kind, "an escaped unknown test.* name is still a test name");
 
             var app = Port("{\"$cmd\":\"counter.\\u0073et\",\"Value\":1}");
-            IsTrue(app.TryPull(out var d), "pulled");
+            IsTrue(app.TryPullCmd(out var d), "pulled");
             Eq(TestCmdKind.App, d.Kind, "an escaped app name");
         });
 
@@ -118,7 +118,7 @@ static class TestPortTests
             Refused("{\"$cmd\":\"test.screenshot\",\"path\":7}", "path");
 
             var escaped = Port("{\"$cmd\":\"test.screenshot\",\"path\":\"a\\u0020b\\\\c.png\"}");
-            IsTrue(escaped.TryPull(out var cmd), "pulled");
+            IsTrue(escaped.TryPullCmd(out var cmd), "pulled");
             Eq("a b\\c.png", Str(cmd.Path), "an escaped path, unescaped");
         });
 
@@ -133,7 +133,7 @@ static class TestPortTests
                 + "{\"kind\":\"key_up\",\"key\":\"Left\"},"
                 + "{\"kind\":\"key_char\",\"char\":\"😀\"},"
                 + "{\"kind\":\"focus_lost\"}]}");
-            IsTrue(port.TryPull(out var cmd), "pulled");
+            IsTrue(port.TryPullCmd(out var cmd), "pulled");
             var ev = cmd.Events;
             Eq(8, ev.Length, "eight events");
 
@@ -179,7 +179,7 @@ static class TestPortTests
         {
             var port = new TestPort(requestBytes: 16);
             port.Publish(Encoding.UTF8.GetBytes("{\"$cmd\":\"test.state\"}"));
-            IsTrue(port.TryPull(out var cmd), "pulled");
+            IsTrue(port.TryPullCmd(out var cmd), "pulled");
             Eq(TestCmdKind.None, cmd.Kind, "refused");
             IsTrue(cmd.Error!.Contains("longer than the request buffer"), $"why: {cmd.Error}");
         });
@@ -188,16 +188,16 @@ static class TestPortTests
         {
             var port = Port("[{\"$cmd\":\"counter.set\",\"Value\":1},{\"$cmd\":\"test.events\",\"events\":[]},"
                 + "{\"$cmd\":\"test.tree\"},{\"$cmd\":\"test.screenshot\",\"path\":\"a.png\"}]");
-            IsTrue(port.TryPull(out var a), "step 0");
+            IsTrue(port.TryPullCmd(out var a), "step 0");
             Eq(TestCmdKind.App, a.Kind, "step 0 is the app's");
             Eq("{\"$cmd\":\"counter.set\",\"Value\":1}", Str(a.Json), "its own bytes, not the batch's");
-            IsTrue(port.TryPull(out var b), "step 1");
+            IsTrue(port.TryPullCmd(out var b), "step 1");
             Eq(TestCmdKind.Events, b.Kind, "step 1 is events");
-            IsTrue(port.TryPull(out var c), "step 2");
+            IsTrue(port.TryPullCmd(out var c), "step 2");
             Eq(TestCmdKind.Tree, c.Kind, "step 2 is the tree");
-            IsTrue(port.TryPull(out var d), "step 3");
+            IsTrue(port.TryPullCmd(out var d), "step 3");
             Eq(TestCmdKind.Screenshot, d.Kind, "step 3 is a screenshot");
-            IsTrue(!port.TryPull(out _), "and that is all");
+            IsTrue(!port.TryPullCmd(out _), "and that is all");
         });
 
         run("TestPort: an empty batch, a batch in a batch, and a batch of non-commands are refused", () =>
@@ -213,14 +213,14 @@ static class TestPortTests
             var port = Port("[{\"$cmd\":\"a\"},{\"$cmd\":\"b\"},{\"$cmd\":\"c\"},{\"$cmd\":\"test.nope\"},{\"$cmd\":\"d\"}]");
             for (int i = 0; i < 3; i++)
             {
-                IsTrue(port.TryPull(out var ok), $"step {i}");
+                IsTrue(port.TryPullCmd(out var ok), $"step {i}");
                 Eq(TestCmdKind.App, ok.Kind, $"step {i} runs");
             }
-            IsTrue(port.TryPull(out var bad), "step 3");
+            IsTrue(port.TryPullCmd(out var bad), "step 3");
             Eq(TestCmdKind.None, bad.Kind, "step 3 is refused");
             IsTrue(bad.Error!.StartsWith("Step 3:"), $"named: {bad.Error}");
             Eq(3, port.Step, "the port knows which step failed");
-            IsTrue(!port.TryPull(out _), "step 4 does not run");
+            IsTrue(!port.TryPullCmd(out _), "step 4 does not run");
         });
 
         run("TestPort: a frame takes app commands, then one events step, then queries", () =>
@@ -237,7 +237,7 @@ static class TestPortTests
                 for (int frame = 0; frame < 10; frame++)
                 {
                     int taken = 0;
-                    while (port.TryPull(out _)) taken++;
+                    while (port.TryPullCmd(out _)) taken++;
                     if (taken == 0) break;
                     frames.Add(taken);
                     port.EndFrame();
@@ -256,9 +256,9 @@ static class TestPortTests
         run("TestPort: the buffer holds one request until it is released", () =>
         {
             var port = Port("{\"$cmd\":\"test.state\"}");
-            IsTrue(port.TryPull(out _), "the request");
+            IsTrue(port.TryPullCmd(out _), "the request");
             port.EndFrame();
-            IsTrue(!port.TryPull(out _), "pulled once, even in a later frame");
+            IsTrue(!port.TryPullCmd(out _), "pulled once, even in a later frame");
 
             var threw = false;
             try { port.Publish("{\"$cmd\":\"test.tree\"}"u8); } catch (InvalidOperationException) { threw = true; }
@@ -266,7 +266,7 @@ static class TestPortTests
 
             port.Release();
             port.Publish("{\"$cmd\":\"test.tree\"}"u8);
-            IsTrue(port.TryPull(out var next), "after release, the next request");
+            IsTrue(port.TryPullCmd(out var next), "after release, the next request");
             Eq(TestCmdKind.Tree, next.Kind, "the new one");
         });
 
@@ -285,7 +285,7 @@ static class TestPortTests
                 foreach (var line in lines)
                 {
                     port.Publish(line);
-                    while (port.TryPull(out var cmd)) { if (cmd.Kind == TestCmdKind.None) throw new Exception(cmd.Error); }
+                    while (port.TryPullCmd(out var cmd)) { if (cmd.Kind == TestCmdKind.None) throw new Exception(cmd.Error); }
                     port.Release();
                 }
             }
