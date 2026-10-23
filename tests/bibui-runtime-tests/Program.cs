@@ -8000,9 +8000,6 @@ MotionTests.Register(Run);
 Console.WriteLine();
 Console.WriteLine("Scroll list");
 ScrollListTests.Register(Run);
-Console.WriteLine();
-Console.WriteLine("Test port: requests");
-TestPortTests.Register(Run);
 
 // ── Key repeat ──────────────────────────────────────────────────────────────
 

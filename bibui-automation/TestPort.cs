@@ -1,8 +1,9 @@
 using System.Text;
 using System.Text.Json;
+using Bibui.Core;
 using Bibui.Core.Runtime.Platform;
 
-namespace Bibui.Core.Runtime;
+namespace Bibui.Automation;
 
 /// <summary>What a <see cref="TestCmd"/> asks the frame loop for.</summary>
 public enum TestCmdKind
