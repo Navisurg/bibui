@@ -83,6 +83,7 @@ change. Each page names the fixture it shows.
 | [Popover](popover.md) | A raised panel under a trigger | `PopoverScope` → `BibuiWidget` |
 | [Tooltip](tooltip.md) | One line of text over a trigger | `Box` |
 | [Scrollbar](scrollbar.md) | A bar beside a view that scrolls | `BibuiWidget` |
+| [RowScrollList and ScrollList](scroll-list.md) | Lists that build only the rows in sight, of one height or of their own, and their bar | `(int, int)`, `ScrollRows` |
 | [Badge](badge.md) | A pill with a short label | `Box` |
 | [Avatar](avatar.md) | Initials on a circle | `Box` |
 | [KeyboardShortcut](keyboard-shortcut.md) | Keycaps for a keyboard shortcut | `Box` |

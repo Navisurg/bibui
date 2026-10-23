@@ -6,6 +6,31 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **RowScrollList** (`runtime.BeginRowScrollList`, `EndRowScrollList`): the
+  list of rows of one pitch, building only those in sight, by rows or by
+  pixels (`ScrollBy`). It eases.
+- **ScrollList** (`runtime.BeginScrollList(id, ref scroll, count)`, a loop of
+  `ScrollRows.Next`, `EndScrollList`): rows of their own heights, by pixels.
+  It holds no heights; the loop hands each in as the list reaches the row, so
+  the wheel moves exactly through rows of any height. It eases.
+- `runtime.Scrollbar(id, ref scroll, count, first, last)`, a bar for either.
+
+### Changed
+
+- The gallery's ScrollList page shows both lists; the showcase's target queue
+  is a RowScrollList.
+
+### Removed
+
+- **Breaking:** the pitch overloads `BeginScrollList(id, ref scroll, pitch,
+  count)`, `EndScrollList(ref scroll)` and `Scrollbar(id, scroll, count,
+  viewRows)`, `ScrollPt.First`, `Last`, `ViewRows` and `Target(idx, px,
+  pitch)`. Use RowScrollList, the same list. `ScrollPt.Off` is now pixels.
+  Removed without a deprecated release first, so the next release is a major
+  one.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release, and the start of the full semantic-versioning
