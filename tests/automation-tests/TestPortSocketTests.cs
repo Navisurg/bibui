@@ -75,7 +75,7 @@ static class TestPortSocketTests
             using var app = new CounterApp(draw: false, state: false);
             using var client = app.Connect();
             var shot = client.Ask("{\"$cmd\":\"test.screenshot\",\"path\":\"x.png\"}");
-            IsTrue(!Ok(shot) && shot["error"]!.GetValue<string>().Contains("no renderer"), "no screenshot");
+            IsTrue(!Ok(shot) && shot["error"]!.GetValue<string>().Contains("no screenshots"), "no screenshot");
             var state = client.Ask("{\"$cmd\":\"test.state\"}");
             IsTrue(!Ok(state) && state["error"]!.GetValue<string>().Contains("no state"), "no state");
         });
@@ -207,6 +207,7 @@ static class TestPortSocketTests
         private readonly CounterState _state = new();
         private readonly List<CounterCmd> _pending = [];
         private readonly List<WindowEvent> _events = [];
+        private readonly SkiaCpuRenderer? _cpu;    // what screenshots are drawn with; none, and they are refused
         private readonly int _rows;
         private readonly bool _reportsState;
         private readonly Thread _loop;
@@ -214,14 +215,13 @@ static class TestPortSocketTests
 
         public CounterApp(bool draw = true, bool state = true, int requestBytes = 1 << 16, int rows = 0, TimeSpan? sendTimeout = null)
         {
-            (_rows, _reportsState) = (rows, state);
+            (_rows, _reportsState, _cpu) = (rows, state, draw ? new SkiaCpuRenderer() : null);
             _runtime.Surface = new SurfaceOptions { Width = 400, Height = 300, ScaleFactor = 1f };
             _runtime.SetTheme(ThemeRegistry.Load("bibui-dark"));
             Port = TestPort.Open(_runtime, new TestPortOptions
             {
                 Name = "counter",
                 Directory = Folder,
-                Draw = draw ? new SkiaCpuRenderer().Draw : null,
                 Commands = CounterJson.Default.CounterCmd,
                 RequestBytes = requestBytes,
                 SendTimeout = sendTimeout ?? TimeSpan.FromSeconds(1),
@@ -249,6 +249,11 @@ static class TestPortSocketTests
                     switch (cmd.Kind)
                     {
                         case TestCmdKind.Events: _events.AddRange(cmd.Events); break;
+                        case TestCmdKind.Screenshot:
+                            // The last frame's draw list is still the runtime's: the frame on screen.
+                            if (_cpu is null) Port.RefuseCmd("This app takes no screenshots.");
+                            else File.WriteAllBytes(cmd.Path!, FramePixels.Png(_runtime, _cpu.Draw));
+                            break;
                         case TestCmdKind.App:
                             try { _pending.Add(JsonSerializer.Deserialize(cmd.Json, CounterJson.Default.CounterCmd)!); }
                             catch (JsonException e) { Port.RefuseCmd($"Not a command of this app: {e.Message}"); }

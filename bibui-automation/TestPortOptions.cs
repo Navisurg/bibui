@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization.Metadata;
-using Bibui.Core.Draw;
 
 namespace Bibui.Automation;
 
@@ -18,12 +17,6 @@ public sealed class TestPortOptions
     /// folder's <c>bibui</c> where there is no <c>XDG_RUNTIME_DIR</c>.
     /// </summary>
     public string? Directory { get; init; }
-
-    /// <summary>
-    /// Draws a frame into pixels for <c>test.screenshot</c>: a renderer on the CPU,
-    /// whatever the window draws with. Null refuses screenshots.
-    /// </summary>
-    public DrawToPixels? Draw { get; init; }
 
     /// <summary>
     /// The app's commands, as the type its <c>$cmd</c> names are declared on, for

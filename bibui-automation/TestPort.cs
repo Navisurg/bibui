@@ -18,7 +18,12 @@ public enum TestCmdKind
     State,
     /// <summary><c>test.schema</c>: the <c>test.*</c> commands and the app's.</summary>
     Schema,
-    /// <summary><c>test.screenshot</c>: this frame as a PNG at <see cref="TestCmd.Path"/>.</summary>
+    /// <summary>
+    /// <c>test.screenshot</c>: the app writes the frame on screen as a PNG at
+    /// <see cref="TestCmd.Path"/>, drawn with a renderer of its choosing, or refuses
+    /// it (<see cref="TestPort.RefuseCmd"/>). At the top of the frame the last frame's
+    /// draw list is still the runtime's, so it is the frame on screen that is drawn.
+    /// </summary>
     Screenshot,
     /// <summary>Any other name: one of the app's commands, as sent, in <see cref="TestCmd.Json"/>.</summary>
     App,
@@ -40,7 +45,7 @@ public readonly ref struct TestCmd
     public readonly TestCmdKind Kind;
     /// <summary>Events: this frame's input.</summary>
     public readonly ReadOnlySpan<WindowEvent> Events;
-    /// <summary>Screenshot: the file to write.</summary>
+    /// <summary>Screenshot: the file the app writes the frame to.</summary>
     public readonly string? Path;
     /// <summary>App: the command as sent, for the app's own deserializer.</summary>
     public readonly ReadOnlySpan<byte> Json;

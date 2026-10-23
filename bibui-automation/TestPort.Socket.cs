@@ -37,7 +37,6 @@ public sealed partial class TestPort : IDisposable
         var port = new TestPort(options.RequestBytes)
         {
             _runtime = runtime,
-            _draw = options.Draw,
             _sendTimeoutMs = (int)Math.Clamp(options.SendTimeout.TotalMilliseconds, 1, int.MaxValue),
             _schema = SchemaBytes(options),
         };

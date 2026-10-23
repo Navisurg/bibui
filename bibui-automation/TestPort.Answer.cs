@@ -3,7 +3,6 @@ using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Bibui.Core;
-using Bibui.Core.Draw;
 using Bibui.Core.Runtime;
 
 namespace Bibui.Automation;
@@ -13,7 +12,6 @@ namespace Bibui.Automation;
 public sealed partial class TestPort
 {
     // Set by Open.
-    private DrawToPixels? _draw;
     private int _sendTimeoutMs = 1000;
     private byte[] _schema = [];
 
@@ -22,7 +20,8 @@ public sealed partial class TestPort
     private Utf8JsonWriter? _json;
 
     /// <summary>
-    /// Refuses the request in hand: an app command the app cannot read. Answered as
+    /// Refuses the request in hand: an app command the app cannot read, or a
+    /// screenshot it does not take or could not write. Answered as
     /// <c>{"ok":false,"error":...}</c> at the end of the frame.
     /// </summary>
     public void RefuseCmd(string error)
@@ -80,6 +79,7 @@ public sealed partial class TestPort
                     break;
                 case TestCmdKind.Events:
                 case TestCmdKind.App:
+                case TestCmdKind.Screenshot:          // written by the app, or refused by it
                     json.WriteBoolean("ok", true);
                     break;
                 case TestCmdKind.Tree:
@@ -97,11 +97,6 @@ public sealed partial class TestPort
                     json.WriteBoolean("ok", true);
                     json.WritePropertyName("result");
                     json.WriteRawValue(_schema, skipInputValidation: true);
-                    break;
-                case TestCmdKind.Screenshot:
-                    var error = Screenshot();
-                    if (error is null) json.WriteBoolean("ok", true);
-                    else Error(json, error);
                     break;
             }
             json.WriteEndObject();
@@ -150,23 +145,6 @@ public sealed partial class TestPort
             json.WriteEndArray();
         }
         json.WriteEndObject();
-    }
-
-    // test.screenshot: this frame, drawn on the CPU, as a PNG at the path the request
-    // named (the app's, relative to its working directory). Null when written;
-    // otherwise why not.
-    private string? Screenshot()
-    {
-        if (_draw is null || _runtime is null) return "This app's port has no renderer to draw a screenshot with.";
-        try
-        {
-            File.WriteAllBytes(_heldPath!, FramePixels.Png(_runtime, _draw));
-            return null;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return $"The screenshot was not written: {e.Message}";
-        }
     }
 
     // A reply's bytes, through one buffer allocated once, sent to the socket each time
