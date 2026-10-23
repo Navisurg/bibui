@@ -60,7 +60,7 @@ One JSON line per request, one answer line back:
 
 | Request | Answer |
 |---|---|
-| `{"$cmd":"test.tree"}` | the UI tree the last frame laid out: each node's kind, id, rect, text, and whether it is clickable or disabled |
+| `{"$cmd":"test.tree"}` | the UI tree the last frame laid out: each node's kind, id, rect, text, and claims |
 | `{"$cmd":"test.state"}` | the app's state |
 | `{"$cmd":"test.schema"}` | a JSON schema of every request: the `test.*` ones and the app's |
 | `{"$cmd":"test.events","events":[…]}` | `{"ok":true}`, once the events and what they set off have run |
@@ -87,6 +87,22 @@ echo '{"$cmd":"test.state"}' | socat - UNIX-CONNECT:$S
 ```
 
 Several lines may be sent without waiting; they are answered in order.
+
+A box's `claims` are its `InteractionKinds`, one name per bit: `LeftPress` is
+clickable, `Disabled` is disabled, `ViewScrollY` scrolls its view, and `Clip`
+cuts its children to it, so a node is in view when its centre is inside every
+ancestor claiming `Clip`.
+
+`bibui-port` (`tools/bibui-port`) is a native command-line client: it finds the
+socket, builds the JSON, and clicks a node by id, scrolled into view first.
+
+```sh
+bibui-port tree --depth 2          # an outline: kind, id, rect, claims, text
+bibui-port find "Add one"          # the nodes holding a text, and the id to click
+bibui-port click add
+bibui-port cmd counter.set Value=10
+bibui-port state
+```
 
 Part of bibui, a code-first native UI library for .NET:
 <https://github.com/Navisurg/bibui>. Licensed under Apache-2.0.

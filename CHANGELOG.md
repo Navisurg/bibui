@@ -13,12 +13,20 @@ All notable changes to bibui are recorded here. The format is based on
   and one thread that reads it; the app calls `port.TryPullCmd` at the top of each
   frame and `port.AnswerCmds` at its end, so everything else happens on its loop.
   A client sends one JSON line per request: `test.tree` (the UI tree the last frame
-  laid out), `test.state`, `test.schema`, `test.events` (input, as a window reports
+  laid out, each box with its claims by name), `test.state`, `test.schema`, `test.events` (input, as a window reports
   it), `test.screenshot` (written by the app, with a renderer of its choosing) and
   the app's own commands; events and commands are answered once the app has
   settled. An app that does not reference the package ships none of it. See
   `packaging/readme/Bibui.Automation.md`.
 
+- **`bibui-port`: the test port from a shell.** `tools/bibui-port`, a
+  command-line client published with Native AOT: one native file that starts in
+  milliseconds, for scripts and agents. It finds the app's socket, prints the
+  tree as an outline (`tree`, `find`), clicks a node by id once it holds still
+  and is scrolled into view (`click add`), and sends the app's commands
+  (`cmd counter.set Value=10`), `state`, `schema` and `screenshot`. The
+  gallery's page walk, `samples/component-gallery/test_all_pages.sh`, is a
+  shell script on it.
 - **RowScrollList** (`runtime.BeginRowScrollList`, `EndRowScrollList`): the
   list of rows of one pitch, building only those in sight, by rows or by
   pixels (`ScrollBy`). It eases.
@@ -65,7 +73,7 @@ All notable changes to bibui are recorded here. The format is based on
   `BibuiAppOptions.TestServer` and `TestServerPort`, and `BibuiApp.TestServer`.
   A `BibuiApp` opens no port: an app that wants one references `Bibui.Automation`
   and opens a `TestPort`. The samples open one with `BIBUI_TEST_PORT=1`, and the
-  gallery's page walk is `samples/component-gallery/test_all_pages.py`.
+  gallery's page walk is `samples/component-gallery/test_all_pages.sh`.
 - **Breaking: the test server no longer records video.** `start_recording` and
   `stop_recording` are gone from `BibuiTestServer`, and `StartRecording` and
   `StopRecording` from `WorkflowClient`. Encoding video is not the test
