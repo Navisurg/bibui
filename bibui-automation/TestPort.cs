@@ -62,21 +62,16 @@ public readonly ref struct TestCmd
 /// The app's end of the test protocol: a client's requests, handed to the frame
 /// loop as <see cref="TestCmd"/>s.
 ///
-/// <para>A request is one line: a command, <c>{"$cmd":name,...}</c>, or a batch of
-/// them, <c>[{...},{...}]</c>. The <c>test.*</c> names are bibui's
-/// (<see cref="NameOf"/>); any other name is the app's, handed over as bytes.</para>
+/// <para>A request is one line holding one command, <c>{"$cmd":name,...}</c>. The
+/// <c>test.*</c> names are bibui's (<see cref="NameOf"/>); any other name is the
+/// app's, handed over as bytes. A client with several commands sends several lines
+/// without waiting, and reads their answers in order.</para>
 ///
 /// <para>The request buffer has one owner at a time, and its length says which:
 /// 0, the port thread's, which writes a line into it and then the length; above 0,
 /// the loop's, from <see cref="TryPullCmd"/> until the request is answered, when the
 /// length goes back to 0. So a <see cref="TestCmd"/>'s spans stay put for the
 /// whole request.</para>
-///
-/// <para>The loop drains <see cref="TryPullCmd"/> at the top of each frame, and it hands
-/// out what can run in that frame, in the order a frame runs it: the app's commands
-/// (run before the build), then at most one frame of events (seen by the build),
-/// then queries (answered after it). A step that would break that order waits for
-/// a later frame.</para>
 /// </summary>
 public sealed class TestPort
 {
@@ -84,39 +79,26 @@ public sealed class TestPort
     internal const int Oversized = -1;
 
     // The request buffer, its length (written last by the port thread, set back to 0
-    // when the request is answered), and what each part of the loop's work needs.
-    // All allocated once, for the port's life.
+    // when the request is answered), and what the loop reads into from it. All
+    // allocated once, for the port's life.
     private readonly byte[] _request;
     private int _requestLength;
-    private readonly WindowEvent[] _events;                  // the one events step a frame takes
-    private readonly byte[] _scratch;                        // unescaped strings this frame: escaped paths
+    private readonly WindowEvent[] _events;                  // a test.events request's events
+    private readonly byte[] _scratch;                        // an escaped path, unescaped
     private int _scratchUsed;
-    private readonly int[] _stepStart, _stepLength;          // the request's steps: one, or a batch's elements
 
-    // The loop's, about the request in hand: its steps once found (-1 before),
-    // the next to hand out, whether it was a batch, whether a refusal ended it,
-    // and what this frame has taken so far.
-    private int _stepCount = -1;
-    private int _next;
-    private bool _isBatch;
-    private bool _ended;
-    private FramePhase _phase;
-
-    private enum FramePhase { Commands, Events, Queries }
+    // The loop's: whether the request in hand has been handed out.
+    private bool _pulled;
 
     /// <param name="requestBytes">The request buffer: the longest line a client may send.</param>
     /// <param name="maxEvents">The most events one <c>test.events</c> may carry.</param>
-    /// <param name="maxSteps">The most commands one batch may carry.</param>
-    public TestPort(int requestBytes = 1 << 20, int maxEvents = 256, int maxSteps = 256)
+    public TestPort(int requestBytes = 1 << 20, int maxEvents = 256)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(requestBytes, 16);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxEvents, 1);
-        ArgumentOutOfRangeException.ThrowIfLessThan(maxSteps, 1);
         _request = new byte[requestBytes];
         _events = new WindowEvent[maxEvents];
         _scratch = new byte[4096];
-        _stepStart = new int[maxSteps];
-        _stepLength = new int[maxSteps];
     }
 
     /// <summary>
@@ -155,66 +137,27 @@ public sealed class TestPort
     // ── The loop's side ────────────────────────────────────────────────────
 
     /// <summary>
-    /// The next step that can run in this frame, if there is one: a single command,
-    /// or a batch's next. False when nothing is published, every step has been
-    /// handed out, or the next must wait for a later frame. The loop's, at the top
-    /// of the frame: <c>while (port.TryPullCmd(out var cmd)) { ... }</c>.
+    /// The request the port thread has published, once: false when there is none,
+    /// or when it has been handed out and not yet answered. The loop's, at the top of
+    /// the frame: <c>while (port.TryPullCmd(out var cmd)) { ... }</c>. With nothing
+    /// published, it costs one read of the request's length.
     /// </summary>
     public bool TryPullCmd(out TestCmd cmd)
     {
         cmd = default;
-        if (_ended) return false;
+        if (_pulled) return false;
         int length = Volatile.Read(ref _requestLength);
         if (length == 0) return false;
+        _pulled = true;
+
         if (length == Oversized)
-            return Refuse($"The request is longer than the request buffer ({_request.Length} bytes).", out cmd);
-
-        var line = _request.AsSpan(0, length);
-        if (_stepCount < 0)
         {
-            var refusal = FindSteps(line);
-            if (refusal is not null) return Refuse(refusal, out cmd);
+            cmd = Refused($"The request is longer than the request buffer ({_request.Length} bytes).");
+            return true;
         }
-        if (_next == _stepCount) return false;
-
-        var step = line.Slice(_stepStart[_next], _stepLength[_next]);
-        TestCmdKind kind;
-        string? error;
-        try { kind = KindOf(step, out error); }
-        catch (JsonException e) { return Refuse(StepError($"Not JSON: {e.Message}"), out cmd); }
-        if (error is not null) return Refuse(StepError(error), out cmd);
-
-        //- one frame runs the app's commands, then the build sees the events, then the queries are answered
-        if (!Fits(kind)) return false;
-
-        try { cmd = Read(step, kind); }
-        catch (JsonException e) { return Refuse(StepError($"Not JSON: {e.Message}"), out cmd); }
-        if (cmd.Kind == TestCmdKind.None) { _ended = true; return true; }
-
-        _phase = kind switch
-        {
-            TestCmdKind.App    => FramePhase.Commands,
-            TestCmdKind.Events => FramePhase.Events,
-            _                  => FramePhase.Queries,
-        };
-        _next++;
+        try { cmd = Read(_request.AsSpan(0, length)); }
+        catch (JsonException e) { cmd = Refused($"Not JSON: {e.Message}"); }
         return true;
-    }
-
-    /// <summary>
-    /// The batch step <see cref="TryPullCmd"/> last handed out (0 up), or -1 for a single
-    /// command or a request refused as a whole: what a refusal's answer names as failed.
-    /// </summary>
-    internal int Step => _isBatch && _stepCount > 0 ? Math.Min(_next, _stepCount - 1) : -1;
-
-    /// <summary>
-    /// The frame is over: the next <see cref="TryPullCmd"/> starts a new one. Called by
-    /// AnswerCmds, when the frame's steps are answered.
-    /// </summary>
-    internal void EndFrame()
-    {
-        _phase = FramePhase.Commands;
-        _scratchUsed = 0;
     }
 
     /// <summary>
@@ -223,80 +166,32 @@ public sealed class TestPort
     /// </summary>
     internal void Release()
     {
-        _stepCount = -1;
-        _next = 0;
-        _isBatch = false;
-        _ended = false;
-        EndFrame();
+        _pulled = false;
+        _scratchUsed = 0;
         Volatile.Write(ref _requestLength, 0);
     }
 
-    // Whether a step of this kind runs in this frame, after what the frame has taken.
-    private bool Fits(TestCmdKind kind) => kind switch
-    {
-        TestCmdKind.App    => _phase == FramePhase.Commands,
-        TestCmdKind.Events => _phase == FramePhase.Commands,
-        _                  => true,      // queries are answered after everything before them; a refusal at once
-    };
-
-    private bool Refuse(string error, out TestCmd cmd)
-    {
-        _ended = true;
-        cmd = new TestCmd(TestCmdKind.None, error: error);
-        return true;
-    }
-
-    private string StepError(string error) => _isBatch ? $"Step {_next}: {error}" : error;
-
     // ── Reading a request ──────────────────────────────────────────────────
 
-    // The request's steps, found once: one object, or a batch's elements. A whole
-    // request that is not well-formed JSON is refused here, before any step runs.
-    private string? FindSteps(ReadOnlySpan<byte> line)
+    // The line as a TestCmd: one JSON object, its kind from its $cmd, its arguments
+    // read and checked. Not well-formed JSON throws, for TryPullCmd to refuse.
+    private TestCmd Read(ReadOnlySpan<byte> line)
     {
-        try
-        {
-            var reader = new Utf8JsonReader(line);
-            if (!reader.Read()) return "An empty request.";
-            if (reader.TokenType == JsonTokenType.StartObject)
-            {
-                reader.Skip();
-                if (reader.Read()) return "A request is one JSON object, or a batch of them.";
-                (_stepStart[0], _stepLength[0], _stepCount) = (0, line.Length, 1);
-                return null;
-            }
-            if (reader.TokenType != JsonTokenType.StartArray)
-                return "A request is one JSON object, or a batch of them.";
+        var reader = new Utf8JsonReader(line);
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            return Refused("A request is one JSON object.");
+        reader.Skip();
+        if (reader.Read()) return Refused("A request is one JSON object.");
 
-            _isBatch = true;
-            int count = 0;
-            while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
-            {
-                if (reader.TokenType == JsonTokenType.StartArray) return "A batch cannot hold a batch.";
-                if (reader.TokenType != JsonTokenType.StartObject) return $"Step {count}: a batch holds commands, JSON objects.";
-                if (count == _stepStart.Length) return $"A batch holds at most {_stepStart.Length} commands.";
-                int start = (int)reader.TokenStartIndex;
-                reader.Skip();
-                (_stepStart[count], _stepLength[count]) = (start, (int)reader.BytesConsumed - start);
-                count++;
-            }
-            if (reader.Read()) return "A request is one JSON object, or a batch of them.";
-            if (count == 0) return "An empty batch.";
-            _stepCount = count;
-            return null;
-        }
-        catch (JsonException e)
-        {
-            _isBatch = false;
-            return $"Not JSON: {e.Message}";
-        }
+        var kind = KindOf(line, out var error);
+        return error is not null ? Refused(error) : Read(line, kind);
     }
 
-    // The step's kind, from its $cmd: one pass over its top level, $cmd anywhere in it.
-    private static TestCmdKind KindOf(ReadOnlySpan<byte> step, out string? error)
+    // The request's kind, from its $cmd: one pass over its top level, $cmd anywhere in it.
+    private static TestCmdKind KindOf(ReadOnlySpan<byte> line, out string? error)
     {
         error = null;
-        var reader = new Utf8JsonReader(step);
+        var reader = new Utf8JsonReader(line);
         reader.Read();
         while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
         {
@@ -322,17 +217,17 @@ public sealed class TestPort
             && name[..reader.CopyString(name)].StartsWith("test."u8);
     }
 
-    // The step as a TestCmd of its kind, its arguments read and checked.
-    private TestCmd Read(ReadOnlySpan<byte> step, TestCmdKind kind)
+    // The request as a TestCmd of its kind, its arguments read and checked.
+    private TestCmd Read(ReadOnlySpan<byte> line, TestCmdKind kind)
     {
         switch (kind)
         {
             case TestCmdKind.App:
-                return new TestCmd(TestCmdKind.App, json: step);
+                return new TestCmd(TestCmdKind.App, json: line);
 
             case TestCmdKind.Events:
             {
-                var reader = new Utf8JsonReader(step);
+                var reader = new Utf8JsonReader(line);
                 if (!FindProperty(ref reader, "events"u8) || reader.TokenType != JsonTokenType.StartArray)
                     return Refused("test.events carries its events, a list.");
                 var error = ReadEvents(ref reader, out int count);
@@ -343,7 +238,7 @@ public sealed class TestPort
 
             case TestCmdKind.Screenshot:
             {
-                var reader = new Utf8JsonReader(step);
+                var reader = new Utf8JsonReader(line);
                 if (!FindProperty(ref reader, "path"u8) || reader.TokenType != JsonTokenType.String
                     || reader.ValueSpan.IsEmpty)
                     return Refused("test.screenshot carries the path to write, a string.");
@@ -360,7 +255,7 @@ public sealed class TestPort
         }
     }
 
-    private TestCmd Refused(string error) => new(TestCmdKind.None, error: StepError(error));
+    private static TestCmd Refused(string error) => new(TestCmdKind.None, error: error);
 
     // Moves the reader onto the value of the top-level property named name.
     private static bool FindProperty(ref Utf8JsonReader reader, ReadOnlySpan<byte> name)

@@ -30,7 +30,7 @@ static class TestPortTests
 
     static string Str(ReadOnlySpan<byte> utf8) => Encoding.UTF8.GetString(utf8);
 
-    // The one step line holds, which must be a refusal mentioning what.
+    // The request line holds, which must be a refusal mentioning what.
     static void Refused(string line, string what, int maxEvents = 256)
     {
         var port = Port(line, maxEvents: maxEvents);
@@ -184,81 +184,17 @@ static class TestPortTests
             IsTrue(cmd.Error!.Contains("longer than the request buffer"), $"why: {cmd.Error}");
         });
 
-        run("TestPort: a batch hands out its steps in order", () =>
+        run("TestPort: one command per line; a batch is refused", () =>
         {
-            var port = Port("[{\"$cmd\":\"counter.set\",\"Value\":1},{\"$cmd\":\"test.events\",\"events\":[]},"
-                + "{\"$cmd\":\"test.tree\"},{\"$cmd\":\"test.screenshot\",\"path\":\"a.png\"}]");
-            IsTrue(port.TryPullCmd(out var a), "step 0");
-            Eq(TestCmdKind.App, a.Kind, "step 0 is the app's");
-            Eq("{\"$cmd\":\"counter.set\",\"Value\":1}", Str(a.Json), "its own bytes, not the batch's");
-            IsTrue(port.TryPullCmd(out var b), "step 1");
-            Eq(TestCmdKind.Events, b.Kind, "step 1 is events");
-            IsTrue(port.TryPullCmd(out var c), "step 2");
-            Eq(TestCmdKind.Tree, c.Kind, "step 2 is the tree");
-            IsTrue(port.TryPullCmd(out var d), "step 3");
-            Eq(TestCmdKind.Screenshot, d.Kind, "step 3 is a screenshot");
-            IsTrue(!port.TryPullCmd(out _), "and that is all");
-        });
-
-        run("TestPort: an empty batch, a batch in a batch, and a batch of non-commands are refused", () =>
-        {
-            Refused("[]", "empty batch");
-            Refused("[[{\"$cmd\":\"test.tree\"}]]", "cannot hold a batch");
-            Refused("[{\"$cmd\":\"test.tree\"},3]", "Step 1: a batch holds commands");
-            Refused("[{\"$cmd\":\"test.tree\"}", "Not JSON");
-        });
-
-        run("TestPort: a bad step ends the batch, naming its index", () =>
-        {
-            var port = Port("[{\"$cmd\":\"a\"},{\"$cmd\":\"b\"},{\"$cmd\":\"c\"},{\"$cmd\":\"test.nope\"},{\"$cmd\":\"d\"}]");
-            for (int i = 0; i < 3; i++)
-            {
-                IsTrue(port.TryPullCmd(out var ok), $"step {i}");
-                Eq(TestCmdKind.App, ok.Kind, $"step {i} runs");
-            }
-            IsTrue(port.TryPullCmd(out var bad), "step 3");
-            Eq(TestCmdKind.None, bad.Kind, "step 3 is refused");
-            IsTrue(bad.Error!.StartsWith("Step 3:"), $"named: {bad.Error}");
-            Eq(3, port.Step, "the port knows which step failed");
-            IsTrue(!port.TryPullCmd(out _), "step 4 does not run");
-        });
-
-        run("TestPort: a frame takes app commands, then one events step, then queries", () =>
-        {
-            const string set = "{\"$cmd\":\"counter.set\",\"Value\":1}";
-            const string move = "{\"$cmd\":\"test.events\",\"events\":[{\"kind\":\"mouse_move\",\"x\":1,\"y\":1}]}";
-            const string state = "{\"$cmd\":\"test.state\"}";
-
-            // The steps each frame takes, frame by frame, until the batch is done.
-            static int[] Frames(string batch)
-            {
-                var port = Port(batch);
-                var frames = new List<int>();
-                for (int frame = 0; frame < 10; frame++)
-                {
-                    int taken = 0;
-                    while (port.TryPullCmd(out _)) taken++;
-                    if (taken == 0) break;
-                    frames.Add(taken);
-                    port.EndFrame();
-                }
-                return [.. frames];
-            }
-
-            Eq("3", string.Join(",", Frames($"[{set},{set},{state}]")), "commands, then a query: one frame");
-            Eq("1,1", string.Join(",", Frames($"[{move},{move}]")), "events, then events: a frame each");
-            Eq("1,1", string.Join(",", Frames($"[{state},{set}]")), "a query, then a command: the command waits");
-            Eq("1,1", string.Join(",", Frames($"[{move},{set}]")), "events, then a command: the command waits");
-            Eq("3", string.Join(",", Frames($"[{set},{move},{state}]")), "a command, events, a query: one frame");
-            Eq("2,2,1", string.Join(",", Frames($"[{move},{state},{move},{state},{move}]")), "a click and its reads");
+            Refused("[{\"$cmd\":\"test.tree\"},{\"$cmd\":\"test.state\"}]", "one JSON object");
+            Refused("[]", "one JSON object");
         });
 
         run("TestPort: the buffer holds one request until it is released", () =>
         {
             var port = Port("{\"$cmd\":\"test.state\"}");
             IsTrue(port.TryPullCmd(out _), "the request");
-            port.EndFrame();
-            IsTrue(!port.TryPullCmd(out _), "pulled once, even in a later frame");
+            IsTrue(!port.TryPullCmd(out _), "pulled once, until it is answered");
 
             var threw = false;
             try { port.Publish("{\"$cmd\":\"test.tree\"}"u8); } catch (InvalidOperationException) { threw = true; }
@@ -278,7 +214,7 @@ static class TestPortTests
                 Encoding.UTF8.GetBytes("{\"$cmd\":\"test.events\",\"events\":[{\"kind\":\"mouse_down\",\"x\":1,\"y\":2,\"button\":\"left\",\"modifiers\":[\"ctrl\"]},{\"kind\":\"key_down\",\"key\":\"Enter\"},{\"kind\":\"key_char\",\"char\":\"x\"}]}"),
                 Encoding.UTF8.GetBytes("{\"Value\":3,\"$cmd\":\"counter.set\"}"),
                 Encoding.UTF8.GetBytes("{\"$cmd\":\"test.screenshot\",\"path\":\"a\\u0020b.png\"}"),
-                Encoding.UTF8.GetBytes("[{\"$cmd\":\"a\"},{\"$cmd\":\"test.\\u0074ree\"},{\"$cmd\":\"test.state\"}]"),
+                Encoding.UTF8.GetBytes("{\"$cmd\":\"test.\\u0074ree\"}"),
             };
             void PullAll()
             {
