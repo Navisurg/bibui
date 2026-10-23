@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Net.Sockets;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Bibui.Core;
@@ -18,6 +19,10 @@ public sealed partial class TestPort
     // The loop's: a reply is written through these, allocated once.
     private SocketWriter? _out;
     private Utf8JsonWriter? _json;
+
+    // Answers are read by programs and people, never put into a page: ' < > and
+    // non-ASCII text are written as themselves, not as \u escapes.
+    private static readonly JsonWriterOptions Relaxed = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     /// <summary>
     /// Refuses the request in hand: an app command the app cannot read, or a
@@ -65,7 +70,7 @@ public sealed partial class TestPort
     {
         _out ??= new SocketWriter();
         _out.Start(client);
-        if (_json is null) _json = new Utf8JsonWriter(_out);
+        if (_json is null) _json = new Utf8JsonWriter(_out, Relaxed);
         else _json.Reset(_out);
         var json = _json;
 
@@ -120,7 +125,10 @@ public sealed partial class TestPort
     // test.tree: the tree the last frame laid out, walked as it is (the runtime keeps
     // it; nothing is copied), each node saying what it is, where it was laid out and
     // what it holds, leaving out what is empty or false:
-    // {"kind":"box","id":"add","x":10,"y":40,"w":80,"h":24,"clickable":true,"children":[...]}
+    // {"kind":"box","id":"add","x":10,"y":40,"w":80,"h":24,"claims":["LeftPress"],"children":[...]}
+    // A box's claims are its InteractionKinds, one name per bit, never a composite
+    // (ViewScrollY, not ViewScroll): what a client reads is what the code declares.
+    // A node is in view when its centre is inside every ancestor claiming Clip.
     private static void WriteTree(Utf8JsonWriter json, UiNode? node)
     {
         if (node is null) { json.WriteNullValue(); return; }
@@ -132,10 +140,12 @@ public sealed partial class TestPort
         json.WriteNumber("w", node.Extent.X);
         json.WriteNumber("h", node.Extent.Y);
         if (node is Text text) json.WriteString("text", text.Content);
-        if (node is Box box)
+        if (node is Box { Claims: not InteractionKinds.None } box)
         {
-            if ((box.Claims & InteractionKinds.Press) != 0) json.WriteBoolean("clickable", true);
-            if ((box.Claims & InteractionKinds.Disabled) != 0) json.WriteBoolean("disabled", true);
+            json.WriteStartArray("claims");
+            for (int bit = 1; bit != 0 && bit <= (int)box.Claims; bit <<= 1)
+                if (((int)box.Claims & bit) != 0) json.WriteStringValue(((InteractionKinds)bit).ToString());
+            json.WriteEndArray();
         }
         if (node.FirstChild is not null)
         {
