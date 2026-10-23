@@ -214,6 +214,21 @@ public sealed class DrawList
         return ref op;
     }
 
+    // Room for n glyphs or points at the end of the payload, for a writer that
+    // fills them in place; Return gives back what it did not use.
+    internal Span<ushort> ReserveGlyphs(int n, out int start) => Reserve(ref _glyphs, ref _glyphCount, n, out start);
+    internal Span<Vector2> ReservePoints(int n, out int start) => Reserve(ref _points, ref _pointCount, n, out start);
+    internal void ReturnGlyphs(int n) => _glyphCount -= n;
+    internal void ReturnPoints(int n) => _pointCount -= n;
+
+    private static Span<T> Reserve<T>(ref T[] array, ref int count, int n, out int start)
+    {
+        if (count + n > array.Length) Array.Resize(ref array, Math.Max(array.Length * 2, count + n));
+        start = count;
+        count += n;
+        return array.AsSpan(start, n);
+    }
+
     internal int AddPoints(ReadOnlySpan<Vector2> points) => Append(ref _points, ref _pointCount, points);
     internal int AddGlyphs(ReadOnlySpan<ushort> glyphs) => Append(ref _glyphs, ref _glyphCount, glyphs);
     internal int AddVerbs(ReadOnlySpan<PathVerb> verbs) => Append(ref _verbs, ref _verbCount, verbs);

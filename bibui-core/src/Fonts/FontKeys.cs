@@ -4,59 +4,19 @@ using System.Runtime.InteropServices;
 namespace Bibui.Core;
 
 /// <summary>
-/// Measured text width for one (text, style): the chars hashed, seeded by the
-/// style's key (<see cref="FontStyle.Key"/>: the face's id and the physical
-/// size), for the reason <see cref="RunsKey"/> gives.
-/// </summary>
-internal readonly record struct MeasureKey(UInt128 Hash)
-{
-    public static MeasureKey For(ReadOnlySpan<char> text, ulong style)
-        => new(XxHash128.HashToUInt128(MemoryMarshal.AsBytes(text), (long)style));
-}
-
-/// <summary>
-/// Typeface runs for one (text, face), addressed by a 128-bit content hash
-/// instead of by the text itself.
+/// A greedy word-wrap layout — which chars land on which line — for one
+/// (text, maxWidth, style, scale), addressed by a 128-bit content hash instead
+/// of by the text itself.
 ///
 /// The hash is the better key here, not merely a cheaper one. The text is the
 /// caller's memory, which changes under an edit, so a key holding it would have
 /// to copy it, and would then compare by value on every lookup — a second full
 /// pass over the text on top of the hash the dictionary already computes.
-/// Hashing pays one pass and retains nothing but 16 bytes.
-///
-/// A collision returns the wrong runs, so the width is the safety margin: 128
-/// bits puts the birthday bound around 2^64 distinct strings, against the
-/// thousands a screenful of UI actually produces.
-/// </summary>
-internal readonly record struct RunsKey(UInt128 Hash)
-{
-    /// <summary>
-    /// XxHash128 over the bytes of the text's chars, seeded by the face's id. The
-    /// face is folded into the seed rather than concatenated into the hashed
-    /// bytes so there is no intermediate buffer to build and no ambiguity to
-    /// guard against. Deterministic, unlike string.GetHashCode, which is seeded
-    /// per process and so could not be asserted on in a test.
-    /// </summary>
-    public static RunsKey For(ReadOnlySpan<char> text, FontFace face) =>
-        new(XxHash128.HashToUInt128(MemoryMarshal.AsBytes(text), face.Id));
-}
-
-/// <summary>
-/// One run of text shaped in one face at one physical size: XxHash128 over the
-/// chars, seeded by the face and the size, for the reasons <see cref="RunsKey"/>
-/// gives.
-/// </summary>
-internal readonly record struct ShapeKey(UInt128 Hash)
-{
-    public static ShapeKey For(ReadOnlySpan<char> text, FontFace face, float sizePhysical) =>
-        new(XxHash128.HashToUInt128(MemoryMarshal.AsBytes(text),
-            (long)face.Id << 32 | (uint)BitConverter.SingleToInt32Bits(sizePhysical)));
-}
-
-/// <summary>
-/// A greedy word-wrap layout — which chars land on which line — for one
-/// (text, maxWidth, style, scale). Hash-keyed for the same reason as
-/// <see cref="RunsKey"/>.
+/// Hashing pays one pass and retains nothing but 16 bytes. Deterministic,
+/// unlike string.GetHashCode, which is seeded per process and so could not be
+/// asserted on in a test. A collision returns the wrong lines, so the width is
+/// the safety margin: 128 bits puts the birthday bound around 2^64 distinct
+/// strings, against the thousands a screenful of UI produces.
 ///
 /// Scale is a field of its own rather than being folded into the size, because
 /// the wrap decision is `physicalWidth / scale > maxWidth` — a *logical*

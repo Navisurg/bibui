@@ -14,24 +14,27 @@ public readonly ref partial struct DrawContext
 {
     /// <summary>
     /// Draws one line of <paramref name="text"/> in <paramref name="style"/> with
-    /// its baseline at <paramref name="baselineY"/>, in physical px.
-    ///
-    /// Each run is shaped by <see cref="Fonts"/> and handed to the canvas as
-    /// glyphs, so the backend draws exactly what was measured.
+    /// its baseline at <paramref name="baselineY"/>, in physical px: its glyphs
+    /// walked straight into the list, so the backend draws exactly what was
+    /// measured.
     /// </summary>
     private void DrawRuns(ReadOnlySpan<char> text, float x, float baselineY, FontStyle style, Rgba color)
     {
-        float cursor = x;
-        float sizePx = style.Strike.Size;
-        for (var run = Fonts.SplitRuns(text, style.Face); run is not null; run = run.Next)
-        {
-            var shaped = Fonts.Shape(text[run.Start..run.End], run.Face, sizePx);
-            ref var op = ref List.Push(DrawOpKind.Glyphs);
-            op.Resource = List.AddFace(run.Face);
-            (op.A, op.B, op.C, op.Color) = (cursor, baselineY, sizePx, color);
-            (op.Start, op.Count, op.Start2) = (List.AddGlyphs(shaped.Glyphs), shaped.Glyphs.Length, List.AddPoints(shaped.Positions));
-            cursor += shaped.Width;
-        }
+        var glyphs = List.ReserveGlyphs(text.Length, out int glyphStart);
+        var points = List.ReservePoints(text.Length, out int pointStart);
+        int count = style.Strike.Glyphs(text, glyphs, points, out _);
+        List.ReturnGlyphs(text.Length - count);
+        List.ReturnPoints(text.Length - count);
+        PushGlyphs(style, x, baselineY, color, glyphStart, count, pointStart);
+    }
+
+    // The op for a run whose glyphs and positions are in the list already.
+    private void PushGlyphs(FontStyle style, float x, float baselineY, Rgba color, int glyphStart, int count, int pointStart)
+    {
+        ref var op = ref List.Push(DrawOpKind.Glyphs);
+        op.Resource = List.AddFace(style.Face);
+        (op.A, op.B, op.C, op.Color) = (x, baselineY, style.Strike.Size, color);
+        (op.Start, op.Count, op.Start2) = (glyphStart, count, pointStart);
     }
 
     /// <summary>
@@ -47,11 +50,25 @@ public readonly ref partial struct DrawContext
     public static float LineAdvance(float fontSize) => Bibui.Core.Fonts.LineAdvance(fontSize);
 
     /// <summary>
-    /// One line of <paramref name="text"/> in <paramref name="font"/>, its
-    /// ascent at <paramref name="top"/>. What a <see cref="Text"/> is drawn with.
+    /// <paramref name="text"/> in <paramref name="font"/>, its ascent at
+    /// <paramref name="top"/>: drawn from the run layout walked it into this
+    /// frame, copied into the list, or walked again when it has none, or one
+    /// walked in another style.
     /// </summary>
-    internal void DrawTextTop(ReadOnlySpan<char> text, float x, float top, in Font font, ReadOnlySpan<char> color)
-        => DrawText(text, x * Scale, top * Scale, font, Color(color));
+    internal void DrawTextTop(Text text, float x, float top, in Font font, ReadOnlySpan<char> color)
+    {
+        if (text.Content.IsEmpty) return;
+        var style = Fonts.StyleOf(font, Scale);
+        var rgba = Color(color);
+        float baselineY = top * Scale - style.Metrics.Ascent;
+        if (text.RunFrame != Fonts.RunFrame || text.RunStyle != style)
+        {
+            DrawRuns(text.Content, x * Scale, baselineY, style, rgba);
+            return;
+        }
+        PushGlyphs(style, x * Scale, baselineY, rgba,
+            List.AddGlyphs(Fonts.RunGlyphs(text)), text.RunCount, List.AddPoints(Fonts.RunPoints(text)));
+    }
 
     /// <summary>
     /// One line of <paramref name="text"/> in <paramref name="font"/>, drawn as a
@@ -73,7 +90,7 @@ public readonly ref partial struct DrawContext
     {
         var style = Fonts.StyleOf(Fonts.BuiltIn(600), fontSize * Scale);
         var metrics = style.Metrics;
-        float textWidth = Fonts.MeasureRuns(text, style);
+        float textWidth = style.Strike.Measure(text);
         float textHeight = metrics.Descent - metrics.Ascent;
         float textX = (rectX * Scale) + ((rectW * Scale) - textWidth) / 2f;
         float baselineY = (rectY * Scale) + ((rectH * Scale) - textHeight) / 2f - metrics.Ascent;

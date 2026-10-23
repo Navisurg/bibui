@@ -110,6 +110,24 @@ public sealed unsafe class FontStrike
         return a;
     }
 
+    // For chars below 256, the glyph and its advance side by side, filled on
+    // first use (rad's utf8_class1_direct_map): a walk reads one entry per char.
+    // Anything else goes through the font's cmap and the strike's advances.
+    private readonly DirectGlyph[] _direct = new DirectGlyph[256];
+
+    private struct DirectGlyph
+    {
+        public ushort Glyph;
+        public bool Filled;
+        public float Advance;
+    }
+
+    // The walks below keep their index, count and pen in registers, which is
+    // most of their speed: nothing of theirs is passed by ref (a char is
+    // decoded by value, Next returning where the next starts), and the hot loop
+    // of Glyphs is a method of its own with no call in it. With either, the JIT
+    // sends them through the stack every char, about three times slower.
+
     /// <summary>
     /// Width of <paramref name="text"/> in physical px, exactly as <c>SKPaint.MeasureText</c>
     /// computes it: one glyph per code point, linear advances summed in order. No
@@ -117,14 +135,79 @@ public sealed unsafe class FontStrike
     /// </summary>
     public float Measure(ReadOnlySpan<char> text)
     {
+        var direct = _direct;
         float total = 0f;
-        var font = Font;
-        for (int i = 0; i < text.Length; i++)
+        int i = 0;
+        while (i < text.Length)
         {
-            int cp = NextCodepoint(text, ref i);
-            total += Advance(font.GlyphIndex(cp));
+            for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++)
+                total += direct[c].Advance;
+            if (i == text.Length) break;
+            var (_, advance, next) = Next(text, i);
+            total += advance;
+            i = next;
         }
         return total;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/>'s glyphs into <paramref name="glyphs"/> and their
+    /// pen positions from its start into <paramref name="points"/>: what
+    /// <see cref="FontStrike.Shape"/> makes in its nominal mode. Both spans hold
+    /// at least one entry per char. Returns how many glyphs; <paramref name="width"/>
+    /// is the last pen position, as <see cref="Measure"/> answers.
+    /// </summary>
+    internal int Glyphs(ReadOnlySpan<char> text, Span<ushort> glyphs, Span<System.Numerics.Vector2> points, out float width)
+    {
+        int n = 0, i = 0;
+        float pen = 0f;
+        while (i < text.Length)
+        {
+            (i, n, pen) = GlyphsDirect(text, i, _direct, glyphs, points, n, pen);
+            if (i == text.Length) break;
+            var (glyph, advance, next) = Next(text, i);
+            glyphs[n] = glyph;
+            points[n] = new(pen, 0f);
+            pen += advance;
+            n++;
+            i = next;
+        }
+        width = pen;
+        return n;
+    }
+
+    // Glyphs' hot loop: while the chars have filled direct entries.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static (int I, int N, float Pen) GlyphsDirect(ReadOnlySpan<char> text, int i, DirectGlyph[] direct,
+        Span<ushort> glyphs, Span<System.Numerics.Vector2> points, int n, float pen)
+    {
+        for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++, n++)
+        {
+            glyphs[n] = direct[c].Glyph;
+            points[n] = new(pen, 0f);
+            pen += direct[c].Advance;
+        }
+        return (i, n, pen);
+    }
+
+    // The char at i the hot loops did not take: below 256, its direct entry
+    // filled; above, its code point (a surrogate pair is one) looked up the slow
+    // way. An unpaired surrogate is taken as itself, which no font maps, so it
+    // draws as .notdef. Its glyph, its advance, and where the next char starts.
+    private (ushort Glyph, float Advance, int Next) Next(ReadOnlySpan<char> text, int i)
+    {
+        char c = text[i];
+        if (c < 256)
+        {
+            uint g = Font.GlyphIndex(c);
+            _direct[c] = new DirectGlyph { Glyph = (ushort)g, Filled = true, Advance = Advance(g) };
+            return (_direct[c].Glyph, _direct[c].Advance, i + 1);
+        }
+        int cp = c, next = i + 1;
+        if (char.IsHighSurrogate(c) && next < text.Length && char.IsLowSurrogate(text[next]))
+            cp = char.ConvertToUtf32(c, text[next++]);
+        uint glyph = Font.GlyphIndex(cp);
+        return ((ushort)glyph, Advance(glyph), next);
     }
 
     /// <summary>Width of <paramref name="text"/> under <paramref name="options"/>.</summary>
@@ -153,12 +236,11 @@ public sealed unsafe class FontStrike
         if (options.Mode == ShapingMode.Nominal)
         {
             into.Reserve(text.Length);
-            var font = Font;
-            for (int i = 0; i < text.Length; i++)
+            for (int i = 0; i < text.Length;)
             {
-                int start = i;
-                uint g = font.GlyphIndex(NextCodepoint(text, ref i));
-                into.Add(g, Advance(g), 0f, 0f, start);
+                var (glyph, advance, next) = Next(text, i);
+                into.Add(glyph, advance, 0f, 0f, i);
+                i = next;
             }
             return;
         }
@@ -294,21 +376,6 @@ public sealed unsafe class FontStrike
     internal void Destroy()
     {
         HB.hb_font_destroy(_hbFont);   // the FT_Face goes with the engine's FT_Library
-    }
-
-    /// <summary>
-    /// Reads the code point at <paramref name="i"/>, advancing past a low surrogate.
-    /// An unpaired surrogate is taken as itself, which no font maps, so it draws as .notdef.
-    /// </summary>
-    internal static int NextCodepoint(ReadOnlySpan<char> text, ref int i)
-    {
-        char c = text[i];
-        if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
-        {
-            i++;
-            return char.ConvertToUtf32(c, text[i]);
-        }
-        return c;
     }
 
     public override string ToString() => $"{Font} @ {Size}px";

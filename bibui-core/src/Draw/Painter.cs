@@ -152,7 +152,7 @@ internal sealed class Painter
     private static void DrawText(Text text, Frame frame, ThemeTokens theme, DrawContext ctx)
     {
         var font = ctx.Fonts.FontOf(text, theme, ctx.Scale);
-        ctx.DrawTextTop(text.Content, frame.X, frame.Y, font, (text.Color ?? UiColor.TextPrimary).Resolve(theme.Colors));
+        ctx.DrawTextTop(text, frame.X, frame.Y, font, (text.Color ?? UiColor.TextPrimary).Resolve(theme.Colors));
     }
 
     private static void DrawIcon(Icon icon, Frame frame, ThemeTokens theme, DrawContext ctx)
