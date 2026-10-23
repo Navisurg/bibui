@@ -310,11 +310,13 @@ internal sealed class SkiaOps : IDisposable
     }
 
     // The positions are not in the key: a run's are its glyphs' advances summed
-    // in order, so the face, the size and the glyphs decide them. (A run shaped
-    // by HarfBuzz, whose positions depend on more, would have to add them.) A
-    // collision would draw another run's glyphs until it is evicted: 64 bits put
-    // that around n / 2^64 per new run with n kept, and the glyph count in the
-    // key rules out the likeliest.
+    // in order, so the face, the size and the glyphs decide them. That is the
+    // core's promise, written where Glyphs ops are made (NOTE(positions) at
+    // DrawContext.PushGlyphs, with an example); a run shaped by HarfBuzz breaks
+    // it and would have to add its positions here. A collision would draw
+    // another run's glyphs until it is evicted: 64 bits put that around n / 2^64
+    // per new run with n kept, and the glyph count in the key rules out the
+    // likeliest.
     private ulong RunKey(int faceId, float sizePx, ReadOnlySpan<ushort> glyphs)
     {
         Span<int> head = [faceId, BitConverter.SingleToInt32Bits(sizePx), glyphs.Length];
