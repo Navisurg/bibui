@@ -6,11 +6,12 @@ using Bibui.Core.TextEdit;
 namespace Bibui.Core;
 
 /// <summary>
-/// Everything about text that is not drawing it: the typefaces, the runs a
-/// text splits into by typeface, a font's metrics, how wide a text is, and
-/// where it breaks into lines at a width. Text is UTF-16 throughout. Layout, the
-/// painter and the runtime all ask this one instance, so a text measured by any
-/// of them is a cache hit for the others, and what is drawn is what was measured.
+/// Everything about text that is not drawing it: the typefaces, a font's
+/// metrics, how wide a text is, its glyphs, and where it breaks into lines at a
+/// width. Text is UTF-16 throughout. Layout, the painter and the runtime all ask
+/// this one instance, so what is drawn is what was measured: a text's glyphs are
+/// walked from per-character tables (<see cref="FontStyle"/>), and a
+/// <see cref="Text"/> layout walked is drawn from that walk.
 ///
 /// <para>It knows nothing about a canvas, and nothing about a raster backend:
 /// faces, metrics and measurements come from the FreeType + HarfBuzz engine it
@@ -32,17 +33,13 @@ public sealed class Fonts : IDisposable
     // confined to the rendering thread, as Fonts is.
     private readonly TextEngine _engine = new();
     private readonly FontProvider _provider;
-    private readonly ResourceCache<MeasureKey, float> _measures;
     private readonly ResourceCache<WrapKey, TextLine> _lines;
-    private readonly ResourceCache<ShapeKey, ShapedText> _shapes;
 
     /// <summary>Fonts on a text engine of their own, which the renderer owns with them.</summary>
     internal Fonts()
     {
-        _provider = new FontProvider(_engine, Create<RunsKey, TextRun>());
-        _measures = Create<MeasureKey, float>();
+        _provider = new FontProvider(_engine);
         _lines = Create<WrapKey, TextLine>();
-        _shapes = Create<ShapeKey, ShapedText>();
     }
 
     private ResourceCache<TKey, TValue> Create<TKey, TValue>() where TKey : notnull
@@ -68,17 +65,10 @@ public sealed class Fonts : IDisposable
         _engine.Dispose();
     }
 
-    // ── Typefaces and runs ───────────────────────────────────────────────────
+    // ── Typefaces ────────────────────────────────────────────────────────────
 
     /// <summary>The built-in Inter at <paramref name="weight"/>, for what draws text no theme set: an icon's fallback letter.</summary>
     internal FontFace BuiltIn(int weight) => _provider.Resolve(null, weight);
-
-    /// <summary>
-    /// <paramref name="text"/> split into runs of one face each. With no fallback
-    /// per character yet, that is one run in <paramref name="face"/>. The first
-    /// run, the rest linked from it; null for empty text.
-    /// </summary>
-    internal TextRun? SplitRuns(ReadOnlySpan<char> text, FontFace face) => _provider.SplitRuns(text, face);
 
     // ── A theme's faces ──────────────────────────────────────────────────────
 
@@ -198,7 +188,7 @@ public sealed class Fonts : IDisposable
     /// breaks into lines is composed from texts, as a multi-line field is.
     /// </summary>
     internal Bibui.Core.Draw.Size Measure(Text text, in Font font)
-        => new(Measure(text.Content, font), LineHeight(font));
+        => new(MeasureRun(text, font), LineHeight(font));
 
     // ── Public: measuring in a Font ──────────────────────────────────────────
 
@@ -208,14 +198,61 @@ public sealed class Fonts : IDisposable
     /// text with that content, from the same cache.
     /// </summary>
     public float Measure(ReadOnlySpan<char> text, in Font font)
+        => text.IsEmpty ? 0f : StyleOf(font, font.Scale).Measure(text) / font.Scale;
+
+    // ── A frame's runs ───────────────────────────────────────────────────────
+
+    // rad's per-frame run cache, keyed by the Text instead of a hash of its
+    // chars: layout walks a text's glyphs and positions into the next free slice
+    // of these, and the painter copies them out instead of walking again.
+    // Emptied when layout starts (BeginFrameRuns), so all of it lives one frame.
+    // They grow when a frame needs more room and never shrink, so once the
+    // largest frame has been seen they are never allocated again.
+    private ushort[] _runGlyphs = new ushort[4096];
+    private System.Numerics.Vector2[] _runPoints = new System.Numerics.Vector2[4096];
+    private int _runCount;
+
+    /// <summary>The frame the run buffer holds: a text's run is this frame's when its <see cref="Text.RunFrame"/> matches.</summary>
+    internal int RunFrame { get; private set; }
+
+    /// <summary>Empties the run buffer for a frame's layout.</summary>
+    internal void BeginFrameRuns()
     {
-        if (text.IsEmpty) return 0f;
-        var style = StyleOf(font, font.Scale);
-        var key = MeasureKey.For(text, style.Key);
-        return _measures.TryGet(key, out float width)
-            ? width
-            : _measures.Add(key, MeasureRuns(text, style) / font.Scale);
+        _runCount = 0;
+        RunFrame++;
     }
+
+    /// <summary>
+    /// The width of <paramref name="text"/> in <paramref name="font"/>, in logical
+    /// px, found by walking it into the run buffer: its glyphs and positions are
+    /// kept for the painter, and the text is stamped with where they are. Asked
+    /// again in the same frame and style (layout asks once per axis), it answers
+    /// from the stamp.
+    /// </summary>
+    internal float MeasureRun(Text text, in Font font)
+    {
+        var style = StyleOf(font, font.Scale);
+        if (text.RunFrame == RunFrame && text.RunStyle == style) return text.RunWidth;
+        var content = text.Content;
+        if (_runCount + content.Length > _runGlyphs.Length)
+        {
+            int size = Math.Max(_runGlyphs.Length * 2, _runCount + content.Length);
+            Array.Resize(ref _runGlyphs, size);
+            Array.Resize(ref _runPoints, size);
+        }
+        int count = style.Glyphs(content, _runGlyphs.AsSpan(_runCount, content.Length),
+            _runPoints.AsSpan(_runCount, content.Length), out float width);
+        (text.RunStart, text.RunCount, text.RunWidth, text.RunStyle, text.RunFrame)
+            = (_runCount, count, width / font.Scale, style, RunFrame);
+        _runCount += count;
+        return text.RunWidth;
+    }
+
+    /// <summary>The glyphs layout walked <paramref name="text"/> into this frame.</summary>
+    internal ReadOnlySpan<ushort> RunGlyphs(Text text) => _runGlyphs.AsSpan(text.RunStart, text.RunCount);
+
+    /// <summary>Their positions, from the run's start.</summary>
+    internal ReadOnlySpan<System.Numerics.Vector2> RunPoints(Text text) => _runPoints.AsSpan(text.RunStart, text.RunCount);
 
     /// <summary>
     /// The char offset in <paramref name="text"/> nearest <paramref name="x"/>,
@@ -264,54 +301,6 @@ public sealed class Fonts : IDisposable
     /// <summary>Whether a run <paramref name="width"/> wide fits in <paramref name="room"/>. See <see cref="FitSlack"/>.</summary>
     internal static bool Fits(float width, float room) => width <= room + FitSlack;
 
-    /// <summary>
-    /// Width in physical px of <paramref name="text"/> in <paramref name="style"/>,
-    /// summed over the run split. Measuring the whole text against one typeface
-    /// would be wrong wherever fallback applies.
-    /// </summary>
-    internal float MeasureRuns(ReadOnlySpan<char> text, FontStyle style)
-    {
-        float total = 0f;
-        for (var run = SplitRuns(text, style.Face); run is not null; run = run.Next)
-        {
-            var strike = run.Face == style.Face ? style.Strike : StyleOf(run.Face, style.Strike.Size).Strike;
-            total += strike.Measure(text[run.Start..run.End]);
-        }
-        return total;
-    }
-
-
-    // ── Shaping ──────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// One run of <paramref name="text"/> as glyphs in <paramref name="face"/> at
-    /// <paramref name="sizePx"/> physical px: one glyph per code point through the
-    /// face's cmap, each at the sum of the linear advances before it. Measuring
-    /// sums the same advances in the same order, so what is drawn is what was
-    /// measured. Cached, so the same text frame after frame is shaped once.
-    /// </summary>
-    internal ShapedText Shape(ReadOnlySpan<char> text, FontFace face, float sizePx)
-    {
-        var key = ShapeKey.For(text, face, sizePx);
-        return _shapes.TryGet(key, out var shaped) ? shaped : _shapes.Add(key, ShapeUncached(text, face, sizePx));
-    }
-
-    private ShapedText ShapeUncached(ReadOnlySpan<char> text, FontFace face, float sizePx)
-    {
-        var run = _engine.ScratchRun;
-        face.Strike(sizePx).Shape(text, run);
-        var glyphs = new ushort[run.Count];
-        var positions = new System.Numerics.Vector2[run.Count];
-        float pen = 0f;
-        for (int i = 0; i < glyphs.Length; i++)
-        {
-            glyphs[i] = (ushort)run.Glyphs[i];
-            positions[i] = new(pen, 0f);
-            pen += run.Advances[i];
-        }
-        run.Clear();
-        return new ShapedText(glyphs, positions, pen);
-    }
 
     // ── Lines ────────────────────────────────────────────────────────────────
 
@@ -399,7 +388,7 @@ public sealed class Fonts : IDisposable
             int wordEnd = i;
 
             var candidate = textStart < 0 ? text[wordStart..wordEnd] : text[textStart..wordEnd];
-            float w = MeasureRuns(candidate, style) / scale;
+            float w = style.Measure(candidate) / scale;
             if (!Fits(w, maxWidth) && textStart >= 0)
             {
                 result.Add(new TextLine(lineStart, lastEnd));
@@ -433,7 +422,7 @@ public sealed class Fonts : IDisposable
             {
                 int mid = CharacterStart(text, (lo + hi + 1) / 2, lo);
                 if (mid <= lo) mid = NextCharacter(text, lo, segEnd);
-                float w = MeasureRuns(text[start..mid], style) / scale;
+                float w = style.Measure(text[start..mid]) / scale;
                 if (Fits(w, maxWidth)) lo = mid;
                 else hi = CharacterStart(text, mid - 1, lo);
             }
@@ -499,6 +488,105 @@ internal sealed class FontStyle(ulong key, FontFace face, FontStrike strike, Tex
     public FontFace Face { get; } = face;
     public FontStrike Strike { get; } = strike;
     public TextMetrics Metrics { get; } = metrics;
+
+    // For chars below 256, the glyph and its advance side by side, filled on
+    // first use (rad's utf8_class1_direct_map): a walk reads one entry per char.
+    // Anything else goes through the font's cmap and the strike's advances.
+    private readonly DirectGlyph[] _direct = new DirectGlyph[256];
+
+    private struct DirectGlyph
+    {
+        public ushort Glyph;
+        public bool Filled;
+        public float Advance;
+    }
+
+    // The walks below keep their index, count and pen in registers, which is
+    // most of their speed: nothing of theirs is passed by ref (a char is
+    // decoded by value, Next returning where the next starts), and the hot loop
+    // of Glyphs is a method of its own with no call in it. With either, the JIT
+    // sends them through the stack every char, about three times slower.
+
+    /// <summary>
+    /// The width of <paramref name="text"/> in physical px: one glyph per code
+    /// point through the cmap, linear advances summed in order, as
+    /// <see cref="FontStrike.Measure(ReadOnlySpan{char})"/> sums them.
+    /// </summary>
+    public float Measure(ReadOnlySpan<char> text)
+    {
+        var direct = _direct;
+        float total = 0f;
+        int i = 0;
+        while (i < text.Length)
+        {
+            for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++)
+                total += direct[c].Advance;
+            if (i == text.Length) break;
+            var (_, advance, next) = Next(text, i);
+            total += advance;
+            i = next;
+        }
+        return total;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/>'s glyphs into <paramref name="glyphs"/> and their
+    /// pen positions from its start into <paramref name="points"/>: what
+    /// <see cref="FontStrike.Shape"/> makes in its nominal mode. Both spans hold
+    /// at least one entry per char. Returns how many glyphs; <paramref name="width"/>
+    /// is the last pen position, as <see cref="Measure"/> answers.
+    /// </summary>
+    public int Glyphs(ReadOnlySpan<char> text, Span<ushort> glyphs, Span<System.Numerics.Vector2> points, out float width)
+    {
+        int n = 0, i = 0;
+        float pen = 0f;
+        while (i < text.Length)
+        {
+            (i, n, pen) = GlyphsDirect(text, i, _direct, glyphs, points, n, pen);
+            if (i == text.Length) break;
+            var (glyph, advance, next) = Next(text, i);
+            glyphs[n] = glyph;
+            points[n] = new(pen, 0f);
+            pen += advance;
+            n++;
+            i = next;
+        }
+        width = pen;
+        return n;
+    }
+
+    // Glyphs' hot loop: while the chars have filled direct entries.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static (int I, int N, float Pen) GlyphsDirect(ReadOnlySpan<char> text, int i, DirectGlyph[] direct,
+        Span<ushort> glyphs, Span<System.Numerics.Vector2> points, int n, float pen)
+    {
+        for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++, n++)
+        {
+            glyphs[n] = direct[c].Glyph;
+            points[n] = new(pen, 0f);
+            pen += direct[c].Advance;
+        }
+        return (i, n, pen);
+    }
+
+    // The char at i the hot loops did not take: below 256, its direct entry
+    // filled; above, its code point (a surrogate pair is one) looked up the slow
+    // way. Its glyph, its advance, and where the next char starts.
+    private (ushort Glyph, float Advance, int Next) Next(ReadOnlySpan<char> text, int i)
+    {
+        char c = text[i];
+        if (c < 256)
+        {
+            uint g = Strike.Font.GlyphIndex(c);
+            _direct[c] = new DirectGlyph { Glyph = (ushort)g, Filled = true, Advance = Strike.Advance(g) };
+            return (_direct[c].Glyph, _direct[c].Advance, i + 1);
+        }
+        int cp = c, next = i + 1;
+        if (char.IsHighSurrogate(c) && next < text.Length && char.IsLowSurrogate(text[next]))
+            cp = char.ConvertToUtf32(c, text[next++]);
+        uint glyph = Strike.Font.GlyphIndex(cp);
+        return ((ushort)glyph, Strike.Advance(glyph), next);
+    }
 }
 
 /// <summary>
@@ -524,35 +612,5 @@ public sealed class TextLine
         Next = line;
         line.Prev = this;
         return line;
-    }
-}
-
-/// <summary>
-/// A stretch of text set in one typeface: the char range [Start, End) of the
-/// text it was split from, linked to the runs before and after it. A cached
-/// chain: read it, never relink it.
-/// </summary>
-/// <summary>A run shaped for drawing: glyph ids, their positions from the run's origin, and its advance.</summary>
-internal sealed class ShapedText(ushort[] glyphs, System.Numerics.Vector2[] positions, float width)
-{
-    public ushort[] Glyphs { get; } = glyphs;
-    public System.Numerics.Vector2[] Positions { get; } = positions;
-    public float Width { get; } = width;
-}
-
-internal sealed class TextRun(FontFace face, int start, int end)
-{
-    public FontFace Face { get; } = face;
-    public int Start { get; } = start;
-    public int End { get; } = end;
-    public TextRun? Next { get; private set; }
-    public TextRun? Prev { get; private set; }
-
-    /// <summary>Links <paramref name="run"/> after this one and returns it.</summary>
-    internal TextRun Append(TextRun run)
-    {
-        Next = run;
-        run.Prev = this;
-        return run;
     }
 }

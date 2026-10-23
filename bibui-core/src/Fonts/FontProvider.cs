@@ -4,8 +4,8 @@ using FtFont = Bibui.Core.FreeType.Font;
 namespace Bibui.Core;
 
 /// <summary>
-/// Which face draws which text: resolves (family, weight) to a <see cref="FontFace"/>
-/// and splits a string into runs of one face each. The policy is bibui's: a
+/// Which face draws which text: resolves (family, weight) to a <see cref="FontFace"/>.
+/// The policy is bibui's: a
 /// family registered with <see cref="FontRegistry"/>, else the embedded Inter
 /// (Regular below 600, SemiBold from 600 up). Faces come from the one
 /// <see cref="TextEngine"/> its <see cref="Fonts"/> owns, never from a raster
@@ -26,17 +26,7 @@ internal sealed class FontProvider
     // One FontFace per engine font, so runs compare faces by reference.
     private readonly Dictionary<FtFont, FontFace> _faces = new(ReferenceEqualityComparer.Instance);
 
-    // Typeface runs, addressed by a content hash of (text, face) — see RunsKey.
-    // Touch-evicted, because its keys come from arbitrary UI text: text that stops
-    // being drawn falls out on its own. Made by Fonts, which is what ticks it —
-    // this class has no EndFrame of its own to be called out of step.
-    private readonly ResourceCache<RunsKey, TextRun> _runs;
-
-    internal FontProvider(TextEngine engine, ResourceCache<RunsKey, TextRun> runs)
-    {
-        _engine = engine;
-        _runs = runs;
-    }
+    internal FontProvider(TextEngine engine) => _engine = engine;
 
     public FontFace Resolve(string? family, int weight)
     {
@@ -60,12 +50,5 @@ internal sealed class FontProvider
     {
         if (!_faces.TryGetValue(font, out var face)) _faces[font] = face = new FontFace(font);
         return face;
-    }
-
-    internal TextRun? SplitRuns(ReadOnlySpan<char> text, FontFace face)
-    {
-        if (text.IsEmpty) return null;
-        var key = RunsKey.For(text, face);
-        return _runs.TryGet(key, out var runs) ? runs : _runs.Add(key, new TextRun(face, 0, text.Length));
     }
 }

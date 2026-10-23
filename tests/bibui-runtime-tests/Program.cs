@@ -2705,9 +2705,11 @@ Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string
 
     const float size = 17.5f;
     const string text = "Shaped runs, glyph by glyph — 0.5 ffi";
-    var shaped = fonts.Shape(text, face, size);
-    Eq(text.Length, shaped.Glyphs.Length, "one glyph per char for this text (no ligatures)");
-    Eq(face.Strike(size).Measure(text), shaped.Width, "the shaped run is as wide as measuring says");
+    var glyphIds = new ushort[text.Length];
+    var positions = new System.Numerics.Vector2[text.Length];
+    int count = fonts.StyleOf(face, size).Glyphs(text, glyphIds, positions, out float width);
+    Eq(text.Length, count, "one glyph per char for this text (no ligatures)");
+    Eq(face.Strike(size).Measure(text), width, "the walked run is as wide as measuring says");
 
     var info = new SkiaSharp.SKImageInfo(360, 48, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
     static byte[] Read(SkiaSharp.SKSurface surface)
@@ -2733,15 +2735,15 @@ Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string
         surface.Canvas.Clear(SkiaSharp.SKColors.White);
         surface.Canvas.DrawText(text, 6.25f, 32f, SkiaSharp.SKTextAlign.Left, font, paint);
         fromString = Read(surface);
-        Eq(font.MeasureText(text), shaped.Width, $"Skia measures the string as FreeType does (Skia {font.MeasureText(text)}, FreeType {shaped.Width})");
+        Eq(font.MeasureText(text), width, $"Skia measures the string as FreeType does (Skia {font.MeasureText(text)}, FreeType {width})");
     }
 
     var list = new Bibui.Core.Draw.DrawList();
     list.Push(Bibui.Core.Draw.DrawOpKind.Clear).Color = Rgba.White;
     ref var glyphs = ref list.Push(Bibui.Core.Draw.DrawOpKind.Glyphs);
     (glyphs.Resource, glyphs.C, glyphs.A, glyphs.B, glyphs.Color) = (list.AddFace(face), size, 6.25f, 32f, Rgba.Black);
-    (glyphs.Start, glyphs.Count) = (list.AddGlyphs(shaped.Glyphs), shaped.Glyphs.Length);
-    glyphs.Start2 = list.AddPoints(shaped.Positions);
+    (glyphs.Start, glyphs.Count) = (list.AddGlyphs(glyphIds.AsSpan(0, count)), count);
+    glyphs.Start2 = list.AddPoints(positions.AsSpan(0, count));
     var fromGlyphs = Pixels.Of(list, 360, 48, Frames.Skia.Draw).RawBgraBytes;
 
     IsTrue(fromString.AsSpan().SequenceEqual(fromGlyphs), "glyph pixels must equal Skia's string pixels");

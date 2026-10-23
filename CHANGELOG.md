@@ -24,6 +24,10 @@ All notable changes to bibui are recorded here. The format is based on
 - Text finds its face by the theme's slot and its size by the face's id, so
   measuring and drawing a line no longer hash a family's name: a frame of 256
   lines records about a third faster.
+- Text is walked from per-character tables each frame instead of looked up in
+  caches keyed by a hash of its chars, and a text layout walked is drawn from
+  that walk: a frame of 256 lines records about a third faster again, and a
+  line that changes costs no more than one that doesn't.
 - **Breaking:** `Font` holds the `Face` it is set in instead of `Family` and
   `Weight`, and has no public constructor. Get one from
   `runtime.FontInScope()`: a font is always one the theme provides.
