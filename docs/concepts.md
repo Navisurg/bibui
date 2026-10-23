@@ -849,8 +849,8 @@ owner of the loop chose draws that list. Two pieces connect it to the outside:
   `SKSurface` or into `RasterPixels` (BGRA8888 premultiplied memory the caller
   owns), and `ManagedRenderer` into `RasterPixels`. Each also makes the
   textures its lists draw. There is no default: you construct the one you
-  want. Code that draws into memory it owns (`FramePixels`, `BibuiPage`, the
-  test server) takes a `DrawToPixels`, a
+  want. Code that draws into memory it owns (`FramePixels`, `BibuiPage`, an
+  app's screenshots for a test port) takes a `DrawToPixels`, a
   `void (DrawList list, RasterPixels target)` delegate, and a renderer's `Draw`
   method group converts to it.
 

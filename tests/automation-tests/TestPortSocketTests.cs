@@ -48,7 +48,8 @@ static class TestPortSocketTests
 
             var tree = client.Ask("{\"$cmd\":\"test.tree\"}");
             IsTrue(Ok(tree) && tree["result"]!["kind"]!.GetValue<string>() == "box", $"the tree: {tree.ToJsonString()[..Math.Min(200, tree.ToJsonString().Length)]}");
-            IsTrue(Find(tree["result"]!, "add") is { } add && add["clickable"]!.GetValue<bool>(), "the tree holds the button, clickable");
+            var add = Find(tree["result"]!, "add");
+            IsTrue(add is not null && Claims(add) == "LeftPress", "the tree holds the button, claiming a press");
 
             var schema = client.Ask("{\"$cmd\":\"test.schema\"}").ToJsonString();
             IsTrue(schema.Contains("\"test.events\"") && schema.Contains("\"counter.set\""), "the schema names the test commands and the app's");
@@ -68,6 +69,16 @@ static class TestPortSocketTests
             var png = Path.Combine(app.Folder, "frame.png");
             IsTrue(Ok(client.Ask("{\"$cmd\":\"test.screenshot\",\"path\":" + JsonSerializer.Serialize(png) + "}")), "a screenshot");
             IsTrue(File.ReadAllBytes(png).AsSpan().StartsWith((ReadOnlySpan<byte>)[0x89, (byte)'P', (byte)'N', (byte)'G']), "written as a PNG");
+        });
+
+        run("TestPort: a box's claims are written one name per bit, and answers write ' and é as themselves", () =>
+        {
+            using var app = new CounterApp(list: true);
+            using var client = app.Connect();
+            var list = Find(client.Ask("{\"$cmd\":\"test.tree\"}")["result"]!, "list")!;
+            Eq("ViewScrollY ClampY Clip", Claims(list), "the list's claims, not a composite name");
+            var refusal = client.ReadLineAfter("{\"$cmd\":\"test.nope'é\"}");
+            IsTrue(refusal.Contains("test.nope'é"), $"unescaped: {refusal}");
         });
 
         run("TestPort: an app with no renderer or no state says so", () =>
@@ -168,6 +179,10 @@ static class TestPortSocketTests
 
     static bool Ok(JsonNode answer) => answer["ok"]?.GetValue<bool>() == true;
 
+    // A tree node's claims, space-separated, or "" for none.
+    static string Claims(JsonNode node) =>
+        node["claims"] is JsonArray claims ? string.Join(' ', claims.Select(c => c!.GetValue<string>())) : "";
+
     // The node with this id in a tree answer, or null.
     static JsonNode? Find(JsonNode node, string id)
     {
@@ -184,7 +199,7 @@ static class TestPortSocketTests
     /// A counter app with no window: a runtime, its port, and its frame loop on a
     /// thread of its own, as an app's loop runs a frame whenever one is owed.
     /// </summary>
-    sealed class CounterApp : IDisposable
+    internal sealed class CounterApp : IDisposable
     {
         public readonly string Folder = Path.Combine(Path.GetTempPath(), "bibui-at-" + Guid.NewGuid().ToString("N")[..8]);
         public readonly TestPort Port;
@@ -209,13 +224,16 @@ static class TestPortSocketTests
         private readonly List<WindowEvent> _events = [];
         private readonly SkiaCpuRenderer? _cpu;    // what screenshots are drawn with; none, and they are refused
         private readonly int _rows;
+        private readonly bool _list;
         private readonly bool _reportsState;
         private readonly Thread _loop;
         private volatile bool _stopping;
 
-        public CounterApp(bool draw = true, bool state = true, int requestBytes = 1 << 16, int rows = 0, TimeSpan? sendTimeout = null)
+        // list: a scrolling list of buttons below the counter, 100 px tall and far
+        // taller inside: row-i sets the count to 100 + i.
+        public CounterApp(bool draw = true, bool state = true, int requestBytes = 1 << 16, int rows = 0, TimeSpan? sendTimeout = null, bool list = false)
         {
-            (_rows, _reportsState, _cpu) = (rows, state, draw ? new SkiaCpuRenderer() : null);
+            (_rows, _list, _reportsState, _cpu) = (rows, list, state, draw ? new SkiaCpuRenderer() : null);
             _runtime.Surface = new SurfaceOptions { Width = 400, Height = 300, ScaleFactor = 1f };
             _runtime.SetTheme(ThemeRegistry.Load("bibui-dark"));
             Port = TestPort.Open(_runtime, new TestPortOptions
@@ -269,6 +287,18 @@ static class TestPortSocketTests
                 _runtime.Text($"Count {_state.Count}");
                 if (_runtime.Button("add", "Add one").Clicked) _pending.Add(new CounterCmd.Increment());
                 for (int i = 0; i < _rows; i++) _runtime.Text("A row of text to make the tree large");
+                if (_list)
+                {
+                    var list = _runtime.BoxFromId("list", InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip);
+                    list.ChildLayoutAxis = LayoutAxis.Y;
+                    _runtime.BeginParent(list);
+                    for (int i = 0; i < 30; i++)
+                        if (_runtime.Button($"row-{i}", $"Row {i}").Clicked) _pending.Add(new CounterCmd.Set(100 + i));
+                    _runtime.EndParent(list);
+                    _runtime.InteractionsFor(list);
+                    (list.SizeX, list.SizeY) = (SemanticSize.Pixels(200), SemanticSize.Pixels(100));
+                    list.AllowOverflowY = true;
+                }
                 _runtime.EndBuild();
                 if (_pending.Count > 0) _runtime.RequestFrame();
 
@@ -294,7 +324,7 @@ static class TestPortSocketTests
     }
 
     /// <summary>A client of the port: lines out, lines in, over the Unix socket.</summary>
-    sealed class Client : IDisposable
+    internal sealed class Client : IDisposable
     {
         private readonly Socket _socket = new(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         private readonly StreamReader _reader;
@@ -309,6 +339,7 @@ static class TestPortSocketTests
         public string ReadLine() => _reader.ReadLine() ?? throw new Exception("The port closed the connection.");
         public JsonNode Read() => JsonNode.Parse(ReadLine())!;
         public JsonNode Ask(string line) { Send(line + "\n"); return Read(); }
+        public string ReadLineAfter(string line) { Send(line + "\n"); return ReadLine(); }
 
         // An answer within timeout, if one comes: nothing has been read ahead, so the
         // socket having bytes is the answer having come.

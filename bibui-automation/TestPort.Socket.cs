@@ -158,7 +158,7 @@ public sealed partial class TestPort : IDisposable
     private static byte[] SchemaBytes(TestPortOptions options)
     {
         var buffer = new System.Buffers.ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
+        using (var writer = new Utf8JsonWriter(buffer, Relaxed))
         {
             writer.WriteStartObject();
             writer.WriteStartArray("anyOf");

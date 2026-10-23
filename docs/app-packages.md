@@ -78,9 +78,6 @@ Where they differ:
   `requestAnimationFrame` instead. A browser app references
   `Bibui.Platform.Browser` and a renderer, as [bibui in the
   browser](https://github.com/Navisurg/bibui/blob/main/docs/browser.md) shows.
-- **Test-server screenshots** are drawn by the app's own renderer, so they hold
-  its textures, except on `SilkSkiaGl`, where the GPU draws into the window
-  and a separate CPU renderer draws the screenshots.
 
 The counter is one app, [`samples/counter`](https://github.com/Navisurg/bibui/tree/main/samples/counter),
 compiled by three projects that differ only in their package:
@@ -89,13 +86,20 @@ compiled by three projects that differ only in their package:
 (`SilkSkiaCpu`) and [`samples/counter-wayland`](https://github.com/Navisurg/bibui/tree/main/samples/counter-wayland)
 (`WaylandManaged`, one Native AOT binary).
 
-## The test server
+## Driving an app from outside
 
-The test server lets a test or an agent drive a running app: click, type,
-read the tree, take a screenshot. It starts when the app asks,
-`BibuiApp.Open(runtime, window, new BibuiAppOptions { TestServer = true })`,
-or when the environment variable `BIBUI_TEST_SERVER=1` is set. Otherwise it is
-off.
+`TestPort` (package `Bibui.Automation`) lets a test, a script or an agent drive
+a running app over a Unix socket only the user can reach: read the UI tree and
+the app's state, send input events and the app's own commands, ask for
+screenshots. The app opens it, and calls `TryPullCmd` at the top of each frame
+and `AnswerCmds` at its end; a client sends one JSON line per request:
+
+```sh
+echo '{"$cmd":"test.tree"}' | socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/bibui/<app>-<pid>.sock
+```
+
+A `BibuiApp` opens none: an app that does not reference `Bibui.Automation` ships
+no automation code. [Its README](../packaging/readme/Bibui.Automation.md) has the loop, the requests, and a click from a shell.
 
 ## Writing the loop yourself
 
