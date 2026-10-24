@@ -92,18 +92,24 @@ if (!WaylandWindow.IsSupported)
     Console.Error.WriteLine("This app needs a Wayland session.");
     return 1;
 }
-using var window = WaylandWindow.Open(runtime, new PlatformWindowOptions("Counter", 360, 160),
+using var window = WaylandWindow.Open(new PlatformWindowOptions("Counter", 360, 160),
     new WaylandHostOptions { AppId = "dev.example.counter" });
+runtime.WakeUp = window.Wake;
+runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+window.OnRefresh = runtime.RequestFrame;
 using var managed = new ManagedRenderer(window.Cpu);
-while (WaylandWindow.BeginFrame(window, runtime))
+while (!window.IsClosing)
 {
-    runtime.BeginBuild(window.Events);
+    bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
+    var events = window.GetEvents(wait: idle);   // paced by the compositor's frame callback
+    if (runtime.FramesRequested == 0 && events.Count == 0) continue;
+    runtime.ConsumeFrame();
+    runtime.BeginBuild(window.Frame, events);
     Build();
     runtime.EndBuild();
     WaylandWindow.BeginDraw(window);
     managed.Draw(runtime.DrawList);
     WaylandWindow.EndDraw(window);
-    WaylandWindow.EndFrame(window, runtime);
 }
 return 0;
 ```
@@ -229,7 +235,7 @@ exits:
 ```csharp
 if (args.Contains("--first-frame"))
 {
-    runtime.BeginBuild();
+    runtime.BeginBuild(new WindowFrame(360, 160, 1f, 60f));   // a window's size, scale and refresh rate
     Build();
     runtime.EndBuild();   // lays out one frame into runtime.DrawList; throws if it fails
     return 0;

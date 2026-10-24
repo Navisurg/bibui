@@ -17,6 +17,30 @@ All notable changes to bibui are recorded here. The format is based on
   the wheel moves exactly through rows of any height. It eases.
 - `runtime.Scrollbar(id, ref scroll, count, first, last)`, a bar for either.
 
+- **`WindowFrame`** (`Bibui.Core.Runtime.Platform`): what a window is as a
+  frame starts, its framebuffer size in physical pixels, its scale and its
+  display's refresh rate. `runtime.BeginBuild(window, events)` lays the frame
+  out on it; every window has `window.Frame`, and a headless caller makes its
+  own. `runtime.Window` is the last frame's. `WindowFrame.PhysicalSize` and
+  `LogicalSize` are the rounding rule `SurfaceOptions` had.
+- `runtime.SleepUntilNextFrame()`: the runtime paces the loop, to one frame at
+  the window's refresh rate since the last frame started.
+- **`SilkGl`** (`Bibui.Platform.Silk`): the Silk window's OpenGL route.
+  `SilkGl.Options` opens the window with a GL 3.3 core context,
+  `SilkGl.Target(window)` is the `GlTarget` a renderer draws into, and
+  `SilkGl.BeginDraw`/`EndDraw` bracket the drawing.
+- `window.GetEvents(wait)` on the Silk and Wayland windows: wait until
+  something happens, or take what is queued. `window.RefreshRate` on every
+  window, read each frame: a screen switched to another rate, or a window moved
+  to another screen, has it on the next frame. The browser measures it from
+  `requestAnimationFrame`.
+- `BibuiApp.WaitForFrame()`, `Present()` and `Frame`: the app owns the loop
+  (`while (app.WaitForFrame()) Frame();`), and `app.Frame` is the frame the
+  window calls where the loop cannot run, during a resize.
+- `BibuiPage.Window` and `BibuiPage.DefaultWindow`: a page builds every frame
+  on a window, 800 × 600 at 1× and 60 Hz unless given, so a run is
+  deterministic.
+
 ### Changed
 
 - The gallery's ScrollList page shows both lists; the showcase's target queue
@@ -38,6 +62,35 @@ All notable changes to bibui are recorded here. The format is based on
 - **Breaking:** `DrawContext.FontMetrics` takes a `Font` instead of a size,
   family and weight.
 
+- **Breaking:** the windows no longer know the runtime. `SilkWindow.Open`,
+  `WaylandWindow.Open` and `BrowserWindow.OpenAsync` take no runtime, and the
+  app wires the window to it: `runtime.WakeUp = window.Wake`, and the
+  clipboard to `window.GetClipboardText`/`SetClipboardText`. Each frame the
+  loop hands the runtime `window.Frame` and the window's events. A loop that
+  called `SilkWindow.BeginFrame(window, runtime)` and `EndFrame` now waits with
+  `window.GetEvents(wait)` and paces with `runtime.SleepUntilNextFrame()`; the
+  README shows the loop.
+- **Breaking:** `SilkWindow` opens with no graphics API (`SilkWindow.DefaultOptions`):
+  open it with `SilkGl.Options(...)` for OpenGL. `window.Gl` is
+  `SilkGl.Target(window)`, and `SilkWindow.BeginDraw`/`EndDraw` are
+  `SilkGl.BeginDraw(window, gl)`/`EndDraw(window)`. Input is wired as the
+  window opens.
+- **Breaking:** `runtime.Dt` is one frame at the window's refresh rate,
+  `1 / runtime.TargetHz`, never measured, and is read-only, as is `TargetHz`:
+  both come from the `WindowFrame`. A dropped frame steps animations by one
+  frame all the same.
+- **Breaking:** `WaylandWindow.GetEvents(wait: false)` waits for the
+  compositor's frame callback, which paces the loop (`window.PacesFrames`); a
+  configure, a new size or scale calls `window.OnRefresh`.
+- **Breaking:** `BrowserWindow.Run(window, frameOwed, frame)` takes whether a
+  frame is owed instead of the runtime, and the frame takes its owed frame
+  (`runtime.ConsumeFrame()`).
+- **Breaking:** `BibuiApp`'s loop is `while (app.WaitForFrame()) Frame();`, the
+  frame building on `app.Window.Frame` and ending with `app.Present()`, where it
+  was `BeginFrame`/`EndFrame`.
+- **Breaking:** `BibuiPage.Launch` and `From` take a `WindowFrame` where they
+  took `SurfaceOptions`.
+
 ### Removed
 
 - **Breaking:** the pitch overloads `BeginScrollList(id, ref scroll, pitch,
@@ -49,6 +102,16 @@ All notable changes to bibui are recorded here. The format is based on
 - **Breaking:** `Fonts.Face(family, weight)`, and `DrawContext.LineBox` and
   `BlockHeight`, which took a family's name. Use `Fonts.LineHeight(font)` with
   a font from `runtime.FontInScope()`.
+- **Breaking:** `SurfaceOptions`, `runtime.Surface`, `runtime.ResizeSurface`
+  and `runtime.BeginBuild(events)`: a frame is built on a `WindowFrame`
+  (`runtime.BeginBuild(window, events)`). The rounding rule is
+  `WindowFrame.PhysicalSize`/`LogicalSize`.
+- **Breaking:** `SilkWindow.BeginFrame`, `EndFrame`, `BeginDraw`, `EndDraw`
+  and `Gl`, `WaylandWindow.BeginFrame` and `EndFrame`, and `BibuiApp.BeginFrame`
+  and `EndFrame`. The loop is the app's (above).
+- `BIBUI_ALWAYS_RENDER`, which made the Silk and Wayland windows draw every
+  frame.
+
 
 ## [1.0.0] - 2026-10-21
 

@@ -29,11 +29,18 @@ using Bibui.Core.Runtime.Platform;
 var runtime = BibuiRuntime.Create();
 int clicks = 0;
 
-using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("Hello", 480, 240));
-using var skia = new SkiaGlRenderer(window.Gl);   // Bibui.Raster.Skia
-while (SilkWindow.BeginFrame(window, runtime))
+using var window = SilkWindow.Open(SilkGl.Options(new PlatformWindowOptions("Hello", 480, 240)));
+runtime.WakeUp = window.Wake;
+var gl = SilkGl.Target(window);
+using var skia = new SkiaGlRenderer(gl);   // Bibui.Raster.Skia
+while (!window.IsClosing)
 {
-    runtime.BeginBuild(window.Events);
+    bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
+    if (!idle) runtime.SleepUntilNextFrame();
+    var events = window.GetEvents(wait: idle);
+    if (runtime.FramesRequested == 0 && events.Count == 0) continue;
+    runtime.ConsumeFrame();
+    runtime.BeginBuild(window.Frame, events);
     var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
     page.Style = new Style { BackgroundColor = UiColor.Background, Padding = EdgeInsets.All(24f) };
     runtime.Text($"Clicked {clicks} times");
@@ -41,15 +48,16 @@ while (SilkWindow.BeginFrame(window, runtime))
     if (runtime.Button("hello", "Click me").Clicked) clicks++;
     runtime.EndParent(page);
     runtime.EndBuild();
-    SilkWindow.BeginDraw(window);
+    SilkGl.BeginDraw(window, gl);
     skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);
-    SilkWindow.EndFrame(window, runtime);
+    SilkGl.EndDraw(window);
 }
 ```
 
 The app owns the loop: the window waits for input and puts frames on screen,
-the runtime builds and records them, and the renderer draws them. The app's
+the runtime paces the loop, builds the frame on the window as it is
+(`window.Frame`: its size, scale and refresh rate) and records it, and the
+renderer draws it. The app's
 state is its own fields; a click writes one and the next frame reads it.
 `samples/counter` is this loop in full.
 

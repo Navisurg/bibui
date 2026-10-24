@@ -1,7 +1,7 @@
 # Bibui.App packages
 
 A bibui app in one package: each `Bibui.App` package brings bibui, a window
-and a renderer, and runs the frame in two calls.
+and a renderer, wired together, and what the app's loop calls.
 
 ```bash
 dotnet add package Bibui.App.SilkSkiaGl
@@ -14,23 +14,33 @@ using Bibui.Core.Runtime;
 var runtime = BibuiRuntime.Create();
 using var app = BibuiApp.Open(runtime, new("Counter", 360, 160));
 int count = 0;
+app.Frame = Frame;
 
-while (app.BeginFrame())
+while (app.WaitForFrame()) Frame();
+
+void Frame()
 {
-    runtime.BeginBuild(app.Events);
+    runtime.BeginBuild(app.Window.Frame, app.Events);
     var column = runtime.BeginParent(runtime.Column());
     runtime.Text($"Clicked {count} times");
     if (runtime.Button("add", "Add one").Clicked) count++;
     runtime.EndParent(column);
     runtime.EndBuild();
-    app.EndFrame();
+    app.Present();
 }
 ```
 
-- `app.BeginFrame()` waits until a frame is wanted and collects its input into
-  `app.Events`; it returns false once the window is closing.
-- `app.EndFrame()` draws the runtime's draw list into the window, presents it,
-  and paces the loop.
+- `app.WaitForFrame()` waits until a frame is wanted (input, or one the
+  runtime owes) and due, collects its input into `app.Events`, and returns
+  false once the window is closing. With nothing happening it waits on the OS
+  and uses no CPU.
+- `app.Window.Frame` is the window as the frame starts: its size, scale and
+  refresh rate, which the runtime lays the frame out on and steps animations
+  by.
+- `app.Present()` draws the runtime's draw list into the window and shows it.
+- `app.Frame` is the app's frame, for the window to call where the loop cannot
+  run: a resize, which on Windows and macOS holds the loop. Without one, a
+  resize asks the loop for a frame.
 - `app.Renderer` is the renderer, for textures (`CreateTexture`,
   `UpdateTexture`, `ReleaseTexture`); `app.Window` is the window.
 
@@ -60,20 +70,21 @@ Where they differ:
 
 - **The Silk packages** open the window with GLFW and present through OpenGL.
   `SilkSkiaCpu` and `SilkManaged` draw on the CPU into memory, which is then
-  shown on the window's GL framebuffer. Set `app.OnRefresh` to the loop's body
-  to keep drawing while the window is resized on Windows and macOS, where the
-  OS blocks the loop.
+  shown on the window's GL framebuffer. The runtime paces the loop to the
+  monitor's refresh rate; `app.Frame` keeps the window drawing while it is
+  resized on Windows and macOS, where the OS holds the loop.
 - **The Wayland packages** talk to the compositor directly, with no GLFW and no
   GL: the frame is drawn into the window's shared-memory buffers.
-  `app.OnRefresh` is never called, because a Wayland window never blocks the
-  loop. The compositor groups and themes windows by an application id:
+  The compositor's frame callback paces the loop, as vsync would, and a
+  configure or a new scale draws a frame. The compositor groups and themes
+  windows by an application id:
   `new BibuiAppOptions { AppId = "dev.example.app" }`.
   Both publish with Native AOT: `WaylandManaged` as one binary with no native
   dependency beyond libwayland-client, `WaylandSkiaCpu` beside Skia's
   `libSkiaSharp.so`. The Silk packages run on the JIT: Silk.NET is not
   trim-safe.
 - **There is no `Bibui.App` package for the browser.** `BibuiApp` is a loop
-  the app owns (`while (app.BeginFrame())`), and a page may not block: in the
+  the app owns (`while (app.WaitForFrame())`), and a page may not block: in the
   browser the frame is handed to `BrowserWindow.Run` and called on
   `requestAnimationFrame` instead. A browser app references
   `Bibui.Platform.Browser` and a renderer, as [bibui in the
@@ -106,19 +117,33 @@ more than one renderer into a window, or bring a window or renderer of your
 own:
 
 ```csharp
-using var window = SilkWindow.Open(runtime, new("Counter", 360, 160));
-using var skia = new SkiaGlRenderer(window.Gl);
+using var window = SilkWindow.Open(SilkGl.Options(new("Counter", 360, 160)));
+runtime.WakeUp = window.Wake;
+runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+var gl = SilkGl.Target(window);
+using var skia = new SkiaGlRenderer(gl);
 
-while (SilkWindow.BeginFrame(window, runtime))
+while (!window.IsClosing)
 {
-    runtime.BeginBuild(window.Events);
+    bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
+    if (!idle) runtime.SleepUntilNextFrame();
+    var events = window.GetEvents(wait: idle);
+    if (runtime.FramesRequested == 0 && events.Count == 0) continue;
+    runtime.ConsumeFrame();
+    runtime.BeginBuild(window.Frame, events);
     Build();
     runtime.EndBuild();
-    SilkWindow.BeginDraw(window);
+    SilkGl.BeginDraw(window, gl);
     skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);
-    SilkWindow.EndFrame(window, runtime);
+    SilkGl.EndDraw(window);
 }
 ```
+
+The window knows no runtime: the loop wires its wake and clipboard to the
+runtime, hands the runtime its `Frame` and events each frame, and tells it when
+to wait. Without input or a frame owed, `GetEvents(wait: true)` blocks; with a
+frame owed, the runtime sleeps until it is due and `GetEvents(wait: false)`
+takes what came meanwhile. `window.OnRefresh` is what the window calls on a
+resize.
 
 More at https://github.com/Navisurg/bibui.

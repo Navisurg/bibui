@@ -442,10 +442,9 @@ look at the PNG (using `Bibui.Raster.Skia`):
 ```csharp
 var runtime = BibuiRuntime.Create();
 runtime.SetTheme(ThemeRegistry.Load(ThemeRegistry.RegisterFile("themes/ocean.json")));
-runtime.Surface = new SurfaceOptions { Width = 360, Height = 80, ScaleFactor = 1f };
 const string save = "Save", sync = "Sync";
 
-runtime.BeginBuild();
+runtime.BeginBuild(new WindowFrame(360, 80, 1f, 60f));   // 360 × 80 px at 1×
 var row = runtime.BeginParent(runtime.Row().Sized(Size.Px(360f), Size.Px(80f)));
 row.Style.Padding = EdgeInsets.All(24f);
 runtime.Button("save", save);

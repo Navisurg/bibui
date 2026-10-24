@@ -48,10 +48,13 @@ using Bibui.Core.Runtime;
 var runtime = BibuiRuntime.Create();
 using var app = BibuiApp.Open(runtime, new("Counter", 360, 160));
 int count = 0;
+app.Frame = Frame;   // the window draws it too, during a resize
 
-while (app.BeginFrame())
+while (app.WaitForFrame()) Frame();
+
+void Frame()
 {
-    runtime.BeginBuild(app.Events);
+    runtime.BeginBuild(app.Window.Frame, app.Events);
 
     runtime.BeginCenterXY();
     var column = runtime.BeginParent(runtime.Column());
@@ -65,9 +68,15 @@ while (app.BeginFrame())
     runtime.EndCenterXY();
 
     runtime.EndBuild();
-    app.EndFrame();
+    app.Present();
 }
 ```
+
+The app owns the loop. `app.WaitForFrame()` waits until there is a frame to
+draw (input, or one the runtime owes) and returns false once the window
+closes; an app with nothing happening waits on the OS and uses no CPU.
+`Frame` builds the frame on the window as it is now (`app.Window.Frame`: its
+size, scale and refresh rate) and presents it.
 
 You can run the app using the Skia+OpenGL backend with
 
@@ -145,20 +154,31 @@ You may instead reference directly `Bibui.Core`, `Bibui.Platform.Silk`,
 `Bibui.Raster.Skia`, and then you will have to write the main app loop as:
 
 ```csharp
-using var window = SilkWindow.Open(runtime, new("Counter", 360, 160));
-using var skia = new SkiaGlRenderer(window.Gl);
+using var window = SilkWindow.Open(SilkGl.Options(new("Counter", 360, 160)));
+runtime.WakeUp = window.Wake;                   // a frame asked for on another thread ends the wait
+var gl = SilkGl.Target(window);
+using var skia = new SkiaGlRenderer(gl);
 
-while (SilkWindow.BeginFrame(window, runtime))  // window:   wait for a frame; Silk input → window.Events
+while (!window.IsClosing)
 {
-    runtime.BeginBuild(window.Events);          // runtime:  WindowEvent → BibUiEvent; start a new tree
+    bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
+    if (!idle) runtime.SleepUntilNextFrame();   // runtime:  pace to the window's refresh rate
+    var events = window.GetEvents(wait: idle);  // window:   wait for input, or take what came; Silk input → WindowEvents
+    if (runtime.FramesRequested == 0 && events.Count == 0) continue;
+    runtime.ConsumeFrame();
+    runtime.BeginBuild(window.Frame, events);   // runtime:  the window's size, scale and rate; WindowEvent → BibUiEvent
     Build();                                    // your app: build boxes and text, read interactions
     runtime.EndBuild();                         // runtime:  lay the tree out, record runtime.DrawList
-    SilkWindow.BeginDraw(window);               // renderer: draw the DrawList into the GL framebuffer
+    SilkGl.BeginDraw(window, gl);               // renderer: draw the DrawList into the GL framebuffer
     skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);                 // window:   swap; the frame is on screen
-    SilkWindow.EndFrame(window, runtime);       // window:   sleep until the next frame is due
+    SilkGl.EndDraw(window);                     // window:   swap; the frame is on screen
 }
 ```
+
+The window knows no runtime: it hands the runtime what it is each frame, a
+`WindowFrame` (framebuffer size, scale and refresh rate), and the events, and
+waits when told to. The runtime lays the frame out on that window, steps
+animations by one frame at its refresh rate (`Dt`), and paces the loop.
 
 Each layer sends data only to layers below it, and each layer is free to interpret that data however it likes.
 With this design, you may target a new platform, by writing a new platform layer that produces `WindowEvent`s.
