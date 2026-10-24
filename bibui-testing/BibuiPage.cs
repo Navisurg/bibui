@@ -15,8 +15,10 @@ namespace Bibui.Testing;
 /// Tests read the tree the runtime laid out, and drive it by dispatching events
 /// through the runtime's event system rather than the OS — the way Playwright
 /// uses Chrome DevTools Protocol to talk to the browser's DOM. Every action
-/// builds the frame it causes. <see cref="Screenshot"/> draws the last frame's
-/// list with the page's renderer, Skia on the CPU unless another is given.
+/// builds the frame it causes, on the page's <see cref="Window"/>, so its
+/// <c>Dt</c> is one frame at the window's refresh rate and a run is
+/// deterministic. <see cref="Screenshot"/> draws the last frame's list with the
+/// page's renderer, Skia on the CPU unless another is given.
 ///
 /// Usage:
 ///   page.Click("inc");     // a press and release at the box named "inc"
@@ -29,10 +31,11 @@ public sealed class BibuiPage : IDisposable
     private readonly SkiaCpuRenderer? _ownRenderer;
     private bool _disposed;
 
-    private BibuiPage(BibuiRuntime runtime, Action build, DrawToPixels? draw)
+    private BibuiPage(BibuiRuntime runtime, Action build, DrawToPixels? draw, WindowFrame? window)
     {
         _runtime = runtime;
         _build = build;
+        Window = window ?? DefaultWindow;
         if (draw is null)
         {
             _ownRenderer = new SkiaCpuRenderer();
@@ -53,6 +56,17 @@ public sealed class BibuiPage : IDisposable
     // What one frame builds, between the page's BeginBuild and EndBuild.
     private readonly Action _build;
 
+    /// <summary>The window a page has unless given one: 800 × 600 at 1×, 60 Hz.</summary>
+    public static readonly WindowFrame DefaultWindow = new(800, 600, 1f, 60f);
+
+    /// <summary>
+    /// The window every frame of the page is built on: its size in physical px,
+    /// its scale and its refresh rate, of which a frame's <c>Dt</c> is one frame.
+    /// Set it to resize the page, change its scale or its rate; the next frame
+    /// is built on it.
+    /// </summary>
+    public WindowFrame Window { get; set; }
+
     // ── Factories ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -60,13 +74,12 @@ public sealed class BibuiPage : IDisposable
     /// into the runtime it is handed, as an app's loop body does between
     /// <c>BeginBuild</c> and <c>EndBuild</c>; state is the caller's own.
     /// </summary>
-    public static BibuiPage Launch(Action<BibuiRuntime> build, SurfaceOptions? surface = null, ThemeTokens? theme = null)
+    public static BibuiPage Launch(Action<BibuiRuntime> build, WindowFrame? window = null, ThemeTokens? theme = null)
     {
         ArgumentNullException.ThrowIfNull(build);
         var runtime = BibuiRuntime.Create();
-        if (surface is not null) runtime.Surface = surface;
         if (theme is not null) runtime.SetTheme(theme);
-        return new BibuiPage(runtime, () => build(runtime), null);
+        return new BibuiPage(runtime, () => build(runtime), null, window);
     }
 
     /// <summary>
@@ -74,42 +87,45 @@ public sealed class BibuiPage : IDisposable
     /// <paramref name="build"/> returns, linked under the frame's root (unless
     /// the build linked it already). In the theme named <paramref name="theme"/>.
     /// </summary>
-    public static BibuiPage Launch(Func<UiNode> build, SurfaceOptions? surface = null, string theme = "bibui-dark")
-        => Launch(build, ThemeRegistry.Load(theme), surface);
+    public static BibuiPage Launch(Func<UiNode> build, WindowFrame? window = null, string theme = "bibui-dark")
+        => Launch(build, ThemeRegistry.Load(theme), window);
 
-    /// <inheritdoc cref="Launch(Func{UiNode}, SurfaceOptions?, string)"/>
-    public static BibuiPage Launch(Func<UiNode> build, ThemeTokens theme, SurfaceOptions? surface = null)
+    /// <inheritdoc cref="Launch(Func{UiNode}, WindowFrame?, string)"/>
+    public static BibuiPage Launch(Func<UiNode> build, ThemeTokens theme, WindowFrame? window = null)
     {
         ArgumentNullException.ThrowIfNull(build);
         return Launch(runtime =>
         {
             var tree = build();
             if (tree.Parent is null) UiNode.PushIntoParent(runtime.ParentInScope, tree);
-        }, surface, theme);
+        }, window, theme);
     }
 
     /// <summary>
     /// A page on a runtime the caller made. Use this when an external service
     /// (e.g. VideoService) needs to close over the runtime first.
     /// <paramref name="build"/> builds one frame into it; <paramref name="draw"/>
-    /// is what <see cref="Screenshot"/> draws with, null for Skia on the CPU.
+    /// is what <see cref="Screenshot"/> draws with, null for Skia on the CPU;
+    /// <paramref name="window"/> the page's <see cref="Window"/>, null for
+    /// <see cref="DefaultWindow"/>.
     /// </summary>
-    public static BibuiPage From(BibuiRuntime runtime, Action build, DrawToPixels? draw = null)
+    public static BibuiPage From(BibuiRuntime runtime, Action build, DrawToPixels? draw = null, WindowFrame? window = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(build);
-        return new BibuiPage(runtime, build, draw);
+        return new BibuiPage(runtime, build, draw, window);
     }
 
     /// <summary>
-    /// One frame, as the app's loop would build it: <c>BeginBuild</c>, the
-    /// build, <c>EndBuild</c>. Every action builds the frame it causes; call this
-    /// for one that nothing caused (time passing, a value set from outside).
+    /// One frame, as the app's loop would build it: <c>BeginBuild</c> on the
+    /// page's <see cref="Window"/>, the build, <c>EndBuild</c>. Every action
+    /// builds the frame it causes; call this for one that nothing caused (time
+    /// passing, a value set from outside).
     /// </summary>
     public void Frame()
     {
         if (_disposed) throw new ObjectDisposedException(nameof(BibuiPage));
-        _runtime.BeginBuild(_keys);
+        _runtime.BeginBuild(Window, _keys);
         _build();
         _runtime.EndBuild();
     }
