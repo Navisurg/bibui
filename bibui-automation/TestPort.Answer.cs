@@ -58,15 +58,6 @@ public sealed partial class TestPort
             _runtime?.RequestFrame();
             return;
         }
-        if (_heldKind is TestCmdKind.Idle && (!settled || _runtime?.IsAnimating == true))
-        {
-            if (System.Diagnostics.Stopwatch.GetElapsedTime(_pulledAt).TotalSeconds < _heldTimeout)
-            {
-                _runtime?.RequestFrame();
-                return;
-            }
-            (_heldKind, _heldError) = (TestCmdKind.None, $"Still animating after {_heldTimeout:0.#} s.");
-        }
 
         var client = Volatile.Read(ref _client);
         if (client is not null) Write(client, state, stateType);
@@ -94,7 +85,6 @@ public sealed partial class TestPort
                 case TestCmdKind.Events:
                 case TestCmdKind.App:
                 case TestCmdKind.Screenshot:          // written by the app, or refused by it
-                case TestCmdKind.Idle:
                     json.WriteBoolean("ok", true);
                     break;
                 case TestCmdKind.Tree:

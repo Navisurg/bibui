@@ -249,9 +249,6 @@ public sealed class Port : IDisposable
             }
     }
 
-    /// <summary>Waits until nothing in the app is moving: refused after <paramref name="timeout"/> seconds.</summary>
-    public void Idle(double timeout) => Ask(new JsonObject { ["$cmd"] = "test.idle", ["timeout"] = timeout });
-
     // The node with this id, once it holds still and, if a box claiming Clip hides
     // it, scrolled into view.
     private PortNode InView(string id)

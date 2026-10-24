@@ -13,7 +13,6 @@ namespace Bibui.Automation;
 [JsonDerivedType(typeof(StateRequest), "test.state")]
 [JsonDerivedType(typeof(SchemaRequest), "test.schema")]
 [JsonDerivedType(typeof(ScreenshotRequest), "test.screenshot")]
-[JsonDerivedType(typeof(IdleRequest), "test.idle")]
 internal abstract record TestRequest;
 
 /// <summary>One frame's input.</summary>
@@ -33,12 +32,6 @@ internal sealed record SchemaRequest : TestRequest;
 /// with <see cref="Id"/> only that node's rect.
 /// </summary>
 internal sealed record ScreenshotRequest(string Path, string? Id = null) : TestRequest;
-
-/// <summary>
-/// Answered once the app has settled and nothing on screen is moving, or refused
-/// after <see cref="Timeout"/> seconds (10 by default): a spinner never stops.
-/// </summary>
-internal sealed record IdleRequest(float? Timeout = null) : TestRequest;
 
 /// <summary>
 /// One event, as a window reports one: <c>kind</c> is <c>mouse_move</c>, <c>mouse_down</c>,

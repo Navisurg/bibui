@@ -65,7 +65,6 @@ One JSON line per request, one answer line back:
 | `{"$cmd":"test.schema"}` | a JSON schema of every request: the `test.*` ones and the app's |
 | `{"$cmd":"test.events","events":[…]}` | `{"ok":true}`, once the events and what they set off have run |
 | `{"$cmd":"test.screenshot","path":"/tmp/frame.png"}` | `{"ok":true}`, the PNG written by the app; with `"id"`, only that node's rect (`cmd.Region`) |
-| `{"$cmd":"test.idle","timeout":10}` | `{"ok":true}` once the app has settled and nothing is moving (`runtime.IsAnimating`); refused after `timeout` seconds, since a spinner never stops |
 | an app command, e.g. `{"$cmd":"counter.set","Value":10}` | `{"ok":true}`, once it has run |
 
 An event is `{"kind":…}` with what its kind needs: `mouse_move` (`x`, `y`),
@@ -108,7 +107,6 @@ bibui-port scroll list -3
 bibui-port type "Hello"                # into what has the keyboard
 bibui-port key Left --shift --repeat 5
 bibui-port cmd counter.set Value=10
-bibui-port --idle state                # once nothing is moving
 bibui-port screenshot field.png --id email
 ```
 

@@ -192,7 +192,8 @@ public sealed partial class BibuiRuntime
         _eased.EndFrame();
         _motion.EndFrame();
         _lists.EndFrame();
-        _animating = animating;
+        // The painter stepped the drawings' own animations while recording, just before.
+        IsAnimating = animating || _painter.IsAnimating;
         if (animating) RequestFrame();
     }
 

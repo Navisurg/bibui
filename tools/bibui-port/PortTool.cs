@@ -14,7 +14,7 @@ public static class PortTool
     public const string Usage = """
         bibui-port: drive a running bibui app through its test port.
 
-        usage: bibui-port [--app <name> | --socket <path>] [--idle] <command> [args]
+        usage: bibui-port [--app <name> | --socket <path>] <command> [args]
 
           list                          the running apps' sockets
           tree [--id <id>] [--depth N]  the UI tree as an outline; --json for the answer's JSON
@@ -33,9 +33,8 @@ public static class PortTool
           cmd <name> [key=value...]     an app command: {"$cmd":name, key:value...}; numbers, true,
                                         false, null and JSON values ({..} [..] "..") as such
           screenshot <path> [--id <id>] the frame on screen as a PNG the app writes; one node's rect with --id
-          idle [--timeout S]            wait until nothing in the app is moving (10 s by default)
 
-        With no --app or --socket, the only app running. --idle waits as idle does after any command.
+        With no --app or --socket, the only app running.
         Coordinates are logical pixels from the window's top-left.
         """;
 
@@ -44,8 +43,7 @@ public static class PortTool
         //- options, anywhere; the rest is the command and its arguments
         string? app = null, id = null;
         int depth = int.MaxValue, repeat = 1;
-        bool json = false, idle = false;
-        double timeout = 10;
+        bool json = false;
         string button = "left";
         var modifiers = new List<string>();
         var rest = new List<string>();
@@ -58,8 +56,6 @@ public static class PortTool
                 case "--id": id = Value(); break;
                 case "--depth": depth = int.TryParse(Value(), out var d) && d >= 0 ? d : -1; break;
                 case "--json": json = true; break;
-                case "--idle": idle = true; break;
-                case "--timeout": timeout = double.TryParse(Value(), CultureInfo.InvariantCulture, out var t) && t > 0 ? t : -1; break;
                 case "--repeat": repeat = int.TryParse(Value(), out var r) && r > 0 ? r : -1; break;
                 case "--right" or "--middle": button = args[i][2..]; break;
                 case "--ctrl" or "--shift" or "--alt" or "--super": modifiers.Add(args[i][2..]); break;
@@ -67,7 +63,7 @@ public static class PortTool
                 default: rest.Add(args[i]); break;
             }
         }
-        if (depth < 0 || repeat < 0 || timeout < 0) return Fail(error, "--depth, --repeat and --timeout take a number above 0.");
+        if (depth < 0 || repeat < 0) return Fail(error, "--depth and --repeat take a number above 0.");
         if (rest.Count == 0 || rest[0] == "help") { output.Write(Usage); return rest.Count == 0 ? 1 : 0; }
         var (command, argv) = (rest[0], rest.GetRange(1, rest.Count - 1));
         var needs = command switch
@@ -86,10 +82,7 @@ public static class PortTool
             }
 
             using var port = new Port(Port.SocketFor(app));
-            port.Timeout = TimeSpan.FromSeconds(timeout);
-            int code = Command(port, command, argv, id, depth, json, button, modifiers, repeat, output, error);
-            if (code == 0 && (idle || command == "idle")) port.Idle(timeout);
-            return code;
+            return Command(port, command, argv, id, depth, json, button, modifiers, repeat, output, error);
         }
         catch (PortException e) { return Fail(error, e.Message); }
         catch (SocketException e) { return Fail(error, $"The app's socket: {e.Message}"); }
@@ -181,9 +174,6 @@ public static class PortTool
                 port.Ask(shot);
                 output.WriteLine(file);
                 return 0;
-
-            case "idle":
-                return 0;                                 // waited for after the command
 
             default:
                 return Fail(error, $"No command '{command}': see bibui-port help.");

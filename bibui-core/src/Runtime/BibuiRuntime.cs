@@ -102,16 +102,13 @@ public sealed partial class BibuiRuntime
     public int FramesRequested => Volatile.Read(ref _framesRequested);
 
     /// <summary>
-    /// Whether the frame just built left anything moving: an eased value, a hover
-    /// or press fade, an <c>Animate</c>, a transition, a drawing's own animation.
-    /// The runtime asks for frames while it is; once it is not, the screen holds
-    /// still until something changes. Read between frames, on the loop's thread.
+    /// Whether the frame just built left anything moving: what the build stepped
+    /// (hot and active, view offsets, <c>Animate</c>, transitions) or what its
+    /// drawings animate themselves. The runtime's: written at the end of every
+    /// <see cref="EndBuild"/>, which asks for another frame while it is true.
+    /// Read between frames, on the loop's thread.
     /// </summary>
-    public bool IsAnimating => _animating || _painter.IsAnimating;
-
-    // Whether SweepFrame stepped anything short of its target, the frame just built:
-    // hot and active, view offsets, Animate and motion. The painter keeps its own.
-    private bool _animating;
+    public bool IsAnimating;
 
     /// <summary>
     /// Asks for the next few frames to run.

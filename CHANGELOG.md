@@ -35,14 +35,14 @@ All notable changes to bibui are recorded here. The format is based on
   what the agent did. `bibui-port move` moves the pointer without a click. The
   gallery draws it when started with its test port.
 - **`runtime.IsAnimating`**: whether the frame just built left anything moving
-  (an eased value, a hover fade, an `Animate`, a transition). The runtime asked
-  itself this every frame to request the next; now anyone can.
-- **Driving an app, further.** `test.idle` is answered once the app has settled
-  and nothing is moving, or refused after a timeout; `test.screenshot` takes an
-  `id` for one node's rect, which the app passes on as `cmd.Region` to
+  (an eased value, a hover fade, an `Animate`, a transition, a drawing's own
+  animation). The runtime asked itself this every frame to request the next;
+  now it keeps the answer.
+- **Driving an app, further.** `test.screenshot` takes an `id` for one node's
+  rect, which the app passes on as `cmd.Region` to
   `FramePixels.Png(runtime, draw, region)`. `bibui-port` gets `type`, `key`
   (modifiers, `--repeat`), `drag`, `hover`, `scroll`, `click --right/--middle`,
-  `idle` and `--idle`, and `screenshot --id`. While a button is held the agent
+  and `screenshot --id`. While a button is held the agent
   cursor follows the pointer at once, so a drag reads as one.
 - **RowScrollList** (`runtime.BeginRowScrollList`, `EndRowScrollList`): the
   list of rows of one pitch, building only those in sight, by rows or by

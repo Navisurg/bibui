@@ -25,11 +25,6 @@ public enum TestCmdKind
     /// draw list is still the runtime's, so it is the frame on screen that is drawn.
     /// </summary>
     Screenshot,
-    /// <summary>
-    /// <c>test.idle</c>: nothing for the app to do. The port answers it once the app
-    /// has settled and the runtime has stopped animating (<c>runtime.IsAnimating</c>).
-    /// </summary>
-    Idle,
     /// <summary>Any other name: one of the app's commands, as sent, in <see cref="TestCmd.Json"/>.</summary>
     App,
 }
@@ -113,8 +108,6 @@ public sealed partial class TestPort
     private TestCmdKind _heldKind;
     private string? _heldError;                              // None: why it was refused
     private string? _heldPath;                               // Screenshot: where to write
-    private float _heldTimeout;                              // Idle: seconds before it is refused
-    private long _pulledAt;                                  // when it was pulled, a Stopwatch timestamp
 
     // A port with no socket: the request buffer and what reads it, for Open, and for
     // tests that publish lines themselves.
@@ -176,7 +169,6 @@ public sealed partial class TestPort
             catch (JsonException e) { cmd = Refused($"Not a request: {e.Message}"); }
         }
         (_heldKind, _heldError, _heldPath) = (cmd.Kind, cmd.Error, cmd.Path);
-        _pulledAt = System.Diagnostics.Stopwatch.GetTimestamp();
         return true;
     }
 
@@ -219,8 +211,6 @@ public sealed partial class TestPort
             ScreenshotRequest { Path.Length: > 0, Id: { } id } s => NodeRect(_runtime?.LastTree, id) is { } rect
                 ? new TestCmd(TestCmdKind.Screenshot, path: s.Path, region: rect)
                 : Refused($"No node '{id}' in the tree."),
-            IdleRequest { Timeout: <= 0 } => Refused("test.idle's timeout is a number of seconds above 0."),
-            IdleRequest i => Idle(i.Timeout ?? 10f),
             ScreenshotRequest => Refused("test.screenshot carries the path to write."),
             _ => Refused("Not a request."),
         };
@@ -247,12 +237,6 @@ public sealed partial class TestPort
     }
 
     private static TestCmd Refused(string error) => new(TestCmdKind.None, error: error);
-
-    private TestCmd Idle(float timeout)
-    {
-        _heldTimeout = timeout;
-        return new TestCmd(TestCmdKind.Idle);
-    }
 
     // The rect of the node with this id in the tree, in logical pixels, or null.
     private static RectF? NodeRect(UiNode? node, string id)
