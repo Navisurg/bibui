@@ -83,8 +83,21 @@ public sealed class SilkWindow : IDisposable
     /// <summary>Makes a waiting <see cref="WaitEvents"/> return. Safe from any thread.</summary>
     public void Wake() => Native.ContinueEvents();
 
-    /// <summary>The refresh rate of the monitor GLFW puts the window on, in Hz; 60 until it knows one.</summary>
-    public float RefreshRate { get; private set; } = 60f;
+    /// <summary>
+    /// The refresh rate of the monitor the window is on, in Hz, as that monitor
+    /// runs now: read every time it is asked, so a screen switched to another
+    /// rate has it on the next frame. 60 when GLFW knows no monitor. Which
+    /// monitor is looked up when the window opens, when it moves, and when a
+    /// monitor is connected or unplugged; on Wayland GLFW reports no moves and
+    /// cannot tell which monitor a window is on, so with several monitors this
+    /// may be another's.
+    /// </summary>
+    public float RefreshRate => _monitor?.VideoMode.RefreshRate is int hz && hz > 0 ? hz : 60f;
+
+    // The monitor the window is on. Silk's lookup (Native.Monitor) works it out
+    // from the window's position and allocates, so it runs when that can change,
+    // not every frame.
+    private IMonitor? _monitor;
 
     /// <summary>
     /// False: <see cref="GetEvents"/> takes what is queued and returns, so the
@@ -195,16 +208,11 @@ public sealed class SilkWindow : IDisposable
         cursor.StandardCursor = standard;
     }
 
-    /// <summary>
-    /// Takes the refresh rate of the monitor GLFW puts the window on, when it
-    /// knows one. On Wayland GLFW cannot tell which monitor a window is on, so
-    /// with several monitors this may be another's.
-    /// </summary>
-    private void ApplyRefresh()
-    {
-        if (Native.Monitor?.VideoMode.RefreshRate is int hz && hz > 0)
-            RefreshRate = hz;
-    }
+    /// <summary>Looks up which monitor the window is on, for <see cref="RefreshRate"/>.</summary>
+    private void FindMonitor() => _monitor = Native.Monitor;
+
+    // Held so the GC keeps it while GLFW holds its function pointer.
+    private global::Silk.NET.GLFW.GlfwCallbacks.MonitorCallback? _onMonitor;
 
     /// <summary>
     /// Closes the window and destroys it with any graphics context it was opened
@@ -313,10 +321,10 @@ public sealed class SilkWindow : IDisposable
         native.Load += () =>
         {
             window.Resize(native.FramebufferSize);
-            window.ApplyRefresh();
+            window.FindMonitor();
         };
         // Moved onto another monitor (X11; Wayland reports no moves).
-        native.Move += _ => window.ApplyRefresh();
+        native.Move += _ => window.FindMonitor();
         native.FramebufferResize += size =>
         {
             window.Resize(size);
@@ -328,6 +336,20 @@ public sealed class SilkWindow : IDisposable
         native.FocusChanged += focused => { if (!focused) window.Events.Add(WindowEvent.FocusLost()); };
         native.Initialize();
         window.WireInput();
+        // A monitor connected or unplugged: look the monitor up again, as an
+        // unplugged one is freed under the IMonitor that names it. GLFW has one
+        // monitor callback for the process, so the one set before is called on.
+        // Unsafe only for the callback's type: the monitor pointer is never read.
+        unsafe
+        {
+            global::Silk.NET.GLFW.GlfwCallbacks.MonitorCallback? previous = null;
+            window._onMonitor = (monitor, state) =>
+            {
+                window.FindMonitor();
+                previous?.Invoke(monitor, state);
+            };
+            previous = global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetMonitorCallback(window._onMonitor);
+        }
 
         return window;
     }
