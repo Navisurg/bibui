@@ -22,7 +22,7 @@ while (app.BeginFrame())
         switch (cmd.Kind)
         {
             case TestCmdKind.Events: app.Events.AddRange(cmd.Events); break;
-            case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, cpu.Draw)); break;
+            case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, cpu.Draw, cmd.Region)); break;
             case TestCmdKind.App: /* the app's own command: cmd.Json */ break;
         }
 
@@ -64,7 +64,7 @@ One JSON line per request, one answer line back:
 | `{"$cmd":"test.state"}` | the app's state |
 | `{"$cmd":"test.schema"}` | a JSON schema of every request: the `test.*` ones and the app's |
 | `{"$cmd":"test.events","events":[…]}` | `{"ok":true}`, once the events and what they set off have run |
-| `{"$cmd":"test.screenshot","path":"/tmp/frame.png"}` | `{"ok":true}`, the PNG written by the app |
+| `{"$cmd":"test.screenshot","path":"/tmp/frame.png"}` | `{"ok":true}`, the PNG written by the app; with `"id"`, only that node's rect (`cmd.Region`) |
 | an app command, e.g. `{"$cmd":"counter.set","Value":10}` | `{"ok":true}`, once it has run |
 
 An event is `{"kind":…}` with what its kind needs: `mouse_move` (`x`, `y`),
@@ -94,15 +94,59 @@ cuts its children to it, so a node is in view when its centre is inside every
 ancestor claiming `Clip`.
 
 `bibui-port` (`tools/bibui-port`) is a native command-line client: it finds the
-socket, builds the JSON, and clicks a node by id, scrolled into view first.
+socket, builds the JSON, and acts on a node by id, once it holds still and
+scrolled into view first.
 
 ```sh
-bibui-port tree --depth 2          # an outline: kind, id, rect, claims, text
-bibui-port find "Add one"          # the nodes holding a text, and the id to click
-bibui-port click add
+bibui-port tree --depth 2              # an outline: kind, id, rect, claims, text
+bibui-port find "Add one"              # the nodes holding a text, and the id to click
+bibui-port click add                   # --right, --middle
+bibui-port hover help-button           # a move, no press
+bibui-port drag slider 320 140         # from a node, or: drag x y x y
+bibui-port scroll list -3
+bibui-port type "Hello"                # into what has the keyboard
+bibui-port key Left --shift --repeat 5
 bibui-port cmd counter.set Value=10
-bibui-port state
+bibui-port screenshot field.png --id email
 ```
+
+## Making an app easy to drive
+
+A client finds what to act on in the tree, and the tree holds only what the
+runtime knows: boxes and texts, where they were laid out, and their claims. So:
+
+- **Give every box a client acts on an id**, stable from frame to frame, naming
+  what it is for (`settings-save`, `nav-inbox`), with its label as a text inside
+  it: `find "Save"` then leads to the id.
+- **Keyboard focus, a text field's caret and selection, and what kind of control
+  a box is are the app's**, not the runtime's: a text field is edited when its
+  caller says so. An app whose client should check them puts them in its state
+  (`test.state`), or takes its own commands for them.
+
+## Showing the agent
+
+`AgentCursor` (in `Bibui.Core.Runtime`) draws what an agent driving the app does,
+for a person watching: an arrow at its pointer, a tag with its name, a ring on each
+click. Nothing is kept: the pointer is folded from the events the agent sends, and
+it is shown while `port.HasClient`.
+
+```csharp
+var agent = AgentCursor.Start("Agent", UiColor.Hex("#3B82F6"));    // before the loop
+...
+case TestCmdKind.Events:
+    app.Events.AddRange(cmd.Events);
+    agent = AgentCursor.FromWindowEvents(agent, cmd.Events);
+    break;
+...
+agent.Connected = port.HasClient;                                  // last in the build
+bool agentSettled = AgentCursorUi.Build(runtime, agent, size: 1.5f);
+runtime.EndBuild();
+port.AnswerCmds(agentSettled);
+```
+
+It glides to each point and shows each click, and `Build` says when it has: held
+until then, an answer makes the agent's next event wait for the person watching.
+`bibui-port move <x> <y>` moves it without a click.
 
 Part of bibui, a code-first native UI library for .NET:
 <https://github.com/Navisurg/bibui>. Licensed under Apache-2.0.

@@ -27,6 +27,23 @@ All notable changes to bibui are recorded here. The format is based on
   (`cmd counter.set Value=10`), `state`, `schema` and `screenshot`. The
   gallery's page walk, `samples/component-gallery/test_all_pages.sh`, is a
   shell script on it.
+- **`AgentCursor`: what an agent driving the app does, drawn for a person
+  watching.** `AgentCursor.FromWindowEvents` folds the agent's pointer from the
+  events it sends; `AgentCursorUi.Build(runtime, cursor, size)` draws an arrow
+  there with a tag naming the agent and a ring on each click, gliding, fading in
+  while `TestPort.HasClient` and out a while after, and says when it has shown
+  what the agent did. `bibui-port move` moves the pointer without a click. The
+  gallery draws it when started with its test port.
+- **`runtime.IsAnimating`**: whether the frame just built left anything moving
+  (an eased value, a hover fade, an `Animate`, a transition, a drawing's own
+  animation). The runtime asked itself this every frame to request the next;
+  now it keeps the answer.
+- **Driving an app, further.** `test.screenshot` takes an `id` for one node's
+  rect, which the app passes on as `cmd.Region` to
+  `FramePixels.Png(runtime, draw, region)`. `bibui-port` gets `type`, `key`
+  (modifiers, `--repeat`), `drag`, `hover`, `scroll`, `click --right/--middle`,
+  and `screenshot --id`. While a button is held the agent
+  cursor follows the pointer at once, so a drag reads as one.
 - **RowScrollList** (`runtime.BeginRowScrollList`, `EndRowScrollList`): the
   list of rows of one pitch, building only those in sight, by rows or by
   pixels (`ScrollBy`). It eases.

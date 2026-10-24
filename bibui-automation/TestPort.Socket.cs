@@ -21,6 +21,13 @@ public sealed partial class TestPort : IDisposable
     // answer, and only between a pull and its answer, when it cannot change.
     private Socket? _client;
 
+    /// <summary>
+    /// A client is connected: something is driving the app. Read by the loop at any
+    /// time; it changes when the port thread accepts a client and when one leaves,
+    /// and the port asks for a frame then, so a loop drawing it sees the change.
+    /// </summary>
+    public bool HasClient => Volatile.Read(ref _client) is not null;
+
     /// <summary>The socket file clients connect to; null on a port with no socket.</summary>
     public string? SocketPath { get; private set; }
 
@@ -88,6 +95,7 @@ public sealed partial class TestPort : IDisposable
             catch (ObjectDisposedException) { return; }
             client.SendTimeout = _sendTimeoutMs;
             Volatile.Write(ref _client, client);
+            _runtime!.RequestFrame();
 
             try { ReadLines(client, received); }
             catch (SocketException) { }
@@ -97,6 +105,7 @@ public sealed partial class TestPort : IDisposable
             _bufferFree.Wait();
             Volatile.Write(ref _client, null);
             client.Dispose();
+            _runtime!.RequestFrame();
         }
     }
 
