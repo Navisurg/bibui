@@ -341,10 +341,9 @@ Debian and Ubuntu). The result is a single executable of about 5 MB that runs
 under a Wayland compositor. `WaylandWindow.IsSupported` tells you whether
 the current session can open a window.
 
-The Silk + Skia route is JIT-only for now: Silk.NET itself is not trim-safe,
-so Native AOT is supported on the Wayland + managed route only. [Publishing
-with Native AOT](aot.md) covers the trimming rules your own code has to keep,
-and what to expect of size and start-up time.
+Native AOT is supported on the Wayland routes only; the Silk route runs on the
+JIT. [Publishing with Native AOT](aot.md) says why, and covers the trimming
+rules your own code has to keep and what to expect of size and start-up time.
 
 ## Next
 

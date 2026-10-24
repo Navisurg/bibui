@@ -23,9 +23,9 @@ system libraries at run time:
 
 - FreeType and HarfBuzz (`libfreetype6`, `libharfbuzz0b` on Debian/Ubuntu)
   for `Bibui.Core`, which measures and shapes all text with them;
-- `libwayland-client` and `libxkbcommon` for `Bibui.Platform.Wayland`.
+- `libwayland-client`, `libwayland-cursor` and `libxkbcommon` for `Bibui.Platform.Wayland`.
 
-Each library is its own project: `bibui` holds the core, the runtime
+Each library is its own project: `bibui-core` holds the core, the runtime
 (`BibuiRuntime`) and the components, and the platform windows,
 renderers and text engine are projects beside it. Build the ones you
 touch, in Release, as CI does:
@@ -101,92 +101,44 @@ check is how the maintainers make sure nothing else moved.
 
 A frame is three passes that never mix: your code **builds** a tree of boxes,
 the layout solver **lays it out**, and the painter **paints** it. The painter
-lays nothing out, and the solver draws nothing.
+lays nothing out, and the solver draws nothing. [Concepts](docs/concepts.md) explains each
+part; a change keeps to these rules.
 
-### Components are functions that compose boxes
+### Components
 
-A component is a plain static function, not a renderer or a class with
-state, written as an extension method on the runtime so it is called as
-`runtime.Switch(...)`. `SwitchExtensions.Switch` (`bibui-core/src/Runtime/Switch.cs`)
-is the pattern:
+A component is a plain static extension method on the runtime
+(`runtime.Switch(...)`; `bibui-core/src/Runtime/Switch.cs` is the pattern), not
+a class with state ([Components are functions](docs/concepts.md#components-are-functions)):
 
-```csharp
-public static BibuiWidget Switch(this BibuiRuntime runtime, string id, bool on, ReadOnlySpan<char> label = default, bool disabled = false)
-```
+- It composes `runtime.Box()`, `runtime.BoxFromId(id, claims)` (for anything it
+  asks about), `runtime.Text`, `runtime.Icon`, `runtime.Gap` and
+  `runtime.BeginParent`, building each node where it goes in the tree.
+- Every node states its size on both axes ([Boxes and sizes](docs/concepts.md#boxes-and-sizes)).
+- It owns no state and writes none of the caller's: it takes the value to draw
+  and returns a `BibuiWidget`, and the caller updates its own state. What must
+  survive a frame lives on a retained box or in `runtime.Animate`.
+- Colours are theme tokens, and line widths, focus ring, shadows, density and
+  motion are read from `runtime.Theme`: no literals, no theme parameter.
+- Text is UTF-16: a label is a `ReadOnlySpan<char>`; `BibuiStr` only for text
+  the user edits ([Text is UTF-16](docs/concepts.md#text-is-utf-16)).
 
-- Compose it from `runtime.Box()` (pooled, keyless), `runtime.BoxFromId(id,
-  claims)` (retained, for anything you ask about), `runtime.Text`,
-  `runtime.Icon`, `runtime.Gap` and `runtime.BeginParent`.
-- Every node states its size on both axes (`.Sized(Size.Px(…), Size.Fill)`,
-  a share of its parent, or the sum of its children). A box from
-  `runtime.Box()` has no default size; `runtime.Row()` and `runtime.Column()`
-  are as large as their children unless told otherwise.
-- Build each node where it goes in the tree; don't build a control early and
-  move it into place.
-- Text is UTF-16. A read-only label is a `ReadOnlySpan<char>` (a `string` converts to it);
-  a `BibuiStr` is only for text the user edits, such as a `TextField`'s buffer.
-- Colours are theme tokens (`UiColor.Accent`, `UiColor.Border`) resolved at
-  paint time, so a component takes no theme parameter. Line widths, focus
-  ring, shadows, density and motion are read from `runtime.Theme`; do not
-  write a literal for one.
-- The component owns no state and does not write the caller's. It takes the
-  value to draw and returns a `BibuiWidget`, the node plus what happened
-  (`Clicked`, `Pressed`, ...), and the caller updates its own state. Where a
-  component animates, take the eased 0..1 value rather than a bool.
-- Anything that must survive a frame lives on a retained box or in
-  `runtime.Animate`.
+### Interaction
 
-### No callbacks: boxes are asked what happened
-
-A box says what it takes when it is acquired, and the code that holds it asks
-what happened:
-
-```csharp
-Box track = runtime.BoxFromId(id, InteractionKinds.LeftPress);
-Interaction i = runtime.InteractionsFor(track);
-```
-
-- A box with no claims takes nothing. Hover follows from a press claim; there
-  is no separate hover claim.
-- A disabled control claims `InteractionKinds.Disabled`: it reports nothing
-  and swallows the press, so the press does not fall through to what is
-  beneath it.
-
-### Ask order is z-order
-
-There is no hit test. `InteractionsFor` tests the pointer against the rect
-the box had last frame, and **asking consumes**: the first box to ask for a
-point gets it, and boxes beneath get nothing. So:
-
-- a container that claims an area asks **after** the controls inside it;
-- an overlay asks **before** the content beneath it.
-
-Acquiring, asking and describing are separate steps, and only asking has an
-order that matters. Acquire boxes, ask them innermost first, then set sizes
-and push children in whatever order is convenient.
-
-Dropdowns (`runtime.OpenDropDown(id, anchor)`, built with
-`runtime.BeginDropDown(id)`) are the one exception: they are drawn last, over
-everything, and while open they own the rect they were drawn at, whatever
-order the rest of the frame asks in. A press that a box outside one and its
-anchor takes closes it, and so does a press nothing takes.
+There are no callbacks. A box says what it takes when it is acquired, and the
+code that holds it asks what happened (`runtime.InteractionsFor(box)`); a
+disabled control claims `InteractionKinds.Disabled`
+([Claims and asks](docs/concepts.md#claims-and-asks)). Asking consumes, so ask order is
+z-order: a container asks after the controls inside it, an overlay before what
+is beneath it ([Ask order is z-order](docs/concepts.md#ask-order-is-z-order); dropdowns are
+the [exception](docs/concepts.md#dropdowns-are-the-exception)).
 
 ### When a layout is wrong, fix the layout code
 
-The layout solver is deliberately small and strict. A node without a size
-throws, and so does a cycle such as a fill inside a parent sized by its
-children. When a layout collapses to zero or throws `LayoutException`, look
-at the code that built it first; the usual causes are:
-
-- a fill (`FillX`/`FillY`, a spring, centring) inside a parent sized by its
-  children;
-- centring children in a row whose height comes from those same children;
-- a box with no size, or a size on the wrong axis.
-
-Fix it there: give the parent a size, drop the fill, or push children
-straight into the box that owns them. Changes to the solver or the painter
-need a failing test that shows the solver mishandling correct layout code,
-and should be discussed in an issue before the pull request.
+The solver is small and strict: a node without a size throws, and so does a
+cycle such as a fill inside a parent sized by its children. Fix the code that
+built the layout ([The usual mistakes](docs/concepts.md#the-usual-mistakes)). Changes to the
+solver or the painter need a failing test that shows it mishandling correct
+layout code, and an issue to discuss them before the pull request.
 
 ### Native AOT, always
 
@@ -205,8 +157,8 @@ compiler refuses what AOT cannot do. Do not add, or depend on:
 Do not suppress an IL2xxx or IL3xxx warning to make a build pass; fix the
 code, or ask in the pull request. CI publishes a test app on the raw Wayland
 host and the managed rasterizer with Native AOT, so a regression shows up there.
-That is the route that promises a Native AOT app. The Silk + Skia route is
-JIT-only for now, because Silk.NET itself is not AOT-clean.
+That is the route that promises a Native AOT app; the Silk route runs on the
+JIT ([why](docs/aot.md#which-route-publishes)).
 
 ### Performance
 

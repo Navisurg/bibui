@@ -5,7 +5,7 @@ bibui runs on two stacks, and you choose one per app:
 - **Silk + Skia**: a GLFW window (`Bibui.Platform.Silk`) drawn by SkiaSharp
   (`Bibui.Raster.Skia`), on the GPU when there is one.
 - **Wayland + managed**: a raw Wayland window (`Bibui.Platform.Wayland`) drawn on
-  the CPU by bibui's own rasterizer (`Bibui.Raster.Managed`), with FreeType and
+  the CPU by bibui's own rasterizer (`Bibui.Raster.Managed.Backend`), with FreeType and
   HarfBuzz for text. It runs on Linux only.
 
 This page records what measuring them has shown. The numbers come from one
@@ -16,6 +16,9 @@ the two stacks with each other, not with your own machine.
 ## End to end
 
 The same small dashboard app was built on each stack and published with Native AOT.
+Silk + Skia was published with Silk.NET's trim warnings accepted, for the
+comparison only: it is not a supported Native AOT route, and runs on the JIT
+([Publishing with Native AOT](aot.md)).
 
 | | Silk + Skia | Wayland + managed |
 |---|---|---|
