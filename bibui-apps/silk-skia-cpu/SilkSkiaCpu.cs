@@ -38,7 +38,6 @@ public sealed partial class BibuiApp
     private partial void EndWindowFrame() => SilkWindow.EndFrame(Window, Runtime);
 
     // The app's own renderer, so screenshots hold its textures.
-    private partial DrawToPixels ScreenshotDraw() => Renderer.Draw;
 
     private partial void DisposeRenderer()
     {

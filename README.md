@@ -168,13 +168,29 @@ You may be able to reuse any of the renderers, or write a new one for the platfo
 
 This design enables us to have different combinations of platform layers for handling input and renderers, for rendering the bibui `DrawList`.
 
-## The test server
+## Driving an app from outside
 
-The test server lets a test or an agent drive a running app: click, type,
-read the tree, take a screenshot. A `BibuiApp` starts it when asked,
-`BibuiApp.Open(runtime, window, new BibuiAppOptions { TestServer = true })`,
-or when the environment variable `BIBUI_TEST_SERVER=1` is set. Otherwise it is
-off.
+`TestPort` (package `Bibui.Automation`) lets a test, a script or an agent drive
+a running app over a Unix socket only the user can reach: read the UI tree and
+the app's state, send input events and the app's own commands, ask for
+screenshots. The app opens it, and calls `TryPullCmd` at the top of each frame
+and `AnswerCmds` at its end; a client sends one JSON line per request:
+
+```sh
+echo '{"$cmd":"test.tree"}' | socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/bibui/<app>-<pid>.sock
+```
+
+`bibui-port` (`tools/bibui-port`, a native command-line tool) does the same in a
+word, and clicks a node by id, scrolled into view first:
+
+```sh
+bibui-port tree --depth 2
+bibui-port click add
+bibui-port cmd counter.set Value=10
+```
+
+A `BibuiApp` opens none: an app that does not reference `Bibui.Automation` ships
+no automation code. [Its README](packaging/readme/Bibui.Automation.md) has the loop, the requests, and a click from a shell.
 
 ## Component Library
 

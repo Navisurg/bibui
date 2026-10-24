@@ -228,7 +228,7 @@ public sealed class BibUiEvent
     /// <summary>
     /// Translates a key press into a text-edit intent, with the modifier state supplied rather
     /// than read from a keyboard. Every caller has it to hand already — the window pump captures
-    /// it with the event, and <see cref="BibuiTestServer"/> synthesises presses over a socket
+    /// it with the event, and a test port (<c>Bibui.Automation</c>) synthesises presses over a socket
     /// with no keyboard at all — so both produce identical events. Duplicating this switch is
     /// how the two would drift. <paramref name="clipboard"/> is read on Ctrl+V; null means
     /// there is no clipboard, and the paste is empty.

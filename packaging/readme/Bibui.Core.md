@@ -17,6 +17,7 @@ Add a platform window and a renderer:
 | `Bibui.Raster.Skia` | Drawing with SkiaSharp |
 | `Bibui.Raster.Managed.Backend` | Drawing with a managed rasterizer and FreeType text, no SkiaSharp |
 | `Bibui.Testing` | Headless pages for testing an app |
+| `Bibui.Automation` | A test port: drive a running app over a socket |
 
 ## Hello
 
