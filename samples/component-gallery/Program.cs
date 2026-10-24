@@ -1,3 +1,4 @@
+using Bibui.App;
 using Bibui.Core;
 using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
@@ -5,7 +6,6 @@ using ComponentGallery;
 using Bibui.Core.Draw;
 using Bibui.Raster.Skia;
 using Bibui.Core.Runtime.Platform;
-using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 
 // ── Component Gallery ─────────────────────────────────────────────────────────
@@ -17,18 +17,17 @@ using Bibui.Raster.Managed.Backend;
 // bar (ShellLayout), and the page scrolls.
 //
 // Usage (GalleryOptions.Usage has the whole list):
-//   dotnet run             → opens interactive window (Silk host + Skia)
+//   dotnet run             → opens interactive window (Silk + Skia on the GPU)
+//   dotnet run -p:App=WaylandManaged
+//                          → on another Bibui.App package: here raw Wayland and the
+//                            managed rasterizer (samples/BibuiApp.props lists them)
 //   dotnet run -- reference → renders every page, and its open state, to reference/
 //   dotnet run -- check    → lays every page out at several window sizes and
 //                            reports anything cut, spilling, or off the window
-//   dotnet run -- --host wayland --raster managed
-//                          → raw Wayland host + managed rasterizer with FreeType/HarfBuzz text
 //   dotnet run -- --accent "#E11D48" --mode light
 //                          → the same gallery in a theme generated from one seed
 //   dotnet run -- --first-frame
 //                          → renders the first frame headless and exits (CI's start-up check)
-//   dotnet run -- --host wayland --raster managed --dry-run
-//                          → prints the choice and exits, without opening a window
 
 if (GalleryOptions.Parse(args, out string? error) is not { } options)
 {
@@ -38,18 +37,9 @@ if (GalleryOptions.Parse(args, out string? error) is not { } options)
     Environment.Exit(2);
     return;
 }
-foreach (var notice in options.Notices)
-    Console.Error.WriteLine(notice);
-
 if (options.Help)
 {
     Console.WriteLine(GalleryOptions.Usage);
-    return;
-}
-
-if (options.DryRun)
-{
-    Console.WriteLine(options.Describe());
     return;
 }
 
@@ -87,81 +77,28 @@ if (options.FirstFrame)
     return;
 }
 
-// Off unless asked for: BIBUI_TEST_SERVER=1 (test_all_pages.sh says how); the
-// loop steps it. Its screenshots draw with a CPU renderer of their own: the
-// window's draws on the GPU, or keeps damage state for the window's buffers.
-using var testServer = BibuiTestServer.StartIfEnabled(runtime, options.Port,
-    options.Raster == GalleryRaster.Managed ? new ManagedRenderer().Draw : new SkiaCpuRenderer().Draw);
-
-var size = new PlatformWindowOptions("Component Gallery", StartWidth, StartHeight);
-if (options.Host == GalleryHost.Wayland)
+// The window and renderer of the Bibui.App package the gallery was built with.
+// Its test server runs only with BIBUI_TEST_SERVER=1 in the environment.
+using var app = BibuiApp.Open(runtime, new("Component Gallery", StartWidth, StartHeight), new BibuiAppOptions
 {
-    using var window = WaylandWindow.Open(size, new WaylandHostOptions
-    {
-        AppId = "bibui-component-gallery",
-        MinWidth = ShellLayout.MinWidth,
-        MinHeight = ShellLayout.MinHeight,
-    });
-    runtime.WakeUp = window.Wake;
-    runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
-    window.OnRefresh = runtime.RequestFrame;   // a configure, a new size or scale: draw again
-    // The renderer --raster names, bound to the window's memory; the texture page makes its textures on it.
-    SkiaCpuRenderer? skia = options.Raster == GalleryRaster.Skia ? new SkiaCpuRenderer(window.Cpu) : null;
-    ManagedRenderer? managed = skia is null ? new ManagedRenderer(window.Cpu) : null;
-    (DemoTexture.SkiaCpu, DemoTexture.Managed) = (skia, managed);
-    while (!window.IsClosing)
-    {
-        // Nothing happening: wait for input. A frame wanted: wait for the
-        // compositor's frame callback, which paces the loop.
-        bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
-        var events = window.GetEvents(wait: idle);
-        if (runtime.FramesRequested == 0 && events.Count == 0) continue;
-        runtime.ConsumeFrame();
-        // While a test-server command runs, the server is the keyboard and mouse.
-        runtime.BeginBuild(window.Frame, testServer?.Step(events) ?? events);
-        BuildGallery(runtime, gallery);
-        runtime.EndBuild();
-        WaylandWindow.BeginDraw(window);
-        if (skia is not null) skia.Draw(runtime.DrawList);
-        else managed!.Draw(runtime.DrawList);
-        WaylandWindow.EndDraw(window);
-    }
-    runtime.WakeUp = null;
-    skia?.Dispose();
-    managed?.Dispose();
-}
-else
-{
-    using var window = SilkWindow.Open(SilkGl.Options(size));
-    runtime.WakeUp = window.Wake;
-    runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
-    var gl = SilkGl.Target(window);
-    using var skia = new SkiaGlRenderer(gl);
-    DemoTexture.SkiaGl = skia;   // the texture page's textures, on the renderer that draws them
-    window.OnRefresh = Frame;  // draws at a new size, and during a resize on Windows and macOS
-    while (!window.IsClosing)
-    {
-        // Nothing happening: wait for input. A frame wanted: sleep until it is
-        // due, and take the input that came meanwhile.
-        bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
-        if (!idle) runtime.SleepUntilNextFrame();
-        var events = window.GetEvents(wait: idle);
-        if (runtime.FramesRequested == 0 && events.Count == 0) continue;
-        runtime.ConsumeFrame();
-        Frame();
-    }
-    runtime.WakeUp = null;
+    AppId = "bibui-component-gallery",
+    MinWidth = ShellLayout.MinWidth,
+    MinHeight = ShellLayout.MinHeight,
+    TestServerPort = options.Port,
+});
+// The texture page's textures, on the renderer that draws them.
+object renderer = app.Renderer;
+(DemoTexture.SkiaGl, DemoTexture.SkiaCpu, DemoTexture.Managed) =
+    (renderer as SkiaGlRenderer, renderer as SkiaCpuRenderer, renderer as ManagedRenderer);
+app.Frame = Frame;
+while (app.WaitForFrame()) Frame();
 
-    void Frame()
-    {
-        // While a test-server command runs, the server is the keyboard and mouse.
-        runtime.BeginBuild(window.Frame, testServer?.Step(window.Events) ?? window.Events);
-        BuildGallery(runtime, gallery);
-        runtime.EndBuild();
-        SilkGl.BeginDraw(window, gl);
-        skia.Draw(runtime.DrawList);
-        SilkGl.EndDraw(window);
-    }
+void Frame()
+{
+    runtime.BeginBuild(app.Window.Frame, app.Events);
+    BuildGallery(runtime, gallery);
+    runtime.EndBuild();
+    app.Present();
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────

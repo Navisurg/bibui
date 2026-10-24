@@ -20,6 +20,12 @@ public sealed record BibuiAppOptions
 
     /// <summary>The application id a Wayland compositor groups and themes the window by; the Silk window has none.</summary>
     public string AppId { get; init; } = "bibui";
+
+    /// <summary>The smallest logical width a Wayland compositor may give the window; the Silk window has none.</summary>
+    public int MinWidth { get; init; } = 240;
+
+    /// <summary>The smallest logical height a Wayland compositor may give the window; the Silk window has none.</summary>
+    public int MinHeight { get; init; } = 160;
 }
 
 /// <summary>

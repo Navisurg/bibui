@@ -4,11 +4,11 @@
 //   dotnet run --project samples/bibui-app
 //   dotnet run --project samples/bibui-app -- --first-frame   # one frame headless, then exit (CI)
 
-using Bibui.Core;
-using Bibui.Raster.Skia;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
+using Bibui.Raster.Skia;
 using BibuiApp;
+using App = Bibui.App.BibuiApp;   // the window and renderer; BibuiApp is this sample's namespace
 
 var runtime = BibuiRuntime.Create();
 HotReloadListener.Register(runtime.RequestFrame);   // dotnet watch: a code change draws a frame
@@ -25,38 +25,16 @@ if (args.Contains("--first-frame"))
     return;
 }
 
-using var window = SilkWindow.Open(SilkGl.Options(new("bibui — interactive demo", 720, 1200)));
-runtime.WakeUp = window.Wake;
-runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
-var gl = SilkGl.Target(window);
-using var skia = new SkiaGlRenderer(gl);
-
-// Off unless asked for (BIBUI_TEST_SERVER=1); the loop steps it. Its screenshots
-// draw on the CPU, with a renderer of their own beside the window's GPU one.
-using var testServer = BibuiTestServer.StartIfEnabled(runtime, draw: new SkiaCpuRenderer().Draw);
-
-window.OnRefresh = Frame;   // draws at a new size, and during a resize on Windows and macOS
-while (!window.IsClosing)
-{
-    // Nothing happening: wait for input. A frame wanted: sleep until it is due,
-    // and take the input that came meanwhile.
-    bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
-    if (!idle) runtime.SleepUntilNextFrame();
-    var events = window.GetEvents(wait: idle);
-    if (runtime.FramesRequested == 0 && events.Count == 0) continue;
-    // Taken before the frame is built, so what the build asks for is still owed after it.
-    runtime.ConsumeFrame();
-    Frame();
-}
-runtime.WakeUp = null;
+// The window and Skia on its GL context, from Bibui.App.SilkSkiaGl. Its test
+// server runs only with BIBUI_TEST_SERVER=1 in the environment.
+using var app = App.Open(runtime, new("bibui — interactive demo", 720, 1200));
+app.Frame = Frame;
+while (app.WaitForFrame()) Frame();
 
 void Frame()
 {
-    // While a test-server command runs, the server is the keyboard and mouse.
-    runtime.BeginBuild(window.Frame, testServer?.Step(window.Events) ?? window.Events);
+    runtime.BeginBuild(app.Window.Frame, app.Events);
     Demo.Build(runtime, state);
     runtime.EndBuild();
-    SilkGl.BeginDraw(window, gl);
-    skia.Draw(runtime.DrawList);
-    SilkGl.EndDraw(window);
+    app.Present();
 }

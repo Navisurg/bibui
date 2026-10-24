@@ -11,7 +11,7 @@ public sealed partial class BibuiApp
 {
     private static partial WaylandWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options)
     {
-        var opened = WaylandWindow.Open(window, new WaylandHostOptions { AppId = options.AppId });
+        var opened = WaylandWindow.Open(window, new WaylandHostOptions { AppId = options.AppId, MinWidth = options.MinWidth, MinHeight = options.MinHeight });
         runtime.WakeUp = opened.Wake;
         runtime.WindowClipboard = (opened.GetClipboardText, opened.SetClipboardText);
         return opened;
