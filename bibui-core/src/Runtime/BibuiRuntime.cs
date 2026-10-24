@@ -107,10 +107,11 @@ public sealed partial class BibuiRuntime
     /// The runtime asks for frames while it is; once it is not, the screen holds
     /// still until something changes. Read between frames, on the loop's thread.
     /// </summary>
-    public bool IsAnimating => _stepping || _painter.IsAnimating;
+    public bool IsAnimating => _animating || _painter.IsAnimating;
 
-    // Whether SweepFrame stepped anything short of its target, the frame just built.
-    private bool _stepping;
+    // Whether SweepFrame stepped anything short of its target, the frame just built:
+    // hot and active, view offsets, Animate and motion. The painter keeps its own.
+    private bool _animating;
 
     /// <summary>
     /// Asks for the next few frames to run.
