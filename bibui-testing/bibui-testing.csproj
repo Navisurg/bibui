@@ -12,7 +12,7 @@
     <IsAotCompatible>true</IsAotCompatible>
     <UseAppHost>false</UseAppHost>
     <PackageId>Bibui.Testing</PackageId>
-    <Description>Playwright-style semantic testing API for Bibui apps. Provides BibuiPage and IBibuiPage for headless component testing.</Description>
+    <Description>Headless testing for Bibui apps: a BibuiPage holds a runtime with no window, and a test finds nodes by id, clicks, types, presses keys and takes screenshots.</Description>
     <PackageTags>$(PackageTags);testing;headless;ui-testing</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <IsPackable>true</IsPackable>

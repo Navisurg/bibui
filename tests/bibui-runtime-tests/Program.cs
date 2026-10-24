@@ -159,7 +159,7 @@ Console.WriteLine("===================");
 
 // ── Bibui.Core.Key / Bibui.Core.MouseButton ────────────────────────────────────
 
-// The Silk host converts with a cast, and the test server parses key names,
+// The Silk host converts with a cast, and a test port parses key names,
 // so both enums must keep Silk.NET.Input's names and values exactly.
 Run("Key and MouseButton: Silk.NET.Input's names, with Silk's values", () =>
 {
@@ -4857,8 +4857,8 @@ Run("Claims: a drag pressed and released in one frame still says where it began"
     //
     // That pairing is the normal case, not a corner: pointer events arrive far faster
     // than frames are drawn, so a real mouse delivers press and release together
-    // whenever the gesture is quicker than a repaint, and the test server's `gesture`
-    // command does it by construction.
+    // whenever the gesture is quicker than a repaint, and a client sending a whole
+    // drag as one frame of events does it by construction.
     var runtime = BibuiRuntime.Create();
     Box card = null!;
     runtime.SetBuild(
@@ -5031,7 +5031,7 @@ Run("Claims: clicking an unknown name, or a box with no rect yet, does nothing",
 Run("Pointer: the runtime keeps its own current, without being told", () =>
 {
     // It used to be filled only by the window, so anything driving the runtime
-    // directly — a test server, a headless harness — ran an entire synthesised
+    // directly — a test port, a headless harness — ran an entire synthesised
     // drag with Pointer reporting no buttons at all.
     var (runtime, under, over) = Overlapping();
     IsTrue(!runtime.InteractionsFor(under).Dragging, "nothing held to begin with");
