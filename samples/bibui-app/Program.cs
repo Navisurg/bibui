@@ -11,7 +11,6 @@ using Bibui.Core.Runtime.Platform;
 using BibuiApp;
 
 var runtime = BibuiRuntime.Create();
-runtime.Surface = new SurfaceOptions { Width = 720, Height = 1200 };
 HotReloadListener.Register(runtime.RequestFrame);   // dotnet watch: a code change draws a frame
 var state = new DemoState();
 
@@ -19,31 +18,45 @@ var state = new DemoState();
 if (args.Contains("--first-frame"))
 {
     using var cpu = new SkiaCpuRenderer();
-    runtime.BeginBuild();
+    runtime.BeginBuild(new WindowFrame(720, 1200, 1f, 60f));
     Demo.Build(runtime, state);
     runtime.EndBuild();
     FramePixels.Bgra(runtime, cpu.Draw, out _, out _);
     return;
 }
 
-using var window = SilkWindow.Open(runtime, new("bibui — interactive demo", 720, 1200));
-using var skia = new SkiaGlRenderer(window.Gl);
+using var window = SilkWindow.Open(SilkGl.Options(new("bibui — interactive demo", 720, 1200)));
+runtime.WakeUp = window.Wake;
+runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+var gl = SilkGl.Target(window);
+using var skia = new SkiaGlRenderer(gl);
 
 // Off unless asked for (BIBUI_TEST_SERVER=1); the loop steps it. Its screenshots
 // draw on the CPU, with a renderer of their own beside the window's GPU one.
 using var testServer = BibuiTestServer.StartIfEnabled(runtime, draw: new SkiaCpuRenderer().Draw);
 
-window.OnRefresh = Frame;   // keeps drawing during a resize on Windows and macOS
-while (SilkWindow.BeginFrame(window, runtime)) Frame();
+window.OnRefresh = Frame;   // draws at a new size, and during a resize on Windows and macOS
+while (!window.IsClosing)
+{
+    // Nothing happening: wait for input. A frame wanted: sleep until it is due,
+    // and take the input that came meanwhile.
+    bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
+    if (!idle) runtime.SleepUntilNextFrame();
+    var events = window.GetEvents(wait: idle);
+    if (runtime.FramesRequested == 0 && events.Count == 0) continue;
+    // Taken before the frame is built, so what the build asks for is still owed after it.
+    runtime.ConsumeFrame();
+    Frame();
+}
+runtime.WakeUp = null;
 
 void Frame()
 {
     // While a test-server command runs, the server is the keyboard and mouse.
-    runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
+    runtime.BeginBuild(window.Frame, testServer?.Step(window.Events) ?? window.Events);
     Demo.Build(runtime, state);
     runtime.EndBuild();
-    SilkWindow.BeginDraw(window);
+    SilkGl.BeginDraw(window, gl);
     skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);
-    SilkWindow.EndFrame(window, runtime);
+    SilkGl.EndDraw(window);
 }

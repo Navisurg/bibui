@@ -6,6 +6,7 @@ using Bibui.Raster.Managed.Backend;
 using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
 using Bibui.Core.Theming;
+using Bibui.Core.Runtime.Platform;
 
 /// <summary>
 /// The damage oracle: every scene runs on two runtimes side by side, each drawn
@@ -45,8 +46,8 @@ internal static class DamageOracle
             stepFull(f);
             stepDmg(f);
 
-            int pw = SurfaceOptions.PhysicalSize(full.SurfaceWidth, full.ScaleFactor);
-            int ph = SurfaceOptions.PhysicalSize(full.SurfaceHeight, full.ScaleFactor);
+            // The window the frame is about to be built on: a step may have resized it.
+            var (pw, ph) = (full.WindowOf().Width, full.WindowOf().Height);
             if (pw != w || ph != h)
             {
                 w = pw; h = ph;
@@ -74,9 +75,8 @@ internal static class DamageOracle
     private static BibuiRuntime Make(Scene scene, ManagedRenderer renderer, out Action<int> step)
     {
         var rt = BibuiRuntime.Create();
-        rt.TargetHz = 60f;
         var (build, s) = scene.Setup(rt, renderer);
-        rt.SetBuild(build, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = scene.Width, Height = scene.Height, ScaleFactor = scene.Scale });
+        rt.SetBuild(build, ThemeLoader.BibuiDark(), TestBuild.Window(scene.Width, scene.Height, scene.Scale));
         step = s;
         return rt;
     }
@@ -445,8 +445,8 @@ internal static class DamageOracle
             }
             return (Build, f =>
             {
-                if (f == 20) rt.ResizeSurface(700, 450, 1f);
-                if (f == 40) rt.ResizeSurface(500, 360, 1f);
+                if (f == 20) rt.SetWindow(new WindowFrame(700, 450, 1f, 60f));
+                if (f == 40) rt.SetWindow(new WindowFrame(500, 360, 1f, 60f));
                 var (x, y) = Wander(f, 480, 340);
                 Move(rt, x, y);
             });

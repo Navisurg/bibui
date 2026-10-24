@@ -10,6 +10,7 @@ using Surface = Bibui.Raster.Managed.Surface;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Core.Runtime;
 using Bibui.Core.Theming;
+using Bibui.Core.Runtime.Platform;
 
 int passed = 0, failed = 0;
 string? filter = args.Length > 0 ? args[0] : null;
@@ -58,7 +59,6 @@ static (BibuiRuntime Rt, ManagedRenderer Backend, Surface Target) Rig()
 {
     var backend = new ManagedRenderer { DamageTracking = true };
     var rt = BibuiRuntime.Create();
-    rt.TargetHz = 60f;
     rt.SetBuild(() =>
     {
         var page = rt.Column().Sized(Size.Fill, Size.Fill);
@@ -75,7 +75,7 @@ static (BibuiRuntime Rt, ManagedRenderer Backend, Surface Target) Rig()
                     }
             }
         return page;
-    }, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = 400, Height = 160, ScaleFactor = 1f });
+    }, ThemeLoader.BibuiDark(), TestBuild.Window(400, 160));
     return (rt, backend, new Surface(400, 160));
 }
 
@@ -96,7 +96,7 @@ Run("A surface the renderer has not drawn, a new background and a resize are pai
     Frame(rt, backend, target);
     Eq("background", backend.LastFullRepaintReason);
 
-    rt.ResizeSurface(300, 160, 1f);
+    rt.SetWindow(new WindowFrame(300, 160, 1f, 60f));
     var smaller = new Surface(300, 160);
     Frame(rt, backend, smaller);
     Eq("resize", backend.LastFullRepaintReason);
@@ -119,7 +119,6 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
     {
         var backend = new ManagedRenderer { DamageTracking = tracked };
         var rt = BibuiRuntime.Create();
-        rt.TargetHz = 60f;
         rt.SetBuild(() =>
         {
             var page = rt.Column().Sized(Size.Fill, Size.Fill);
@@ -134,7 +133,7 @@ Run("A retained box's draw callback follows a theme change, as a whole repaint d
                 ctx.DrawEdge(r.Left + 8f, r.MidY, r.Right - 8f, r.MidY, 2f, ctx.Resolve(UiColor.Accent));
             };
             return page;
-        }, ThemeLoader.BibuiDark(), new SurfaceOptions { Width = 160, Height = 80, ScaleFactor = 1f });
+        }, ThemeLoader.BibuiDark(), TestBuild.Window(160, 80));
         var target = new Surface(160, 80);
         return (() => Frame(rt, backend, target), rt.SetTheme, () => { var px = new uint[160 * 80]; target.CopyTo(px); return px; });
     }
