@@ -10,34 +10,15 @@ memory that `Bibui.Gl`'s `GlCpuFramebuffer` shows on it. The clipboard goes
 through TextCopy.
 
 ```csharp
-var runtime = BibuiRuntime.Create();
 using var window = SilkWindow.Open(SilkGl.Options(new PlatformWindowOptions("My app", 960, 640)));
-runtime.WakeUp = window.Wake;
-runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
 var gl = SilkGl.Target(window);
-using var skia = new SkiaGlRenderer(gl);                 // Bibui.Raster.Skia
-while (!window.IsClosing)
-{
-    bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
-    if (!idle) runtime.SleepUntilNextFrame();
-    var events = window.GetEvents(wait: idle);
-    if (runtime.FramesRequested == 0 && events.Count == 0) continue;
-    runtime.ConsumeFrame();
-    runtime.BeginBuild(window.Frame, events);
-    /* your frame */
-    runtime.EndBuild();
-    SilkGl.BeginDraw(window, gl);
-    skia.Draw(runtime.DrawList);
-    SilkGl.EndDraw(window);
-}
+using var skia = new SkiaGlRenderer(gl);   // Bibui.Raster.Skia
 ```
 
-`GetEvents(wait: true)` blocks until something happens, so an idle app uses no
-CPU; with a frame owed, the runtime sleeps until it is due. Set
-`window.OnRefresh` to the frame (build and draw) to draw at a new size and keep
-drawing during a resize on Windows and macOS. An app drawing with Skia references `Bibui.Raster.Skia`
-as well. It runs under the JIT; for a Native
-AOT app, use `Bibui.Platform.Wayland` with `Bibui.Raster.Managed.Backend`.
+Most apps take it through a `Bibui.App` package (`Bibui.App.SilkSkiaGl`,
+`SilkSkiaCpu`, `SilkManaged`), which runs the loop. [Writing the loop yourself](https://github.com/Navisurg/bibui/blob/main/docs/app-packages.md#writing-the-loop-yourself) shows the
+loop on the window and a renderer directly. It runs under the JIT; for a
+Native AOT app, use `Bibui.App.WaylandManaged`.
 
 Part of bibui, a code-first native UI library for .NET:
 <https://github.com/Navisurg/bibui>. Licensed under Apache-2.0.

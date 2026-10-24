@@ -8,11 +8,12 @@ result.
 
 ## Which route publishes
 
-| Route | Packages | Native AOT |
+| Route | Package | Native AOT |
 |---|---|---|
-| Wayland + managed raster | `Bibui.Core`, `Bibui.Platform.Wayland`, `Bibui.Raster.Managed.Backend` | **Yes.** Tested in CI with warnings as errors |
-| Silk + Skia | `Bibui.Core`, `Bibui.Platform.Silk`, `Bibui.Raster.Skia` | **No, JIT only for now** |
-| Browser + managed raster | `Bibui.Core`, `Bibui.Platform.Browser`, `Bibui.Raster.Managed.Backend` | Not Native AOT: WebAssembly, interpreted or ahead-of-time compiled ([bibui in the browser](browser.md)) |
+| Wayland + managed raster | `Bibui.App.WaylandManaged` (or `Bibui.Platform.Wayland` + `Bibui.Raster.Managed.Backend`) | **Yes.** Tested in CI with warnings as errors |
+| Wayland + Skia on the CPU | `Bibui.App.WaylandSkiaCpu` | Yes, beside `libSkiaSharp.so` |
+| Silk + Skia, Silk + managed | `Bibui.App.SilkSkiaGl`, `SilkSkiaCpu`, `SilkManaged` | **No, JIT only for now** |
+| Browser + managed raster | `Bibui.Platform.Browser` + `Bibui.Raster.Managed.Backend` | Not Native AOT: WebAssembly, interpreted or ahead-of-time compiled ([bibui in the browser](browser.md)) |
 
 The Silk + Skia route is JIT-only for now. bibui's own Silk window and Skia
 renderer are AOT compatible, but Silk.NET itself is not trim-safe: it finds its
@@ -28,8 +29,8 @@ the .NET runtime's interpreter in the page, or compiled to WebAssembly ahead
 of time with `-p:RunAOTCompilation=true`. Its publish trims the app as a
 Native AOT publish does, so the same rules for your own code apply to it.
 
-Your build code does not depend on the route. Only `Program.cs`, which opens
-the window and binds the renderer, differs.
+Your build code does not depend on the route. Only the package the app
+references differs.
 
 ## Set up the project
 
@@ -40,9 +41,7 @@ HarfBuzz (`libfreetype6` and `libharfbuzz0b` on Debian and Ubuntu).
 
 ```bash
 dotnet new console -n Counter && cd Counter
-dotnet add package Bibui.Core
-dotnet add package Bibui.Platform.Wayland
-dotnet add package Bibui.Raster.Managed.Backend
+dotnet add package Bibui.App.WaylandManaged
 ```
 
 In the `.csproj`, turn on AOT and make every trimming warning an error, so a
@@ -62,66 +61,49 @@ publish. `InvariantGlobalization` is optional. It leaves out the ICU culture
 data, which a UI that formats its numbers with the invariant culture does not
 need.
 
-## Name the renderer
+## The app
 
-Open the window and construct the renderer yourself, bound to the window's
-memory:
+The app is the same as on any other `Bibui.App` package; the package names
+the window and the renderer, so the trimmer sees the types and keeps them:
 
 ```csharp
+using Bibui.App;
 using Bibui.Core;
-using Bibui.Platform.Wayland;
-using Bibui.Raster.Managed.Backend;
 using Bibui.Core.Runtime;
-using Bibui.Core.Runtime.Platform;
-
-var runtime = BibuiRuntime.Create();
-int count = 0;
-
-void Build()
-{
-    var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
-    page.Style.Padding = EdgeInsets.All(24f);
-    runtime.Text($"Clicked {count} times");
-    runtime.Gap(12f);
-    if (runtime.Button("add", "Add one").Clicked) count++;
-    runtime.EndParent(page);
-}
+using Bibui.Platform.Wayland;
 
 if (!WaylandWindow.IsSupported)
 {
     Console.Error.WriteLine("This app needs a Wayland session.");
     return 1;
 }
-using var window = WaylandWindow.Open(new PlatformWindowOptions("Counter", 360, 160),
-    new WaylandHostOptions { AppId = "dev.example.counter" });
-runtime.WakeUp = window.Wake;
-runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
-window.OnRefresh = runtime.RequestFrame;
-using var managed = new ManagedRenderer(window.Cpu);
-while (!window.IsClosing)
-{
-    bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
-    var events = window.GetEvents(wait: idle);   // paced by the compositor's frame callback
-    if (runtime.FramesRequested == 0 && events.Count == 0) continue;
-    runtime.ConsumeFrame();
-    runtime.BeginBuild(window.Frame, events);
-    Build();
-    runtime.EndBuild();
-    WaylandWindow.BeginDraw(window);
-    managed.Draw(runtime.DrawList);
-    WaylandWindow.EndDraw(window);
-}
+
+var runtime = BibuiRuntime.Create();
+int count = 0;
+using var app = BibuiApp.Open(runtime, new("Counter", 360, 160),
+    new BibuiAppOptions { AppId = "dev.example.counter" });
+app.Frame = Frame;
+while (app.WaitForFrame()) Frame();
 return 0;
+
+void Frame()
+{
+    runtime.BeginBuild(app.Window.Frame, app.Events);
+    var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+    page.Style.Padding = EdgeInsets.All(24f);
+    runtime.Text($"Clicked {count} times");
+    runtime.Gap(12f);
+    if (runtime.Button("add", "Add one").Clicked) count++;
+    runtime.EndParent(page);
+    runtime.EndBuild();
+    app.Present();
+}
 ```
 
-There is no default renderer: the runtime only records each frame into a
-`DrawList`, and the renderer that draws it is one you construct
-(`new ManagedRenderer(window.Cpu)` or `new SkiaCpuRenderer(window.Cpu)`), so the
-trimmer sees the type you name and keeps it.
-
-The window is chosen the same way: the app opens the one it names. bibui looks
-nothing up at run time: no platform discovery, no plug-in loading, no
-reflection over your types.
+bibui looks nothing up at run time: no platform discovery, no plug-in loading,
+no reflection over your types. An app that combines a window and a renderer
+itself constructs both, as [Writing the loop yourself](app-packages.md#writing-the-loop-yourself)
+shows, and the trimmer keeps what it names in the same way.
 
 ## Publish
 
@@ -151,31 +133,15 @@ to about 5 MB as well. Most of that is bibui and the managed rasterizer, so it
 grows slowly with your own code; `System.Text.Json`, for example, adds about
 half a megabyte.
 
-The showcase builds both routes from one project. A build property leaves Silk
-and Skia out of the AOT binary, so only the managed route ships:
-
-```xml
-<ItemGroup>
-  <PackageReference Include="Bibui.Core" Version="1.0.0" />
-  <PackageReference Include="Bibui.Platform.Wayland" Version="1.0.0" />
-  <PackageReference Include="Bibui.Raster.Managed.Backend" Version="1.0.0" />
-</ItemGroup>
-<ItemGroup Condition="'$(AppRoute)' != 'wayland'">
-  <PackageReference Include="Bibui.Platform.Silk" Version="1.0.0" />
-  <PackageReference Include="Bibui.Raster.Skia" Version="1.0.0" />
-</ItemGroup>
-<PropertyGroup Condition="'$(AppRoute)' == 'wayland'">
-  <DefineConstants>$(DefineConstants);WAYLAND_ONLY</DefineConstants>
-</PropertyGroup>
-```
+The showcase builds on any `Bibui.App` package from one project: a build
+property picks the package ([`samples/BibuiApp.props`](../samples/BibuiApp.props)),
+so the Native AOT build references only the Wayland one, and no Silk or Skia
+ships in it:
 
 ```bash
-dotnet run                                                          # JIT, Silk + Skia available
-dotnet publish -c Release -r linux-x64 -p:PublishAot=true -p:AppRoute=wayland -o out
+dotnet run                                                          # JIT, Bibui.App.SilkSkiaGl
+dotnet publish -c Release -r linux-x64 -p:PublishAot=true -p:App=WaylandManaged -o out
 ```
-
-Code that names `SilkWindow` or `SkiaGlRenderer` goes inside
-`#if !WAYLAND_ONLY`.
 
 ## Trimming rules for your code
 

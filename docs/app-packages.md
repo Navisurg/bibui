@@ -104,7 +104,7 @@ compiled by three projects that differ only in their package:
 
 The test server lets a test or an agent drive a running app: click, type,
 read the tree, take a screenshot. It starts when the app asks,
-`BibuiApp.Open(runtime, window, new BibuiAppOptions { TestServer = true })`,
+`BibuiApp.Open(runtime, new("App", 800, 600), new BibuiAppOptions { TestServer = true })`,
 or when the environment variable `BIBUI_TEST_SERVER=1` is set. Otherwise it is
 off.
 
@@ -143,7 +143,10 @@ The window knows no runtime: the loop wires its wake and clipboard to the
 runtime, hands the runtime its `Frame` and events each frame, and tells it when
 to wait. Without input or a frame owed, `GetEvents(wait: true)` blocks; with a
 frame owed, the runtime sleeps until it is due and `GetEvents(wait: false)`
-takes what came meanwhile. `window.OnRefresh` is what the window calls on a
-resize.
+takes what came meanwhile. A Wayland window paces the loop itself
+(`window.PacesFrames`): its `GetEvents(wait: false)` waits for the compositor's
+frame callback, so the loop does not sleep, and it draws into `window.Cpu`
+between `WaylandWindow.BeginDraw` and `EndDraw`. `window.OnRefresh` is what the
+window calls on a resize: the frame (build and draw), or `runtime.RequestFrame`.
 
 More at https://github.com/Navisurg/bibui.

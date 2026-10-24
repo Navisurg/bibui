@@ -37,6 +37,8 @@ All notable changes to bibui are recorded here. The format is based on
 - `BibuiApp.WaitForFrame()`, `Present()` and `Frame`: the app owns the loop
   (`while (app.WaitForFrame()) Frame();`), and `app.Frame` is the frame the
   window calls where the loop cannot run, during a resize.
+- `BibuiAppOptions.MinWidth` and `MinHeight`: the smallest size a Wayland
+  compositor may give the window of a `Bibui.App.Wayland*` package.
 - `BibuiPage.Window` and `BibuiPage.DefaultWindow`: a page builds every frame
   on a window, 800 × 600 at 1× and 60 Hz unless given, so a run is
   deterministic.
@@ -68,8 +70,8 @@ All notable changes to bibui are recorded here. The format is based on
   clipboard to `window.GetClipboardText`/`SetClipboardText`. Each frame the
   loop hands the runtime `window.Frame` and the window's events. A loop that
   called `SilkWindow.BeginFrame(window, runtime)` and `EndFrame` now waits with
-  `window.GetEvents(wait)` and paces with `runtime.SleepUntilNextFrame()`; the
-  README shows the loop.
+  `window.GetEvents(wait)` and paces with `runtime.SleepUntilNextFrame()`;
+  docs/app-packages.md ("Writing the loop yourself") shows the loop.
 - **Breaking:** `SilkWindow` opens with no graphics API (`SilkWindow.DefaultOptions`):
   open it with `SilkGl.Options(...)` for OpenGL. `window.Gl` is
   `SilkGl.Target(window)`, and `SilkWindow.BeginDraw`/`EndDraw` are

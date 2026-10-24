@@ -91,7 +91,7 @@ dotnet run --project samples/counter-gl
 
 bibui consists of a core part, [bibui-core](bibui-core), that defines
 how you build user interfaces with bibui through layout constraints
-and the builtin UI node typestypes.
+and the builtin UI node types.
 By itself it has no idea how to talk to the OS to get window and
 input events, or do any type of rendering of the UI.
 
@@ -148,51 +148,26 @@ with a `Text` inside. `button.Clicked` reports an [Interaction](bibui-core/src/P
 
 ## bibui app from scratch
 
-A `Bibui.App` package is a fast path for gluing together a window package and a renderer package.
+A `Bibui.App` package is a window package and a renderer package put together,
+with the loop's calls. You may instead reference `Bibui.Core`, a window
+(`Bibui.Platform.Silk`, `Bibui.Platform.Wayland`) and a renderer
+(`Bibui.Raster.Skia`, `Bibui.Raster.Managed.Backend`) directly, and write the
+loop yourself: [Writing the loop yourself](docs/app-packages.md#writing-the-loop-yourself)
+shows it.
 
-You may instead reference directly `Bibui.Core`, `Bibui.Platform.Silk`,
-`Bibui.Raster.Skia`, and then you will have to write the main app loop as:
-
-```csharp
-using var window = SilkWindow.Open(SilkGl.Options(new("Counter", 360, 160)));
-runtime.WakeUp = window.Wake;                   // a frame asked for on another thread ends the wait
-var gl = SilkGl.Target(window);
-using var skia = new SkiaGlRenderer(gl);
-
-while (!window.IsClosing)
-{
-    bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
-    if (!idle) runtime.SleepUntilNextFrame();   // runtime:  pace to the window's refresh rate
-    var events = window.GetEvents(wait: idle);  // window:   wait for input, or take what came; Silk input → WindowEvents
-    if (runtime.FramesRequested == 0 && events.Count == 0) continue;
-    runtime.ConsumeFrame();
-    runtime.BeginBuild(window.Frame, events);   // runtime:  the window's size, scale and rate; WindowEvent → BibUiEvent
-    Build();                                    // your app: build boxes and text, read interactions
-    runtime.EndBuild();                         // runtime:  lay the tree out, record runtime.DrawList
-    SilkGl.BeginDraw(window, gl);               // renderer: draw the DrawList into the GL framebuffer
-    skia.Draw(runtime.DrawList);
-    SilkGl.EndDraw(window);                     // window:   swap; the frame is on screen
-}
-```
-
-The window knows no runtime: it hands the runtime what it is each frame, a
-`WindowFrame` (framebuffer size, scale and refresh rate), and the events, and
-waits when told to. The runtime lays the frame out on that window, steps
-animations by one frame at its refresh rate (`Dt`), and paces the loop.
-
-Each layer sends data only to layers below it, and each layer is free to interpret that data however it likes.
-With this design, you may target a new platform, by writing a new platform layer that produces `WindowEvent`s.
-You may be able to reuse any of the renderers, or write a new one for the platform that renders using the draw operations issued to a `DrawList`.
-
-[Bibui.Platform.Wayland](bibui-platform-wayland/) and the managed rasterizer are both built this way.
-
-This design enables us to have different combinations of platform layers for handling input and renderers, for rendering the bibui `DrawList`.
+Each layer sends data only to the layer below it. The window knows no runtime:
+each frame it hands the runtime a `WindowFrame` (its size, scale and refresh
+rate) and its `WindowEvent`s. The runtime lays the frame out, paces the loop,
+and records a `DrawList`, which a renderer draws. A new platform is a new
+window that produces those; any renderer can draw for it, or a new one can be
+written against the `DrawList`. [Bibui.Platform.Wayland](bibui-platform-wayland/)
+and the managed rasterizer are both built this way.
 
 ## The test server
 
 The test server lets a test or an agent drive a running app: click, type,
 read the tree, take a screenshot. A `BibuiApp` starts it when asked,
-`BibuiApp.Open(runtime, window, new BibuiAppOptions { TestServer = true })`,
+`BibuiApp.Open(runtime, new("App", 800, 600), new BibuiAppOptions { TestServer = true })`,
 or when the environment variable `BIBUI_TEST_SERVER=1` is set. Otherwise it is
 off.
 
