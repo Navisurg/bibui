@@ -1,4 +1,5 @@
 using Bibui.Core.Draw;
+using Bibui.Gl;
 using Bibui.Raster.Skia;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
@@ -12,21 +13,24 @@ public sealed partial class BibuiApp
     // CPU renderer of its own draws them. Textures made on Renderer are not in it.
     private SkiaCpuRenderer? _screenshots;
 
+    // The window's GL framebuffer, which Renderer draws into.
+    private GlTarget _gl = null!;
+
     /// <summary>Called while the window is being resized, where the OS blocks the loop (Windows, macOS): set it to the loop's body to keep drawing.</summary>
     public Action? OnRefresh { get => Window.OnRefresh; set => Window.OnRefresh = value; }
 
     private static partial SilkWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options) =>
-        SilkWindow.Open(runtime, window);
+        SilkWindow.Open(runtime, SilkGl.Options(window));
 
-    private partial SkiaGlRenderer MakeRenderer() => new(Window.Gl);
+    private partial SkiaGlRenderer MakeRenderer() => new(_gl = SilkGl.Target(Window));
 
     private partial bool BeginWindowFrame() => SilkWindow.BeginFrame(Window, Runtime);
 
     private partial void Present()
     {
-        SilkWindow.BeginDraw(Window);
+        SilkGl.BeginDraw(Window, _gl);
         Renderer.Draw(Runtime.DrawList);
-        SilkWindow.EndDraw(Window);
+        SilkGl.EndDraw(Window);
     }
 
     private partial void EndWindowFrame() => SilkWindow.EndFrame(Window, Runtime);
