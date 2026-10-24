@@ -16,7 +16,10 @@ var bounds = page.GetBounds("save");
 The build is what the app's loop runs between `BeginBuild` and `EndBuild`;
 each action builds the frame it causes, and `page.Frame()` builds one nothing
 caused. `BibuiPage.Launch(runtime => MyScreen.Build(runtime))` does the same on
-a runtime of its own.
+a runtime of its own. Every frame is built on the page's `Window`, a
+`WindowFrame` (800 × 600 at 1× and 60 Hz unless given), so a frame's `Dt` is
+1/60 and a run is deterministic; set `page.Window` to resize the page or
+change its scale.
 
 `WorkflowClient` talks to a `BibuiTestServer` the app starts on purpose, for
 example with `BibuiTestServer.StartIfEnabled(runtime, draw: cpu.Draw)` (`cpu`
@@ -25,7 +28,7 @@ a renderer that draws into memory), which starts one only when
 runs, the server is the keyboard and mouse:
 
 ```csharp
-runtime.BeginBuild(server?.Step(window.Events) ?? window.Events);
+runtime.BeginBuild(window.Frame, server?.Step(window.Events) ?? window.Events);
 ```
 
 Its screenshots and recordings are drawn with the function you pass, on the

@@ -37,7 +37,7 @@ static partial class IconNameTests
                     }
                     return row;
                 },
-                new SurfaceOptions { Width = 100, Height = 40 });
+                TestBuild.Window(100, 40));
             runtime.Step();
 #if DEBUG
             Check(thrown is not null && thrown.Message.Contains("folder-open"), "a debug build names the icon it does not have");

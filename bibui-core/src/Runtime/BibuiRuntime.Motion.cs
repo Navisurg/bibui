@@ -16,8 +16,8 @@ public sealed partial class BibuiRuntime
     // It keeps every rule Animate keeps. Keyed by (id, property), evicted when
     // nobody asks. A value asked for the first time is at its target. Asking
     // does not advance it: everything steps once, at the end of the frame, on
-    // the frame's Dt, which the window sets before the build — so a frame's two
-    // builds read one answer, and a headless run is deterministic. And whatever the transition, ReducedMotion (or a theme whose
+    // the frame's Dt, which BeginBuild takes — so a frame's two builds read one
+    // answer, and a headless run is deterministic. And whatever the transition, ReducedMotion (or a theme whose
     // easing is None) closes every gap in one step.
 
     /// <summary>

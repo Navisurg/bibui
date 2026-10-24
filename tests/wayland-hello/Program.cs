@@ -18,6 +18,7 @@ using Bibui.Core;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 using Bibui.Core.TextEdit;
 
 bool animate = !args.Contains("--still");
@@ -30,7 +31,6 @@ string lastButton = "none yet";
 KeyModifiers lastModifiers = KeyModifiers.None;
 
 var runtime = BibuiRuntime.Create();
-runtime.Surface = new SurfaceOptions { Width = 760, Height = 560, ScaleFactor = 1f };
 long frame = 0;
 
 // One frame of the app, built from the state above, top to bottom.
@@ -126,7 +126,7 @@ void Build()
 if (args.Contains("--first-frame"))
 {
     using var cpu = new ManagedRenderer();
-    runtime.BeginBuild();
+    runtime.BeginBuild(new WindowFrame(760, 560, 1f, 60f));
     Build();
     runtime.EndBuild();
     FramePixels.Bgra(runtime, cpu.Draw, out _, out _);
@@ -140,17 +140,26 @@ if (!WaylandWindow.IsSupported)
 }
 
 // The renderer is named: the Wayland window brings none, and Native AOT keeps only what is named.
-using var window = WaylandWindow.Open(runtime, new("bibui — wayland-hello", 760, 560),
+using var window = WaylandWindow.Open(new("bibui — wayland-hello", 760, 560),
     new WaylandHostOptions { AppId = "bibui-wayland-hello" });
+runtime.WakeUp = window.Wake;
+runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+window.OnRefresh = runtime.RequestFrame;
 using var managed = new ManagedRenderer(window.Cpu);
-while (WaylandWindow.BeginFrame(window, runtime))
+while (!window.IsClosing)
 {
-    runtime.BeginBuild(window.Events);
+    // Nothing happening: wait for input. A frame wanted: wait for the
+    // compositor's frame callback, which paces the loop.
+    bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
+    var events = window.GetEvents(wait: idle);
+    if (runtime.FramesRequested == 0 && events.Count == 0) continue;
+    runtime.ConsumeFrame();
+    runtime.BeginBuild(window.Frame, events);
     Build();
     runtime.EndBuild();
     WaylandWindow.BeginDraw(window);
     managed.Draw(runtime.DrawList);
     WaylandWindow.EndDraw(window);
-    WaylandWindow.EndFrame(window, runtime);
 }
+runtime.WakeUp = null;
 return 0;

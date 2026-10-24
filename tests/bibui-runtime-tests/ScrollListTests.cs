@@ -62,7 +62,7 @@ static class ScrollListTests
                     Runtime.EndParent(area);
                 }
                 return panel;
-            }, ThemeRegistry.Load("bibui-dark"), new SurfaceOptions { Width = 400, Height = (int)Height, ScaleFactor = 1f });
+            }, ThemeRegistry.Load("bibui-dark"), TestBuild.Window(400, (int)Height, 1f));
             Frame();
             Frame();   // laid out: the view has its height
         }
