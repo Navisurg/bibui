@@ -172,14 +172,86 @@ public sealed class Port : IDisposable
         return null;
     }
 
-    // ── Clicking ───────────────────────────────────────────────────────────
+    // ── Input ──────────────────────────────────────────────────────────────
+    // Each event is one request, so one frame, answered once what it set off has run.
 
     /// <summary>
-    /// Clicks the node with this id: once it holds still, scrolled into view if a
-    /// box claiming Clip hides it, at its centre; a move, a press and a release,
-    /// each one frame. Returns once what the click set off has run.
+    /// Clicks the node with this id with <paramref name="button"/> (left, right or
+    /// middle), in view and still, at its centre: a move, a press and a release.
     /// </summary>
-    public PortNode Click(string id)
+    public PortNode Click(string id, string button = "left")
+    {
+        var node = InView(id);
+        var (x, y) = node.Centre;
+        Ask(Events(Pointer("mouse_move", x, y)));
+        Ask(Events(Pointer("mouse_down", x, y, button)));
+        Ask(Events(Pointer("mouse_up", x, y, button)));
+        return node;
+    }
+
+    /// <summary>Moves the pointer onto the node with this id, in view and still, without a press.</summary>
+    public PortNode Hover(string id)
+    {
+        var node = InView(id);
+        var (x, y) = node.Centre;
+        Ask(Events(Pointer("mouse_move", x, y)));
+        return node;
+    }
+
+    /// <summary>
+    /// Drags from the node with this id's centre to (x, y): a press, moves a few
+    /// pixels apart, a release, as a hand drags.
+    /// </summary>
+    public PortNode Drag(string id, float toX, float toY)
+    {
+        var node = InView(id);
+        var (x, y) = node.Centre;
+        Drag(x, y, toX, toY);
+        return node;
+    }
+
+    /// <summary>Drags from (x, y) to (toX, toY): to select text, say, from its first letter to its last.</summary>
+    public void Drag(float x, float y, float toX, float toY)
+    {
+        Ask(Events(Pointer("mouse_move", x, y)));
+        Ask(Events(Pointer("mouse_down", x, y, "left")));
+        int steps = Math.Clamp((int)(MathF.Sqrt((toX - x) * (toX - x) + (toY - y) * (toY - y)) / 12f), 1, 40);
+        for (int i = 1; i <= steps; i++)
+            Ask(Events(Pointer("mouse_move", x + (toX - x) * i / steps, y + (toY - y) * i / steps)));
+        Ask(Events(Pointer("mouse_up", toX, toY, "left")));
+    }
+
+    /// <summary>Wheel steps over the node with this id: a negative <paramref name="dy"/> shows what is below.</summary>
+    public PortNode Scroll(string id, float dy)
+    {
+        var node = Still(id);
+        var (x, y) = node.Centre;
+        Ask(Events(new JsonObject { ["kind"] = "scroll", ["x"] = x, ["y"] = y, ["dy"] = dy }));
+        return node;
+    }
+
+    /// <summary>The text typed into what has the keyboard, a character a frame.</summary>
+    public void Type(string text)
+    {
+        foreach (var rune in text.EnumerateRunes())
+            Ask(Events(new JsonObject { ["kind"] = "key_char", ["char"] = rune.ToString() }));
+    }
+
+    /// <summary>A key pressed and released <paramref name="times"/> times, with modifiers (ctrl, shift, alt, super).</summary>
+    public void Key(string key, IReadOnlyList<string> modifiers, int times = 1)
+    {
+        for (int i = 0; i < times; i++)
+            foreach (var kind in (ReadOnlySpan<string>)["key_down", "key_up"])
+            {
+                var mods = new JsonArray();
+                foreach (var m in modifiers) mods.Add((JsonNode)JsonValue.Create(m));
+                Ask(Events(new JsonObject { ["kind"] = kind, ["key"] = key, ["modifiers"] = mods }));
+            }
+    }
+
+    // The node with this id, once it holds still and, if a box claiming Clip hides
+    // it, scrolled into view.
+    private PortNode InView(string id)
     {
         var node = Still(id);
         for (int tries = 0; Hiding(node) is { } hiding; tries++)
@@ -187,10 +259,14 @@ public sealed class Port : IDisposable
             if (tries == 20) throw new PortException($"'{id}' did not come into view.");
             node = ScrollTowards(node, hiding);
         }
-        var (x, y) = node.Centre;
-        foreach (var kind in (ReadOnlySpan<string>)["mouse_move", "mouse_down", "mouse_up"])
-            Ask(Events(new JsonObject { ["kind"] = kind, ["x"] = x, ["y"] = y, ["button"] = "left" }));
         return node;
+    }
+
+    private static JsonObject Pointer(string kind, float x, float y, string? button = null)
+    {
+        var ev = new JsonObject { ["kind"] = kind, ["x"] = x, ["y"] = y };
+        if (button is not null) ev["button"] = button;
+        return ev;
     }
 
     // The node once two trees in a row have it in the same place: each tree is a

@@ -51,7 +51,7 @@ void Frame()
             switch (cmd.Kind)
             {
                 case TestCmdKind.Events: window.Events.AddRange(cmd.Events); break;
-                case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, shots!.Draw)); break;
+                case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, shots!.Draw, cmd.Region)); break;
                 case TestCmdKind.App: testPort.RefuseCmd("This demo has no commands of its own."); break;
             }
 

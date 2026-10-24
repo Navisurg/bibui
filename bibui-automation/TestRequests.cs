@@ -27,8 +27,11 @@ internal sealed record StateRequest : TestRequest;
 /// <summary>The commands a client may send: these, and the app's.</summary>
 internal sealed record SchemaRequest : TestRequest;
 
-/// <summary>The frame as a PNG, written by the app at <see cref="Path"/>.</summary>
-internal sealed record ScreenshotRequest(string Path) : TestRequest;
+/// <summary>
+/// The frame as a PNG, written by the app at <see cref="Path"/>: the whole frame, or
+/// with <see cref="Id"/> only that node's rect.
+/// </summary>
+internal sealed record ScreenshotRequest(string Path, string? Id = null) : TestRequest;
 
 /// <summary>
 /// One event, as a window reports one: <c>kind</c> is <c>mouse_move</c>, <c>mouse_down</c>,

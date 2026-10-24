@@ -47,17 +47,23 @@ public readonly ref struct TestCmd
     public readonly ReadOnlySpan<WindowEvent> Events;
     /// <summary>Screenshot: the file the app writes the frame to.</summary>
     public readonly string? Path;
+    /// <summary>
+    /// Screenshot: the part of the frame asked for, in logical pixels (a node's rect),
+    /// or null for all of it; for <c>FramePixels.Png(runtime, draw, cmd.Region)</c>.
+    /// </summary>
+    public readonly RectF? Region;
     /// <summary>App: the command as sent, for the app's own deserializer.</summary>
     public readonly ReadOnlySpan<byte> Json;
     /// <summary>None: why the request was refused.</summary>
     public readonly string? Error;
 
     internal TestCmd(TestCmdKind kind, ReadOnlySpan<WindowEvent> events = default,
-        string? path = null, ReadOnlySpan<byte> json = default, string? error = null)
+        string? path = null, ReadOnlySpan<byte> json = default, string? error = null, RectF? region = null)
     {
         Kind = kind;
         Events = events;
         Path = path;
+        Region = region;
         Json = json;
         Error = error;
     }
@@ -201,7 +207,10 @@ public sealed partial class TestPort
             TreeRequest => new TestCmd(TestCmdKind.Tree),
             StateRequest => new TestCmd(TestCmdKind.State),
             SchemaRequest => new TestCmd(TestCmdKind.Schema),
-            ScreenshotRequest { Path.Length: > 0 } s => new TestCmd(TestCmdKind.Screenshot, path: s.Path),
+            ScreenshotRequest { Path.Length: > 0, Id: null } s => new TestCmd(TestCmdKind.Screenshot, path: s.Path),
+            ScreenshotRequest { Path.Length: > 0, Id: { } id } s => NodeRect(_runtime?.LastTree, id) is { } rect
+                ? new TestCmd(TestCmdKind.Screenshot, path: s.Path, region: rect)
+                : Refused($"No node '{id}' in the tree."),
             ScreenshotRequest => Refused("test.screenshot carries the path to write."),
             _ => Refused("Not a request."),
         };
@@ -228,6 +237,16 @@ public sealed partial class TestPort
     }
 
     private static TestCmd Refused(string error) => new(TestCmdKind.None, error: error);
+
+    // The rect of the node with this id in the tree, in logical pixels, or null.
+    private static RectF? NodeRect(UiNode? node, string id)
+    {
+        if (node is null) return null;
+        if (node.Id == id) return new RectF(node.Rect.X, node.Rect.Y, node.Rect.X + node.Extent.X, node.Rect.Y + node.Extent.Y);
+        for (var child = node.FirstChild; child is not null; child = child.Next == child ? null : child.Next)
+            if (NodeRect(child, id) is { } found) return found;
+        return null;
+    }
 
     // ── Events ─────────────────────────────────────────────────────────────
 

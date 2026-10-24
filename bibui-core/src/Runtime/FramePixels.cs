@@ -22,10 +22,26 @@ public static class FramePixels
         return bgra;
     }
 
-    /// <summary>The same pixels, encoded as a PNG.</summary>
-    public static byte[] Png(BibuiRuntime runtime, DrawToPixels draw)
+    /// <summary>
+    /// The same pixels, encoded as a PNG: the whole frame, or with
+    /// <paramref name="region"/> only that part of it, a rect in logical pixels
+    /// (a node's, from the tree) cut to the frame.
+    /// </summary>
+    public static byte[] Png(BibuiRuntime runtime, DrawToPixels draw, RectF? region = null)
     {
         var bgra = Bgra(runtime, draw, out int w, out int h);
-        return Imaging.Png.Encode(bgra, w, h, w * 4, ChannelOrder.Bgra, AlphaMode.Premultiplied);
+        if (region is not { } r) return Imaging.Png.Encode(bgra, w, h, w * 4, ChannelOrder.Bgra, AlphaMode.Premultiplied);
+
+        // The region in physical pixels, whole pixels covering it, inside the frame.
+        float scale = runtime.ScaleFactor;
+        int left = Math.Clamp((int)MathF.Floor(r.Left * scale), 0, w), top = Math.Clamp((int)MathF.Floor(r.Top * scale), 0, h);
+        int right = Math.Clamp((int)MathF.Ceiling(r.Right * scale), left, w), bottom = Math.Clamp((int)MathF.Ceiling(r.Bottom * scale), top, h);
+        int cw = Math.Max(1, right - left), ch = Math.Max(1, bottom - top);
+        if (left + cw > w) left = w - cw;
+        if (top + ch > h) top = h - ch;
+        var cut = new byte[cw * ch * 4];
+        for (int y = 0; y < ch; y++)
+            bgra.AsSpan(((top + y) * w + left) * 4, cw * 4).CopyTo(cut.AsSpan(y * cw * 4));
+        return Imaging.Png.Encode(cut, cw, ch, cw * 4, ChannelOrder.Bgra, AlphaMode.Premultiplied);
     }
 }
