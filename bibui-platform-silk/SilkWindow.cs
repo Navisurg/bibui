@@ -86,6 +86,12 @@ public sealed class SilkWindow : IDisposable
     /// <summary>The refresh rate of the monitor GLFW puts the window on, in Hz; 60 until it knows one.</summary>
     public float RefreshRate { get; private set; } = 60f;
 
+    /// <summary>
+    /// False: <see cref="GetEvents"/> takes what is queued and returns, so the
+    /// loop paces itself (<c>runtime.SleepUntilNextFrame</c>).
+    /// </summary>
+    public bool PacesFrames => false;
+
     /// <summary>This frame's window, for <c>runtime.BeginBuild(window.Frame, window.Events)</c>.</summary>
     public WindowFrame Frame => new(FramebufferWidth, FramebufferHeight, Scale, RefreshRate);
 

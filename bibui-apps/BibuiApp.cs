@@ -116,7 +116,8 @@ public sealed partial class BibuiApp : IDisposable
         while (!Window.IsClosing)
         {
             bool idle = Runtime.FramesRequested == 0 && Window.Events.Count == 0;
-            if (!idle) Runtime.SleepUntilNextFrame();
+            // A window whose wait paces the loop (a compositor's frame callback) needs no sleep.
+            if (!idle && !Window.PacesFrames) Runtime.SleepUntilNextFrame();
             Window.GetEvents(wait: idle);
             if (Window.IsClosing) break;
             // Awake is not the same as having something to draw: a focus change or

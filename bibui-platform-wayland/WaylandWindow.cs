@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Bibui.Core;
 using Bibui.Platform.Wayland.Protocol;
-using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
 
 namespace Bibui.Platform.Wayland;
@@ -23,7 +22,7 @@ public sealed record WaylandHostOptions
     public int Buffers { get; init; } = 3;
 
     /// <summary>
-    /// How long <see cref="BeginFrame"/> waits for the compositor's
+    /// How long <see cref="WaylandWindow.GetEvents"/> waits for the compositor's
     /// frame callback, or for a buffer to come back, before drawing anyway. A
     /// compositor sends no frame callbacks to a window it is not showing
     /// (another workspace); the bound keeps the loop from stalling on one, at
@@ -36,9 +35,9 @@ public sealed record WaylandHostOptions
 /// A window on raw Wayland: libwayland-client and the generated bindings, an
 /// xdg-shell toplevel, and frames drawn on the CPU straight into wl_shm
 /// buffers. No GLFW, no GL, no Silk.NET windowing. Linux under a Wayland
-/// compositor only (Hyprland is the one it is built for). What
-/// <see cref="Open"/> makes, and <see cref="BeginFrame"/> and
-/// <see cref="EndFrame"/> bracket every frame of.
+/// compositor only (Hyprland is the one it is built for). It knows no runtime:
+/// the loop hands the runtime <see cref="Frame"/> and <see cref="Events"/>, and
+/// wires <see cref="Wake"/> and the clipboard to it.
 ///
 /// <list type="bullet">
 /// <item><b>Drawing</b>: <see cref="Cpu"/> holds a free shm buffer from
@@ -46,21 +45,20 @@ public sealed record WaylandHostOptions
 /// (<c>new ManagedRenderer(window.Cpu)</c>) draws there, with no copy.
 /// <c>EndDraw</c> attaches it, damages it whole, and commits it with a frame
 /// callback, whether or not the renderer repainted all of it.</item>
-/// <item><b>Pacing</b>: <c>BeginFrame</c> waits for the previous frame's
-/// callback, so the compositor sets the frame rate and an idle window draws
-/// nothing. A pending configure skips the wait: a resize is drawn at once. The
-/// runtime's <see cref="BibuiRuntime.TargetHz"/> follows the refresh rate of the
-/// output the window is on, and its <see cref="BibuiRuntime.Dt"/> is the time
-/// measured between frames, so animations keep their length.</item>
+/// <item><b>Pacing</b>: <see cref="GetEvents"/> without waiting waits for the
+/// previous frame's callback, so the compositor sets the frame rate, as vsync
+/// would (<see cref="PacesFrames"/>). A pending configure skips the wait: a
+/// resize is drawn at once. <see cref="Frame"/>'s refresh rate is the output's
+/// the window is on.</item>
 /// <item><b>Buffers</b>: triple-buffered by default, each tracked from commit
 /// to wl_buffer.release (<see cref="BufferPool{TBuffer}"/>); a resize retires
 /// the old ones as the compositor lets go of them.</item>
 /// <item><b>Configure</b>: the xdg handshake is state
-/// (<see cref="ToplevelConfigure"/>); the new size goes to
-/// <see cref="BibuiRuntime.ResizeSurface"/> from <see cref="WaitEvents"/>, and
-/// the serial is acked just before the commit of the first frame drawn for it.</item>
-/// <item><b>Ping/pong</b> is answered inside dispatch, which runs while the
-/// loop waits for events and while BeginFrame waits for the compositor, so a busy
+/// (<see cref="ToplevelConfigure"/>); the new size is in <see cref="Frame"/>,
+/// <see cref="OnRefresh"/> draws it, and the serial is acked just before the
+/// commit of the first frame drawn for it.</item>
+/// <item><b>Ping/pong</b> is answered inside dispatch, which runs while
+/// <see cref="GetEvents"/> waits, for events or for the compositor, so a busy
 /// or hidden window never trips the compositor's not-responding check.</item>
 /// <item><b>Wake</b> is an eventfd polled beside the display's fd.</item>
 /// </list>
@@ -72,17 +70,23 @@ public sealed record WaylandHostOptions
 /// <see cref="Pump"/> polls beside the display.</para>
 ///
 /// <code>
-/// using var window = WaylandWindow.Open(runtime, new("My app", 960, 640));
+/// using var window = WaylandWindow.Open(new("My app", 960, 640));
+/// runtime.WakeUp = window.Wake;
+/// runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+/// window.OnRefresh = runtime.RequestFrame;
 /// using var managed = new ManagedRenderer(window.Cpu);
-/// while (WaylandWindow.BeginFrame(window, runtime))
+/// while (!window.IsClosing)
 /// {
-///     runtime.BeginBuild(window.Events);
+///     bool idle = runtime.FramesRequested == 0 &amp;&amp; window.Events.Count == 0;
+///     var events = window.GetEvents(wait: idle);
+///     if (runtime.FramesRequested == 0 &amp;&amp; events.Count == 0) continue;
+///     runtime.ConsumeFrame();
+///     runtime.BeginBuild(window.Frame, events);
 ///     // ... build ...
 ///     runtime.EndBuild();
 ///     WaylandWindow.BeginDraw(window);
 ///     managed.Draw(runtime.DrawList);
 ///     WaylandWindow.EndDraw(window);
-///     WaylandWindow.EndFrame(window, runtime);
 /// }
 /// </code>
 ///
@@ -106,8 +110,8 @@ public sealed unsafe class WaylandWindow : IDisposable
 
     /// <summary>
     /// What the keyboard and mouse did since the last frame, in order, handed over
-    /// from the listeners' queue as <see cref="BeginFrame"/> waits. The loop hands it
-    /// to the runtime (<c>runtime.BeginBuild(window.Events)</c>), which empties it.
+    /// from the listeners' queue by <see cref="GetEvents"/>. The loop hands it to
+    /// the runtime (<c>runtime.BeginBuild(window.Frame, window.Events)</c>), which empties it.
     /// </summary>
     public readonly List<WindowEvent> Events = [];
 
@@ -132,7 +136,9 @@ public sealed unsafe class WaylandWindow : IDisposable
     private uint? _ackSerial;
     private int _logicalW, _logicalH, _fbW, _fbH;
 
-    private BibuiRuntime? _runtime;
+    // A frame the window owes: a configure to answer, a new size or scale, a
+    // frame that found no buffer free. OnRefresh is called for it from GetEvents.
+    private bool _redraw;
     private GCHandle _self;
     private int _wakeFd = -1;
     private volatile bool _open;
@@ -186,8 +192,29 @@ public sealed unsafe class WaylandWindow : IDisposable
     /// <inheritdoc cref="FramebufferWidth"/>
     public int FramebufferHeight => _fbH;
 
-    /// <summary>Physical px per logical px: the scale the runtime is sized at.</summary>
+    /// <summary>Physical px per logical px: the scale the frame is drawn at.</summary>
     public float Scale => SurfaceScale.ToFactor(_scale120);
+
+    /// <summary>The refresh rate of the output the window is on, in Hz; 60 when the compositor told none.</summary>
+    public float RefreshRate => _scale.RefreshHz is > 0f and var hz ? hz : 60f;
+
+    /// <summary>This frame's window, for <c>runtime.BeginBuild(window.Frame, window.Events)</c>.</summary>
+    public WindowFrame Frame => new(Math.Max(1, _fbW), Math.Max(1, _fbH), Scale, RefreshRate);
+
+    /// <summary>
+    /// True: <see cref="GetEvents"/> without waiting waits for the compositor's
+    /// frame callback, which paces the loop as vsync would, so the loop needs no
+    /// sleep of its own.
+    /// </summary>
+    public bool PacesFrames => true;
+
+    /// <summary>
+    /// Called from <see cref="GetEvents"/> when the window must be drawn without
+    /// input asking: a configure to answer, a new size or scale, a frame that was
+    /// drawn and not shown. The app's frame, or a request for one
+    /// (<c>runtime.RequestFrame</c>).
+    /// </summary>
+    public Action? OnRefresh { get; set; }
 
     /// <summary>True once the compositor or <see cref="Close"/> has asked the window to close.</summary>
     public bool IsClosing => _closing || !_open;
@@ -204,10 +231,9 @@ public sealed unsafe class WaylandWindow : IDisposable
 
     // ── Open / Shutdown ──────────────────────────────────────────────────────
 
-    internal void Open(BibuiRuntime runtime, PlatformWindowOptions options)
+    internal void Open(PlatformWindowOptions options)
     {
         if (_open) throw new InvalidOperationException("The window is already open.");
-        _runtime = runtime;
         _closing = false;
         _listenerError = null;
         _configure = new ToplevelConfigure();
@@ -273,7 +299,6 @@ public sealed unsafe class WaylandWindow : IDisposable
     /// <summary>Destroys the window and disconnects from the compositor.</summary>
     public void Dispose()
     {
-        if (_runtime is { } runtime && runtime.WakeUp == Wake) runtime.WakeUp = null;
         _open = false;
         try
         {
@@ -302,7 +327,6 @@ public sealed unsafe class WaylandWindow : IDisposable
             _frameCallback = default; _decoration = default; _toplevel = default; _xdgSurface = default; _surface = default;
             _decorationManager = default; _wmBase = default; _shm = default; _compositor = default; _registry = default;
             _ackSerial = null;
-            _runtime = null;
             if (_self.IsAllocated) _self.Free();
         }
     }
@@ -310,23 +334,34 @@ public sealed unsafe class WaylandWindow : IDisposable
     // ── The loop ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Waits until the compositor has something or <see cref="Wake"/> is called,
-    /// then appends what arrived to <paramref name="into"/>. A resize is not an
-    /// event: it goes to the runtime itself (ResizeSurface, which asks for a frame).
+    /// Takes what the compositor has queued into <see cref="Events"/> and returns
+    /// them. With <paramref name="wait"/>, for when nothing else is happening, it
+    /// first waits until something does: input, a configure, a
+    /// <see cref="Wake"/> (from any thread), or the window closing. Without, a
+    /// frame is wanted: it waits until the compositor wants one too (the last
+    /// frame's callback), and takes a configure that came meanwhile, so the frame
+    /// is built at the size it will be shown at. A resize is not an event: it is
+    /// in <see cref="Frame"/>, and <see cref="OnRefresh"/> is called for it.
     /// </summary>
-    internal void WaitEvents(List<WindowEvent> into)
+    public List<WindowEvent> GetEvents(bool wait)
     {
-        if (_display == 0) return;
-        bool haveWork = _queue.Count > 0 || _configure.HasPending || _closing || ScaleChanged;
+        if (_display == 0) return Events;
+        bool haveWork = !wait || _queue.Count > 0 || _configure.HasPending || _closing || ScaleChanged || _redraw;
         Pump(haveWork ? 0 : -1);
         ApplyConfigure();
         if (ScaleChanged && _configure.EverConfigured) ApplySize(); // moved to an output of another scale
-        ApplyRefresh();
-        into.AddRange(_queue);
+        if (!wait) WaitForCompositor();
+        Events.AddRange(_queue);
         _queue.Clear();
+        if (_redraw)
+        {
+            _redraw = false;
+            OnRefresh?.Invoke();
+        }
+        return Events;
     }
 
-    /// <summary>Makes a waiting <see cref="BeginFrame"/> return. Safe from any thread.</summary>
+    /// <summary>Makes a waiting <see cref="GetEvents"/> return. Safe from any thread.</summary>
     public void Wake()
     {
         int fd = _wakeFd;
@@ -335,7 +370,7 @@ public sealed unsafe class WaylandWindow : IDisposable
         Libc.write(fd, &one, sizeof(ulong)); // EAGAIN when the counter is full: already awake
     }
 
-    /// <summary>Asks the window to close: the next <see cref="BeginFrame"/> returns false.</summary>
+    /// <summary>Asks the window to close: <see cref="IsClosing"/> turns true.</summary>
     public void Close()
     {
         _closing = true;
@@ -346,12 +381,12 @@ public sealed unsafe class WaylandWindow : IDisposable
 
     /// <summary>
     /// Waits until the compositor wants a frame, and takes a configure that came
-    /// meanwhile, so the frame is built at the size it will be shown at. False
-    /// when there is nothing to draw into (closing, not configured yet).
+    /// meanwhile, so the frame is built at the size it will be shown at. Nothing
+    /// to wait for when there is nothing to draw into (closing, not configured yet).
     /// </summary>
-    internal bool WaitForCompositor()
+    private void WaitForCompositor()
     {
-        if (_display == 0 || _closing || _pool is null || !_configure.EverConfigured) return false;
+        if (_display == 0 || _closing || _pool is null || !_configure.EverConfigured) return;
 
         // Pace: draw when the compositor wants a frame. A configure waiting to
         // be acked does not wait — the new size should appear at once.
@@ -367,14 +402,14 @@ public sealed unsafe class WaylandWindow : IDisposable
                 _frameCallback = default;
             }
         }
-        return !_closing;
     }
 
     /// <summary>
     /// Takes a free buffer and points <see cref="Cpu"/> at it. When every buffer
     /// is still the compositor's (or the window is closing), <see cref="Cpu"/> is
     /// memory of the window's own that nothing shows, the commit is skipped, and
-    /// a frame is asked for again: the frame is drawn, never dropped half-way.
+    /// the window owes a frame again (<see cref="OnRefresh"/>): the frame is drawn,
+    /// never dropped half-way.
     /// </summary>
     internal void AcquireBuffer()
     {
@@ -388,7 +423,7 @@ public sealed unsafe class WaylandWindow : IDisposable
         {
             _buffer = null;
             Cpu.Pixels = Unshown(_fbW, _fbH);
-            _runtime?.RequestFrame();
+            _redraw = true;
             return;
         }
         _buffer = buffer;
@@ -432,29 +467,29 @@ public sealed unsafe class WaylandWindow : IDisposable
     // ── Configure ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Resolves a completed configure: a new size goes to the runtime (which
-    /// asks for a frame), and the serial waits to be acked by the commit that
-    /// shows it. Runs on the loop, never inside dispatch.
+    /// Resolves a completed configure: the new size is taken, the window owes a
+    /// frame (a configure of the same size, a focus change say, is still answered
+    /// with a commit), and the serial waits to be acked by the commit that shows
+    /// it. Runs on the loop, never inside dispatch.
     /// </summary>
     private void ApplyConfigure()
     {
-        if (!_configure.HasPending || _runtime is null) return;
+        if (!_configure.HasPending) return;
         var c = _configure.Take(_logicalW, _logicalH, _options.MinWidth, _options.MinHeight);
         _ackSerial = c.Serial;
         _logicalW = c.Width;
         _logicalH = c.Height;
-        // Same size (a focus change, say): still answer it with a commit.
-        if (!ApplySize()) _runtime.RequestFrame();
+        ApplySize();
+        _redraw = true;
     }
 
     // ── Buffer size and scale ─────────────────────────────────────────────────
     // The one place the framebuffer is sized. Logical size from the configure,
     // scale from WaylandScaleAndCursor (fractional, else integer, else 1); the
-    // buffer is round(logical × scale) (FramebufferSize), drawn by the runtime
-    // at that size and scale, and presented at the logical size through the
-    // viewport (BeforeCommit in Commit). A change of either reaches the runtime
-    // exactly as the Silk host's does — ResizeSurface(physical, scale) — and the
-    // pool retires the old size's buffers as the compositor releases them.
+    // buffer is round(logical × scale) (FramebufferSize), drawn at that size and
+    // scale (Frame), and presented at the logical size through the viewport
+    // (BeforeCommit in Commit). A change of either owes a frame, and the pool
+    // retires the old size's buffers as the compositor releases them.
 
     private uint _scale120 = SurfaceScale.One;
 
@@ -464,39 +499,18 @@ public sealed unsafe class WaylandWindow : IDisposable
     internal static (int W, int H) FramebufferSize(int logicalW, int logicalH, uint scale120) =>
         (SurfaceScale.Physical(logicalW, scale120), SurfaceScale.Physical(logicalH, scale120));
 
-    /// <summary>Resizes the runtime when the buffer size or the scale changed. True when it did.</summary>
-    private bool ApplySize()
+    /// <summary>Takes a new buffer size or scale, and owes a frame for it.</summary>
+    private void ApplySize()
     {
-        if (_runtime is null) return false;
         uint scale120 = _scale.Wanted120;
         var (fbW, fbH) = FramebufferSize(_logicalW, _logicalH, scale120);
-        if (fbW == _fbW && fbH == _fbH && scale120 == _scale120) return false;
+        if (fbW == _fbW && fbH == _fbH && scale120 == _scale120) return;
         bool scaleChanged = scale120 != _scale120;
         _fbW = fbW;
         _fbH = fbH;
         _scale120 = scale120;
-        _runtime.ResizeSurface(fbW, fbH, Scale);
         if (scaleChanged) _scale.OnScaleApplied();
-        return true;
-    }
-
-    // ── Refresh rate ─────────────────────────────────────────────────────────
-    // The frame callback paces the loop at the output's refresh rate, so that is
-    // the runtime's TargetHz: what a frame after a wait for input stands for.
-    // Every other frame's Dt is measured, in BeginFrame.
-
-    private float _refreshHz;
-
-    // When the last frame started (Stopwatch timestamp): what the next frame's Dt is measured from.
-    private long _lastFrame;
-
-    /// <summary>Sets the runtime's TargetHz to the refresh rate of the output the window is on, when that is known and changed.</summary>
-    private void ApplyRefresh()
-    {
-        float hz = _scale.RefreshHz;
-        if (_runtime is null || hz <= 0f || hz == _refreshHz) return;
-        _refreshHz = hz;
-        _runtime.TargetHz = hz;
+        _redraw = true;
     }
 
     // ── Dispatch ─────────────────────────────────────────────────────────────
@@ -653,58 +667,18 @@ public sealed unsafe class WaylandWindow : IDisposable
         if (h._pool?.Find(b => b.Wl == buffer) is { } b) h._pool.Released(b);
     }
 
-    // ── The module: open, then bracket every frame ──────────────────────────
-
-
-    // Restores the continuous loop, for comparing against the event-driven one.
-    private static readonly bool s_alwaysRender = Environment.GetEnvironmentVariable("BIBUI_ALWAYS_RENDER") == "1";
+    // ── The module: open, then bracket every frame's drawing ────────────────
 
     /// <summary>
-    /// Opens a window for <paramref name="runtime"/>: connects, makes the toplevel
-    /// and waits for its first configure. The runtime's surface is sized to it,
-    /// its <see cref="BibuiRuntime.WakeUp"/> wakes the window, and its default
-    /// clipboard is the session's.
+    /// Opens a window: connects, makes the toplevel and waits for its first
+    /// configure, so <see cref="Frame"/> has its size.
     /// </summary>
-    public static WaylandWindow Open(BibuiRuntime runtime, PlatformWindowOptions options, WaylandHostOptions? wayland = null)
+    public static WaylandWindow Open(PlatformWindowOptions options, WaylandHostOptions? wayland = null)
     {
-        ArgumentNullException.ThrowIfNull(runtime);
         var window = new WaylandWindow(wayland);
-        try { window.Open(runtime, options); }
+        try { window.Open(options); }
         catch { window.Dispose(); throw; }
-        runtime.WakeUp = window.Wake;
-        runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
         return window;
-    }
-
-    /// <summary>
-    /// Waits until there is a frame to draw — input arrived, or the runtime owes
-    /// frames — and the compositor wants one, with what the keyboard and mouse did
-    /// in <see cref="Events"/>. False once the window is closing: the loop ends.
-    /// </summary>
-    public static bool BeginFrame(WaylandWindow window, BibuiRuntime runtime)
-    {
-        // Nothing owed: the loop waits for input, and the wait is not frame time.
-        bool waited = !s_alwaysRender && runtime.FramesRequested == 0;
-        while (true)
-        {
-            if (window.IsClosing) return false;
-            // A frame owed must not wait on unrelated input.
-            if (s_alwaysRender || runtime.FramesRequested > 0) window.Wake();
-            window.WaitEvents(window.Events);
-            if (window.IsClosing) return false;
-            bool any = window.Events.Count > 0;
-            // Awake is not the same as having something to draw: a buffer
-            // release, a ping or a wake with nothing owed draws nothing.
-            if ((any || s_alwaysRender || runtime.FramesRequested > 0) && window.WaitForCompositor())
-            {
-                // Taken before the frame is built, so what the build asks for is still owed after it.
-                runtime.ConsumeFrame();
-                long now = Stopwatch.GetTimestamp();
-                runtime.Dt = waited || window._lastFrame == 0 ? 1f / runtime.TargetHz : (float)Stopwatch.GetElapsedTime(window._lastFrame, now).TotalSeconds;
-                window._lastFrame = now;
-                return true;
-            }
-        }
     }
 
     /// <summary>
@@ -715,10 +689,4 @@ public sealed unsafe class WaylandWindow : IDisposable
 
     /// <summary>Shows what was drawn into <see cref="Cpu"/>: attaches, damages and commits the buffer.</summary>
     public static void EndDraw(WaylandWindow window) => window.Commit();
-
-    /// <summary>
-    /// Ends the frame. Nothing to do: the next frame is paced by the compositor's
-    /// frame callback, which <see cref="BeginFrame"/> waits for.
-    /// </summary>
-    public static void EndFrame(WaylandWindow window, BibuiRuntime runtime) { }
 }
