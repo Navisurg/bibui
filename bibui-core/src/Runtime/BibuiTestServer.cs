@@ -18,10 +18,10 @@ namespace Bibui.Core.Runtime;
 /// recording. The app holds it and steps it from its loop:
 /// <code>
 /// using var server = BibuiTestServer.StartIfEnabled(runtime, draw: renderer.Draw);
-/// while (SilkWindow.BeginFrame(window, runtime))
+/// while (app.WaitForFrame())
 /// {
 ///     // While a command runs, the server is the keyboard and mouse.
-///     runtime.BeginBuild(server?.Step(window.Events) ?? window.Events);
+///     runtime.BeginBuild(app.Window.Frame, server?.Step(app.Events) ?? app.Events);
 ///     ...
 /// }
 /// </code>

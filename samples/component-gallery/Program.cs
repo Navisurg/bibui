@@ -53,6 +53,11 @@ if (options.DryRun)
     return;
 }
 
+// The size the window opens at, in logical px. Only that: the window is
+// resizable, and the shell lays itself out for whatever size it is given
+// (ShellLayout).
+const int StartWidth = 1100, StartHeight = 820;
+
 if (options.Reference)
 {
     WriteReferences(options);
@@ -67,7 +72,6 @@ if (options.Check)
 
 var runtime = BibuiRuntime.Create();
 runtime.SetTheme(options.Theme());
-runtime.Surface = Surface();
 HotReloadListener.Register(runtime.RequestFrame);
 var gallery = new Gallery { State = InitialState() };
 
@@ -76,7 +80,7 @@ if (options.FirstFrame)
 {
     using var cpu = new SkiaCpuRenderer();
     DemoTexture.SkiaCpu = cpu;
-    runtime.BeginBuild();
+    runtime.BeginBuild(new WindowFrame(StartWidth, StartHeight, 1f, 60f));
     BuildGallery(runtime, gallery);
     runtime.EndBuild();
     FramePixels.Bgra(runtime, cpu.Draw, out _, out _);
@@ -89,52 +93,74 @@ if (options.FirstFrame)
 using var testServer = BibuiTestServer.StartIfEnabled(runtime, options.Port,
     options.Raster == GalleryRaster.Managed ? new ManagedRenderer().Draw : new SkiaCpuRenderer().Draw);
 
-var size = new PlatformWindowOptions("Component Gallery", Surface().Width, Surface().Height);
+var size = new PlatformWindowOptions("Component Gallery", StartWidth, StartHeight);
 if (options.Host == GalleryHost.Wayland)
 {
-    using var window = WaylandWindow.Open(runtime, size, new WaylandHostOptions
+    using var window = WaylandWindow.Open(size, new WaylandHostOptions
     {
         AppId = "bibui-component-gallery",
         MinWidth = ShellLayout.MinWidth,
         MinHeight = ShellLayout.MinHeight,
     });
+    runtime.WakeUp = window.Wake;
+    runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+    window.OnRefresh = runtime.RequestFrame;   // a configure, a new size or scale: draw again
     // The renderer --raster names, bound to the window's memory; the texture page makes its textures on it.
     SkiaCpuRenderer? skia = options.Raster == GalleryRaster.Skia ? new SkiaCpuRenderer(window.Cpu) : null;
     ManagedRenderer? managed = skia is null ? new ManagedRenderer(window.Cpu) : null;
     (DemoTexture.SkiaCpu, DemoTexture.Managed) = (skia, managed);
-    while (WaylandWindow.BeginFrame(window, runtime))
+    while (!window.IsClosing)
     {
+        // Nothing happening: wait for input. A frame wanted: wait for the
+        // compositor's frame callback, which paces the loop.
+        bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
+        var events = window.GetEvents(wait: idle);
+        if (runtime.FramesRequested == 0 && events.Count == 0) continue;
+        runtime.ConsumeFrame();
         // While a test-server command runs, the server is the keyboard and mouse.
-        runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
+        runtime.BeginBuild(window.Frame, testServer?.Step(events) ?? events);
         BuildGallery(runtime, gallery);
         runtime.EndBuild();
         WaylandWindow.BeginDraw(window);
         if (skia is not null) skia.Draw(runtime.DrawList);
         else managed!.Draw(runtime.DrawList);
         WaylandWindow.EndDraw(window);
-        WaylandWindow.EndFrame(window, runtime);
     }
+    runtime.WakeUp = null;
     skia?.Dispose();
     managed?.Dispose();
 }
 else
 {
-    using var window = SilkWindow.Open(runtime, size);
-    using var skia = new SkiaGlRenderer(window.Gl);
+    using var window = SilkWindow.Open(SilkGl.Options(size));
+    runtime.WakeUp = window.Wake;
+    runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+    var gl = SilkGl.Target(window);
+    using var skia = new SkiaGlRenderer(gl);
     DemoTexture.SkiaGl = skia;   // the texture page's textures, on the renderer that draws them
-    window.OnRefresh = Frame;  // keeps drawing during a resize on Windows and macOS
-    while (SilkWindow.BeginFrame(window, runtime)) Frame();
+    window.OnRefresh = Frame;  // draws at a new size, and during a resize on Windows and macOS
+    while (!window.IsClosing)
+    {
+        // Nothing happening: wait for input. A frame wanted: sleep until it is
+        // due, and take the input that came meanwhile.
+        bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
+        if (!idle) runtime.SleepUntilNextFrame();
+        var events = window.GetEvents(wait: idle);
+        if (runtime.FramesRequested == 0 && events.Count == 0) continue;
+        runtime.ConsumeFrame();
+        Frame();
+    }
+    runtime.WakeUp = null;
 
     void Frame()
     {
         // While a test-server command runs, the server is the keyboard and mouse.
-        runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
+        runtime.BeginBuild(window.Frame, testServer?.Step(window.Events) ?? window.Events);
         BuildGallery(runtime, gallery);
         runtime.EndBuild();
-        SilkWindow.BeginDraw(window);
+        SilkGl.BeginDraw(window, gl);
         skia.Draw(runtime.DrawList);
-        SilkWindow.EndDraw(window);
-        SilkWindow.EndFrame(window, runtime);
+        SilkGl.EndDraw(window);
     }
 }
 
@@ -353,9 +379,6 @@ static void BuildDemo(BibuiRuntime runtime, GalleryState state, Gallery gallery)
 
 // ── The whole window ──────────────────────────────────────────────────────────
 
-// The size the window opens at. Only that: the window is resizable, and the
-// shell lays itself out for whatever size it is given (ShellLayout).
-static SurfaceOptions Surface() => new() { Width = 1100, Height = 820 };
 
 // Wide, the sidebar sits beside the page; narrow, it folds behind a menu bar and
 // takes the page's place while it is open.
@@ -397,7 +420,7 @@ static void WriteReferences(GalleryOptions options)
     var outDir = Path.GetFullPath(options.OutDir ?? Path.Combine(AppContext.BaseDirectory, "..", "..", "..",
         options.Accent is null ? "reference" : "reference-seed"));
     var theme = options.Theme();
-    var sizes = options.Sizes.Count > 0 ? options.Sizes : [(Surface().Width, Surface().Height)];
+    var sizes = options.Sizes.Count > 0 ? options.Sizes : [(StartWidth, StartHeight)];
     using var skia = new SkiaCpuRenderer();
     DemoTexture.SkiaCpu = skia;   // the texture page's textures, on the renderer that draws it
     foreach (var (width, height) in sizes)
@@ -406,7 +429,7 @@ static void WriteReferences(GalleryOptions options)
         var dir = sizes.Count == 1 ? outDir : Path.Combine(outDir, $"{width}x{height}");
         Directory.CreateDirectory(dir);
         foreach (var (name, state, dropDown) in Pages())
-            WriteReference(dir, name, state, dropDown, theme, new SurfaceOptions { Width = width, Height = height }, skia);
+            WriteReference(dir, name, state, dropDown, theme, new WindowFrame(width, height, 1f, 60f), skia);
     }
     Console.WriteLine($"Done — references in {outDir}");
 }
@@ -428,15 +451,14 @@ static IEnumerable<(string Name, GalleryState State, string? DropDown)> Pages()
 // A page that cannot be rendered — a layout ring, say — leaves what it threw
 // instead of a picture, and the rest go on.
 static void WriteReference(string outDir, string name, GalleryState state, string? dropDown,
-    Bibui.Core.Theming.ThemeTokens theme, SurfaceOptions surface, SkiaCpuRenderer skia)
+    Bibui.Core.Theming.ThemeTokens theme, WindowFrame window, SkiaCpuRenderer skia)
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetTheme(theme);
-    runtime.Surface = surface;
     if (dropDown is not null) runtime.OpenDropDown(dropDown);
     try
     {
-        File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime, new Gallery { State = state }, skia));
+        File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime, new Gallery { State = state }, skia, window));
         Console.WriteLine($"  wrote {name}.png");
     }
     catch (Exception e)
@@ -446,12 +468,12 @@ static void WriteReference(string outDir, string name, GalleryState state, strin
     }
 }
 
-// Three frames: laid out, and wrapped at that width; the last drawn with Skia.
-static byte[] RenderSettled(BibuiRuntime runtime, Gallery gallery, SkiaCpuRenderer skia)
+// Three frames on the window: laid out, and wrapped at that width; the last drawn with Skia.
+static byte[] RenderSettled(BibuiRuntime runtime, Gallery gallery, SkiaCpuRenderer skia, WindowFrame window)
 {
     for (int i = 0; i < 3; i++)
     {
-        runtime.BeginBuild();
+        runtime.BeginBuild(window);
         BuildGallery(runtime, gallery);
         runtime.EndBuild();
     }
@@ -482,12 +504,11 @@ static int CheckLayouts(GalleryOptions options)
             pages++;
             var runtime = BibuiRuntime.Create();
             runtime.SetTheme(options.Theme());
-            runtime.Surface = new SurfaceOptions { Width = width, Height = height };
             if (dropDown is not null) runtime.OpenDropDown(dropDown);
             List<LayoutCheck.Fault> faults;
             try
             {
-                byte[] png = RenderSettled(runtime, new Gallery { State = state }, skia);
+                byte[] png = RenderSettled(runtime, new Gallery { State = state }, skia, new WindowFrame(width, height, 1f, 60f));
                 if (dir is not null) File.WriteAllBytes(Path.Combine(dir, $"{name}.png"), png);
                 faults = LayoutCheck.Check(runtime, runtime.FindById("gallery")!, width, height);
             }

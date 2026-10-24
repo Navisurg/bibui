@@ -149,19 +149,28 @@ if (host == "wayland")
         Console.Error.WriteLine("--host wayland needs a Wayland session (WAYLAND_DISPLAY) and libwayland-client.");
         return 1;
     }
-    using var window = WaylandWindow.Open(runtime, options, new WaylandHostOptions { AppId = "bibui-showcase", MinWidth = 640, MinHeight = 480 });
+    using var window = WaylandWindow.Open(options, new WaylandHostOptions { AppId = "bibui-showcase", MinWidth = 640, MinHeight = 480 });
+    runtime.WakeUp = window.Wake;
+    runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+    window.OnRefresh = runtime.RequestFrame;   // a configure, a new size or scale: draw again
     var (renderer, draw) = RendererFor(window.Cpu);
     using (renderer)
     {
-        while (WaylandWindow.BeginFrame(window, runtime))
+        while (!window.IsClosing)
         {
-            live.Frame(runtime, window.Events);
+            // Nothing happening: wait for input. A frame wanted: wait for the
+            // compositor's frame callback, which paces the loop.
+            bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
+            var events = window.GetEvents(wait: idle);
+            if (runtime.FramesRequested == 0 && events.Count == 0) continue;
+            runtime.ConsumeFrame();
+            live.Frame(runtime, window.Frame, events);
             WaylandWindow.BeginDraw(window);
             draw(runtime.DrawList);
             WaylandWindow.EndDraw(window);
-            WaylandWindow.EndFrame(window, runtime);
         }
     }
+    runtime.WakeUp = null;
     return 0;
 }
 
@@ -169,29 +178,42 @@ if (host == "wayland")
 return 2;
 #else
 {
-    using var window = SilkWindow.Open(runtime, options);
+    using var window = SilkWindow.Open(SilkGl.Options(options));
+    runtime.WakeUp = window.Wake;
+    runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+    var gl = SilkGl.Target(window);
     // Skia on the window's GL; --raster managed draws on the CPU, into memory
     // shown on the window's GL framebuffer (Bibui.Gl).
-    using var shown = raster == "skia" ? null : new Bibui.Gl.GlCpuFramebuffer(window.Gl);
+    using var shown = raster == "skia" ? null : new Bibui.Gl.GlCpuFramebuffer(gl);
     var (renderer, draw) = shown is null
-        ? new Bibui.Raster.Skia.SkiaGlRenderer(window.Gl) is var skia ? ((IDisposable)skia, (Action<DrawList>)skia.Draw) : default
+        ? new Bibui.Raster.Skia.SkiaGlRenderer(gl) is var skia ? ((IDisposable)skia, (Action<DrawList>)skia.Draw) : default
         : RendererFor(shown.Cpu);
     using (renderer)
     {
-        window.OnRefresh = Frame;   // keeps drawing during a resize on Windows and macOS
-        while (SilkWindow.BeginFrame(window, runtime)) Frame();
+        window.OnRefresh = Frame;   // draws at a new size, and during a resize on Windows and macOS
+        while (!window.IsClosing)
+        {
+            // Nothing happening: wait for input. A frame wanted: sleep until it
+            // is due, and take the input that came meanwhile.
+            bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
+            if (!idle) runtime.SleepUntilNextFrame();
+            var events = window.GetEvents(wait: idle);
+            if (runtime.FramesRequested == 0 && events.Count == 0) continue;
+            runtime.ConsumeFrame();
+            Frame();
+        }
     }
+    runtime.WakeUp = null;
     return 0;
 
     void Frame()
     {
-        live.Frame(runtime, window.Events);
-        SilkWindow.BeginDraw(window);
+        live.Frame(runtime, window.Frame, window.Events);
+        SilkGl.BeginDraw(window, gl);
         shown?.BeginDraw();
         draw(runtime.DrawList);
         shown?.EndDraw();
-        SilkWindow.EndDraw(window);
-        SilkWindow.EndFrame(window, runtime);
+        SilkGl.EndDraw(window);
     }
 }
 #endif
