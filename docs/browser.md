@@ -69,13 +69,16 @@ using Bibui.Core.Runtime;
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("browser")]
 
 var runtime = BibuiRuntime.Create();
-var window = await BrowserWindow.OpenAsync(runtime, "app");   // <canvas id="app">
+var window = await BrowserWindow.OpenAsync("app");   // <canvas id="app">
+runtime.WakeUp = window.Wake;
+runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
 var managed = new ManagedRenderer(window.Cpu);
 int count = 0;
 
-BrowserWindow.Run(window, runtime, () =>
+BrowserWindow.Run(window, () => runtime.FramesRequested > 0, () =>
 {
-    runtime.BeginBuild(window.Events);
+    runtime.ConsumeFrame();
+    runtime.BeginBuild(window.Frame, window.Events);
     var column = runtime.BeginParent(runtime.Column());
     runtime.Text($"Clicked {count} times");
     if (runtime.Button("add", "Add one").Clicked) count++;
@@ -87,27 +90,32 @@ BrowserWindow.Run(window, runtime, () =>
 });
 ```
 
-The body of the frame is a desktop loop's body: `window.Events` into
-`BeginBuild`, the build, `EndBuild`, and the renderer's draw between
-`BeginDraw` and `EndDraw`. What differs is who calls it.
+The body of the frame is a desktop loop's body: taking the owed frame,
+`window.Frame` and `window.Events` into `BeginBuild`, the build, `EndBuild`,
+and the renderer's draw between `BeginDraw` and `EndDraw`. As on the desktop,
+the window knows no runtime: the app wires its wake and clipboard to the
+runtime, and tells `Run` how to ask whether a frame is owed. What differs is
+who calls the frame.
 
-A desktop app owns its loop: `while (WaylandWindow.BeginFrame(window, runtime))`
-waits until there is a frame to draw, and the loop runs on the app's thread
-until the window closes. A page may not do that. Code that blocks freezes the
+A desktop app owns its loop: it waits until there is a frame to draw
+(`window.GetEvents(wait: true)`), and the loop runs on the app's thread until
+the window closes. A page may not do that. Code that blocks freezes the
 page, and the browser shows nothing until it returns. So the app hands the
 frame to `BrowserWindow.Run`, which returns at once, and the browser calls the
 frame on `requestAnimationFrame`:
 
 - A window draws when there is something to draw: input on its canvas, a
-  frame its runtime owes (`runtime.RequestFrame()`, which animations ask for),
-  or a change in its canvas's size. A window with nothing owed draws nothing,
+  frame its app owes (`frameOwed`: `runtime.RequestFrame()`, which animations
+  ask for), or a change in its canvas's size. A window with nothing owed draws nothing,
   and when no window on the page owes anything the loop stops: an idle page
   costs nothing until input, a resize or a request starts it again.
 - A window draws only while its canvas is in the viewport. One scrolled out of
   sight is drawn when it comes back.
-- `runtime.Dt` is the time since the window's last frame, or one frame at
-  `runtime.TargetHz` after a wait for input, and at most a quarter of a second,
-  so a tab the browser stopped drawing comes back without a jump.
+- `requestAnimationFrame` runs once a display refresh, as vsync does. The
+  browser does not say how often that is, so the window measures it from the
+  callbacks; `window.Frame` carries it, and the runtime's `Dt` is one frame at
+  that rate. A tab the browser stopped drawing comes back one frame on, without
+  a jump.
 - A frame that throws stops its own window, and the exception is written to
   the browser's console. The other windows on the page keep drawing.
 
@@ -180,9 +188,10 @@ public static partial class Embed
     public static async Task Mount(JSObject canvas)
     {
         var runtime = BibuiRuntime.Create();
-        var window = await BrowserWindow.OpenAsync(runtime, canvas);
+        var window = await BrowserWindow.OpenAsync(canvas);
+        runtime.WakeUp = window.Wake;
         var managed = new ManagedRenderer(window.Cpu);
-        BrowserWindow.Run(window, runtime, () => { /* the frame */ });
+        BrowserWindow.Run(window, () => runtime.FramesRequested > 0, () => { /* the frame */ });
     }
 }
 ```

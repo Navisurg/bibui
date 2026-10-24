@@ -4,14 +4,13 @@
 //   dotnet run --project samples/bibui-app
 //   dotnet run --project samples/bibui-app -- --first-frame   # one frame headless, then exit (CI)
 
-using Bibui.Core;
-using Bibui.Raster.Skia;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
+using Bibui.Raster.Skia;
 using BibuiApp;
+using App = Bibui.App.BibuiApp;   // the window and renderer; BibuiApp is this sample's namespace
 
 var runtime = BibuiRuntime.Create();
-runtime.Surface = new SurfaceOptions { Width = 720, Height = 1200 };
 HotReloadListener.Register(runtime.RequestFrame);   // dotnet watch: a code change draws a frame
 var state = new DemoState();
 
@@ -19,31 +18,23 @@ var state = new DemoState();
 if (args.Contains("--first-frame"))
 {
     using var cpu = new SkiaCpuRenderer();
-    runtime.BeginBuild();
+    runtime.BeginBuild(new WindowFrame(720, 1200, 1f, 60f));
     Demo.Build(runtime, state);
     runtime.EndBuild();
     FramePixels.Bgra(runtime, cpu.Draw, out _, out _);
     return;
 }
 
-using var window = SilkWindow.Open(runtime, new("bibui — interactive demo", 720, 1200));
-using var skia = new SkiaGlRenderer(window.Gl);
-
-// Off unless asked for (BIBUI_TEST_SERVER=1); the loop steps it. Its screenshots
-// draw on the CPU, with a renderer of their own beside the window's GPU one.
-using var testServer = BibuiTestServer.StartIfEnabled(runtime, draw: new SkiaCpuRenderer().Draw);
-
-window.OnRefresh = Frame;   // keeps drawing during a resize on Windows and macOS
-while (SilkWindow.BeginFrame(window, runtime)) Frame();
+// The window and Skia on its GL context, from Bibui.App.SilkSkiaGl. Its test
+// server runs only with BIBUI_TEST_SERVER=1 in the environment.
+using var app = App.Open(runtime, new("bibui — interactive demo", 720, 1200));
+app.Frame = Frame;
+while (app.WaitForFrame()) Frame();
 
 void Frame()
 {
-    // While a test-server command runs, the server is the keyboard and mouse.
-    runtime.BeginBuild(testServer?.Step(window.Events) ?? window.Events);
+    runtime.BeginBuild(app.Window.Frame, app.Events);
     Demo.Build(runtime, state);
     runtime.EndBuild();
-    SilkWindow.BeginDraw(window);
-    skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);
-    SilkWindow.EndFrame(window, runtime);
+    app.Present();
 }

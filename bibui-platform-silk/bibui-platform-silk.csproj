@@ -2,11 +2,11 @@
   <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
   <Import Project="../packaging/PublicPackage.props" />
 
-  <!-- The cross-platform window: GLFW through Silk.NET, presenting with
-       OpenGL (whatever draws a frame draws it into the GL framebuffer; it makes
-       no GL calls of its own),
-       clipboard through TextCopy and wl-clipboard. It references no renderer:
-       an app opens one with SilkWindow.Open(runtime, options) and runs the loop. -->
+  <!-- The cross-platform window: GLFW through Silk.NET, clipboard through
+       TextCopy and wl-clipboard. It knows no runtime and no renderer, and opens
+       with no graphics API; SilkGl is its OpenGL route (whatever draws a frame
+       draws it into the GL framebuffer). An app runs it through a Bibui.App
+       package, or opens it with SilkWindow.Open and runs the loop itself. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Bibui.Platform.Silk</AssemblyName>
@@ -18,7 +18,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IsAotCompatible>true</IsAotCompatible>
     <PackageId>Bibui.Platform.Silk</PackageId>
-    <Description>Bibui cross-platform window: GLFW + OpenGL through Silk.NET, clipboard through TextCopy. SilkWindow.Open(runtime, options), then SilkWindow.BeginFrame/EndFrame around each frame.</Description>
+    <Description>Bibui cross-platform window: GLFW through Silk.NET, with SilkGl for OpenGL, clipboard through TextCopy. SilkWindow.Open(SilkGl.Options(options)); each frame the window hands the runtime its WindowFrame and events (GetEvents).</Description>
     <PackageTags>$(PackageTags);window;glfw;opengl;silk.net</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <IsPackable>true</IsPackable>

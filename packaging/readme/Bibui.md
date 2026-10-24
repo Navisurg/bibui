@@ -29,10 +29,13 @@ using Bibui.Core.Runtime;
 var runtime = BibuiRuntime.Create();
 using var app = BibuiApp.Open(runtime, new("Counter", 360, 160));
 int count = 0;
+app.Frame = Frame;   // the window draws it too, during a resize
 
-while (app.BeginFrame())
+while (app.WaitForFrame()) Frame();
+
+void Frame()
 {
-    runtime.BeginBuild(app.Events);
+    runtime.BeginBuild(app.Window.Frame, app.Events);
     var column = runtime.BeginParent(runtime.Column());
     {
         runtime.Text($"Clicked {count} times");
@@ -42,7 +45,7 @@ while (app.BeginFrame())
     runtime.EndParent(column);
 
     runtime.EndBuild();
-    app.EndFrame();
+    app.Present();
 }
 ```
 

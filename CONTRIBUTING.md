@@ -43,8 +43,8 @@ listed in `.github/workflows/`; a pull request should build all of them with
 To see components running, start the gallery, a page per component:
 
 ```bash
-dotnet run --project samples/component-gallery                    # GLFW + OpenGL window, Skia
-dotnet run --project samples/component-gallery -- --host wayland --raster managed
+dotnet run --project samples/component-gallery                       # GLFW + OpenGL window, Skia
+dotnet run --project samples/component-gallery -p:App=WaylandManaged  # raw Wayland, managed raster
 ```
 
 ## Tests

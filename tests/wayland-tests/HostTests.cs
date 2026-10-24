@@ -215,9 +215,8 @@ internal static unsafe class HostTests
             host.SetClipboardText("x");
             host.SetCursor(CursorShape.Text);
             host.Wake();
-            var events = new List<WindowEvent>();
-            host.WaitEvents(events);
-            Assert.Eq(0, events.Count, "WaitEvents on a closed window returns nothing at once");
+            var events = host.GetEvents(wait: true);
+            Assert.Eq(0, events.Count, "GetEvents on a closed window returns nothing at once");
             host.Dispose(); // copes with never having opened
             Assert.Throws<ArgumentOutOfRangeException>(() => new WaylandWindow(new WaylandHostOptions { Buffers = 1 }));
         });
@@ -278,7 +277,7 @@ internal static unsafe class HostTests
                     box.Style = new Bibui.Core.Style { BackgroundColor = Bibui.Core.UiColor.Accent, CornerRadius = 8f };
                     return box;
                 },
-                new Bibui.Core.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });
+                new WindowFrame(64, 48, 1f, 60f));
             pool = new BufferPool<ShmBuffer>(new ShmAllocator(_shm, bufferListener, null), depth: 2);
             var buffer = pool.TryAcquire(64, 48)!;
             runtime.Step();

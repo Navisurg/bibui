@@ -42,34 +42,63 @@ public static class Frames
     }
 
     /// <summary>A free-standing tree as a runtime's whole frame, built and drawn with Skia.</summary>
-    public static Pixels Frame(UiNode root, SurfaceOptions surface, Bibui.Core.Theming.ThemeTokens theme)
+    public static Pixels Frame(UiNode root, WindowFrame window, Bibui.Core.Theming.ThemeTokens theme)
     {
         var runtime = BibuiRuntime.Create();
-        runtime.SetBuild(() => root, theme, surface);
+        runtime.SetBuild(() => root, theme, window);
         return runtime.Frame();
     }
 }
 
 /// <summary>
-/// A test's app: its build, kept per runtime, and the frames it runs. An app
-/// owns its loop and runs BeginBuild, its build, EndBuild; a test does the same
-/// here, a frame at a time.
+/// A test's app: its build and its window, kept per runtime, and the frames it
+/// runs. An app owns its loop and runs BeginBuild on its window, its build,
+/// EndBuild; a test does the same here, a frame at a time.
 /// </summary>
 public static class TestBuild
 {
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<BibuiRuntime, Func<UiNode>> s_builds = new();
+    /// <summary>The window a test runs on unless given one: 800 × 600 at 1×, 60 Hz, so a frame's Dt is 1/60.</summary>
+    public static readonly WindowFrame DefaultWindow = new(800, 600, 1f, 60f);
 
-    /// <summary>Keeps <paramref name="build"/> as the test's, on a surface (800×600 at 1× by default) in a theme.</summary>
-    public static void SetBuild(this BibuiRuntime runtime, Func<UiNode> build, SurfaceOptions? surface = null, string theme = "bibui-dark")
-        => runtime.SetBuild(build, Bibui.Core.Theming.ThemeRegistry.Load(theme), surface);
+    /// <summary>
+    /// A window <paramref name="logicalWidth"/> × <paramref name="logicalHeight"/>
+    /// logical px at <paramref name="scale"/>, 60 Hz: its framebuffer is the
+    /// physical size a window would give it (<see cref="WindowFrame.PhysicalSize"/>).
+    /// </summary>
+    public static WindowFrame Window(int logicalWidth, int logicalHeight, float scale = 1f) =>
+        new(WindowFrame.PhysicalSize(logicalWidth, scale), WindowFrame.PhysicalSize(logicalHeight, scale), scale, 60f);
 
-    /// <inheritdoc cref="SetBuild(BibuiRuntime, Func{UiNode}, SurfaceOptions?, string)"/>
-    public static void SetBuild(this BibuiRuntime runtime, Func<UiNode> build, Bibui.Core.Theming.ThemeTokens theme, SurfaceOptions? surface = null)
+    private sealed class App(Func<UiNode> build, WindowFrame window)
     {
-        s_builds.AddOrUpdate(runtime, build);
-        runtime.Surface = surface ?? new SurfaceOptions { Width = 800, Height = 600, ScaleFactor = 1f };
+        public readonly Func<UiNode> Build = build;
+        public WindowFrame Window = window;
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<BibuiRuntime, App> s_apps = new();
+
+    /// <summary>Keeps <paramref name="build"/> as the test's, on <paramref name="window"/> (<see cref="DefaultWindow"/> by default) in a theme.</summary>
+    public static void SetBuild(this BibuiRuntime runtime, Func<UiNode> build, WindowFrame? window = null, string theme = "bibui-dark")
+        => runtime.SetBuild(build, Bibui.Core.Theming.ThemeRegistry.Load(theme), window);
+
+    /// <inheritdoc cref="SetBuild(BibuiRuntime, Func{UiNode}, WindowFrame?, string)"/>
+    public static void SetBuild(this BibuiRuntime runtime, Func<UiNode> build, Bibui.Core.Theming.ThemeTokens theme, WindowFrame? window = null)
+    {
+        s_apps.AddOrUpdate(runtime, new App(build, window ?? DefaultWindow));
         runtime.SetTheme(theme);
     }
+
+    /// <summary>Moves the test's app to <paramref name="window"/>: a resize, a new scale or rate, from the next frame on.</summary>
+    public static void SetWindow(this BibuiRuntime runtime, WindowFrame window) => AppOf(runtime).Window = window;
+
+    /// <summary>The window the test's frames are built on.</summary>
+    public static WindowFrame WindowOf(this BibuiRuntime runtime) => AppOf(runtime).Window;
+
+    private static App AppOf(BibuiRuntime runtime) => s_apps.TryGetValue(runtime, out var app) ? app
+        : throw new InvalidOperationException("This runtime has no test build: SetBuild first.");
+
+    /// <summary>A page driving the test's app: its build, on its window.</summary>
+    public static Bibui.Testing.BibuiPage Page(this BibuiRuntime runtime) =>
+        Bibui.Testing.BibuiPage.From(runtime, runtime.BuildTree, window: AppOf(runtime).Window);
 
     /// <summary>
     /// The test's build, between a BeginBuild and an EndBuild: what it returns
@@ -77,9 +106,7 @@ public static class TestBuild
     /// </summary>
     public static void BuildTree(this BibuiRuntime runtime)
     {
-        if (!s_builds.TryGetValue(runtime, out var build))
-            throw new InvalidOperationException("This runtime has no test build: SetBuild first.");
-        var tree = build();
+        var tree = AppOf(runtime).Build();
         if (tree.Parent is null) UiNode.PushIntoParent(runtime.ParentInScope, tree);
     }
 
@@ -109,10 +136,10 @@ public static class TestBuild
         }) { IsBackground = true, Name = "test app loop" }.Start();
     }
 
-    /// <summary>One frame: BeginBuild with the frame's input (none by default), the test's build, EndBuild.</summary>
+    /// <summary>One frame: BeginBuild on the test's window with the frame's input (none by default), the test's build, EndBuild.</summary>
     public static void Step(this BibuiRuntime runtime, List<WindowEvent>? events = null)
     {
-        runtime.BeginBuild(events);
+        runtime.BeginBuild(AppOf(runtime).Window, events);
         runtime.BuildTree();
         runtime.EndBuild();
     }

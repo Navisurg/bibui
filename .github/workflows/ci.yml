@@ -128,7 +128,9 @@ jobs:
           }
           first_frame samples/bibui-app/bibui-app.csproj
           first_frame samples/component-gallery/component-gallery.csproj
-          first_frame samples/component-gallery/component-gallery.csproj --host wayland --raster managed
+          # The gallery on another Bibui.App package, chosen at build time.
+          dotnet run --project samples/component-gallery/component-gallery.csproj --configuration Release \
+            -p:App=WaylandManaged -- --first-frame
           first_frame tests/wayland-hello/wayland-hello.csproj
 
       # An app on the raw Wayland host and the managed rasterizer publishes with
