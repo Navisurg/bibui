@@ -108,7 +108,7 @@ void PullTestCmds(List<WindowEvent> events)
                 events.AddRange(cmd.Events);
                 agent = AgentCursor.FromWindowEvents(agent, cmd.Events);
                 break;
-            case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, shots!)); break;
+            case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, shots!, cmd.Region)); break;
             case TestCmdKind.App: testPort.RefuseCmd("The gallery has no commands of its own."); break;
         }
 }
