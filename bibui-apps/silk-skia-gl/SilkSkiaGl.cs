@@ -16,29 +16,29 @@ public sealed partial class BibuiApp
     // The window's GL framebuffer, which Renderer draws into.
     private GlTarget _gl = null!;
 
-    /// <summary>Called while the window is being resized, where the OS blocks the loop (Windows, macOS): set it to the loop's body to keep drawing.</summary>
-    public Action? OnRefresh { get => Window.OnRefresh; set => Window.OnRefresh = value; }
-
-    private static partial SilkWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options) =>
-        SilkWindow.Open(runtime, SilkGl.Options(window));
+    private static partial SilkWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options)
+    {
+        var opened = SilkWindow.Open(SilkGl.Options(window));
+        runtime.WakeUp = opened.Wake;
+        runtime.WindowClipboard = (opened.GetClipboardText, opened.SetClipboardText);
+        return opened;
+    }
 
     private partial SkiaGlRenderer MakeRenderer() => new(_gl = SilkGl.Target(Window));
 
-    private partial bool BeginWindowFrame() => SilkWindow.BeginFrame(Window, Runtime);
-
-    private partial void Present()
+    public partial void Present()
     {
         SilkGl.BeginDraw(Window, _gl);
         Renderer.Draw(Runtime.DrawList);
         SilkGl.EndDraw(Window);
     }
 
-    private partial void EndWindowFrame() => SilkWindow.EndFrame(Window, Runtime);
-
     private partial DrawToPixels ScreenshotDraw() => (_screenshots ??= new SkiaCpuRenderer()).Draw;
 
     private partial void DisposeRenderer()
     {
+        // The window goes next: nothing may wake it after.
+        if (Runtime.WakeUp == Window.Wake) Runtime.WakeUp = null;
         Renderer.Dispose();
         _screenshots?.Dispose();
     }

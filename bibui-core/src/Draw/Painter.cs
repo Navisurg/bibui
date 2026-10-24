@@ -2,6 +2,7 @@ using System.Numerics;
 using Bibui.Core;
 using Bibui.Core.Theming;
 using Bibui.Core.Draw;
+using Bibui.Core.Runtime.Platform;
 
 namespace Bibui.Core.Draw;
 
@@ -39,11 +40,11 @@ internal sealed class Painter
     /// <see cref="DrawOpKind.Clear"/> in the theme's background on. Draws nothing:
     /// a renderer executes the list.
     /// </summary>
-    internal void Record(DrawList list, UiNode root, SurfaceOptions options, ThemeTokens theme, FrameInput input)
+    internal void Record(DrawList list, UiNode root, WindowFrame window, ThemeTokens theme, FrameInput input)
     {
         list.Reset();
         list.Push(DrawOpKind.Clear).Color = DrawingContext.ParseColor(theme.Colors.Background);
-        _drawing.Begin(list, options.ScaleFactor, input, theme, options.Width, options.Height);
+        _drawing.Begin(list, window.Scale, input, theme, window.LogicalWidth, window.LogicalHeight);
         Node(root, theme, _drawing.Root);
 
         // Commit this frame's animations and ask whether any of them are still
