@@ -100,9 +100,21 @@ internal sealed partial class App
 
     // ── The frame ────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The box the app builds into, the window's size: written by
+    /// <see cref="Build"/>, and between frames the tree the last one laid out,
+    /// which the self-test and the screenshots find their targets in. Null
+    /// before the first frame.
+    /// </summary>
+    public Box? Root;
+
     /// <summary>One frame of the app, between the loop's BeginBuild and EndBuild.</summary>
     public void Build(BibuiRuntime rt)
     {
+        Root = rt.BoxFromId("showcase");
+        Root.ChildLayoutAxis = LayoutAxis.Y;
+        Root.Sized(Size.Fill, Size.Fill);
+        rt.BeginParent(Root);
         ApplyTheme(rt);
         if (Live)
         {
@@ -125,6 +137,7 @@ internal sealed partial class App
         Sidebar(rt, open, h);
         Main(rt, w - SidebarWidth(open), h);
         rt.EndParent(frame);
+        rt.EndParent(Root);
     }
 
     /// <summary>One whole frame on <paramref name="window"/>: BeginBuild with the frame's input, the app, EndBuild.</summary>

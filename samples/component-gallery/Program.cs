@@ -355,8 +355,9 @@ static void BuildDemo(BibuiRuntime runtime, GalleryState state, Gallery gallery)
 
 
 // Wide, the sidebar sits beside the page; narrow, it folds behind a menu bar and
-// takes the page's place while it is open.
-static void BuildGallery(BibuiRuntime runtime, Gallery gallery)
+// takes the page's place while it is open. Returns the gallery's box: the
+// frame's tree once the build returns, and the root a layout check walks.
+static Box BuildGallery(BibuiRuntime runtime, Gallery gallery)
 {
     var state = gallery.State;
     var shell = ShellLayout.For(runtime.SurfaceWidth);
@@ -379,6 +380,7 @@ static void BuildGallery(BibuiRuntime runtime, Gallery gallery)
         else BuildContentPanel(runtime, state, gallery, shell);
     }
     runtime.EndParent(page);
+    return page;
 }
 
 static GalleryState InitialState() => new(Route: "Button", OpenSidebarGroup: "Inputs & Forms");
@@ -432,7 +434,7 @@ static void WriteReference(string outDir, string name, GalleryState state, strin
     if (dropDown is not null) runtime.OpenDropDown(dropDown);
     try
     {
-        File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime, new Gallery { State = state }, skia, window));
+        File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime, new Gallery { State = state }, skia, window, out _));
         Console.WriteLine($"  wrote {name}.png");
     }
     catch (Exception e)
@@ -442,13 +444,15 @@ static void WriteReference(string outDir, string name, GalleryState state, strin
     }
 }
 
-// Three frames on the window: laid out, and wrapped at that width; the last drawn with Skia.
-static byte[] RenderSettled(BibuiRuntime runtime, Gallery gallery, SkiaCpuRenderer skia, WindowFrame window)
+// Three frames on the window: laid out, and wrapped at that width; the last drawn
+// with Skia. Its root is the gallery's box, as the last frame laid it out.
+static byte[] RenderSettled(BibuiRuntime runtime, Gallery gallery, SkiaCpuRenderer skia, WindowFrame window, out Box root)
 {
+    root = null!;
     for (int i = 0; i < 3; i++)
     {
         runtime.BeginBuild(window);
-        BuildGallery(runtime, gallery);
+        root = BuildGallery(runtime, gallery);
         runtime.EndBuild();
     }
     return FramePixels.Png(runtime, skia.Draw);
@@ -482,9 +486,9 @@ static int CheckLayouts(GalleryOptions options)
             List<LayoutCheck.Fault> faults;
             try
             {
-                byte[] png = RenderSettled(runtime, new Gallery { State = state }, skia, new WindowFrame(width, height, 1f, 60f));
+                byte[] png = RenderSettled(runtime, new Gallery { State = state }, skia, new WindowFrame(width, height, 1f, 60f), out var root);
                 if (dir is not null) File.WriteAllBytes(Path.Combine(dir, $"{name}.png"), png);
-                faults = LayoutCheck.Check(runtime, runtime.FindById("gallery")!, width, height);
+                faults = LayoutCheck.Check(runtime, root, width, height);
             }
             catch (Exception e)
             {

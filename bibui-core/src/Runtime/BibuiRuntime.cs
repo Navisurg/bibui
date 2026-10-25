@@ -378,27 +378,4 @@ public sealed partial class BibuiRuntime
     /// out and painted, read as it is: nothing is copied.
     /// </summary>
     internal UiNode Root => _root;
-
-    /// <summary>
-    /// The node named <paramref name="id"/> in the tree the last frame laid out
-    /// and painted, or null: for tests and the test server, which read its
-    /// <see cref="UiNode.Rect"/>, <see cref="UiNode.Extent"/> and content.
-    ///
-    /// <para>Read it between frames, on the loop's thread. The next build
-    /// resets and reuses the nodes it describes, so read what is needed and do
-    /// not keep the node across a frame.</para>
-    /// </summary>
-    public UiNode? FindById(string id)
-    {
-        ArgumentNullException.ThrowIfNull(id);
-        return Find(_root, id);
-
-        static UiNode? Find(UiNode? node, string id)
-        {
-            if (node is null || node.Id == id) return node;
-            for (var child = node.FirstChild; child is not null; child = child.Next == child ? null : child.Next)
-                if (Find(child, id) is { } found) return found;
-            return null;
-        }
-    }
 }

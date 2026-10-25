@@ -88,8 +88,13 @@ public sealed class Fonts : IDisposable
 
     // ── A text node's font ───────────────────────────────────────────────────
 
-    /// <summary>The font <paramref name="text"/> is set in, measured at <paramref name="scale"/>.</summary>
-    internal Font FontOf(Text text, ThemeTokens theme, float scale)
+    /// <summary>
+    /// The font <paramref name="text"/> is set in — its size, family and
+    /// weight, in <paramref name="theme"/> — measured at <paramref name="scale"/>:
+    /// the font layout measured it in, so <see cref="Measure(ReadOnlySpan{char}, in Font)"/>
+    /// of its content in it is the width it wanted.
+    /// </summary>
+    public Font FontOf(Text text, ThemeTokens theme, float scale)
         => FontOf(text.Size, text.Family, text.Weight, theme, scale);
 
     /// <summary>The font a text with these settings is set in, measured at <paramref name="scale"/>.</summary>

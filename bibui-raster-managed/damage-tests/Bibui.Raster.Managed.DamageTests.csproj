@@ -15,6 +15,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
+    <ProjectReference Include="../../bibui-testing/bibui-testing.csproj" />
     <ProjectReference Include="../backend/Bibui.Raster.Managed.Backend.csproj" />
   </ItemGroup>
 </Project>

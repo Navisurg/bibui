@@ -19,6 +19,8 @@
   <ItemGroup>
     <!-- The managed rasterizer draws the headless pictures with any package. -->
     <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
+    <!-- Bibui.Testing: the self-test and the screenshots find what they aim at in the app's tree. -->
+    <ProjectReference Include="../../bibui-testing/bibui-testing.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Theme files the Appearance sheet offers, beside the binary. -->
