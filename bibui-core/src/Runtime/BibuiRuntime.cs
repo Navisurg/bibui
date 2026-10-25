@@ -265,7 +265,7 @@ public sealed partial class BibuiRuntime
         // Every rect is solved before anything is recorded. A text measures
         // itself in this runtime's fonts.
         (_measureTheme, _measureScale) = (theme, window.Scale);
-        _fonts.BeginFrameRuns();
+        Bibui.Core.Text.RunsBegin(_fonts);
         LayoutSolver.Layout(tree, System.Numerics.Vector2.Zero,
             new System.Numerics.Vector2(window.LogicalWidth, window.LogicalHeight), _measure);
         var pointerTransforms = transformed ? PointerTransforms(tree) : null;
@@ -278,7 +278,7 @@ public sealed partial class BibuiRuntime
         _painter.Record(DrawList, tree, window, theme, input);
         // What nobody asked for lately is evicted from the caches recording read.
         _caches.EndFrame();
-        _fonts.EndFrame();
+        Bibui.Core.Text.FontsEndFrame(_fonts);
         var t3 = Stopwatch.GetTimestamp();
 
         if (_profile)
@@ -325,7 +325,7 @@ public sealed partial class BibuiRuntime
         switch (node)
         {
             case Text text:
-                var measured = _fonts.Measure(text, Fonts.FontOf(text, _measureTheme!, _measureScale));
+                var measured = Bibui.Core.Text.SizeFromText(_fonts, text, Bibui.Core.Text.FontFromText(_fonts, text, _measureTheme!, _measureScale));
                 return new System.Numerics.Vector2(measured.Width, measured.Height);
             case Icon icon:
                 float side = icon.Size.In(_measureTheme!);

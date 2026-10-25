@@ -60,13 +60,13 @@ public readonly ref partial struct DrawContext
     /// Ascent and descent of <paramref name="font"/> at this canvas's scale, in
     /// physical px: one baseline for every run of a text.
     /// </summary>
-    public TextMetrics FontMetrics(in Font font) => Fonts.StyleOf(font, Scale).Metrics;
+    public TextMetrics FontMetrics(in Font font) => Text.StyleFromFont(Fonts, font, Scale).Metrics;
 
     /// <summary>
     /// Baseline-to-baseline distance between wrapped lines, in logical px — the
     /// leading that <see cref="Fonts.LineHeight"/> does not bake into a single line.
     /// </summary>
-    public static float LineAdvance(float fontSize) => Bibui.Core.Fonts.LineAdvance(fontSize);
+    public static float LineAdvance(float fontSize) => Text.LineAdvanceFromSize(fontSize);
 
     /// <summary>
     /// <paramref name="text"/> in <paramref name="font"/>, its ascent at
@@ -77,16 +77,31 @@ public readonly ref partial struct DrawContext
     internal void DrawTextTop(Text text, float x, float top, in Font font, ReadOnlySpan<char> color)
     {
         if (text.Content.IsEmpty) return;
-        var style = Fonts.StyleOf(font, Scale);
+        var style = Text.StyleFromFont(Fonts, font, Scale);
         var rgba = Color(color);
         float baselineY = top * Scale - style.Metrics.Ascent;
-        if (text.RunFrame != Fonts.RunFrame || text.RunStyle != style)
+        var fonts = Fonts;
+        var runs = fonts.Runs;
+        if (text.RunFrame != fonts.RunFrame || runs[text.RunStart].Style != style)
         {
             DrawRuns(text.Content, x * Scale, baselineY, style, rgba);
             return;
         }
-        PushGlyphs(style, x * Scale, baselineY, rgba,
-            List.AddGlyphs(Fonts.RunGlyphs(text)), text.RunCount, List.AddPoints(Fonts.RunPoints(text)));
+        // A text's glyphs are one slice across its runs: they go into the list
+        // in one copy, and each run is an op over its part of them, in its own
+        // style, from its own pen. A run with no glyphs (the text's own style,
+        // when it starts in another face) draws nothing.
+        int first = runs[text.RunStart].GlyphStart;
+        ref readonly var last = ref runs[text.RunStart + text.RunCount - 1];
+        int total = last.GlyphStart + last.GlyphCount - first;
+        int glyphShift = List.AddGlyphs(fonts.RunGlyphs.AsSpan(first, total)) - first;
+        int pointShift = List.AddPoints(fonts.RunPoints.AsSpan(first, total)) - first;
+        for (int r = text.RunStart, end = r + text.RunCount; r < end; r++)
+        {
+            ref readonly var run = ref runs[r];
+            if (run.GlyphCount == 0) continue;
+            PushGlyphs(run.Style, x * Scale + run.X, baselineY, rgba, run.GlyphStart + glyphShift, run.GlyphCount, run.GlyphStart + pointShift);
+        }
     }
 
     /// <summary>
@@ -98,7 +113,7 @@ public readonly ref partial struct DrawContext
     public void DrawText(ReadOnlySpan<char> text, float x, float top, in Font font, Rgba color)
     {
         if (text.IsEmpty) return;
-        var style = Fonts.StyleOf(font, Scale);
+        var style = Text.StyleFromFont(Fonts, font, Scale);
         DrawRuns(text, x, top - style.Metrics.Ascent, style, color);
     }
 
@@ -107,7 +122,7 @@ public readonly ref partial struct DrawContext
     private void DrawGlyphCentered(ReadOnlySpan<char> text, float rectX, float rectY, float rectW, float rectH,
         float fontSize, Rgba color)
     {
-        var style = Fonts.StyleOf(Fonts.BuiltIn(600), fontSize * Scale);
+        var style = Text.StyleFromFaceSize(Fonts, Text.FaceBuiltIn(Fonts, 600), fontSize * Scale);
         var metrics = style.Metrics;
         float textWidth = style.Strike.Measure(text);
         float textHeight = metrics.Descent - metrics.Ascent;

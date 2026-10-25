@@ -2699,7 +2699,7 @@ Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string
     // must land exactly where Skia's own string drawing puts them, with the
     // paint bibui draws text with, so the move to glyphs moved no pixel.
     using var fonts = new Fonts();
-    var face = fonts.BuiltIn(400);
+    var face = Text.FaceBuiltIn(fonts, 400);
     IsTrue(face.HasGlyph('A') && !face.HasGlyph(0x10FFFD), "glyph coverage is the face's own");
 
     const float size = 17.5f;
@@ -2873,7 +2873,7 @@ Run("DrawList: recording a frame after the first allocates nothing", () =>
     {
         painter.Record(list, tree!, surface, theme, FrameInput.None);
         caches.EndFrame();
-        fonts.EndFrame();
+        Text.FontsEndFrame(fonts);
     }
 
     long before = GC.GetAllocatedBytesForCurrentThread();
