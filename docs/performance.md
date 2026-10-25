@@ -56,9 +56,7 @@ rasterizer are in gradients and wide strokes.
 ## Measuring
 
 The numbers come from the maintainers' benchmark harness, which is not part of
-this repository. `BIBUI_PROFILE=1` prints, for every frame, the time
-`EndBuild` spent building, laying out and recording. Drawing and presenting
-happen in the app's own loop, so an app times them itself: wrap a
+this repository. An app times its own frame, since the loop is its own: wrap a
 `Stopwatch.GetTimestamp()` around the build, the renderer's `Draw` and the
 window's `EndDraw` (the swap or commit) in the loop. When you compare numbers, run on a quiet machine
 and record the load average with them: on a busy machine the medians inflate and
