@@ -28,7 +28,7 @@ public sealed class Fonts : IDisposable
 {
     // The one text engine every configuration measures with, whatever draws:
     // confined to the rendering thread, as Fonts is. Everything below is data;
-    // what is done with it is the functions on Text (Fonts/Text.cs).
+    // what is done with it is the functions on TextLayer (Fonts/TextLayer.cs).
     internal readonly TextEngine Engine = new();
     internal readonly FontProvider Provider;
 
@@ -62,7 +62,7 @@ public sealed class Fonts : IDisposable
     // chars: layout walks a text's glyphs and positions into the next free slice
     // of RunGlyphs and RunPoints; the painter copies them out instead of walking
     // again. Each text pushes its runs into Runs, one after another. Emptied when layout
-    // starts (Text.RunsBegin), so all of it lives one frame. The arrays grow
+    // starts (TextLayer.RunsBegin), so all of it lives one frame. The arrays grow
     // when a frame needs more room and never shrink, so once the largest frame
     // has been seen they are never allocated again. A Text whose RunFrame is not
     // RunFrame has nothing here.
@@ -82,7 +82,7 @@ public sealed class Fonts : IDisposable
     // past that is some other wrap's line.
     internal const ulong KeepWrapFrames = 60;
     internal readonly Dictionary<WrapKey, WrapNode> Wraps = [];
-    internal readonly List<WrapKey> StaleWraps = [];   // Text.WrapsEvict's scratch
+    internal readonly List<WrapKey> StaleWraps = [];   // TextLayer.WrapsEvict's scratch
     internal ulong WrapFrame;
     internal TextLine? FirstFreeLine;                  // lines no wrap holds, linked by NextFree
     internal float[] WrapAdvances = new float[1024];   // each char's advance, for the text being wrapped: grown, never shrunk
@@ -105,21 +105,21 @@ public sealed class Fonts : IDisposable
     /// the font's ascent to its descent, with no leading. What layout gives a
     /// one-line text.
     /// </summary>
-    public float LineHeight(in Font font) => Text.LineBoxFromFont(this, font);
+    public float LineHeight(in Font font) => TextLayer.LineBoxFromFont(this, font);
 
     /// <summary>
     /// The distance from one line's top to the next's in <paramref name="font"/>,
     /// in logical px: what layout puts between the lines of a wrapped text. At
     /// least <see cref="LineHeight"/>; the difference is the leading.
     /// </summary>
-    public float LineAdvance(in Font font) => Text.LineAdvanceFromSize(font.Size);
+    public float LineAdvance(in Font font) => TextLayer.LineAdvanceFromSize(font.Size);
 
     /// <summary>
     /// The width of <paramref name="text"/> on one line in
     /// <paramref name="font"/>, in logical px. The same number layout gives a
     /// text with that content, from the same cache.
     /// </summary>
-    public float Measure(ReadOnlySpan<char> text, in Font font) => Text.WidthFromChars(this, text, font);
+    public float Measure(ReadOnlySpan<char> text, in Font font) => TextLayer.WidthFromChars(this, text, font);
 
     /// <summary>
     /// The char offset in <paramref name="text"/> nearest <paramref name="x"/>,
@@ -130,7 +130,7 @@ public sealed class Fonts : IDisposable
     /// <para>Each candidate is the width of the chars before it, measured as a
     /// text of its own — which is how a text split at that offset is drawn.</para>
     /// </summary>
-    public int OffsetAt(ReadOnlySpan<char> text, in Font font, float x) => Text.OffsetFromX(this, text, font, x);
+    public int OffsetAt(ReadOnlySpan<char> text, in Font font, float x) => TextLayer.OffsetFromX(this, text, font, x);
 
     /// <summary>
     /// The lines <paramref name="text"/> breaks into at <paramref name="width"/>
@@ -149,7 +149,7 @@ public sealed class Fonts : IDisposable
     /// and a blank line is a line of its own.</para>
     /// </summary>
     public TextLine? Wrap(ReadOnlySpan<char> text, in Font font, float width, TextWrap wrap = TextWrap.Words)
-        => Text.LinesFromChars(this, text, font, width, wrap);
+        => TextLayer.LinesFromChars(this, text, font, width, wrap);
 }
 
 /// <summary>
@@ -183,7 +183,7 @@ public readonly record struct Font
 
 /// <summary>
 /// One face at one physical size, and what text asks of it: the strike that
-/// measures and shapes, and its metrics. <see cref="Text.StyleFromFaceSize"/>
+/// measures and shapes, and its metrics. <see cref="TextLayer.StyleFromFaceSize"/>
 /// keeps one per (face, size), under <see cref="Key"/>.
 /// </summary>
 internal sealed class FontStyle

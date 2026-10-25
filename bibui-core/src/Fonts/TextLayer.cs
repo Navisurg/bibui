@@ -4,11 +4,15 @@ using Bibui.Core.TextEdit;
 
 namespace Bibui.Core;
 
-// What is done with Fonts' data: its faces and styles, a font's metrics, how
-// wide a text is, the runs layout walks a text into, and where a text breaks
-// into lines. Functions over a Fonts, named for what they give from what; the
-// data they read and write is all on Fonts, each field saying whose it is.
-public sealed partial class Text
+/// <summary>
+/// What is done with <see cref="Fonts"/>' data: its faces and styles, a font's
+/// metrics, how wide a text is, the runs layout walks a text into, and where a
+/// text breaks into lines. Functions over a <see cref="Fonts"/>, named for what
+/// they give from what; the data they read and write is all on Fonts, each
+/// field saying whose it is. The text layer; the <see cref="Text"/> node is the
+/// runtime's, and only hands its chars and its stamp to these.
+/// </summary>
+public static class TextLayer
 {
     // ── Frame ────────────────────────────────────────────────────────────────
 

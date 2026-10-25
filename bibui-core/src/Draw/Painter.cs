@@ -152,7 +152,7 @@ internal sealed class Painter
     // measured. Nothing is wrapped, aligned or cut here.
     private static void DrawText(Text text, Frame frame, ThemeTokens theme, DrawContext ctx)
     {
-        var font = Text.FontFromText(ctx.Fonts, text, theme, ctx.Scale);
+        var font = TextLayer.FontFromText(ctx.Fonts, text, theme, ctx.Scale);
         ctx.DrawTextTop(text, frame.X, frame.Y, font, (text.Color ?? UiColor.TextPrimary).Resolve(theme.Colors));
     }
 

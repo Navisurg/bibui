@@ -60,13 +60,13 @@ public readonly ref partial struct DrawContext
     /// Ascent and descent of <paramref name="font"/> at this canvas's scale, in
     /// physical px: one baseline for every run of a text.
     /// </summary>
-    public TextMetrics FontMetrics(in Font font) => Text.StyleFromFont(Fonts, font, Scale).Metrics;
+    public TextMetrics FontMetrics(in Font font) => TextLayer.StyleFromFont(Fonts, font, Scale).Metrics;
 
     /// <summary>
     /// Baseline-to-baseline distance between wrapped lines, in logical px — the
     /// leading that <see cref="Fonts.LineHeight"/> does not bake into a single line.
     /// </summary>
-    public static float LineAdvance(float fontSize) => Text.LineAdvanceFromSize(fontSize);
+    public static float LineAdvance(float fontSize) => TextLayer.LineAdvanceFromSize(fontSize);
 
     /// <summary>
     /// <paramref name="text"/> in <paramref name="font"/>, its ascent at
@@ -77,7 +77,7 @@ public readonly ref partial struct DrawContext
     internal void DrawTextTop(Text text, float x, float top, in Font font, ReadOnlySpan<char> color)
     {
         if (text.Content.IsEmpty) return;
-        var style = Text.StyleFromFont(Fonts, font, Scale);
+        var style = TextLayer.StyleFromFont(Fonts, font, Scale);
         var rgba = Color(color);
         float baselineY = top * Scale - style.Metrics.Ascent;
         var fonts = Fonts;
@@ -113,7 +113,7 @@ public readonly ref partial struct DrawContext
     public void DrawText(ReadOnlySpan<char> text, float x, float top, in Font font, Rgba color)
     {
         if (text.IsEmpty) return;
-        var style = Text.StyleFromFont(Fonts, font, Scale);
+        var style = TextLayer.StyleFromFont(Fonts, font, Scale);
         DrawRuns(text, x, top - style.Metrics.Ascent, style, color);
     }
 
@@ -122,7 +122,7 @@ public readonly ref partial struct DrawContext
     private void DrawGlyphCentered(ReadOnlySpan<char> text, float rectX, float rectY, float rectW, float rectH,
         float fontSize, Rgba color)
     {
-        var style = Text.StyleFromFaceSize(Fonts, Text.FaceBuiltIn(Fonts, 600), fontSize * Scale);
+        var style = TextLayer.StyleFromFaceSize(Fonts, TextLayer.FaceBuiltIn(Fonts, 600), fontSize * Scale);
         var metrics = style.Metrics;
         float textWidth = style.Strike.Measure(text);
         float textHeight = metrics.Descent - metrics.Ascent;

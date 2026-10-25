@@ -9,7 +9,7 @@ public abstract class UiComponent : UiNode
 /// one font. Built with <c>runtime.Text</c>, which says everything
 /// about it in the call; only its <see cref="Size"/> may be changed afterwards.
 /// </summary>
-public sealed partial class Text : UiComponent
+public sealed class Text : UiComponent
 {
     internal Text() { }
 
@@ -17,7 +17,7 @@ public sealed partial class Text : UiComponent
     // to frame, so it is allocated again only for a longer text.
     internal readonly BibuiStr ContentStr = new(0);
 
-    // This frame's runs, written by layout's walk (Text.RunsFromText):
+    // This frame's runs, written by layout's walk (TextLayer.RunsFromText):
     // RunCount TextRuns from RunStart in Fonts.Runs, their glyphs one slice of
     // Fonts.RunGlyphs / RunPoints. The first is always in the text's own style
     // (with no glyphs, when the text starts in another face), so it says what
@@ -116,7 +116,7 @@ public readonly record struct FontSize
     public static implicit operator FontSize(ComponentSize step) => new(step, 0f);
 
     /// <summary>The size in logical px, under <paramref name="theme"/>'s steps.</summary>
-    internal float In(Bibui.Core.Theming.ThemeTokens theme) => _pixels > 0f ? _pixels : Text.SizeFromStep(_step, theme);
+    internal float In(Bibui.Core.Theming.ThemeTokens theme) => _pixels > 0f ? _pixels : TextLayer.SizeFromStep(_step, theme);
 
     /// <summary>The same size times <paramref name="factor"/>, in pixels.</summary>
     public FontSize Times(float factor, Bibui.Core.Theming.ThemeTokens theme) => Px(In(theme) * factor);
