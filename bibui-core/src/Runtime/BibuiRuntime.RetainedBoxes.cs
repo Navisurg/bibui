@@ -71,8 +71,7 @@ public sealed partial class BibuiRuntime
     /// </summary>
     private Box? PeekBox(string id)
     {
-        if (_retainedBoxes.Entries.TryGetValue(id, out var entry)) return entry.Value;
-        return _interactiveBoxes.TryGetValue(id, out var box) ? box : null;
+        return _retainedBoxes.Entries.TryGetValue(id, out var entry) ? entry.Value : null;
     }
 
     /// <summary>
@@ -170,15 +169,14 @@ public sealed partial class BibuiRuntime
         // the hover guard below fails for every box and nothing can go hot
         // again — so the button has to be taken off it here.
         //
-        // Against _interactiveBoxes, which the render rebuilds whole, so a
-        // box that stopped being built is gone from it at once. Not against
-        // _retainedBoxes: that keeps entries for 60 frames, and a box that
-        // stopped being built keeps its last Claims the whole time, because
-        // only BoxFromId clears them.
+        // Built this frame is touched this frame: a retained entry outlives
+        // its box by 60 frames, keeping the last Claims it was given, so
+        // being in the cache says nothing.
         for (int b = 0; b < 3; b++)
             if (_activeId[b] is string activeId
-                && (!_interactiveBoxes.TryGetValue(activeId, out var activeBox)
-                    || activeBox.Claims == InteractionKinds.Disabled))
+                && (!_retainedBoxes.Entries.TryGetValue(activeId, out var active)
+                    || active.Touched != _retainedBoxes.Frame
+                    || active.Value.Claims == InteractionKinds.Disabled))
                 _activeId[b] = null;
 
         // Cleared once a frame so the asks that come next decide it

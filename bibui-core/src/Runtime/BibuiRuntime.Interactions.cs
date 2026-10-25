@@ -303,24 +303,29 @@ public sealed partial class BibuiRuntime
     /// <summary>A clipping ancestor: its laid-out rect, and the surface back to its layout space.</summary>
     private sealed record DrawnClip(Vector2 Min, Vector2 Max, Matrix3x2 Inverse, DrawnClip? Next);
 
-    /// <summary>The transform the box named <paramref name="id"/> was drawn through last frame, or null for none.</summary>
-    private Matrix3x2? PointerTransformOf(string id)
-    {
-        return _pointerTransforms is not null && _pointerTransforms.TryGetValue(id, out var d) ? d.World : null;
-    }
-
     /// <summary>
     /// Every moved interactive box as it was drawn, composed as the painter
-    /// composes transforms. Run after layout, only for a frame that has a
-    /// transform somewhere.
+    /// composes transforms, into <paramref name="map"/> (last frame's, emptied),
+    /// or null when nothing in the frame has a transform. Run after layout.
     /// </summary>
-    private static Dictionary<string, Drawn> PointerTransforms(UiNode root)
+    private static Dictionary<string, Drawn>? PointerTransforms(UiNode root, Dictionary<string, Drawn>? map)
     {
-        var map = new Dictionary<string, Drawn>();
-        Walk(root, Matrix3x2.Identity, Matrix3x2.Identity, moved: false, clips: null);
+        // The common frame moves nothing: one walk that allocates nothing says so.
+        if (!AnyTransform(root)) return null;
+        map ??= new();
+        map.Clear();
+        Walk(map, root, Matrix3x2.Identity, Matrix3x2.Identity, moved: false, clips: null);
         return map;
 
-        void Walk(UiNode node, Matrix3x2 parent, Matrix3x2 parentInverse, bool moved, DrawnClip? clips)
+        static bool AnyTransform(UiNode node)
+        {
+            if (node.Style.HasTransform) return true;
+            for (UiNode? c = node.FirstChild; c is not null; c = c.Next == c ? null : c.Next)
+                if (AnyTransform(c)) return true;
+            return false;
+        }
+
+        static void Walk(Dictionary<string, Drawn> map, UiNode node, Matrix3x2 parent, Matrix3x2 parentInverse, bool moved, DrawnClip? clips)
         {
             var world = parent;
             var inverse = parentInverse;
@@ -339,7 +344,7 @@ public sealed partial class BibuiRuntime
                     clips = new DrawnClip(node.Rect, node.Rect + node.Extent, inverse, clips);
             }
             for (UiNode? c = node.FirstChild; c is not null; c = c.Next == c ? null : c.Next)
-                Walk(c, world, inverse, moved, clips);
+                Walk(map, c, world, inverse, moved, clips);
         }
     }
 
