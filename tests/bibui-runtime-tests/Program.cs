@@ -4928,105 +4928,6 @@ Run("Claims: a drag let go over nothing in particular still reaches its owner", 
     IsTrue(!runtime.InteractionsFor(card).Dragging, "the card is not still holding the button");
 });
 
-Run("Claims: a box that asks rather than calls back is still clickable by name", () =>
-{
-    // Regression: DispatchClick(id) once reached only components and boxes with
-    // a callback, so a box that claims a press could not be clicked by name.
-    // That is the whole of how a test rig and a host's own "click this control"
-    // both reach a box.
-    var runtime = BibuiRuntime.Create();
-    Box card = null!;
-    int clicks = 0;
-    runtime.SetBuild(
-        () =>
-        {
-            card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            if (runtime.InteractionsFor(card).Clicked) clicks++;
-            card.Sized(Size.Px(100f), Size.Px(60f)).At(40f, 20f);
-            return Layer(null, card).Sized(Size.Px(400f), Size.Px(400f));
-        },
-        TestBuild.Window(400, 400));
-    runtime.Step();   // the frame that gives the box a rect to aim at
-
-    runtime.DispatchClick("card");
-    runtime.Step();   // the frame that asks
-
-    Eq(1, clicks, "the box was clicked by its name");
-});
-
-Run("Claims: a click by name goes to the box named, not to a child under the point", () =>
-{
-    // A by-name dispatch has already said which box it means. Delivering it at the
-    // box's centre and letting ask order decide hands it to whatever is drawn
-    // there — which for a card with its own title, button or grip inside it is one
-    // of those, not the card. The name is the answer to "which box", so the point
-    // is only how the event is carried.
-    var runtime = BibuiRuntime.Create();
-    Box card = null!, inner = null!;
-    int cardClicks = 0, innerClicks = 0;
-    runtime.SetBuild(
-        () =>
-        {
-            card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            inner = runtime.BoxFromId("inner", InteractionKinds.LeftPress);
-
-            // Innermost asks first, as z-order demands — so on an ordinary click
-            // at this point the inner box would take it, and does below.
-            if (runtime.InteractionsFor(inner).Clicked) innerClicks++;
-            if (runtime.InteractionsFor(card).Clicked) cardClicks++;
-
-            inner.Sized(Size.Px(100f), Size.Px(100f)).At(0f, 0f);
-            card.Sized(Size.Px(100f), Size.Px(100f)).At(0f, 0f);
-            UiNode.PushIntoParent(card, Layer(null, inner).Sized(Size.Fill, Size.Fill));
-            return Layer(null, card).Sized(Size.Px(300f), Size.Px(300f));
-        },
-        TestBuild.Window(300, 300));
-    runtime.Step();
-
-    runtime.DispatchClick("card");
-    runtime.Step();
-    Eq(1, cardClicks, "the card was named, so the card was clicked");
-    Eq(0, innerClicks, "and the box covering it took nothing");
-
-    runtime.DispatchClick("inner");
-    runtime.Step();
-    Eq(1, innerClicks, "naming the inner one reaches it too");
-    Eq(1, cardClicks, "without the card taking a second");
-
-    // An ordinary click at the same point still goes by ask order, which is what
-    // makes the two different questions.
-    runtime.ProcessEvents(new[]
-    {
-        new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = 50f, Y = 50f },
-        new BibUiEvent { Kind = BibUiEventKind.MouseUp,   Button = MouseButton.Left, X = 50f, Y = 50f },
-    });
-    runtime.Step();
-    Eq(2, innerClicks, "a click by coordinate goes to whoever asks first");
-    Eq(1, cardClicks, "not to the container beneath it");
-});
-
-Run("Claims: clicking an unknown name, or a box with no rect yet, does nothing", () =>
-{
-    var runtime = BibuiRuntime.Create();
-    Box card = null!;
-    int clicks = 0;
-    runtime.SetBuild(
-        () =>
-        {
-            card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            if (runtime.InteractionsFor(card).Clicked) clicks++;
-            card.Sized(Size.Px(100f), Size.Px(60f));
-            return Layer(null, card).Sized(Size.Px(400f), Size.Px(400f));
-        },
-        TestBuild.Window(400, 400));
-
-    // Never painted: there is no centre to aim at, and no exception either.
-    runtime.DispatchClick("card");
-    runtime.DispatchClick("nothing-by-that-name");
-    runtime.Step();
-    Eq(0, clicks, "nothing was clicked");
-});
-
 Run("Pointer: the runtime keeps its own current, without being told", () =>
 {
     // It used to be filled only by the window, so anything driving the runtime
@@ -6692,9 +6593,9 @@ Run("runtime.EllipsisTextField: a press is the field's, and being edited it scro
     bool Dots() => Texts(runtime).Contains("\u2026");
     IsTrue(Dots(), "not being edited, it ends in \"…\"");
 
-    runtime.DispatchClick("label");
+    ClickCentre(runtime, "label");
     runtime.Step();
-    IsTrue(focused, "the press is the field's, by its id");
+    IsTrue(focused, "the press is the field's");
     runtime.Step();
     IsTrue(!Dots(), "being edited, it has no \"…\"");
 });

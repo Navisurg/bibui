@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using Bibui.Core.Theming;
 using Bibui.Core.Draw;
 using Bibui.Core.TextEdit;
@@ -194,8 +193,8 @@ public sealed partial class BibuiRuntime
     // the app builds with nothing else pushed lands under it.
     private readonly Box _root = new();
 
-    // This frame's theme, as BeginBuild found it: the whole frame is laid out
-    // and painted in it, whatever another thread sets.
+    // This frame's theme: _theme, part way from the last one while a
+    // crossfade runs (PaintedTheme). The frame is measured and painted in it.
     private ThemeTokens _frameTheme = null!;
     // When the frame's build started: what SleepUntilNextFrame paces from.
     private long _buildStarted;
@@ -367,48 +366,6 @@ public sealed partial class BibuiRuntime
     {
         _firstEvent = _lastEvent = null;
         _eventsUsed = 0;
-    }
-
-    // ── Event dispatch ───────────────────────────────────────────────────────
-    //
-    // Nothing here renders: dispatch reads the last painted frame's rects, which
-    // is the frame the user was looking at. A caller driving the runtime by hand
-    // builds the next frame itself (EndBuild).
-
-    /// <summary>
-    /// Clicks the box named <paramref name="id"/>: a press and a release at its
-    /// centre, through the same queue a real pointer uses, so focus, hot state
-    /// and the drag anchor land exactly as they would for a person. Queued for
-    /// the next frame. False, and nothing queued, when no box that claims a
-    /// press carries the name.
-    /// </summary>
-    public bool DispatchClick(string id)
-    {
-        Box? box;
-        _interactiveBoxes.TryGetValue(id, out box);
-        if (box is null || box.Claims == InteractionKinds.None || box.Claims == InteractionKinds.Disabled) return false;
-
-        // Last frame's geometry, which is the same frame an ask would test
-        // against. A box that has never been painted has no centre to aim at.
-        var pos = box.Rect;
-        var size = box.Extent;
-        if (size.X <= 0f || size.Y <= 0f) return false;
-
-        float cx = pos.X + size.X / 2f;
-        float cy = pos.Y + size.Y / 2f;
-
-        // Where the centre is drawn, which is where a person would click it.
-        if (PointerTransformOf(id) is { } drawn)
-        {
-            var centre = System.Numerics.Vector2.Transform(new System.Numerics.Vector2(cx, cy), drawn);
-            (cx, cy) = (centre.X, centre.Y);
-        }
-        ProcessEvents(new[]
-        {
-            new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = cx, Y = cy, TargetId = id },
-            new BibUiEvent { Kind = BibUiEventKind.MouseUp,   Button = MouseButton.Left, X = cx, Y = cy, TargetId = id },
-        });
-        return true;
     }
 
     /// <summary>The tree the last frame laid out and painted.</summary>

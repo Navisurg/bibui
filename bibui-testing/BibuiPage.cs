@@ -232,13 +232,12 @@ public sealed class BibuiPage : IDisposable
     /// <summary>
     /// Replaces the whole text of the field with the given Id, the way a
     /// person would: presses it, which its app focuses; then, a frame later,
-    /// selects all and types the value, or deletes for an empty one. Nothing
-    /// when no box that asks carries the name.
+    /// selects all and types the value, or deletes for an empty one.
     /// </summary>
     public void Fill(string inputId, string value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        if (!_runtime.DispatchClick(inputId)) return;
+        PressAt(inputId);
         Frame();
         PressKey(Key.A, ctrl: true);
         if (value.Length == 0) PressKey(Key.Backspace);

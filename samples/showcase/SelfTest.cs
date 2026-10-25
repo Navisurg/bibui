@@ -126,7 +126,10 @@ internal static class SelfTest
 
     private static void Click(App app, BibuiRuntime rt, string id)
     {
-        rt.DispatchClick(id);
+        var box = (Box)rt.FindById(id)!;
+        float x = box.Rect.X + box.Extent.X / 2f, y = box.Rect.Y + box.Extent.Y / 2f;
+        rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = x, Y = y });
+        rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Left, X = x, Y = y });
         Frames(app, rt, 2);
     }
 

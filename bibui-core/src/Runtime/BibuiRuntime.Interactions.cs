@@ -42,16 +42,10 @@ public sealed partial class BibuiRuntime
         Interaction interaction = default;
         if (box.Id is not { } id) return interaction;
 
-        // Claims off the instance handed in, geometry off the last painted
-        // frame. For a retained box they are the same object; for one built
-        // fresh each frame they are not, and only the older of the two has
-        // ever been given a rect.
-        Box geometry = PeekBox(id) ?? box;
-
         // Cut the rect to every ancestor that claims Clip. Links are this
         // frame's, rects last frame's.
-        Vector2 rectMin = geometry.Rect;
-        Vector2 rectMax = geometry.Rect + geometry.Extent;
+        Vector2 rectMin = box.Rect;
+        Vector2 rectMax = box.Rect + box.Extent;
         for (UiNode? parent = box.Parent; parent is not null; parent = parent.Parent == parent ? null : parent.Parent)
         {
             if (parent is not Box { Claims: var parentClaims } || (parentClaims & InteractionKinds.Clip) == 0) continue;
@@ -87,7 +81,7 @@ public sealed partial class BibuiRuntime
 
                 if (blocked.Kind is not (BibUiEventKind.MouseDown or BibUiEventKind.MouseUp)) continue;
                 Vector2 at = new(blocked.X, blocked.Y);
-                if (!Hit(at, geometry, rect, size, transforms) || IsUnderDropDown(box, at)) continue;
+                if (!Hit(at, box, rect, size, transforms) || IsUnderDropDown(box, at)) continue;
 
                 // A release belonging to a gesture someone else started is not
                 // this box's to swallow: it has to reach its owner, or that
@@ -110,18 +104,12 @@ public sealed partial class BibuiRuntime
         {
             if (ev.Consumed) continue;
 
-            // Addressed to one box by name. A by-name dispatch has already decided
-            // which box it means, so the point it carries is only how the event
-            // travels; letting whoever else covers that point take it would press
-            // the button drawn in the middle of the card the caller named.
-            if (ev.TargetId is not null && ev.TargetId != id) continue;
-
             int button = ButtonIndex(ev.Button);
             InteractionKinds kind = KindOf(ev);
             Vector2 pos = new(ev.X, ev.Y);
             // An open dropdown's rect is the dropdown's: what is not under it
             // treats a point there as outside itself.
-            bool inBounds = Hit(pos, geometry, rect, size, transforms) && !IsUnderDropDown(box, pos);
+            bool inBounds = Hit(pos, box, rect, size, transforms) && !IsUnderDropDown(box, pos);
 
             // Per button, not "claims some press": a box that took only the
             // right one must leave a left press for whoever did claim it.
@@ -199,13 +187,13 @@ public sealed partial class BibuiRuntime
             }
         }
 
-        ClampViewOffset(box, geometry);
+        ClampViewOffset(box);
 
         Vector2 mousePos = new Vector2(mouseX, mouseY);
 
         // TODO(K): Maybe also scrollable
         if ((claims & Pressable) != 0
-            && Hit(mousePos, geometry, rect, size, transforms)
+            && Hit(mousePos, box, rect, size, transforms)
             && !IsUnderDropDown(box, mousePos)
             && (_hotId is null || _hotId == id)
             && NoOtherBoxActive(id))

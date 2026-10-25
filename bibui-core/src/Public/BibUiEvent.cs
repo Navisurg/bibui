@@ -135,19 +135,6 @@ public sealed class BibUiEvent
     /// </summary>
     public int ClickCount { get; set; } = 1;
 
-    /// <summary>
-    /// The one box allowed to take this event, or null for an ordinary one that
-    /// whoever asks first may have.
-    ///
-    /// <para>Set by a dispatch that was given a name rather than a point. The
-    /// caller has already said which box it means, so the coordinate is only how
-    /// the event is carried — and without this it is taken by whatever happens to
-    /// sit at that coordinate and ask first, which for a box with interactive
-    /// children of its own is one of the children. Clicking a card by name would
-    /// press the button drawn in the middle of it.</para>
-    /// </summary>
-    internal string? TargetId { get; set; }
-
     // ── Translated text-editing intent (filled by BeginBuild) ───────────────
     public TextActionFlags Flags { get; set; }
     public int Delta { get; set; }
@@ -171,7 +158,7 @@ public sealed class BibUiEvent
     {
         Kind = BibUiEventKind.Null; Next = null; Consumed = false;
         Key = Key.Unknown; Modifiers = KeyModifiers.None; Char = null; Repeat = false;
-        Button = MouseButton.Unknown; X = Y = ScrollX = ScrollY = 0f; ClickCount = 1; TargetId = null;
+        Button = MouseButton.Unknown; X = Y = ScrollX = ScrollY = 0f; ClickCount = 1;
         Flags = 0; Delta = DeltaY = 0; CodePoint = 0; PasteData = null;
     }
 
@@ -181,7 +168,7 @@ public sealed class BibUiEvent
         Kind = from.Kind;
         Key = from.Key; Modifiers = from.Modifiers; Char = from.Char; Repeat = from.Repeat;
         Button = from.Button; X = from.X; Y = from.Y; ScrollX = from.ScrollX; ScrollY = from.ScrollY;
-        ClickCount = from.ClickCount; TargetId = from.TargetId;
+        ClickCount = from.ClickCount;
         Flags = from.Flags; Delta = from.Delta; DeltaY = from.DeltaY; CodePoint = from.CodePoint; PasteData = from.PasteData;
     }
 
