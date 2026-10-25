@@ -117,7 +117,7 @@ static List<string> Texts(BibuiRuntime runtime)
 {
     runtime.Step();
     var texts = new List<string>();
-    Walk(runtime.LastTree);
+    Walk(runtime.Root);
     return texts;
 
     void Walk(UiNode? node)
@@ -901,7 +901,7 @@ Run("HitTest C: layout is in logical pixels, not physical", () =>
         window: TestBuild.Window((int)FormWidth, (int)FormHeight, 2f));
     runtime.Step();
 
-    var root = runtime.LastTree!;
+    var root = runtime.Root;
     IsTrue(MathF.Abs(root.Extent.X - FormWidth) <= 1f,
         $"Root width should be logical {FormWidth}, got {root.Extent.X} (physical would be {FormWidth * 2f})");
 });

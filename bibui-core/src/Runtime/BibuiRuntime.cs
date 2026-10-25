@@ -46,7 +46,6 @@ public sealed partial class BibuiRuntime
 
     // ── Core app state ───────────────────────────────────────────────────────
     private ThemeTokens _theme = ThemeLoader.BibuiDark();
-    private UiNode? _lastTree;
 
     // ── Pointer state ────────────────────────────────────────────────────────
     private float _mouseX = float.NaN;
@@ -228,6 +227,13 @@ public sealed partial class BibuiRuntime
         Rates = MotionRates.From(_theme.Motion, Dt, Instant);
         _buildStarted = Stopwatch.GetTimestamp();
         BeginDropDowns();
+        // Last frame's tree lets go of what was built at its top, so a node the
+        // app keeps from frame to frame is unlinked again until it is built.
+        for (UiNode? c = _root.FirstChild, next; c is not null; c = next)
+        {
+            next = c.Next == c ? null : c.Next;
+            (c.Parent, c.Prev, c.Next) = (null, null, null);
+        }
         ResetForBuild(_root);
         _root.SizeX = _root.SizeY = SemanticSize.ParentPct(1f);
         _root.ChildLayoutAxis = LayoutAxis.Y;
@@ -249,14 +255,14 @@ public sealed partial class BibuiRuntime
         var window = Window;
         var theme = _frameTheme;
 
-        // The frame's tree. One node built at the top is it, and fills the
+        // What is laid out and recorded. One node built at the top fills the
         // surface, as a window's content does; several are stacked top to
-        // bottom under the root, which fills it.
+        // bottom under the root, which fills it. Either way it stays linked
+        // under the root, which is the frame's tree until the next BeginBuild.
         UiNode tree = _root;
         if (_root.FirstChild is { } only && only == _root.LastChild)
         {
-            (_root.FirstChild, _root.LastChild) = (null, null);
-            (only.Parent, only.Prev, only.Next) = (null, null, null);
+            (_root.Rect, _root.Extent) = (System.Numerics.Vector2.Zero, new System.Numerics.Vector2(window.LogicalWidth, window.LogicalHeight));
             tree = only;
         }
 
@@ -274,8 +280,6 @@ public sealed partial class BibuiRuntime
         // What nobody asked for lately is evicted from the caches recording read.
         _caches.EndFrame();
         _fonts.EndFrame();
-
-        _lastTree = tree;
 
         // Will the next frame differ from this one? Asked of the painter,
         // which knows because it stepped the values: a hover fade, an easing
@@ -368,8 +372,12 @@ public sealed partial class BibuiRuntime
         _eventsUsed = 0;
     }
 
-    /// <summary>The tree the last frame laid out and painted.</summary>
-    internal UiNode? LastTree => _lastTree;
+    /// <summary>
+    /// The frame's root. Between <see cref="EndBuild"/> and the next
+    /// <see cref="BeginBuild"/>, which resets it, it is the tree that frame laid
+    /// out and painted, read as it is: nothing is copied.
+    /// </summary>
+    internal UiNode Root => _root;
 
     /// <summary>
     /// The node named <paramref name="id"/> in the tree the last frame laid out
@@ -383,7 +391,7 @@ public sealed partial class BibuiRuntime
     public UiNode? FindById(string id)
     {
         ArgumentNullException.ThrowIfNull(id);
-        return Find(LastTree, id);
+        return Find(_root, id);
 
         static UiNode? Find(UiNode? node, string id)
         {
