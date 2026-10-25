@@ -554,9 +554,14 @@ Run("Counter: click increments", () =>
         window: TestBuild.Window(200, 100));
     runtime.Step();
 
+    // The label is built before the button that takes the click, so the click's
+    // frame counts it and the frame after shows it.
     runtime.Click("inc");
-    Eq("1", runtime.GetText("label"));
+    Eq(1, count, "the click's frame counts it");
+    runtime.Step();
+    Eq("1", runtime.GetText("label"), "and the next frame shows it");
     runtime.Click("inc");
+    runtime.Step();
     Eq("2", runtime.GetText("label"));
 });
 
@@ -783,7 +788,7 @@ static BibuiRuntime LaunchApp()
 // frame: the badge beside the checkbox says its state, under a box with no id.
 static bool ShowsText(BibuiRuntime page, string text)
 {
-    var card = page.NodeById("subscribe-checkbox")?.Parent ?? throw new InvalidOperationException("No checkbox card");
+    var card = Nodes.FindById(page.Root, "subscribe-checkbox")?.Parent ?? throw new InvalidOperationException("No checkbox card");
     return Find(card);
 
     bool Find(UiNode n)
@@ -807,17 +812,21 @@ Run("App: increment and decrement", () =>
 {
     var page = LaunchApp();
 
+    // The label is built before the buttons, so a click shows from the frame after it.
     page.Click("increment-btn");
     page.Click("increment-btn");
     page.Click("increment-btn");
+    page.Step();
     Eq("3", page.GetText("counter-label"));
 
     page.Click("decrement-btn");
+    page.Step();
     Eq("2", page.GetText("counter-label"));
 
     page.Click("decrement-btn");
     page.Click("decrement-btn");
     page.Click("decrement-btn");
+    page.Step();
     Eq("-1", page.GetText("counter-label"), "The counter goes below zero");
 });
 
@@ -992,7 +1001,7 @@ Run("Delete and Backspace remove a selection rather than one character", () =>
 
     var (page2, text2, edit2) = TextFieldPage();
     page2.DoubleClick("txt");
-    page2.PressBackspace();
+    page2.Press(Key.Backspace);
     Eq("hello ", Value(text2), "Backspace with a selection should remove the selection too");
 });
 
@@ -1093,7 +1102,7 @@ Run("InteractiveBox: Box that claims nothing stays as Box kind", () =>
         }.Sized(Size.Px(80f), Size.Px(40f)),
         window: TestBuild.Window(200, 100));
 
-    var node = runtime.NodeById("plain-box");
+    var node = Nodes.FindById(runtime.Root, "plain-box");
     IsTrue(node is Box { Claims: InteractionKinds.None }, "a box that claims nothing is just a box");
 });
 
@@ -1189,7 +1198,7 @@ Run("Row: a weighted child is measured at its share, not at the whole row", () =
         window: TestBuild.Window(700, 400));
     runtime.Step();
 
-    var column = runtime.NodeById("left-column") ?? throw new Exception("left-column missing");
+    var column = Nodes.FindById(runtime.Root, "left-column") ?? throw new Exception("left-column missing");
 
     // The column is as tall as the two paragraphs in it, or it is not describing them.
     float wrapped = 0f;
@@ -2403,8 +2412,8 @@ Run("Box: a fixed Width box holds a multi-line field wrapped at that width, not 
         TestBuild.Window(1000, 300, 1f));
     runtime.Step();   // a field wraps at the width it was laid out at last frame
     runtime.Step();
-    var bubble = Bounds(runtime.NodeById("bubble")!);
-    var text = Bounds(runtime.NodeById("words")!);
+    var bubble = Bounds(Nodes.FindById(runtime.Root, "bubble")!);
+    var text = Bounds(Nodes.FindById(runtime.Root, "words")!);
     IsTrue(text.Height > 30f, $"the words should wrap inside 212px: text {text.Height} tall");
     IsTrue(text.Y + text.Height <= bubble.Y + bubble.Height - 10f + 0.5f,
         $"the bubble ({bubble.Height} tall) should hold its {text.Height}px of text and its padding");
@@ -2434,7 +2443,7 @@ Run("runtime.MultilineTextField: wrapped by characters, a token longer than the 
         runtime.Step();
         runtime.Step();   // wrapped at last frame's width
         runtime.Step();
-        return Below(runtime.NodeById("log")!).Where(t => TextOf(t)?.Length > 0).Select(Bounds).ToList();
+        return Below(Nodes.FindById(runtime.Root, "log")!).Where(t => TextOf(t)?.Length > 0).Select(Bounds).ToList();
     }
     var byWords = Lines();
     Eq(1, byWords.Count, "by words the path is one line");
@@ -2467,8 +2476,8 @@ Run("runtime.MultilineTextField: a hard line break is laid out as a line, not on
         TestBuild.Window(800, 300, 1.25f));
     runtime.Step();
     runtime.Step();
-    var box = Bounds(runtime.NodeById("draft")!);
-    var wordsNode = runtime.NodeById("words")!;
+    var box = Bounds(Nodes.FindById(runtime.Root, "draft")!);
+    var wordsNode = Nodes.FindById(runtime.Root, "words")!;
     var words = Bounds(wordsNode);
     var lines = Below(wordsNode).Where(t => TextOf(t)?.Length > 0).Select(Bounds).ToList();
     IsTrue(lines.Count == 3, $"three lines painted, got {lines.Count}");
@@ -6406,7 +6415,7 @@ Run("Fonts.LineHeight and LineAdvance: what layout gives one line, and the next"
     IsTrue(advance >= height, $"the advance {advance} includes the line {height}");
     Eq(height, one.Extent.Y, "one line");
     runtime.Step();
-    float three = runtime.NodeById("three")!.Extent.Y;
+    float three = Nodes.FindById(runtime.Root, "three")!.Extent.Y;
     IsTrue(MathF.Abs(height + 2f * advance - three) < 0.01f,
         $"three lines: {height} + 2 x {advance}, laid out {three}");
 });

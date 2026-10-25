@@ -156,35 +156,24 @@ public static class TestBuild
     }
 
     // ── Driving the app as a person would ────────────────────────────────────
-    // Each action sends what a mouse or keyboard would and builds the frame it
-    // causes, and each query builds a frame and reads its tree, so a test reads
-    // what is on screen after whatever it did last.
+    // An action sends what a mouse or keyboard would and builds the frame it
+    // causes, as a window's loop does. A query builds nothing: it reads the
+    // tree the last frame laid out, which is what is on screen.
 
-    /// <summary>A frame, then the node named <paramref name="id"/> in its tree, or null.</summary>
-    public static UiNode? NodeById(this BibuiRuntime runtime, string id)
-    {
-        runtime.Step();
-        return Nodes.FindById(runtime.Root, id);
-    }
-
-    /// <summary>A frame, then the logical-px rect of the node named <paramref name="id"/>; throws when there is none.</summary>
+    /// <summary>The logical-px rect of the node named <paramref name="id"/> as the last frame laid it out; throws when there is none.</summary>
     public static System.Drawing.RectangleF GetBounds(this BibuiRuntime runtime, string id)
     {
-        var node = runtime.NodeById(id) ?? throw new InvalidOperationException($"No node with Id '{id}' in the last frame's tree.");
+        var node = Nodes.FindById(runtime.Root, id) ?? throw new InvalidOperationException($"No node with Id '{id}' in the last frame's tree.");
         return new(node.Rect.X, node.Rect.Y, node.Extent.X, node.Extent.Y);
     }
 
-    /// <summary>A frame, then whether a node named <paramref name="id"/> is in its tree.</summary>
-    public static bool IsVisible(this BibuiRuntime runtime, string id) => runtime.NodeById(id) is not null;
+    /// <summary>Whether a node named <paramref name="id"/> is in the last frame's tree.</summary>
+    public static bool IsVisible(this BibuiRuntime runtime, string id) => Nodes.FindById(runtime.Root, id) is not null;
 
-    /// <summary>A frame, then whether the box named <paramref name="id"/> claims Disabled.</summary>
-    public static bool IsDisabled(this BibuiRuntime runtime, string id)
-        => runtime.NodeById(id) is Box box && (box.Claims & InteractionKinds.Disabled) != 0;
-
-    /// <summary>A frame, then the words of the text named <paramref name="id"/>, or of the first text under it — a button's label; null for none.</summary>
+    /// <summary>The words, in the last frame, of the text named <paramref name="id"/>, or of the first text under it — a button's label; null for none.</summary>
     public static string? GetText(this BibuiRuntime runtime, string id)
     {
-        return runtime.NodeById(id) is { } node && FirstText(node) is { } text ? new string(text.Content) : null;
+        return Nodes.FindById(runtime.Root, id) is { } node && FirstText(node) is { } text ? new string(text.Content) : null;
 
         static Text? FirstText(UiNode n)
         {
@@ -214,17 +203,6 @@ public static class TestBuild
     /// <summary>Two clicks, which on text selects a word.</summary>
     public static void DoubleClick(this BibuiRuntime runtime, string id) { PressAt(runtime, id, 2); runtime.Step(); }
 
-    /// <summary>Three clicks, which on text selects the line.</summary>
-    public static void TripleClick(this BibuiRuntime runtime, string id) { PressAt(runtime, id, 3); runtime.Step(); }
-
-    /// <summary>A right press at the centre of the node named <paramref name="id"/>, and the frame it causes.</summary>
-    public static void RightClick(this BibuiRuntime runtime, string id)
-    {
-        var b = runtime.GetBounds(id);
-        runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Right, X = b.X + b.Width / 2f, Y = b.Y + b.Height / 2f });
-        runtime.Step();
-    }
-
     // One key as the window reports it: the modifiers down around it, all of them up after.
     private static void PressKey(BibuiRuntime runtime, Key key, bool ctrl, bool shift)
     {
@@ -240,15 +218,6 @@ public static class TestBuild
 
     /// <summary>One key, with modifiers, and the frame it causes.</summary>
     public static void Press(this BibuiRuntime runtime, Key key, bool ctrl = false, bool shift = false) { PressKey(runtime, key, ctrl, shift); runtime.Step(); }
-
-    /// <summary>Backspace, and the frame it causes.</summary>
-    public static void PressBackspace(this BibuiRuntime runtime) => runtime.Press(Key.Backspace);
-
-    /// <summary>The left arrow, and the frame it causes.</summary>
-    public static void PressArrowLeft(this BibuiRuntime runtime) => runtime.Press(Key.Left);
-
-    /// <summary>The right arrow, and the frame it causes.</summary>
-    public static void PressArrowRight(this BibuiRuntime runtime) => runtime.Press(Key.Right);
 
     /// <summary>One character typed, and the frame it causes: the focused field reads it.</summary>
     public static void TypeChar(this BibuiRuntime runtime, char ch)
@@ -278,12 +247,8 @@ public static class TestBuild
     /// <summary>Puts <paramref name="text"/> on the test's clipboard.</summary>
     public static void SetClipboard(this BibuiRuntime runtime, string text) => AppOf(runtime).Clipboard = text;
 
-    /// <summary>A frame, drawn with Skia, as a PNG.</summary>
-    public static byte[] Screenshot(this BibuiRuntime runtime)
-    {
-        runtime.Step();
-        return FramePixels.Png(runtime, Frames.Skia.Draw);
-    }
+    /// <summary>The last frame, drawn with Skia, as a PNG.</summary>
+    public static byte[] Screenshot(this BibuiRuntime runtime) => FramePixels.Png(runtime, Frames.Skia.Draw);
 }
 
 // A renderer's texture calls, as the texture contract drives them.
