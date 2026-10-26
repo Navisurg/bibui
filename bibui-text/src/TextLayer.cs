@@ -239,6 +239,22 @@ public static class TextLayer
         return (last.X + last.Width) / scale;
     }
 
+    /// <summary>
+    /// How wide <paramref name="chars"/> are in <paramref name="style"/>, in logical px
+    /// over <paramref name="scale"/>, as layout's walk sets them, for usage code that
+    /// measures without laying out (a word to break a line at). A text the fast path
+    /// takes whole is summed here, as RunsFast sums it: the same advances, in the same
+    /// order, from 0, so the same float. Any other is walked (RunsFromChars, WidthOfRuns).
+    /// </summary>
+    internal static float WidthFromChars(Fonts f, ReadOnlySpan<char> chars, FontStyle style, float scale)
+    {
+        var direct = style.Strike.Direct;
+        float pen = 0f;
+        int i = 0;
+        for (; i < chars.Length && GlyphDirect(direct, chars[i], out _, out float advance); i++) pen += advance;
+        return i == chars.Length ? pen / scale : WidthOfRuns(f, RunsFromChars(f, chars, style), scale);
+    }
+
     // ── Measuring blocks ─────────────────────────────────────────────────────
     //
     // What measuring a text is made of, for layout's walk and for usage code
