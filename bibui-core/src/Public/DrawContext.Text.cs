@@ -81,8 +81,7 @@ public readonly ref partial struct DrawContext
         var rgba = Color(color);
         float baselineY = top * Scale - style.Metrics.Ascent;
         var fonts = Fonts;
-        var runs = fonts.Runs;
-        if (text.RunFrame != fonts.RunFrame || runs[text.RunStart].Style != style)
+        if (!TextLayer.RunsAreCurrent(fonts, text.Runs, style))
         {
             DrawRuns(text.Content, x * Scale, baselineY, style, rgba);
             return;
@@ -91,14 +90,14 @@ public readonly ref partial struct DrawContext
         // in one copy, and each run is an op over its part of them, in its own
         // style, from its own pen. A run with no glyphs (the text's own style,
         // when it starts in another face) draws nothing.
-        int first = runs[text.RunStart].GlyphStart;
-        ref readonly var last = ref runs[text.RunStart + text.RunCount - 1];
+        var runs = TextLayer.RunsOf(fonts, text.Runs);
+        int first = runs[0].GlyphStart;
+        ref readonly var last = ref runs[^1];
         int total = last.GlyphStart + last.GlyphCount - first;
         int glyphShift = List.AddGlyphs(fonts.RunGlyphs.AsSpan(first, total)) - first;
         int pointShift = List.AddPoints(fonts.RunPoints.AsSpan(first, total)) - first;
-        for (int r = text.RunStart, end = r + text.RunCount; r < end; r++)
+        foreach (ref readonly var run in runs)
         {
-            ref readonly var run = ref runs[r];
             if (run.GlyphCount == 0) continue;
             PushGlyphs(run.Style, x * Scale + run.X, baselineY, rgba, run.GlyphStart + glyphShift, run.GlyphCount, run.GlyphStart + pointShift);
         }

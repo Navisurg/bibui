@@ -53,8 +53,8 @@ public sealed class Fonts : IDisposable
     // again. Each text pushes its runs into Runs, one after another. Emptied when layout
     // starts (TextLayer.RunsBegin), so all of it lives one frame. The arrays grow
     // when a frame needs more room and never shrink, so once the largest frame
-    // has been seen they are never allocated again. A Text whose RunFrame is not
-    // RunFrame has nothing here.
+    // has been seen they are never allocated again. A RunHandle walked in
+    // another frame (its Frame is not RunFrame) names nothing here.
     internal int RunFrame;
     internal ushort[] RunGlyphs = new ushort[4096];
     internal System.Numerics.Vector2[] RunPoints = new System.Numerics.Vector2[4096];   // pen from its run's start: NOTE(positions)
@@ -195,6 +195,21 @@ internal struct TextRun
     public int GlyphStart, GlyphCount;   // into Fonts.RunGlyphs / RunPoints
     public float X;                      // the pen at the run's start, physical px from the text's start
     public float Width;                  // how far its glyphs advance the pen, physical px
+}
+
+/// <summary>
+/// A handle to a text's runs in <see cref="Fonts.Runs"/>: <c>Count</c> records
+/// from <c>First</c>, walked in frame <c>Frame</c>, which is the handle's
+/// generation. Good while <c>Frame</c> is <see cref="Fonts.RunFrame"/> and it has
+/// runs; the zero handle is no runs. Whoever lays a text out keeps its handle
+/// with it, as the <see cref="Text"/> node does.
+/// </summary>
+public readonly struct RunHandle
+{
+    internal readonly int First, Count;   // a slice of Fonts.Runs
+    internal readonly int Frame;          // the Fonts.RunFrame they were walked in
+
+    internal RunHandle(int first, int count, int frame) => (First, Count, Frame) = (first, count, frame);
 }
 
 /// <summary>A kept wrap: its lines, and when it was last asked for.</summary>

@@ -17,14 +17,12 @@ public sealed class Text : UiComponent
     // to frame, so it is allocated again only for a longer text.
     internal readonly BibuiStr ContentStr = new(0);
 
-    // This frame's runs, written by layout's walk (TextLayer.RunsFromText):
-    // RunCount TextRuns from RunStart in Fonts.Runs, their glyphs one slice of
-    // Fonts.RunGlyphs / RunPoints. The first is always in the text's own style
-    // (with no glyphs, when the text starts in another face), so it says what
-    // the text was walked in. Good while RunFrame is Fonts.RunFrame: the
-    // painter copies them when it is and the style matches, and walks the
-    // chars itself when not.
-    internal int RunStart, RunCount, RunFrame;
+    // Its runs in Fonts.Runs, as layout's walk (TextLayer.RunsFromChars) last
+    // returned them. The first is always in the text's own style (with no
+    // glyphs, when the text starts in another face), so it says what the text
+    // was walked in: the painter copies the runs when the handle is this
+    // frame's and the style matches, and walks the chars itself when not.
+    internal RunHandle Runs;
 
     /// <summary>
     /// What it shows: a copy of the text it was built with, so what the

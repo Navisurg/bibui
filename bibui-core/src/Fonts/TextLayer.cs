@@ -9,7 +9,7 @@ namespace Bibui.Core;
 /// text breaks into lines. Functions over a <see cref="Fonts"/>, named for what
 /// they give from what; the data they read and write is all on Fonts, each
 /// field saying whose it is. The text layer; the <see cref="Text"/> node is the
-/// runtime's, and only hands its chars and its stamp to these.
+/// runtime's, and only hands its chars and its run handle to these.
 /// </summary>
 public static class TextLayer
 {
@@ -110,7 +110,11 @@ public static class TextLayer
         // One style for both: its runs give the width, its metrics the height.
         var style = StyleFromFont(f, font, font.Scale);
         var m = style.Metrics;
-        return new(RunsFromText(f, text, style, font.Scale), (m.Descent - m.Ascent) / font.Scale);
+        // Walked already this frame, in this style (layout asks once per axis): the
+        // handle the text has is the answer. Otherwise walk, and keep the new one.
+        if (!RunsAreCurrent(f, text.Runs, style))
+            text.Runs = RunsFromChars(f, text.Content, style);
+        return new(WidthOfRuns(f, text.Runs, font.Scale), (m.Descent - m.Ascent) / font.Scale);
     }
 
     /// <summary>
@@ -144,49 +148,62 @@ public static class TextLayer
     }
 
     /// <summary>
-    /// The width of <paramref name="text"/> in <paramref name="style"/>, in logical
-    /// px, found by walking it into the frame's runs: its glyphs and positions are
-    /// kept for the painter, its runs pushed, and the text is stamped with where
-    /// they are. Asked again in the same frame and style (layout asks once per
-    /// axis), it answers from the stamp.
+    /// The runs of <paramref name="chars"/> in <paramref name="style"/>, walked
+    /// into this frame's table: their glyphs and positions kept for the painter,
+    /// their records pushed, and a handle to them returned. Empty text has no
+    /// runs: the zero handle. Ask <see cref="RunsAreCurrent"/> first; a text
+    /// whose runs are current needs no walk.
     /// </summary>
-    internal static float RunsFromText(Fonts f, Text text, FontStyle style, float scale)
+    internal static RunHandle RunsFromChars(Fonts f, ReadOnlySpan<char> chars, FontStyle style)
+        => chars.IsEmpty ? default : RunsWalk(f, chars, style);
+
+    /// <summary>
+    /// Whether <paramref name="runs"/> are in this frame's table and were walked
+    /// in <paramref name="style"/>: walked this frame, some, the first in the
+    /// text's own style. The zero handle never is.
+    /// </summary>
+    internal static bool RunsAreCurrent(Fonts f, RunHandle runs, FontStyle style)
+        => runs.Frame == f.RunFrame && runs.Count > 0 && f.Runs[runs.First].Style == style;
+
+    /// <summary>The records <paramref name="runs"/> names; only for runs <see cref="RunsAreCurrent"/> says are this frame's.</summary>
+    internal static ReadOnlySpan<TextRun> RunsOf(Fonts f, RunHandle runs) => f.Runs.AsSpan(runs.First, runs.Count);
+
+    /// <summary>
+    /// How wide the text <paramref name="runs"/> are of is, in logical px: its last
+    /// run's pen plus that run's width, over <paramref name="scale"/>. 0 for no
+    /// runs; only for a handle that is this frame's or the zero handle.
+    /// </summary>
+    internal static float WidthOfRuns(Fonts f, RunHandle runs, float scale)
     {
-        // Empty text is no run: nothing to walk and nothing for the painter to draw.
-        if (text.Content.IsEmpty) return 0f;
-        if (text.RunFrame == f.RunFrame && f.Runs[text.RunStart].Style == style)
-        {
-            ref readonly var last = ref f.Runs[text.RunStart + text.RunCount - 1];
-            return (last.X + last.Width) / scale;
-        }
-        return RunsWalk(f, text, style, scale);
+        if (runs.Count == 0) return 0f;
+        ref readonly var last = ref f.Runs[runs.First + runs.Count - 1];
+        return (last.X + last.Width) / scale;
     }
 
-    // RunsFromText's miss: the walk, a function of its own so the ask that
-    // answers from the stamp stays small enough for layout to inline. Pushes
-    // the text's glyphs, then its runs, and stamps it with where they are.
+    // RunsFromChars' walk, a function of its own so the check before it
+    // (RunsAreCurrent) and the ask around it stay small enough to inline.
+    // Pushes the text's glyphs, then its runs, and returns their handle.
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static float RunsWalk(Fonts f, Text text, FontStyle style, float scale)
+    private static RunHandle RunsWalk(Fonts f, ReadOnlySpan<char> chars, FontStyle style)
     {
-        var content = text.Content;
-        if (f.RunGlyphCount + content.Length > f.RunGlyphs.Length)
+        if (f.RunGlyphCount + chars.Length > f.RunGlyphs.Length)
         {
-            int size = Math.Max(f.RunGlyphs.Length * 2, f.RunGlyphCount + content.Length);
+            int size = Math.Max(f.RunGlyphs.Length * 2, f.RunGlyphCount + chars.Length);
             Array.Resize(ref f.RunGlyphs, size);
             Array.Resize(ref f.RunPoints, size);
         }
         if (f.RunCount == f.Runs.Length) Array.Resize(ref f.Runs, f.Runs.Length * 2);
 
         int start = f.RunGlyphCount;
-        int count = style.Strike.Glyphs(content, f.RunGlyphs.AsSpan(start, content.Length),
-            f.RunPoints.AsSpan(start, content.Length), out float width);
+        int count = style.Strike.Glyphs(chars, f.RunGlyphs.AsSpan(start, chars.Length),
+            f.RunPoints.AsSpan(start, chars.Length), out float width);
         f.RunGlyphCount += count;
 
         // One run, in the text's own style, from the text's start.
         f.Runs[f.RunCount] = new TextRun { Style = style, GlyphStart = start, GlyphCount = count, X = 0f, Width = width };
-        (text.RunStart, text.RunCount, text.RunFrame) = (f.RunCount, 1, f.RunFrame);
+        var runs = new RunHandle(f.RunCount, 1, f.RunFrame);
         f.RunCount += 1;
-        return width / scale;
+        return runs;
     }
 
     // ── Wraps ────────────────────────────────────────────────────────────────
