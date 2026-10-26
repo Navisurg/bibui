@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text;
 
 namespace Bibui.Core.TextEdit;
 
@@ -17,54 +15,22 @@ public ref struct TextOp
 
     // How far back ScanTextElement looks for a certain boundary, in chars. Only
     // an element longer than this — stacked marks, a long run of flags — can
-    // put the cursor inside it.
-    public static int MaxLookBehind = 64;
+    // put the cursor inside it. The text layer's (TextLayer.ElementLookBehind).
+    public static int MaxLookBehind
+    {
+        get => TextLayer.ElementLookBehind;
+        set => TextLayer.ElementLookBehind = value;
+    }
 
     /// <summary>
     /// Scan one text element — what reads as one character: 👍🏽, 🇩🇰, e and an
     /// accent, \r\n — in the direction of <paramref name="delta"/> (sign only).
     /// Returns the char offset from <paramref name="cursor"/>, negative going
     /// left, 0 at the edge. The cursor is assumed to be on an element boundary.
+    /// The text layer's (<see cref="TextLayer.ScanTextElement"/>).
     /// </summary>
     public static int ScanTextElement(ReadOnlySpan<char> str, int cursor, int delta)
-    {
-        if (delta > 0)
-            return cursor < str.Length ? StringInfo.GetNextTextElementLength(str[cursor..]) : 0;
-        if (delta == 0 || cursor == 0) return 0;
-
-        // A line break is a boundary on both sides, and \r\n is one element.
-        if (str[cursor - 1] == '\n') return cursor >= 2 && str[cursor - 2] == '\r' ? -2 : -1;
-
-        // Whether a position is a boundary can depend on what comes before it (a
-        // ZWJ sequence, the pairing of flags), so step back, a code point at a
-        // time, to one that is certainly a boundary — within the line and
-        // MaxLookBehind — and scan forward from there.
-        int floor = Math.Max(cursor + LineScan(str, cursor, -1), cursor - MaxLookBehind);
-        int start = cursor;
-        while (true)
-        {
-            Rune.DecodeLastFromUtf16(str[..start], out _, out int length);
-            start -= Math.Max(1, length);
-            if (start <= floor) break;
-
-            // The pair test: a boundary .NET finds between the two code points
-            // alone holds whatever came before, unless the first is a mark or a
-            // format char — a ZWJ (emoji sequences) and a virama (Indic
-            // conjuncts) join by what precedes them, which the pair can't see.
-            Rune.DecodeLastFromUtf16(str[..start], out Rune before, out int beforeLength);
-            Rune.DecodeFromUtf16(str[start..], out _, out int afterLength);
-            if (Rune.GetUnicodeCategory(before) is not (UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark
-                    or UnicodeCategory.EnclosingMark or UnicodeCategory.Format)
-                && StringInfo.GetNextTextElementLength(str[(start - beforeLength)..(start + afterLength)]) == beforeLength)
-                break;
-        }
-
-        // The last element boundary before the cursor.
-        int boundary = start;
-        for (int i = start; i < cursor; i += StringInfo.GetNextTextElementLength(str[i..cursor]))
-            boundary = i;
-        return boundary - cursor;
-    }
+        => TextLayer.ScanTextElement(str, cursor, delta);
 
     /// <summary>
     /// Scan to the next word boundary in the direction of <paramref name="delta"/>
@@ -163,7 +129,7 @@ public ref struct TextOp
         int charsDelta =
               ev.Flags.HasFlag(TextActionFlags.WordScan) ? WordScan(str.Str, state.Cursor, ev.Delta)
             : ev.Flags.HasFlag(TextActionFlags.LineScan) ? LineScan(str.Str, state.Cursor, ev.Delta)
-            : ScanTextElement(str.Str, state.Cursor, ev.Delta);
+            : TextLayer.ScanTextElement(str.Str, state.Cursor, ev.Delta);
 
         // On this type of select we don't move the cursor since this
         // would for delete delete the point also before the cursor

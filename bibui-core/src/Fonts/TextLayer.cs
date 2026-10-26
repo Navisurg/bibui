@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
-using Bibui.Core.TextEdit;
+using System.Globalization;
+using System.Text;
 
 namespace Bibui.Core;
 
@@ -8,7 +9,7 @@ namespace Bibui.Core;
 /// metrics, how wide a text is, the runs layout walks a text into, and where a
 /// text breaks into lines. Functions over a <see cref="Fonts"/>, named for what
 /// they give from what; the data they read and write is all on Fonts, each
-/// field saying whose it is. The text layer; the <see cref="Text"/> node is the
+/// field saying whose it is. The text layer; the <c>Text</c> node is the
 /// runtime's, and only hands its chars and its run handle to these.
 /// </summary>
 public static class TextLayer
@@ -56,10 +57,15 @@ public static class TextLayer
     /// with no leading. Lines of a wrapped text are <see cref="LineAdvanceFromSize"/> apart.
     /// </summary>
     internal static float LineBoxFromFont(Fonts f, in Font font)
-    {
-        var m = StyleFromFont(f, font, font.Scale).Metrics;
-        return (m.Descent - m.Ascent) / font.Scale;
-    }
+        => LineHeightOfStyle(StyleFromFont(f, font, font.Scale), font.Scale);
+
+    /// <summary>
+    /// The height of one line in <paramref name="style"/>, in logical px: its
+    /// ascent to its descent, over <paramref name="scale"/>, for a caller that
+    /// has the style already.
+    /// </summary>
+    internal static float LineHeightOfStyle(FontStyle style, float scale)
+        => (style.Metrics.Descent - style.Metrics.Ascent) / scale;
 
     /// <summary>
     /// Baseline-to-baseline distance between wrapped lines, in logical px — the
@@ -101,23 +107,6 @@ public static class TextLayer
         => text.IsEmpty ? 0f : StyleFromFont(f, font, font.Scale).Strike.Measure(text) / font.Scale;
 
     /// <summary>
-    /// How large <paramref name="text"/> is: as wide as its chars on one line,
-    /// and one line tall. A text is one line whatever room it is given; what
-    /// breaks into lines is composed from texts, as a multi-line field is.
-    /// </summary>
-    internal static Bibui.Core.Draw.Size SizeFromText(Fonts f, Text text, in Font font)
-    {
-        // One style for both: its runs give the width, its metrics the height.
-        var style = StyleFromFont(f, font, font.Scale);
-        var m = style.Metrics;
-        // Walked already this frame, in this style (layout asks once per axis): the
-        // handle the text has is the answer. Otherwise walk, and keep the new one.
-        if (!RunsAreCurrent(f, text.Runs, style))
-            text.Runs = RunsFromChars(f, text.Content, style);
-        return new(WidthOfRuns(f, text.Runs, font.Scale), (m.Descent - m.Ascent) / font.Scale);
-    }
-
-    /// <summary>
     /// The char offset in <paramref name="text"/> nearest <paramref name="x"/>,
     /// logical px from where the text starts. See <see cref="Fonts.OffsetAt"/>.
     /// </summary>
@@ -128,13 +117,75 @@ public static class TextLayer
         float previousWidth = 0f;
         while (previous < text.Length)
         {
-            int next = previous + TextOp.ScanTextElement(text, previous, +1);
+            int next = previous + ScanTextElement(text, previous, +1);
             float width = WidthFromChars(f, text[..next], font);
             if (width >= x) return x - previousWidth < width - x ? previous : next;
             previous = next;
             previousWidth = width;
         }
         return text.Length;
+    }
+
+    // ── Grapheme clusters ────────────────────────────────────────────────────
+
+    // How far back ScanTextElement looks for a certain boundary, in chars. Only
+    // an element longer than this — stacked marks, a long run of flags — can
+    // put the cursor inside it. TextOp.MaxLookBehind sets it.
+    internal static int ElementLookBehind = 64;
+
+    /// <summary>
+    /// Scan one text element — a grapheme cluster, what reads as one character:
+    /// 👍🏽, 🇩🇰, e and an accent, \r\n — in the direction of <paramref name="delta"/>
+    /// (sign only). Returns the char offset from <paramref name="cursor"/>,
+    /// negative going left, 0 at the edge. The cursor is assumed to be on an
+    /// element boundary.
+    /// </summary>
+    internal static int ScanTextElement(ReadOnlySpan<char> str, int cursor, int delta)
+    {
+        if (delta > 0)
+            return cursor < str.Length ? StringInfo.GetNextTextElementLength(str[cursor..]) : 0;
+        if (delta == 0 || cursor == 0) return 0;
+
+        // A line break is a boundary on both sides, and \r\n is one element.
+        if (str[cursor - 1] == '\n') return cursor >= 2 && str[cursor - 2] == '\r' ? -2 : -1;
+
+        // Whether a position is a boundary can depend on what comes before it (a
+        // ZWJ sequence, the pairing of flags), so step back, a code point at a
+        // time, to one that is certainly a boundary — within the line and
+        // MaxLookBehind — and scan forward from there.
+        int floor = Math.Max(LineStart(str, cursor), cursor - ElementLookBehind);
+        int start = cursor;
+        while (true)
+        {
+            Rune.DecodeLastFromUtf16(str[..start], out _, out int length);
+            start -= Math.Max(1, length);
+            if (start <= floor) break;
+
+            // The pair test: a boundary .NET finds between the two code points
+            // alone holds whatever came before, unless the first is a mark or a
+            // format char — a ZWJ (emoji sequences) and a virama (Indic
+            // conjuncts) join by what precedes them, which the pair can't see.
+            Rune.DecodeLastFromUtf16(str[..start], out Rune before, out int beforeLength);
+            Rune.DecodeFromUtf16(str[start..], out _, out int afterLength);
+            if (Rune.GetUnicodeCategory(before) is not (UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark
+                    or UnicodeCategory.EnclosingMark or UnicodeCategory.Format)
+                && StringInfo.GetNextTextElementLength(str[(start - beforeLength)..(start + afterLength)]) == beforeLength)
+                break;
+        }
+
+        // The last element boundary before the cursor.
+        int boundary = start;
+        for (int i = start; i < cursor; i += StringInfo.GetNextTextElementLength(str[i..cursor]))
+            boundary = i;
+        return boundary - cursor;
+    }
+
+    // Where the line the cursor is on starts: just after the line break before it, or 0.
+    private static int LineStart(ReadOnlySpan<char> str, int cursor)
+    {
+        int i = cursor;
+        while (i > 0 && str[i - 1] != '\n') i--;
+        return i;
     }
 
     // ── Runs ─────────────────────────────────────────────────────────────────

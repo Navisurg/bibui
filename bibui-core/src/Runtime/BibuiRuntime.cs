@@ -332,8 +332,20 @@ public sealed partial class BibuiRuntime
         switch (node)
         {
             case Text text:
-                var measured = TextLayer.SizeFromText(_fonts, text, FontResolution.FontFromText(_slotFaces, text, _measureTheme!, _measureScale));
-                return new System.Numerics.Vector2(measured.Width, measured.Height);
+                // As wide as its chars on one line, and one line tall: a text is
+                // one line whatever room it is given; what breaks into lines is
+                // composed from texts, as a multi-line field is. One style for
+                // both: its runs give the width, its metrics the height. Walked
+                // already this frame, in this style (layout asks once per axis),
+                // the handle the text has is the answer; otherwise walk, and keep
+                // the new one.
+                var font = FontResolution.FontFromText(_slotFaces, text, _measureTheme!, _measureScale);
+                var style = TextLayer.StyleFromFont(_fonts, font, font.Scale);
+                if (!TextLayer.RunsAreCurrent(_fonts, text.Runs, style))
+                    text.Runs = TextLayer.RunsFromChars(_fonts, text.Content, style);
+                return new System.Numerics.Vector2(
+                    TextLayer.WidthOfRuns(_fonts, text.Runs, font.Scale),
+                    TextLayer.LineHeightOfStyle(style, font.Scale));
             case Icon icon:
                 float side = icon.Size.In(_measureTheme!);
                 return new System.Numerics.Vector2(side, side);

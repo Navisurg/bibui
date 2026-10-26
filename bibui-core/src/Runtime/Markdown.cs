@@ -779,11 +779,11 @@ public static class Markdown
                     // Cut between text elements, so a word too wide for the line never splits 👨‍👩‍👧.
                     int cut = avail > 0f ? _runtime.Fonts.OffsetAt(chars, font, avail) : 0;
                     while (cut > 0 && !Fits(_runtime.Fonts.Measure(chars[..cut], font), avail))
-                        cut += TextOp.ScanTextElement(chars, cut, -1);
+                        cut += TextLayer.ScanTextElement(chars, cut, -1);
                     if (cut == 0)
                     {
                         if (content) { EndLine(ref lineStart, ref x, ref content); continue; }
-                        cut = TextOp.ScanTextElement(chars, 0, +1);   // one character, whatever its width
+                        cut = TextLayer.ScanTextElement(chars, 0, +1);   // one character, whatever its width
                     }
                     if (cut >= f.Len) { _placed.Add(f); x += pad + f.Width; content = true; break; }
                     float head = _runtime.Fonts.Measure(chars[..cut], font);

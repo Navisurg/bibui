@@ -1,6 +1,4 @@
-using Bibui.Core.Draw;
 using Bibui.Core.FreeType;
-using Bibui.Core.TextEdit;
 
 namespace Bibui.Core;
 
@@ -10,7 +8,7 @@ namespace Bibui.Core;
 /// width. Text is UTF-16 throughout. Layout, the painter and the runtime all ask
 /// this one instance, so what is drawn is what was measured: a text's glyphs are
 /// walked from per-character tables (<see cref="FontStrike"/>), and a
-/// <see cref="Text"/> layout walked is drawn from that walk.
+/// <c>Text</c> layout walked is drawn from that walk.
 ///
 /// <para>It knows nothing about a canvas, and nothing about a raster backend:
 /// faces, metrics and measurements come from the FreeType + HarfBuzz engine it
@@ -147,6 +145,9 @@ public sealed class Fonts : IDisposable
 /// </summary>
 public enum TextWrap { Words, Characters }
 
+/// <summary>Vertical extents of a font at a size, in physical px. Ascent is negative (above the baseline).</summary>
+public readonly record struct TextMetrics(float Ascent, float Descent, float Leading);
+
 /// <summary>
 /// A resolved font: its size in logical px, the face it is set in, and the
 /// surface scale it is measured at. Everything <see cref="Fonts"/> needs to
@@ -184,7 +185,7 @@ internal sealed class FontStyle
 }
 
 /// <summary>
-/// One run of a <see cref="Text"/>: glyphs in one style, laid from the pen at
+/// One run of a <c>Text</c>: glyphs in one style, laid from the pen at
 /// <see cref="X"/>. Layout's walk pushes a text's runs one after another into
 /// <see cref="Fonts.Runs"/>, so a text's runs and their glyphs are each one
 /// slice; the text's width is its last run's X + Width.
@@ -202,7 +203,7 @@ internal struct TextRun
 /// from <c>First</c>, walked in frame <c>Frame</c>, which is the handle's
 /// generation. Good while <c>Frame</c> is <see cref="Fonts.RunFrame"/> and it has
 /// runs; the zero handle is no runs. Whoever lays a text out keeps its handle
-/// with it, as the <see cref="Text"/> node does.
+/// with it, as the <c>Text</c> node does.
 /// </summary>
 public readonly struct RunHandle
 {
