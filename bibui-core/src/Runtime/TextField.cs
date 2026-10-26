@@ -80,37 +80,18 @@ public static class TextField
     // The char boundary nearest x on one line, x logical px from the line's
     // start: the cluster under x, and the boundary before it when x is in its
     // left half, after it when in its right half; 0 at or before the start, the
-    // line's length past its end. Measured as layout's walk measures, with the
-    // text layer's blocks: a cluster at a time from its start, each char in it
-    // by GlyphDirect (the fast path's table) or a GlyphNext step (an emoji
-    // cluster, or a code point the fast path does not take).
+    // line's length past its end. The clusters are the text layer's, as the walk
+    // sets them (ScanCluster).
     internal static int CharAtX(Fonts fonts, Font font, ReadOnlySpan<char> line, float x)
     {
         if (x <= 0f || line.IsEmpty) return 0;
         var style = TextLayer.StyleFromFont(fonts, font, font.Scale);
-        float target = x * font.Scale;   // the blocks measure in physical px
+        float target = x * font.Scale;   // the text layer measures in physical px
         float pen = 0f;                  // where the cluster at `at` starts
         int at = 0;
         while (at < line.Length)
         {
-            int end = at + TextLayer.ScanTextElement(line, at, +1);
-            float width = 0f;
-            for (int k = at; k < end;)
-            {
-                if (TextLayer.GlyphDirect(style.Strike, line[k], out _, out float advance))
-                {
-                    width += advance;
-                    k++;
-                    continue;
-                }
-                var step = TextLayer.GlyphNext(fonts, style, line, k);
-                // A step that starts before k is the whole cluster, set in the cluster
-                // face (1️⃣: the digit was measured in the text's face before the mark
-                // that makes the cluster an emoji): its width is the step's alone.
-                if (step.Start < k) width = 0f;
-                width += step.Advance;
-                k = step.Next;
-            }
+            int end = TextLayer.ScanCluster(fonts, style, line, at, +1, out float width);
             if (pen + width / 2f > target) return at;
             pen += width;
             at = end;
@@ -143,8 +124,9 @@ public static class TextField
         // away from the mark.
         if (interaction.PressCount > 1)
         {
-            int start = at + TextOp.WordScan(line, at, -1);
-            int end = start + TextOp.WordScan(line, start, +1);
+            var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+            int start = TextLayer.ScanWord(runtime.Fonts, style, line, at, -1);
+            int end = TextLayer.ScanWord(runtime.Fonts, style, line, start, +1);
             if (interaction.Pressed) { edit.Mark = start; edit.Cursor = end; }
             else edit.Cursor = at < edit.Mark ? start : end;
         }
@@ -237,7 +219,7 @@ public static class TextField
                 ev.Eat();
                 continue;
             }
-            var op = TextOp.FromStateAndEvent(text, edit, ev, charBuf);
+            var op = TextOp.FromStateAndEvent(runtime.Fonts, font, text, edit, ev, charBuf);
             if (op.Range.Item1 != op.Range.Item2 || op.ReplaceString.Length > 0) edited = true;
             text.ReplaceRange(op.Range, op.ReplaceString);
             edit.Cursor = op.NewCursor;

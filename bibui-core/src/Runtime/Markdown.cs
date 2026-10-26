@@ -776,17 +776,24 @@ public static class Markdown
                     }
                     var chars = text.Slice(f.Start, f.Len);
                     float avail = room - x - pad;
-                    // Cut between text elements, so a word too wide for the line never splits 👨‍👩‍👧.
-                    int cut = avail > 0f ? _runtime.Fonts.OffsetAt(chars, font, avail) : 0;
-                    while (cut > 0 && !Fits(_runtime.Fonts.Measure(chars[..cut], font), avail))
-                        cut += TextLayer.ScanTextElement(chars, cut, -1);
+                    // Cut between clusters, so a word too wide for the line never splits 🧑‍🚀:
+                    // as many as fit in avail, measured as the walk sets them (physical px).
+                    var style = TextLayer.StyleFromFont(_runtime.Fonts, font, font.Scale);
+                    int cut = 0;
+                    float cutWidth = 0f;
+                    while (cut < chars.Length)
+                    {
+                        int end = TextLayer.ScanCluster(_runtime.Fonts, style, chars, cut, +1, out float width);
+                        if (!Fits((cutWidth + width) / font.Scale, avail)) break;
+                        (cut, cutWidth) = (end, cutWidth + width);
+                    }
                     if (cut == 0)
                     {
                         if (content) { EndLine(ref lineStart, ref x, ref content); continue; }
-                        cut = TextLayer.ScanTextElement(chars, 0, +1);   // one character, whatever its width
+                        cut = TextLayer.ScanCluster(_runtime.Fonts, style, chars, 0, +1, out cutWidth);   // one cluster, whatever its width
                     }
                     if (cut >= f.Len) { _placed.Add(f); x += pad + f.Width; content = true; break; }
-                    float head = _runtime.Fonts.Measure(chars[..cut], font);
+                    float head = cutWidth / font.Scale;
                     _placed.Add(f with { Len = cut, Width = head });
                     x += pad + head;
                     content = true;

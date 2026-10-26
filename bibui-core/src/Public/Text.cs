@@ -13,8 +13,8 @@ public ref struct TextOp
 
     public TextOp() { }
 
-    // How far back ScanTextElement looks for a certain boundary, in chars. Only
-    // an element longer than this — stacked marks, a long run of flags — can
+    // How far back moving left looks for a certain cluster boundary, in chars.
+    // Only a cluster longer than this — stacked marks, a long run of flags — can
     // put the cursor inside it. The text layer's (TextLayer.ElementLookBehind).
     public static int MaxLookBehind
     {
@@ -23,82 +23,23 @@ public ref struct TextOp
     }
 
     /// <summary>
-    /// Scan one text element — what reads as one character: 👍🏽, 🇩🇰, e and an
-    /// accent, \r\n — in the direction of <paramref name="delta"/> (sign only).
-    /// Returns the char offset from <paramref name="cursor"/>, negative going
-    /// left, 0 at the edge. The cursor is assumed to be on an element boundary.
-    /// The text layer's (<see cref="TextLayer.ScanTextElement"/>).
-    /// </summary>
-    public static int ScanTextElement(ReadOnlySpan<char> str, int cursor, int delta)
-        => TextLayer.ScanTextElement(str, cursor, delta);
-
-    /// <summary>
-    /// Scan to the next word boundary in the direction of <paramref name="delta"/>
-    /// (sign only; magnitude ignored). Returns the char offset from <paramref name="cursor"/>
-    /// to the boundary — negative going left, positive going right, 0 at the edge.
-    ///
-    /// A "word" is a run of non-whitespace chars (punctuation included). Going forward
-    /// from inside whitespace skips the whitespace and then the next word; going forward
-    /// from inside a word skips the rest of the word — the usual Ctrl+Arrow behaviour.
-    /// </summary>
-    public static int WordScan(ReadOnlySpan<char> str, int cursor, int delta)
-    {
-        if (delta == 0 || str.Length == 0) return 0;
-
-        if (delta > 0)
-        {
-            int i = cursor;
-            while (i < str.Length && IsSpace(str[i])) i++;       // skip leading whitespace
-            while (i < str.Length && !IsSpace(str[i])) i++;      // skip the word
-            return i - cursor;
-        }
-        else
-        {
-            int i = cursor;
-            while (i > 0 && IsSpace(str[i - 1])) i--;            // skip trailing whitespace
-            while (i > 0 && !IsSpace(str[i - 1])) i--;           // skip the word
-            return i - cursor;                                    // negative
-        }
-    }
-
-    /// <summary>
-    /// Scan to the end of the line in the direction of <paramref name="delta"/>:
-    /// backwards to just after the preceding line break, forwards to just before
-    /// the next one — so in a single-line buffer, to its start or its end.
-    /// Returns the offset in chars from the cursor, like the other scans.
-    /// </summary>
-    internal static int LineScan(ReadOnlySpan<char> str, int cursor, int delta)
-    {
-        if (delta == 0) return 0;
-
-        if (delta > 0)
-        {
-            int i = cursor;
-            while (i < str.Length && str[i] != '\n') i++;
-            return i - cursor;
-        }
-        else
-        {
-            int i = cursor;
-            while (i > 0 && str[i - 1] != '\n') i--;
-            return i - cursor;                                    // negative
-        }
-    }
-
-    private static bool IsSpace(char c) =>
-        c == ' ' || c == '\t' || c == '\n' || c == '\r';
-
-    /// <summary>
     /// What <paramref name="ev"/> does to <paramref name="str"/> with its
     /// caret and selection at <paramref name="state"/>. A
     /// <see cref="BibUiEventKind.Submit"/> ends the line: it puts a \n at the
     /// cursor and lets go of the selection; the selected text stays. A text
     /// that has one line does not pass it Submit.
     ///
+    /// <para>A move by one character crosses one cluster as the text layer sets
+    /// <paramref name="str"/> in <paramref name="font"/> (TextLayer.ScanCluster):
+    /// 👍🏽, 🇩🇰, e and an accent; by a word or to a line's end, TextLayer.ScanWord
+    /// and ScanLine.</para>
+    ///
     /// <para><paramref name="buf"/> holds a typed code point, encoded: at least
     /// <see cref="MaxCharsPerCodePoint"/> chars.</para>
     /// </summary>
-    public static TextOp FromStateAndEvent(BibuiStr str,
+    public static TextOp FromStateAndEvent(Fonts fonts,
+                                           in Font font,
+                                           BibuiStr str,
                                            TextEditState state,
                                            BibUiEvent ev,
                                            Span<char> buf)
@@ -126,10 +67,13 @@ public ref struct TextOp
             return op;
         }
 
+        // A move by a character or a word goes by the clusters the text is set in.
+        var style = TextLayer.StyleFromFont(fonts, font, font.Scale);
+        int cursor = state.Cursor;
         int charsDelta =
-              ev.Flags.HasFlag(TextActionFlags.WordScan) ? WordScan(str.Str, state.Cursor, ev.Delta)
-            : ev.Flags.HasFlag(TextActionFlags.LineScan) ? LineScan(str.Str, state.Cursor, ev.Delta)
-            : TextLayer.ScanTextElement(str.Str, state.Cursor, ev.Delta);
+              ev.Flags.HasFlag(TextActionFlags.WordScan) ? TextLayer.ScanWord(fonts, style, str.Str, cursor, ev.Delta) - cursor
+            : ev.Flags.HasFlag(TextActionFlags.LineScan) ? TextLayer.ScanLine(str.Str, cursor, ev.Delta) - cursor
+            : TextLayer.ScanCluster(fonts, style, str.Str, cursor, ev.Delta, out _) - cursor;
 
         // On this type of select we don't move the cursor since this
         // would for delete delete the point also before the cursor

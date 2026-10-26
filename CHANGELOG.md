@@ -47,11 +47,22 @@ All notable changes to bibui are recorded here. The format is based on
   built-in Inter), which `Bibui.Core` depends on and lays text out with. It
   knows nothing of nodes, themes or platforms.
 
+- `TextLayer.ScanCluster`, `ScanWord` and `ScanLine` (`Bibui.Text`): from an
+  index, across the cluster, word or line next to it in the direction of a
+  sign, as the text is drawn (`ScanCluster` also gives the cluster's width).
+  Each is for a scan done once, a key press or a click.
+
 ### Changed
 
 - A tooltip with an anchor sits with its left edge at the anchor's middle,
   above it, or below it when there is no room above in the window. It was
   centred above it, which needed its text measured before layout.
+- **Breaking:** `TextOp.FromStateAndEvent(fonts, font, str, state, ev, buf)`
+  takes the fonts and the font the text is set in: a move by a character or a
+  word crosses the clusters the text is drawn as (👍🏽, 🇩🇰, 1️⃣, a letter and its
+  accent). Pass `runtime.Fonts` and `runtime.FontInScope()`.
+- A Markdown word too wide for its line is cut by the widths it is drawn at,
+  so a run of emoji fills the line.
 - **Breaking:** the text types are in namespace `Bibui.Text` (package
   `Bibui.Text`): `Fonts`, `Font`, `FontFace`, `FontRegistry`, `TextLine`,
   `TextWrap`, `TextMetrics`; and `Bibui.Core.FreeType` is `Bibui.Text.FreeType`.
@@ -108,6 +119,8 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Removed
 
+- **Breaking:** `TextOp.WordScan` and `TextOp.ScanTextElement`. Use
+  `TextLayer.ScanWord` and `ScanCluster`.
 - **Breaking:** the pitch overloads `BeginScrollList(id, ref scroll, pitch,
   count)`, `EndScrollList(ref scroll)` and `Scrollbar(id, scroll, count,
   viewRows)`, `ScrollPt.First`, `Last`, `ViewRows` and `Target(idx, px,
