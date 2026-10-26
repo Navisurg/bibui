@@ -69,6 +69,18 @@ public sealed class Fonts : IDisposable
     // the text's own face as before. Tests set a fixture face here.
     internal FontFace ClusterFace;
 
+    // A cluster's shape, by a 64-bit hash of its chars seeded with the style
+    // it is shaped in (TextLayer.ClusterShape): HarfBuzz shapes a cluster once,
+    // and every walk after copies it. A fixed table of ClusterCapacity slots,
+    // made once: slots are handed out in order (ClusterUsed) until all are,
+    // then the least recently used is recycled and its key removed. Clusters[0]
+    // is the sentinel of the LRU ring: its NextLru the most recent, its PrevLru
+    // the least. ClusterSlots is made at the capacity, so it never grows.
+    internal const int ClusterCapacity = 1024;
+    internal readonly Dictionary<ulong, int> ClusterSlots = new(ClusterCapacity);
+    internal readonly ClusterShape[] Clusters = new ClusterShape[ClusterCapacity + 1];
+    internal int ClusterUsed;
+
     // ── Wraps ────────────────────────────────────────────────────────────────
 
     // A wrap is kept until it goes KeepWrapFrames frames unasked; then its
@@ -233,6 +245,28 @@ public readonly struct RunHandle
 
     internal RunHandle(int first, int count, int frame) => (First, Count, Frame) = (first, count, frame);
 }
+
+/// <summary>
+/// A grapheme cluster's shape in one style, kept by <see cref="Fonts.Clusters"/>:
+/// its glyphs, each placed from the cluster's pen (HarfBuzz's advances before
+/// it plus its offset), and how far it moves the pen. The font's ligature makes
+/// nearly every emoji one glyph; a shape of more than eight is not kept.
+/// </summary>
+internal struct ClusterShape
+{
+    public ulong Hash;              // its key, to remove it from Fonts.ClusterSlots when its slot is recycled
+    public int NextLru, PrevLru;    // its neighbours in the LRU ring
+    public int GlyphCount;
+    public ClusterGlyphs Glyphs;
+    public ClusterPoints Points;    // each glyph from the cluster's pen, physical px, y down
+    public float Advance;           // the cluster's width at the style's size, physical px
+}
+
+[System.Runtime.CompilerServices.InlineArray(8)]
+internal struct ClusterGlyphs { private ushort _glyph; }
+
+[System.Runtime.CompilerServices.InlineArray(8)]
+internal struct ClusterPoints { private System.Numerics.Vector2 _point; }
 
 /// <summary>A kept wrap: its lines, and when it was last asked for.</summary>
 internal struct WrapNode

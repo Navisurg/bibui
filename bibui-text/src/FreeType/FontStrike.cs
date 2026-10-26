@@ -149,11 +149,13 @@ public sealed unsafe class FontStrike
     }
 
     // For chars below 256, the glyph and its advance side by side, filled on
-    // first use (rad's utf8_class1_direct_map): a walk reads one entry per char.
+    // first use (rad's utf8_class1Direct_map): a walk reads one entry per char.
     // Anything else goes through the font's cmap and the strike's advances.
-    private readonly DirectGlyph[] _direct = new DirectGlyph[256];
+    // Internal, with GlyphsDirect and Next, for a walk that interleaves them
+    // with steps of its own (TextLayer's, which sets grapheme clusters in another face).
+    internal readonly DirectGlyph[] Direct = new DirectGlyph[256];
 
-    private struct DirectGlyph
+    internal struct DirectGlyph
     {
         public ushort Glyph;
         public bool Filled;
@@ -173,7 +175,7 @@ public sealed unsafe class FontStrike
     /// </summary>
     public float Measure(ReadOnlySpan<char> text)
     {
-        var direct = _direct;
+        var direct = Direct;
         float total = 0f;
         int i = 0;
         while (i < text.Length)
@@ -201,7 +203,7 @@ public sealed unsafe class FontStrike
         int i = 0;
         while (i < text.Length)
         {
-            i = CharAdvancesDirect(text, i, _direct, advances);
+            i = CharAdvancesDirect(text, i, Direct, advances);
             if (i == text.Length) break;
             var (_, advance, next) = Next(text, i);
             advances[i] = advance;
@@ -232,7 +234,7 @@ public sealed unsafe class FontStrike
         float pen = 0f;
         while (i < text.Length)
         {
-            (i, n, pen) = GlyphsDirect(text, i, _direct, glyphs, points, n, pen);
+            (i, n, pen) = GlyphsDirect(text, i, Direct, glyphs, points, n, pen);
             if (i == text.Length) break;
             var (glyph, advance, next) = Next(text, i);
             glyphs[n] = glyph;
@@ -247,7 +249,7 @@ public sealed unsafe class FontStrike
 
     // Glyphs' hot loop: while the chars have filled direct entries.
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static (int I, int N, float Pen) GlyphsDirect(ReadOnlySpan<char> text, int i, DirectGlyph[] direct,
+    internal static (int I, int N, float Pen) GlyphsDirect(ReadOnlySpan<char> text, int i, DirectGlyph[] direct,
         Span<ushort> glyphs, Span<System.Numerics.Vector2> points, int n, float pen)
     {
         for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++, n++)
@@ -263,14 +265,14 @@ public sealed unsafe class FontStrike
     // filled; above, its code point (a surrogate pair is one) looked up the slow
     // way. An unpaired surrogate is taken as itself, which no font maps, so it
     // draws as .notdef. Its glyph, its advance, and where the next char starts.
-    private (ushort Glyph, float Advance, int Next) Next(ReadOnlySpan<char> text, int i)
+    internal (ushort Glyph, float Advance, int Next) Next(ReadOnlySpan<char> text, int i)
     {
         char c = text[i];
         if (c < 256)
         {
             uint g = Font.GlyphIndex(c);
-            _direct[c] = new DirectGlyph { Glyph = (ushort)g, Filled = true, Advance = Advance(g) };
-            return (_direct[c].Glyph, _direct[c].Advance, i + 1);
+            Direct[c] = new DirectGlyph { Glyph = (ushort)g, Filled = true, Advance = Advance(g) };
+            return (Direct[c].Glyph, Direct[c].Advance, i + 1);
         }
         int cp = c, next = i + 1;
         if (char.IsHighSurrogate(c) && next < text.Length && char.IsLowSurrogate(text[next]))
