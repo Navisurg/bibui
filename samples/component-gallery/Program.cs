@@ -99,8 +99,22 @@ DrawToPixels? shots = testPort is null ? null
     : renderer is ManagedRenderer ? new ManagedRenderer().Draw : new SkiaCpuRenderer().Draw;
 if (testPort is not null) Console.Error.WriteLine($"Test port: {testPort.SocketPath}");
 // The agent driving the gallery through its port, drawn over it while one is connected:
-// folded from the events it sends.
+// folded from the events it sends. BIBUI_AGENT_CURSOR says how: paced (the default)
+// draws it and holds each answer until it has shown the step, so a person watching
+// can follow; shown draws it without holding; off draws nothing, for scripts.
 var agent = AgentCursor.Start("Agent", UiColor.Hex("#3B82F6"));
+var agentMode = Environment.GetEnvironmentVariable("BIBUI_AGENT_CURSOR") switch
+{
+    null or "" or "paced" => AgentMode.Paced,
+    "shown" => AgentMode.Shown,
+    "off" => AgentMode.Off,
+    var other => Unknown(other),
+};
+static AgentMode Unknown(string value)
+{
+    Console.Error.WriteLine($"BIBUI_AGENT_CURSOR is paced, shown or off, not '{value}': paced.");
+    return AgentMode.Paced;
+}
 
 app.Frame = Frame;
 while (app.WaitForFrame())
@@ -128,10 +142,11 @@ void Frame()
     // The agent's cursor, last in the frame so it is over everything; whether it has
     // shown what the agent did, so the port's answer waits for a person watching.
     bool agentSettled = true;
-    if (testPort is not null)
+    if (testPort is not null && agentMode != AgentMode.Off)
     {
         agent.Connected = testPort.HasClient;
-        agentSettled = AgentCursorUi.Build(runtime, agent, size: 1.5f);
+        bool shown = AgentCursorUi.Build(runtime, agent, size: 1.5f);
+        if (agentMode == AgentMode.Paced) agentSettled = shown;
     }
     runtime.EndBuild();
     testPort?.AnswerCmds(agentSettled);
@@ -527,3 +542,6 @@ sealed class Gallery
 {
     public GalleryState State = null!;
 }
+
+// How the agent driving the gallery is shown (BIBUI_AGENT_CURSOR).
+enum AgentMode { Paced, Shown, Off }

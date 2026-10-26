@@ -7,7 +7,11 @@
 #
 # Start the gallery with its test port on:
 #
-#     BIBUI_TEST_PORT=1 dotnet run --project samples/component-gallery
+#     BIBUI_TEST_PORT=1 BIBUI_AGENT_CURSOR=off dotnet run --project samples/component-gallery
+#
+# BIBUI_AGENT_CURSOR=off draws no agent cursor and answers each step at once;
+# without it, each click waits for the cursor to show it, for a person watching,
+# and the walk takes minutes rather than seconds.
 #
 # then, in another shell:
 #
