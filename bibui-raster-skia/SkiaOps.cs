@@ -24,9 +24,11 @@ internal sealed class SkiaOps : IDisposable
     // A paint owns the Skia children it was built with (shader, filters, dash),
     // so a child can never be evicted from under a live paint: they go together.
     private readonly ResourceCache<CacheKey, SkiaPaintEntry> _paints = new();
-    private readonly ResourceCache<TextPaintKey, SKPaint> _textPaints = new();
-    // The font each text paint draws a text blob with.
-    private readonly ResourceCache<TextPaintKey, SKFont> _textFonts = new();
+    // A glyph run's paint, by its colour alone: that is all a text paint holds.
+    private readonly ResourceCache<uint, SKPaint> _textPaints = new();
+    // A glyph run's font, by its face and size alone (FontKey), never its
+    // colour: one SKFont, and its typeface, for every colour a face is drawn in.
+    private readonly ResourceCache<ulong, SKFont> _textFonts = new();
     // The native path each kept VectorPath was built into, by its Id.
     private readonly ResourceCache<int, SKPath> _paths = new();
     // A path the list carries in its payload, by its content: a callback that
@@ -45,7 +47,6 @@ internal sealed class SkiaOps : IDisposable
     // run's start and colour is the paint's, so one blob draws anywhere in any
     // colour. Touch-evicted.
     private readonly ResourceCache<ulong, SKTextBlob> _blobs = new();
-    private readonly System.IO.Hashing.XxHash3 _runHash = new();
 
     // Skia's face for each of bibui's, made from its font file once: the glyph
     // ids FreeType resolves belong to that file, so Skia draws the same glyphs.
@@ -288,18 +289,19 @@ internal sealed class SkiaOps : IDisposable
         float x, float baselineY, Rgba color)
     {
         if (glyphs.IsEmpty) return;
+        // Per run, two lookups by integers the run already has, and one hash of
+        // its glyphs: a text with emoji is several runs a line, and each pays this.
         var sk = color.ToSk();
-        var tf = Typeface(face);
-        var key = TextPaintKey.For(sizePx, sk, face.Id);
-        var paint = _textPaints.FromKey(key, sk, static c => new SKPaint { Color = c, IsAntialias = true });
-        var font = _textFonts.FromKey(key, (Size: sizePx, tf), static p => new SKFont(p.tf, p.Size)
+        var paint = _textPaints.FromKey((uint)sk, sk, static c => new SKPaint { Color = c, IsAntialias = true });
+        ulong fontKey = FontKey(face.Id, sizePx);
+        var font = _textFonts.FromKey(fontKey, (Ops: this, Face: face, Size: sizePx), static p => new SKFont(p.Ops.Typeface(p.Face), p.Size)
         {
             Subpixel = true,
             Edging = SKFontEdging.Antialias,   // grayscale, never LCD
             ForceAutoHinting = true,
             Hinting = SKFontHinting.Full,
         });
-        ulong run = RunKey(face.Id, sizePx, glyphs);
+        ulong run = RunKey(fontKey, glyphs);
         if (!_blobs.TryGet(run, out var blob))
         {
             _blobBuilder.AddPositionedRun(glyphs, font, positions.AsSk());
@@ -316,16 +318,17 @@ internal sealed class SkiaOps : IDisposable
     // DrawContext.PushGlyphs, with an example); a run shaped by HarfBuzz breaks
     // it and would have to add its positions here. A collision would draw
     // another run's glyphs until it is evicted: 64 bits put that around n / 2^64
-    // per new run with n kept, and the glyph count in the key rules out the
-    // likeliest.
-    private ulong RunKey(int faceId, float sizePx, ReadOnlySpan<ushort> glyphs)
-    {
-        Span<int> head = [faceId, BitConverter.SingleToInt32Bits(sizePx), glyphs.Length];
-        _runHash.Reset();
-        _runHash.Append(MemoryMarshal.AsBytes(head));
-        _runHash.Append(MemoryMarshal.AsBytes(glyphs));
-        return _runHash.GetCurrentHashAsUInt64();
-    }
+    // per new run with n kept, and the glyph count in the seed rules out the
+    // likeliest. One call: the glyphs hashed, seeded with the face and size
+    // (FontKey) and the count.
+    private static ulong RunKey(ulong fontKey, ReadOnlySpan<ushort> glyphs)
+        => System.IO.Hashing.XxHash3.HashToUInt64(MemoryMarshal.AsBytes(glyphs),
+            unchecked((long)(fontKey ^ (ulong)glyphs.Length * 0x9E3779B97F4A7C15UL)));
+
+    // A face at a size, as one integer: its id and the size's bits, the same
+    // key the core's styles use. What a font, and a run's blob, are kept under.
+    private static ulong FontKey(int faceId, float sizePx)
+        => (ulong)(uint)faceId << 32 | (uint)BitConverter.SingleToInt32Bits(sizePx);
 
     private SKTypeface Typeface(FontFace face)
     {
@@ -545,24 +548,5 @@ internal sealed class SkiaPaintEntry : IDisposable
         _mask?.Dispose();
         _image?.Dispose();
         _dash?.Dispose();
-    }
-}
-
-/// <summary>
-/// Text paint key: size, colour and the face the run resolved to. Keyed by the
-/// face's id rather than the (family, weight) asked for, because a run is one
-/// face, whatever was asked for.
-/// </summary>
-internal readonly record struct TextPaintKey(UInt128 Hash)
-{
-    public static TextPaintKey For(float sizePhysical, SKColor color, int typefaceId)
-    {
-        Span<int> parts =
-        [
-            BitConverter.SingleToInt32Bits(sizePhysical),
-            (int)(uint)color,
-            typefaceId,
-        ];
-        return new(System.IO.Hashing.XxHash128.HashToUInt128(MemoryMarshal.AsBytes(parts)));
     }
 }
