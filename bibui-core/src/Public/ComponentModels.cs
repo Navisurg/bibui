@@ -116,7 +116,7 @@ public readonly record struct FontSize
     public static implicit operator FontSize(ComponentSize step) => new(step, 0f);
 
     /// <summary>The size in logical px, under <paramref name="theme"/>'s steps.</summary>
-    internal float In(Bibui.Core.Theming.ThemeTokens theme) => _pixels > 0f ? _pixels : TextLayer.SizeFromStep(_step, theme);
+    internal float In(Bibui.Core.Theming.ThemeTokens theme) => _pixels > 0f ? _pixels : FontResolution.SizeFromStep(_step, theme);
 
     /// <summary>The same size times <paramref name="factor"/>, in pixels.</summary>
     public FontSize Times(float factor, Bibui.Core.Theming.ThemeTokens theme) => Px(In(theme) * factor);

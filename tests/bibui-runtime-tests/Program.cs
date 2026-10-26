@@ -2865,10 +2865,12 @@ Run("DrawList: recording a frame after the first allocates nothing", () =>
 
     var caches = new Bibui.Core.Draw.RenderCaches();
     using var fonts = new Fonts();
-    var painter = new Bibui.Core.Draw.Painter(caches, fonts);
+    var theme = runtime.Theme;
+    var slotFaces = new FontFace[FontResolution.SlotFaceCount];
+    FontResolution.SlotFacesFill(slotFaces, fonts, theme);
+    var painter = new Bibui.Core.Draw.Painter(caches, fonts, slotFaces);
     var list = new Bibui.Core.Draw.DrawList();
     var surface = TestBuild.Window(400, 300);
-    var theme = runtime.Theme;
     for (int i = 0; i < 3; i++)
     {
         painter.Record(list, tree!, surface, theme, FrameInput.None);

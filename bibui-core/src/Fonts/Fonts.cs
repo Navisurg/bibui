@@ -1,5 +1,4 @@
 using Bibui.Core.Draw;
-using Bibui.Core.Theming;
 using Bibui.Core.FreeType;
 using Bibui.Core.TextEdit;
 
@@ -31,16 +30,6 @@ public sealed class Fonts : IDisposable
     // what is done with it is the functions on TextLayer (Fonts/TextLayer.cs).
     internal readonly TextEngine Engine = new();
     internal readonly FontProvider Provider;
-
-    // ── Theme slots ──────────────────────────────────────────────────────────
-
-    // The face each slot resolves to at each weight, [slot * 2 + bold], for the
-    // typography they were resolved from. A family is named only here: a text
-    // asks by slot, and the slot's face is an index. Resolved again when a
-    // text asks under other typography, and once a frame (EndFrame nulls
-    // SlotTypography), so it is never older than the frame asking.
-    internal readonly FontFace[] SlotFaces = new FontFace[8];
-    internal TypographyTokens? SlotTypography;
 
     // ── Styles ───────────────────────────────────────────────────────────────
 

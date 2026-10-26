@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using Bibui.Core.Theming;
 using Bibui.Core.TextEdit;
 
 namespace Bibui.Core;
@@ -16,62 +15,13 @@ public static class TextLayer
 {
     // ── Frame ────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Once a frame, with the renderer's own caches: the wraps unasked for too
-    /// long go back, and the slots resolve again next frame, so the next frame's
-    /// typography is what they hold. The faces they resolve to come from
-    /// FontProvider's cache, which keeps what a (family, weight) first resolved
-    /// to: a family registered after it was first asked for still gets the face
-    /// it got then.
-    /// </summary>
-    internal static void FontsEndFrame(Fonts f)
-    {
-        WrapsEvict(f);
-        f.SlotTypography = null;
-    }
+    /// <summary>Once a frame, with the renderer's own caches: the wraps unasked for too long go back.</summary>
+    internal static void FontsEndFrame(Fonts f) => WrapsEvict(f);
 
     // ── Faces ────────────────────────────────────────────────────────────────
 
     /// <summary>The built-in Inter at <paramref name="weight"/>, for what draws text no theme set: an icon's fallback letter.</summary>
     internal static FontFace FaceBuiltIn(Fonts f, int weight) => f.Provider.Resolve(null, weight);
-
-    /// <summary>The face <paramref name="slot"/> resolves to at <paramref name="weight"/> under <paramref name="theme"/>'s typography.</summary>
-    internal static FontFace FaceFromSlot(Fonts f, FontSlot slot, FontWeight weight, ThemeTokens theme)
-    {
-        if (!ReferenceEquals(theme.Typography, f.SlotTypography))
-        {
-            int regular = FontResolution.ResolveWeight(FontWeight.Regular, theme);
-            int bold = FontResolution.ResolveWeight(FontWeight.Bold, theme);
-            for (int s = 0; s < f.SlotFaces.Length / 2; s++)
-            {
-                string? family = FontResolution.ResolveFamily((FontSlot)s, theme);
-                f.SlotFaces[s * 2] = f.Provider.Resolve(family, regular);
-                f.SlotFaces[s * 2 + 1] = f.Provider.Resolve(family, bold);
-            }
-            f.SlotTypography = theme.Typography;
-        }
-        return f.SlotFaces[(int)slot * 2 + (weight == FontWeight.Bold ? 1 : 0)];
-    }
-
-    // ── Fonts ────────────────────────────────────────────────────────────────
-
-    /// <summary>The font <paramref name="text"/> is set in, measured at <paramref name="scale"/>.</summary>
-    internal static Font FontFromText(Fonts f, Text text, ThemeTokens theme, float scale)
-        => FontFromSize(f, text.Size, text.Family, text.Weight, theme, scale);
-
-    /// <summary>The font a text with these settings is set in, measured at <paramref name="scale"/>.</summary>
-    internal static Font FontFromSize(Fonts f, FontSize size, FontSlot family, FontWeight weight, ThemeTokens theme, float scale)
-        => new(size.In(theme), FaceFromSlot(f, family, weight, theme), scale);
-
-    /// <summary>The theme's font size for a size step, in logical px.</summary>
-    internal static float SizeFromStep(ComponentSize step, ThemeTokens theme) => step switch
-    {
-        ComponentSize.Sm => theme.Typography.SizeSm,
-        ComponentSize.Lg => theme.Typography.SizeLg,
-        ComponentSize.Xl => theme.Typography.SizeXl,
-        ComponentSize.Xxl => theme.Typography.Size2Xl,
-        _ => theme.Typography.SizeMd,
-    };
 
     // ── Styles ───────────────────────────────────────────────────────────────
 

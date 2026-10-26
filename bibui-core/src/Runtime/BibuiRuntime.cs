@@ -24,12 +24,18 @@ public sealed partial class BibuiRuntime
     // One set per runtime, for its life. What draws the list is the loop
     // owner's choice, and none of the runtime's business.
     private readonly Fonts _fonts = new();
+    // The face each theme slot is set in, [slot * 2 + bold]: filled from the
+    // frame's theme in BeginBuild (FontResolution.SlotFacesFill), so build,
+    // layout and paint read the same faces, one entry each.
+    private readonly FontFace[] _slotFaces = new FontFace[FontResolution.SlotFaceCount];
     private readonly RenderCaches _caches = new();
     private readonly Painter _painter;
 
     private BibuiRuntime()
     {
-        _painter = new Painter(_caches, _fonts);
+        _painter = new Painter(_caches, _fonts, _slotFaces);
+        // A font asked for before the first frame gets the default theme's faces.
+        FontResolution.SlotFacesFill(_slotFaces, _fonts, _theme);
         _measure = MeasureLeaf;
     }
 
@@ -223,6 +229,7 @@ public sealed partial class BibuiRuntime
 
         if (events is not null) ApplyInput(events);
         _frameTheme = PaintedTheme(_theme);
+        FontResolution.SlotFacesFill(_slotFaces, _fonts, _frameTheme);
         Rates = MotionRates.From(_theme.Motion, Dt, Instant);
         _buildStarted = Stopwatch.GetTimestamp();
         BeginDropDowns();
@@ -325,7 +332,7 @@ public sealed partial class BibuiRuntime
         switch (node)
         {
             case Text text:
-                var measured = TextLayer.SizeFromText(_fonts, text, TextLayer.FontFromText(_fonts, text, _measureTheme!, _measureScale));
+                var measured = TextLayer.SizeFromText(_fonts, text, FontResolution.FontFromText(_slotFaces, text, _measureTheme!, _measureScale));
                 return new System.Numerics.Vector2(measured.Width, measured.Height);
             case Icon icon:
                 float side = icon.Size.In(_measureTheme!);
