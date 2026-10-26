@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using Bibui.Core.Theming;
 using Bibui.Core.Draw;
 using Bibui.Core.TextEdit;
@@ -47,8 +46,6 @@ public sealed partial class BibuiRuntime
 
     // ── Core app state ───────────────────────────────────────────────────────
     private ThemeTokens _theme = ThemeLoader.BibuiDark();
-    private UiNode? _lastTree;
-    private Dictionary<string, Box> _interactiveBoxes = new();
 
     // ── Pointer state ────────────────────────────────────────────────────────
     private float _mouseX = float.NaN;
@@ -186,11 +183,8 @@ public sealed partial class BibuiRuntime
     public void SetTheme(ThemeTokens theme)
     {
         _theme = theme;
-        _lastTree = null;
         RequestFrame();
     }
-
-    private static readonly bool _profile = Environment.GetEnvironmentVariable("BIBUI_PROFILE") == "1";
 
     // ── The frame ────────────────────────────────────────────────────────────
 
@@ -198,8 +192,8 @@ public sealed partial class BibuiRuntime
     // the app builds with nothing else pushed lands under it.
     private readonly Box _root = new();
 
-    // This frame's theme, as BeginBuild found it: the whole frame is laid out
-    // and painted in it, whatever another thread sets.
+    // This frame's theme: _theme, part way from the last one while a
+    // crossfade runs (PaintedTheme). The frame is measured and painted in it.
     private ThemeTokens _frameTheme = null!;
     // When the frame's build started: what SleepUntilNextFrame paces from.
     private long _buildStarted;
@@ -226,8 +220,6 @@ public sealed partial class BibuiRuntime
     {
         if (window.Width <= 0 || window.Height <= 0 || window.Scale <= 0f || window.RefreshRate <= 0f)
             throw new ArgumentOutOfRangeException(nameof(window), window, "A window frame needs a size, a scale and a refresh rate.");
-        if (window.Width != Window.Width || window.Height != Window.Height || window.Scale != Window.Scale)
-            _lastTree = null;
         Window = window;
 
         if (events is not null) ApplyInput(events);
@@ -235,6 +227,13 @@ public sealed partial class BibuiRuntime
         Rates = MotionRates.From(_theme.Motion, Dt, Instant);
         _buildStarted = Stopwatch.GetTimestamp();
         BeginDropDowns();
+        // Last frame's tree lets go of what was built at its top, so a node the
+        // app keeps from frame to frame is unlinked again until it is built.
+        for (UiNode? c = _root.FirstChild, next; c is not null; c = next)
+        {
+            next = c.Next == c ? null : c.Next;
+            (c.Parent, c.Prev, c.Next) = (null, null, null);
+        }
         ResetForBuild(_root);
         _root.SizeX = _root.SizeY = SemanticSize.ParentPct(1f);
         _root.ChildLayoutAxis = LayoutAxis.Y;
@@ -256,51 +255,31 @@ public sealed partial class BibuiRuntime
         var window = Window;
         var theme = _frameTheme;
 
-        // The frame's tree. One node built at the top is it, and fills the
+        // What is laid out and recorded. One node built at the top fills the
         // surface, as a window's content does; several are stacked top to
-        // bottom under the root, which fills it.
+        // bottom under the root, which fills it. Either way it stays linked
+        // under the root, which is the frame's tree until the next BeginBuild.
         UiNode tree = _root;
         if (_root.FirstChild is { } only && only == _root.LastChild)
         {
-            (_root.FirstChild, _root.LastChild) = (null, null);
-            (only.Parent, only.Prev, only.Next) = (null, null, null);
+            (_root.Rect, _root.Extent) = (System.Numerics.Vector2.Zero, new System.Numerics.Vector2(window.LogicalWidth, window.LogicalHeight));
             tree = only;
         }
 
-        var t0 = _buildStarted;
         EndDropDowns(tree);
-        var t1 = Stopwatch.GetTimestamp();
-        var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
         // Every rect is solved before anything is recorded. A text measures
-        // itself in this runtime's fonts.
-        (_measureTheme, _measureScale) = (theme, window.Scale);
+        // itself in this runtime's fonts, in the frame's theme.
         _fonts.BeginFrameRuns();
         LayoutSolver.Layout(tree, System.Numerics.Vector2.Zero,
             new System.Numerics.Vector2(window.LogicalWidth, window.LogicalHeight), _measure);
-        var pointerTransforms = transformed ? PointerTransforms(tree) : null;
-        var t2 = Stopwatch.GetTimestamp();
+        _pointerTransforms = PointerTransforms(tree, _pointerTransforms);
 
         // Captured after the build, so state the app sets while building
         // lands in this frame.
-        FrameInput input;
-        input = CaptureFrameInput();
-        _painter.Record(DrawList, tree, window, theme, input);
+        _painter.Record(DrawList, tree, window, theme, CaptureFrameInput());
         // What nobody asked for lately is evicted from the caches recording read.
         _caches.EndFrame();
         _fonts.EndFrame();
-        var t3 = Stopwatch.GetTimestamp();
-
-        if (_profile)
-        {
-            double freq = Stopwatch.Frequency / 1000.0;
-            Console.WriteLine(
-                $"[Runtime.EndBuild]  build={(t1 - t0) / freq:F2}ms  " +
-                $"CollectBoxes+Layout={(t2 - t1) / freq:F2}ms  record={(t3 - t2) / freq:F2}ms");
-        }
-
-        _interactiveBoxes = interactiveBoxes;
-        _pointerTransforms = pointerTransforms;
-        _lastTree = tree;
 
         // Will the next frame differ from this one? Asked of the painter,
         // which knows because it stepped the values: a hover fade, an easing
@@ -321,11 +300,8 @@ public sealed partial class BibuiRuntime
     /// <summary>Frames built so far: <see cref="EndBuild"/> counts one each. Read from any thread.</summary>
     public long FrameCount => Interlocked.Read(ref _frames);
 
-    // What a text is measured in, for the frame being laid out; a field so the
-    // delegate the solver calls is made once.
+    // A field so the delegate the solver calls is made once.
     private readonly MeasureLeaf _measure;
-    private ThemeTokens? _measureTheme;
-    private float _measureScale = 1f;
 
     // What a leaf sized by what it holds measures: a text its lines, an icon
     // its side.
@@ -334,10 +310,10 @@ public sealed partial class BibuiRuntime
         switch (node)
         {
             case Text text:
-                var measured = _fonts.Measure(text, Fonts.FontOf(text, _measureTheme!, _measureScale));
+                var measured = _fonts.Measure(text, Fonts.FontOf(text, _frameTheme, Window.Scale));
                 return new System.Numerics.Vector2(measured.Width, measured.Height);
             case Icon icon:
-                float side = icon.Size.In(_measureTheme!);
+                float side = icon.Size.In(_frameTheme);
                 return new System.Numerics.Vector2(side, side);
             default:
                 throw new InvalidOperationException($"{node.GetType().Name} '{node.Id}' is sized by its content, and has none.");
@@ -396,90 +372,10 @@ public sealed partial class BibuiRuntime
         _eventsUsed = 0;
     }
 
-    // ── Event dispatch ───────────────────────────────────────────────────────
-    //
-    // Nothing here renders: dispatch reads the last painted frame's rects, which
-    // is the frame the user was looking at. A caller driving the runtime by hand
-    // builds the next frame itself (EndBuild).
-
     /// <summary>
-    /// Clicks the box named <paramref name="id"/>: a press and a release at its
-    /// centre, through the same queue a real pointer uses, so focus, hot state
-    /// and the drag anchor land exactly as they would for a person. Queued for
-    /// the next frame. False, and nothing queued, when no box that claims a
-    /// press carries the name.
+    /// The frame's root. Between <see cref="EndBuild"/> and the next
+    /// <see cref="BeginBuild"/>, which resets it, it is the tree that frame laid
+    /// out and painted, read as it is: nothing is copied.
     /// </summary>
-    public bool DispatchClick(string id)
-    {
-        Box? box;
-        _interactiveBoxes.TryGetValue(id, out box);
-        if (box is null || box.Claims == InteractionKinds.None || box.Claims == InteractionKinds.Disabled) return false;
-
-        // Last frame's geometry, which is the same frame an ask would test
-        // against. A box that has never been painted has no centre to aim at.
-        var pos = box.Rect;
-        var size = box.Extent;
-        if (size.X <= 0f || size.Y <= 0f) return false;
-
-        float cx = pos.X + size.X / 2f;
-        float cy = pos.Y + size.Y / 2f;
-
-        // Where the centre is drawn, which is where a person would click it.
-        if (PointerTransformOf(id) is { } drawn)
-        {
-            var centre = System.Numerics.Vector2.Transform(new System.Numerics.Vector2(cx, cy), drawn);
-            (cx, cy) = (centre.X, centre.Y);
-        }
-        ProcessEvents(new[]
-        {
-            new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = cx, Y = cy, TargetId = id },
-            new BibUiEvent { Kind = BibUiEventKind.MouseUp,   Button = MouseButton.Left, X = cx, Y = cy, TargetId = id },
-        });
-        return true;
-    }
-
-    /// <summary>The tree the last frame laid out and painted.</summary>
-    internal UiNode? LastTree => _lastTree;
-
-    /// <summary>
-    /// The node named <paramref name="id"/> in the tree the last frame laid out
-    /// and painted, or null: for tests and the test server, which read its
-    /// <see cref="UiNode.Rect"/>, <see cref="UiNode.Extent"/> and content.
-    ///
-    /// <para>Read it between frames, on the loop's thread. The next build
-    /// resets and reuses the nodes it describes, so read what is needed and do
-    /// not keep the node across a frame.</para>
-    /// </summary>
-    public UiNode? FindById(string id)
-    {
-        ArgumentNullException.ThrowIfNull(id);
-        return Find(LastTree, id);
-
-        static UiNode? Find(UiNode? node, string id)
-        {
-            if (node is null || node.Id == id) return node;
-            for (var child = node.FirstChild; child is not null; child = child.Next == child ? null : child.Next)
-                if (Find(child, id) is { } found) return found;
-            return null;
-        }
-    }
-
-    /// <summary>The boxes with an id that claim something: what a named dispatch can reach.</summary>
-    private static Dictionary<string, Box> CollectInteractiveBoxes(UiNode root, out bool transformed)
-    {
-        var boxes = new Dictionary<string, Box>();
-        bool any = false;
-        Collect(root);
-        transformed = any;
-        return boxes;
-
-        void Collect(UiNode node)
-        {
-            any |= node.Style.HasTransform;
-            if (node is Box { Id: { } id } box && box.Claims != InteractionKinds.None)
-                boxes[id] = box;
-            for (UiNode? c = node.FirstChild; c is not null; c = c.Next == c ? null : c.Next)
-                Collect(c);
-        }
-    }
+    internal UiNode Root => _root;
 }

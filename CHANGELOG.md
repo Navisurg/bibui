@@ -81,6 +81,23 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Changed
 
+- **Breaking:** `Bibui.Testing` is `Nodes`: `Nodes.FindById(root, id)` finds a
+  node under a root you hand it, and `Nodes.Centre(node)` is where a person
+  would click it. `BibuiPage` is gone: a test runs the app's loop itself —
+  `BeginBuild` with the window events a mouse and keyboard would send, the
+  build, `EndBuild` — and reads the tree the app built into. The package no
+  longer depends on `Bibui.Raster.Skia`.
+- **Breaking:** `BibuiRuntime.FindById` and `DispatchClick` are gone. Find a
+  node with `Nodes.FindById` under the app's own root; click it with a press
+  and a release at its centre, as a window would send them.
+- **Breaking:** `BIBUI_PROFILE` prints nothing: time the build, the renderer's
+  `Draw` and the window's `EndDraw` in the app's own loop.
+- `test.tree` has the runtime's root at the top, a box the window's size with
+  no id, also when the app built one node.
+- `Fonts.FontOf(Text, ThemeTokens, float)` is public: the font a text is set
+  in, so measuring its content in it is the width it wanted.
+- The gallery's layout check measures a text in its own weight: a bold label
+  was measured as regular, and could be cut without being reported.
 - The gallery's ScrollList page shows both lists; the showcase's target queue
   is a RowScrollList.
 - Text finds its face by the theme's slot and its size by the face's id, so

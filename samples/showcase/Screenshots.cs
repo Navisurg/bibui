@@ -2,6 +2,7 @@ using Bibui.Core;
 using Bibui.Core.Draw;
 using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
+using Bibui.Testing;
 
 namespace Showcase;
 
@@ -14,9 +15,9 @@ internal static class Screenshots
     public static void WriteAll(string dir, Func<DrawToPixels> draw, string rasterName, Func<App> newApp, bool all)
     {
         // 1. The overview, dark, with the pointer over the seeing chart.
-        Write(dir, rasterName, "overview-dark.png", draw(), newApp(), 1440, 900, app => { }, (rt, frame) =>
+        Write(dir, rasterName, "overview-dark.png", draw(), newApp(), 1440, 900, app => { }, (app, rt, frame) =>
         {
-            if (frame == 3) HoverAt(rt, "tel-main-chart", 0.72f, 0.5f);
+            if (frame == 3) HoverAt(app, rt, "tel-main-chart", 0.72f, 0.5f);
         });
 
         // 2. Light mode from another seed, the pointer on a queue row.
@@ -26,9 +27,9 @@ internal static class Screenshots
             app.Accent = "#F97316";
             app.Selected = "kestrel";
             app.Metric = Metric.Throughput;
-        }, (rt, frame) =>
+        }, (app, rt, frame) =>
         {
-            if (frame == 3) HoverAt(rt, "row-quill", 0.5f, 0.5f);
+            if (frame == 3) HoverAt(app, rt, "row-quill", 0.5f, 0.5f);
         });
 
         // 2b. The Appearance sheet: one seed, the whole theme.
@@ -36,9 +37,9 @@ internal static class Screenshots
         {
             app.Accent = "#2DD4BF";
             app.SettingsOpen = true;
-        }, (rt, frame) =>
+        }, (app, rt, frame) =>
         {
-            if (frame == 3) HoverAt(rt, "swatch-orchid", 0.5f, 0.5f);
+            if (frame == 3) HoverAt(app, rt, "swatch-orchid", 0.5f, 0.5f);
         });
 
         // 3. A narrow window: the sidebar folds to a rail and the cards stack.
@@ -46,7 +47,7 @@ internal static class Screenshots
         {
             app.Accent = "#2DD4BF";
             app.Selected = "tamsin";
-        }, (rt, frame) => { });
+        }, (app, rt, frame) => { });
 
         // The four above are the README's. With --all, two more pages.
         if (!all) return;
@@ -58,16 +59,16 @@ internal static class Screenshots
             app.Accent = "#38BDF8";
             app.Sort = "alt";
             app.Selected = "harrow";
-        }, (rt, frame) =>
+        }, (app, rt, frame) =>
         {
-            if (frame == 3 && rt.FindById("row-harrow") is { } row)
+            if (frame == 3 && Nodes.FindById(app.Root!, "row-harrow") is { } row)
             {
                 float x = row.Rect.X + row.Extent.X * 0.4f, y = row.Rect.Y + row.Extent.Y * 0.5f;
                 rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x, Y = y });
                 rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Right, X = x, Y = y });
                 rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Right, X = x, Y = y });
             }
-            if (frame == 5 && rt.FindById("menu-slew") is { } item)
+            if (frame == 5 && Nodes.FindById(app.Root!, "menu-slew") is { } item)
                 rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = item.Rect.X + 40f, Y = item.Rect.Y + item.Extent.Y / 2f });
         });
 
@@ -76,11 +77,11 @@ internal static class Screenshots
         {
             app.Page = Page.Journal;
             app.Accent = "#E879F9";
-        }, (rt, frame) => { });
+        }, (app, rt, frame) => { });
     }
 
     private static void Write(string dir, string rasterName, string name, DrawToPixels draw, App app, int w, int h,
-        Action<App> setup, Action<BibuiRuntime, int> script)
+        Action<App> setup, Action<App, BibuiRuntime, int> script)
     {
         app.Live = false;
         setup(app);
@@ -89,20 +90,20 @@ internal static class Screenshots
         Console.WriteLine($"  wrote {name} ({w}×{h}, {rasterName})");
     }
 
-    public static byte[] Render(DrawToPixels draw, App app, int w, int h, Action<BibuiRuntime, int> script, int frames = 10)
+    public static byte[] Render(DrawToPixels draw, App app, int w, int h, Action<App, BibuiRuntime, int> script, int frames = 10)
     {
         var rt = app.Headless(w, h);
         for (int f = 0; f < frames; f++)
         {
-            script(rt, f);
+            script(app, rt, f);
             app.Frame(rt);
         }
         return FramePixels.Png(rt, draw);
     }
 
-    private static void HoverAt(BibuiRuntime rt, string id, float fx, float fy)
+    private static void HoverAt(App app, BibuiRuntime rt, string id, float fx, float fy)
     {
-        if (rt.FindById(id) is not { } node) return;
+        if (Nodes.FindById(app.Root!, id) is not { } node) return;
         rt.ProcessEvent(new BibUiEvent
         {
             Kind = BibUiEventKind.MouseMove,

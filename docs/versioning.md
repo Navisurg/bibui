@@ -66,7 +66,7 @@ Not part of it:
   minor or patch release may change what a component looks like (a fixed
   anti-aliasing edge, a theme colour, a new default). The changelog says when
   it does;
-- environment variables for diagnostics (`BIBUI_GPU`, `BIBUI_PROFILE`,
+- environment variables for diagnostics (`BIBUI_GPU`,
   `BIBUI_DAMAGE_TRACE`, ...), performance characteristics, and the text of
   exception messages;
 - samples, tests and tools in this repository.

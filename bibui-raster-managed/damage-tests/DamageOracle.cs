@@ -7,6 +7,7 @@ using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
 using Bibui.Core.Theming;
 using Bibui.Core.Runtime.Platform;
+using Bibui.Testing;
 
 /// <summary>
 /// The damage oracle: every scene runs on two runtimes side by side, each drawn
@@ -114,16 +115,12 @@ internal static class DamageOracle
     private static void Wheel(BibuiRuntime rt, float x, float y, float dy) =>
         rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.Scroll, X = x, Y = y, ScrollY = dy });
 
-    /// <summary>The centre of the node named <paramref name="id"/> as last laid out, or null before it was.</summary>
-    private static (float X, float Y)? Centre(BibuiRuntime rt, string id)
+    // A press or a release at the centre of the node named id under root, the
+    // tree the scene's build returned, as last laid out; nothing when it is not there.
+    private static void Click(BibuiRuntime rt, UiNode? root, string id, bool down)
     {
-        var n = rt.FindById(id);
-        return n is null ? null : (n.Rect.X + n.Extent.X / 2f, n.Rect.Y + n.Extent.Y / 2f);
-    }
-
-    private static void Click(BibuiRuntime rt, string id, bool down)
-    {
-        if (Centre(rt, id) is not { } c) return;
+        if (root is null || Nodes.FindById(root, id) is not { } node) return;
+        var c = Nodes.Centre(node);
         Move(rt, c.X, c.Y);
         if (down) Press(rt, c.X, c.Y); else Release(rt, c.X, c.Y);
     }
@@ -241,9 +238,10 @@ internal static class DamageOracle
         yield return new Scene("switches", 500, 360, 1f, 100, (rt, renderer) =>
         {
             var on = new bool[6];
+            UiNode? root = null;
             UiNode Build()
             {
-                return Page(rt, 20f, () =>
+                return root = Page(rt, 20f, () =>
                 {
                     for (int i = 0; i < 6; i++)
                     {
@@ -257,8 +255,8 @@ internal static class DamageOracle
             {
                 // A switch clicked every 8 frames; the frames between are its knob easing.
                 int i = (f / 8) % 6;
-                if (f % 8 == 1) Click(rt, $"sw{i}", down: true);
-                else if (f % 8 == 2) Click(rt, $"sw{i}", down: false);
+                if (f % 8 == 1) Click(rt, root, $"sw{i}", down: true);
+                else if (f % 8 == 2) Click(rt, root, $"sw{i}", down: false);
                 else if (f % 8 == 5) Move(rt, 480, 350);
             });
         });
@@ -281,9 +279,10 @@ internal static class DamageOracle
                 if (line.Pressed) focus = index;
                 return field;
             }
+            UiNode? root = null;
             UiNode Build()
             {
-                return Page(rt, 24f, () =>
+                return root = Page(rt, 24f, () =>
                 {
                     Bold(rt, "Account details");
                     rt.Gap(16f);
@@ -296,10 +295,10 @@ internal static class DamageOracle
             }
             return (Build, f =>
             {
-                if (f == 1) Click(rt, "name", down: true);
-                else if (f == 2) Click(rt, "name", down: false);
-                else if (f == 60) Click(rt, "other", down: true);
-                else if (f == 61) Click(rt, "other", down: false);
+                if (f == 1) Click(rt, root, "name", down: true);
+                else if (f == 2) Click(rt, root, "name", down: false);
+                else if (f == 60) Click(rt, root, "other", down: true);
+                else if (f == 61) Click(rt, root, "other", down: false);
                 else if (f > 2 && f % 3 != 0) Type(rt, (char)('a' + f % 26));
                 if (f % 17 == 0) rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.Navigate, Delta = -2 });
                 if (f % 23 == 0) rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.Edit, Flags = TextActionFlags.Delete, Delta = -1 });

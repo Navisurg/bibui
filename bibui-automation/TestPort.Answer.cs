@@ -90,7 +90,7 @@ public sealed partial class TestPort
                 case TestCmdKind.Tree:
                     json.WriteBoolean("ok", true);
                     json.WritePropertyName("result");
-                    WriteTree(json, _runtime?.LastTree);
+                    WriteTree(json, _runtime?.Root);
                     break;
                 case TestCmdKind.State:
                     if (stateType is null) { Error(json, "This app reports no state."); break; }
