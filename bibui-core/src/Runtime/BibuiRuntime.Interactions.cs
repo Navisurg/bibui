@@ -250,8 +250,8 @@ public sealed partial class BibuiRuntime
         // with — the one frame in which knowing the travel matters most is the
         // one frame it used to be missing. That is not hypothetical: a press and
         // its release arrive together whenever they are delivered faster than
-        // frames, which is what a real pointer does between renders and what the
-        // test server's `gesture` command does by construction. A box driven that
+        // frames, which is what a real pointer does between renders and what a
+        // client sending a whole drag as one frame of events does. A box driven that
         // way was told its drag had ended, at a position, with no way left to ask
         // where it started.
         //

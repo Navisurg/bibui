@@ -1,13 +1,13 @@
 namespace Bibui.Core;
 
 // bibui's own key and button names, so the public API (BibUiEvent,
-// WindowEvent, the test server, bibui-testing) does not make every app, host
+// WindowEvent, a test port, bibui-testing) does not make every app, host
 // and test reference Silk.NET.Input.
 //
 // Member names and values are Silk.NET.Input's (MIT), which are GLFW's key
 // codes: a Silk host converts with a cast, existing source that said Key.Tab
 // or MouseButton.Left keeps compiling once its `using Silk.NET.Input` goes, and
-// the test server's key names — its wire protocol — are unchanged.
+// a test port's key names — its wire protocol — are these names.
 
 /// <summary>A physical key, named for its position on a US layout. Values are GLFW key codes.</summary>
 public enum Key

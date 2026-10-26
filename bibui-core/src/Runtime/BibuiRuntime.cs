@@ -218,7 +218,7 @@ public sealed partial class BibuiRuntime
     /// <see cref="TargetHz"/>, of which the frame's <see cref="Dt"/> is one frame.</para>
     ///
     /// <para><paramref name="events"/> is what the keyboard and mouse did since the
-    /// last frame (<c>window.Events</c>, or a test server's): the frame's input,
+    /// last frame (<c>window.Events</c>, with a test port's added): the frame's input,
     /// which the boxes built from here ask about. It is emptied. None for a frame
     /// nothing happened to, as a headless one.</para>
     /// </summary>
@@ -443,7 +443,7 @@ public sealed partial class BibuiRuntime
 
     /// <summary>
     /// The node named <paramref name="id"/> in the tree the last frame laid out
-    /// and painted, or null: for tests and the test server, which read its
+    /// and painted, or null: for tests and tools, which read its
     /// <see cref="UiNode.Rect"/>, <see cref="UiNode.Extent"/> and content.
     ///
     /// <para>Read it between frames, on the loop's thread. The next build

@@ -7,7 +7,7 @@ namespace Bibui.Core.Runtime;
 /// What input means. A platform says what happened (<see cref="WindowEvent"/>s),
 /// the loop hands that to <see cref="BeginBuild"/>, and it becomes what the
 /// boxes act on (<see cref="BibUiEvent"/>s), queued for the frame. Whatever speaks for a
-/// keyboard and mouse — the window, a test server, a test — hands over the same
+/// keyboard and mouse — the window, a test port, a test — hands over the same
 /// kind of list, so they all take one path.
 /// </summary>
 public sealed partial class BibuiRuntime
