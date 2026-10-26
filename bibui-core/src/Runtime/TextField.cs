@@ -232,29 +232,29 @@ public static class TextField
     internal static void MoveVertically(BibuiRuntime runtime, Font font, BibuiStr text, TextEditState edit,
         float wrapWidth, TextWrap wrap, BibUiEvent ev)
     {
-        // The cursor's line: the last that starts at or before it.
-        var line = runtime.Fonts.Wrap(text.Str, font, wrapWidth, wrap);
-        while (line?.Next is not null && edit.Cursor >= line.Next.Start) line = line.Next;
-
-        var target = ev.DeltaY > 0 ? line?.Next : line?.Prev;
-        if (target is null)
+        var fonts = runtime.Fonts;
+        var style = TextLayer.StyleFromFont(fonts, font, font.Scale);
+        var lines = TextLayer.LinesFromText(fonts, text.Str, style, font.Scale, wrapWidth, wrap);
+        int on = LineOf(lines, edit.Cursor);
+        int to = on + Math.Sign(ev.DeltaY);
+        if (to < 0 || to >= lines.Length)
         {
             edit.Cursor = ev.DeltaY > 0 ? (int)text.Length : 0;
         }
         else
         {
-            float caretX = runtime.Fonts.Measure(text.Str[line!.Start..edit.Cursor], font);
-            edit.Cursor = target.Start + runtime.Fonts.OffsetAt(text.Str[target.Start..target.End], font, caretX);
+            float caretX = WidthOfChars(fonts, font, text.Str[lines[on].Start..edit.Cursor]);
+            edit.Cursor = lines[to].Start + CharAtX(fonts, font, text.Str[lines[to].Start..lines[to].End], caretX);
         }
         if ((ev.Flags & TextActionFlags.KeepMark) == 0) edit.Mark = edit.Cursor;
     }
 
-    // The line numbered index, counted from the first — clamped to the lines there are.
-    internal static TextLine? LineAt(TextLine? first, int index)
+    // The line an offset is on: the last that starts at or before it.
+    internal static int LineOf(ReadOnlySpan<TextLine> lines, int at)
     {
-        var line = first;
-        for (int i = 0; i < index && line?.Next is not null; i++) line = line.Next;
-        return line;
+        int k = 0;
+        while (k + 1 < lines.Length && at >= lines[k + 1].Start) k++;
+        return k;
     }
 }
 
@@ -333,6 +333,7 @@ public static class TextFieldExtensions
         TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default, TextWrap wrap = TextWrap.Words)
     {
         Font font = runtime.FontInScope();
+        var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
 
         // The field's own view: as tall as the size pushed, scrolling, cut at its edge.
         var claims = InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip
@@ -355,9 +356,10 @@ public static class TextFieldExtensions
             float pointerX = interaction.X - view.Rect.X;   // from where the text starts
             float pointerY = interaction.Y - view.Rect.Y + view.ViewOffset.Y;   // in the lines, scrolled
             int lineUnderPointer = (int)MathF.Floor(pointerY / lineAdvance);
-            var line = LineAt(runtime.Fonts.Wrap(text.Str, font, room, wrap), lineUnderPointer);
-            int lineStart = line?.Start ?? 0, lineEnd = line?.End ?? 0;
-            ReadOnlySpan<char> lineText = text.Str[lineStart..lineEnd];
+            var pointerLines = TextLayer.LinesFromText(runtime.Fonts, text.Str, style, font.Scale, room, wrap);
+            var line = pointerLines[Math.Clamp(lineUnderPointer, 0, pointerLines.Length - 1)];
+            int lineStart = line.Start;
+            ReadOnlySpan<char> lineText = text.Str[line.Start..line.End];
 
             edit.Cursor -= lineStart; edit.Mark -= lineStart;
             HandlePointer(runtime, font, interaction, lineText, edit, pointerX, focused);
@@ -370,7 +372,7 @@ public static class TextFieldExtensions
         bool empty = text.Length == 0;
         ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
         TextColor color = empty ? TextColor.Secondary : textColor;
-        TextLine? lines = runtime.Fonts.Wrap(shown, font, room, wrap);
+        var lines = TextLayer.LinesFromText(runtime.Fonts, shown, style, font.Scale, room, wrap);
 
         // Not focused: no caret and nothing highlighted. Empty: the caret is
         // before the placeholder, which is not text to select.
@@ -381,12 +383,13 @@ public static class TextFieldExtensions
         using var inView = runtime.Parent(view);
 
         // A row per line, LineAdvance apart.
-        int index = 0, caretLine = -1;
-        for (var line = lines; line is not null; line = line.Next, index++)
+        int caretLine = -1;
+        for (int index = 0; index < lines.Length; index++)
         {
+            var line = lines[index];
             if (index > 0) runtime.Gap(lineAdvance - lineHeight);
             // The caret's line: the first that holds it, or the space after it does.
-            if (caretLine < 0 && caret <= (line.Next?.Start - 1 ?? int.MaxValue)) caretLine = index;
+            if (caretLine < 0 && caret <= (index + 1 < lines.Length ? line.Next - 1 : int.MaxValue)) caretLine = index;
 
             Box row = runtime.Box();
             row.ChildLayoutAxis = LayoutAxis.X;
@@ -403,8 +406,7 @@ public static class TextFieldExtensions
         if (focused)
         {
             int caretLineIndex = Math.Max(0, caretLine);
-            var onLine = LineAt(lines, caretLineIndex);
-            int lineStart = onLine?.Start ?? 0, lineEnd = onLine?.End ?? 0;
+            int lineStart = lines[caretLineIndex].Start, lineEnd = lines[caretLineIndex].End;
             // The caret and the selection in the caret's line's offsets.
             int selectionStart = Math.Clamp(lo, lineStart, lineEnd) - lineStart;
             int selectionEnd = Math.Clamp(hi, lineStart, lineEnd) - lineStart;
@@ -417,7 +419,7 @@ public static class TextFieldExtensions
             // Its line is kept in sight when it moves, so a wheel scroll is left alone.
             if (!empty && (edited || edit.Cursor != caretBefore))
                 ScrollToCaret(view, new Vector2(0f, lineTop), new Vector2(0f, lineHeight),
-                    new Vector2(0f, lineHeight + Math.Max(0, index - 1) * lineAdvance), new Vector2(0f, lineHeight));
+                    new Vector2(0f, lineHeight + Math.Max(0, lines.Length - 1) * lineAdvance), new Vector2(0f, lineHeight));
         }
         return new BibuiWidget(view, interaction);
     }

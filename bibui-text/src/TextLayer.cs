@@ -648,24 +648,41 @@ public static class TextLayer
 
     // ── Wraps ────────────────────────────────────────────────────────────────
 
-    /// <summary>The lines <paramref name="text"/> breaks into at <paramref name="width"/>. See <see cref="Fonts.Wrap"/>.</summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    internal static TextLine? LinesFromChars(Fonts f, ReadOnlySpan<char> text, in Font font, float width, TextWrap wrap)
+    /// <summary>
+    /// Every line <paramref name="chars"/> breaks into at <paramref name="width"/>
+    /// logical px in <paramref name="style"/> (<see cref="LineFromText"/>, from the
+    /// first to the one that ends at the text's end), kept: the same text, width,
+    /// style, scale and wrap give the same lines without breaking them again. Good
+    /// until the frame ends. An empty text is one empty line.
+    /// </summary>
+    public static ReadOnlySpan<TextLine> LinesFromText(Fonts f, ReadOnlySpan<char> chars, FontStyle style, float scale,
+        float width, TextWrap wrap)
     {
-        if (text.IsEmpty) return null;
-        // The same text is wrapped several times in one frame — to measure the
-        // box, and to draw it — and then identically on every frame after. The
-        // key says everything that moves a line break, so a changed input is a
+        // The key says everything that moves a line break, so a changed input is a
         // different key rather than a stale one.
-        var style = StyleFromFont(f, font, font.Scale);
-        var key = WrapKey.For(text, width, style.Key, font.Scale, wrap);
+        var key = WrapKey.For(chars, width, style.Key, scale, wrap);
         ref var node = ref CollectionsMarshal.GetValueRefOrAddDefault(f.Wraps, key, out bool found);
-        if (!found) node.First = LinesFromCharsUncached(f, text, width, style, font.Scale, wrap);
-        node.Touched = f.WrapFrame;
-        return node.First;
+        if (!found)
+        {
+            node = f.FirstFreeWrap ?? new WrapNode();
+            f.FirstFreeWrap = node.NextFree;
+            node.NextFree = null;
+            int n = 0;
+            for (int at = 0; ; )
+            {
+                var line = LineFromText(f, chars, style, scale, width, wrap, at);
+                if (n == node.Lines.Length) Array.Resize(ref node.Lines, n * 2);
+                node.Lines[n++] = line;
+                if (line.End == chars.Length) break;
+                at = line.Next;
+            }
+            node.Count = n;
+        }
+        node!.Touched = f.WrapFrame;
+        return node.Lines.AsSpan(0, node.Count);
     }
 
-    /// <summary>Once a frame: the lines of every wrap unasked for too long go back.</summary>
+    /// <summary>Once a frame: the wraps unasked for too long go on the free list, their arrays with them.</summary>
     internal static void WrapsEvict(Fonts f)
     {
         foreach (var (key, node) in f.Wraps)
@@ -673,152 +690,97 @@ public static class TextLayer
         foreach (var key in f.StaleWraps)
         {
             f.Wraps.Remove(key, out var node);
-            for (var line = node.First; line is not null; line = line.Next)
-            {
-                line.NextFree = f.FirstFreeLine;
-                f.FirstFreeLine = line;
-            }
+            node!.NextFree = f.FirstFreeWrap;
+            f.FirstFreeWrap = node;
         }
         f.StaleWraps.Clear();
         f.WrapFrame++;
     }
 
-    /// <summary>A line of [<paramref name="start"/>, <paramref name="end"/>), from the free list when it has one.</summary>
-    internal static TextLine LineTake(Fonts f, int start, int end)
+    /// <summary>
+    /// The line that starts at <paramref name="chars"/>[<paramref name="at"/>], a
+    /// line's start (0, or a line's <see cref="TextLine.Next"/>), as chars breaks at
+    /// <paramref name="width"/> logical px in <paramref name="style"/>, measured over
+    /// <paramref name="scale"/>. Not kept: <see cref="LinesFromText"/> keeps them.
+    ///
+    /// <para><see cref="TextWrap.Words"/> is greedy at single spaces: a line holds
+    /// as many words as fit, from its first word with text, and a word wider than
+    /// the width is a line of its own, not broken. The space a line breaks at
+    /// belongs to neither line; spaces with no text after them on their line are
+    /// that line's. <see cref="TextWrap.Characters"/> is greedy at clusters
+    /// (<see cref="ScanCluster"/>), at least one a line. Either way a line break
+    /// (\n, \r, \r\n) always ends a line, and a blank line is a line of its own.</para>
+    /// </summary>
+    public static TextLine LineFromText(Fonts f, ReadOnlySpan<char> chars, FontStyle style, float scale,
+        float width, TextWrap wrap, int at)
     {
-        var line = f.FirstFreeLine ?? new TextLine();
-        f.FirstFreeLine = line.NextFree;
-        (line.Start, line.End, line.Next, line.Prev, line.NextFree) = (start, end, null, null, null);
-        return line;
-    }
+        // The hard line from `at`: [at, end), and where the one after it starts.
+        int n = chars[at..].IndexOfAny('\n', '\r');
+        int end = n < 0 ? chars.Length : at + n;
+        int after = end == chars.Length ? end
+            : chars[end] == '\r' && end + 1 < chars.Length && chars[end + 1] == '\n' ? end + 2 : end + 1;
 
-    /// <summary>Appends <paramref name="line"/> to <paramref name="chain"/>.</summary>
-    internal static void LineChainPush(ref LineChain chain, TextLine line)
-    {
-        if (chain.Last is { } last)
+        if (wrap == TextWrap.Characters)
         {
-            last.Next = line;
-            line.Prev = last;
-        }
-        else chain.First = line;
-        chain.Last = line;
-    }
-
-    // The text's advances, walked once; every line break below is then decided
-    // by adding them up, never by measuring a slice again. Added from a line's
-    // first char in order, they give what measuring that line gives, to the bit,
-    // so the breaks are the ones measuring each candidate made.
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    private static TextLine LinesFromCharsUncached(Fonts f, ReadOnlySpan<char> text, float maxWidth, FontStyle style, float scale, TextWrap wrap)
-    {
-        var chain = new LineChain();
-        if (f.WrapAdvances.Length < text.Length) f.WrapAdvances = new float[Math.Max(text.Length, f.WrapAdvances.Length * 2)];
-        var adv = f.WrapAdvances.AsSpan(0, text.Length);
-        style.Strike.CharAdvances(text, adv);
-
-        int idx = 0;
-        while (idx <= text.Length)
-        {
-            int segStart = idx;
-            while (idx < text.Length && text[idx] != '\n' && text[idx] != '\r') idx++;
-            int segEnd = idx;
-
-            var before = chain.Last;
-            if (wrap == TextWrap.Characters) WrapCharacters(f, text, adv, segStart, segEnd, maxWidth, scale, ref chain);
-            else WrapWords(f, text, adv, segStart, segEnd, maxWidth, scale, ref chain);
-            // Always emit ≥1 entry per logical line so blank lines (\n\n, trailing \n)
-            // produce empty lines that line up with what is drawn.
-            if (chain.Last == before)
-                LineChainPush(ref chain, LineTake(f, segStart, segStart));
-
-            if (idx >= text.Length) break;
-            // Consume the line break — \r\n counts as one.
-            if (idx + 1 < text.Length && text[idx] == '\r' && text[idx + 1] == '\n') idx += 2;
-            else idx++;
+            if (at == end) return new TextLine(at, at, after);
+            int stop = ScanCluster(f, style, chars, at, +1, out float clusters);
+            while (stop < end)
+            {
+                int next = ScanCluster(f, style, chars, stop, +1, out float advance);
+                if (!Fits((clusters + advance) / scale, width)) break;
+                (stop, clusters) = (next, clusters + advance);
+            }
+            return new TextLine(at, stop, stop == end ? after : stop);
         }
 
-        return chain.First!;
-    }
-
-    // One logical line, [segStart, segEnd), broken at single spaces. Adjacent
-    // spaces make empty words. A line's text is every word from its first
-    // non-empty one to the last that fits, with the spaces between them as they
-    // stand in the text — so a candidate line is one slice of it, never built.
-    private static void WrapWords(Fonts f, ReadOnlySpan<char> text, ReadOnlySpan<float> adv, int segStart, int segEnd,
-                                  float maxWidth, float scale, ref LineChain chain)
-    {
-        int lineStart = segStart;   // where the line's range starts: its first word
-        int textStart = -1;         // where its text starts: its first non-empty word, or none yet
-        int lastEnd = segStart;     // the end of the last word that fit
-        float width = 0f;           // [textStart, lastEnd) summed from textStart: what measuring it gives
-
-        int i = segStart;
-        while (i <= segEnd)
+        // Words, in one pass: each word's chars summed as the walk sums them
+        // (WordFast), a word the fast path does not take whole walked. Widths in
+        // physical px; whole 64ths, so a line's sum of words and spaces is what
+        // measuring the line gives.
+        var direct = style.Strike.Direct;
+        if (!GlyphDirect(direct, ' ', out _, out float space)) space = WidthOfRuns(f, RunsFromChars(f, " ", style), 1f);
+        int textStart = -1;    // the line's first word with text, none yet
+        int lastEnd = at;      // the end of the last word that fit
+        float lineWidth = 0f;  // [textStart, lastEnd)
+        int i = at;
+        while (true)
         {
             int wordStart = i;
-            while (i < segEnd && text[i] != ' ') i++;
-            int wordEnd = i;
-
-            // The candidate line, [textStart or wordStart, wordEnd), summed from its start.
-            float w = textStart < 0 ? Sum(adv, wordStart, wordEnd, 0f) : Sum(adv, lastEnd, wordEnd, width);
-            if (!Fits(w / scale, maxWidth) && textStart >= 0)
+            float word = 0f;
+            i = WordFast(chars, i, end, direct, ref word);
+            if (i < end && chars[i] != ' ')
             {
-                LineChainPush(ref chain, LineTake(f, lineStart, lastEnd));
-                lineStart = wordStart;
-                textStart = wordEnd > wordStart ? wordStart : -1;
-                width = Sum(adv, wordStart, wordEnd, 0f);
+                // A char the fast path does not take: the word is walked.
+                int s = chars[i..end].IndexOf(' ');
+                i = s < 0 ? end : i + s;
+                word = WidthOfRuns(f, RunsFromChars(f, chars[wordStart..i], style), 1f);
             }
-            else
+            float w = textStart < 0 ? word : lineWidth + space + word;
+            if (textStart >= 0 && !Fits(w / scale, width))
             {
-                if (textStart < 0 && wordEnd > wordStart) textStart = wordStart;
-                width = w;
+                // Breaks before this word, past the space, when text follows on the
+                // hard line; spaces with no text after them are the line's own.
+                if (chars[wordStart..end].IndexOfAnyExcept(' ') >= 0) return new TextLine(at, lastEnd, wordStart);
+                return new TextLine(at, end, after);
             }
-            lastEnd = wordEnd;
-
-            if (i >= segEnd) break;
-            i++; // skip the space separator
+            if (textStart < 0 && i > wordStart) textStart = wordStart;
+            lineWidth = w;
+            lastEnd = i;
+            if (i >= end) break;
+            i++;   // the space between words
         }
-        if (textStart >= 0)
-            LineChainPush(ref chain, LineTake(f, lineStart, lastEnd));
+        return new TextLine(at, end, after);
     }
 
-    // One logical line, [segStart, segEnd), cut into the longest runs of
-    // characters that fit, each at least one character long.
-    // A line grows a character at a time while it fits: advances are never
-    // negative, so its width only grows, and the first character that doesn't
-    // fit ends it (the longest prefix that fits, as a search over prefixes found).
-    private static void WrapCharacters(Fonts f, ReadOnlySpan<char> text, ReadOnlySpan<float> adv, int segStart, int segEnd,
-                                       float maxWidth, float scale, ref LineChain chain)
+    // A word's fast stretch: from i, every char before a space or end that the direct
+    // table takes, its advance added to width. A function of its own, so the loop's
+    // values stay in registers, as RunsFast's do.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static int WordFast(ReadOnlySpan<char> chars, int i, int end, Bibui.Text.FreeType.FontStrike.DirectGlyph[] direct, ref float width)
     {
-        int start = segStart;
-        while (start < segEnd)
-        {
-            int end = NextCharacter(text, start, segEnd);
-            float w = Sum(adv, start, end, 0f);
-            while (end < segEnd)
-            {
-                int next = NextCharacter(text, end, segEnd);
-                float wider = Sum(adv, end, next, w);
-                if (!Fits(wider / scale, maxWidth)) break;
-                (end, w) = (next, wider);
-            }
-            LineChainPush(ref chain, LineTake(f, start, end));
-            start = end;
-        }
-    }
-
-    /// <summary>advances[from..to) added to <paramref name="sum"/>, in order: measuring goes the same way.</summary>
-    private static float Sum(ReadOnlySpan<float> advances, int from, int to, float sum)
-    {
-        for (int k = from; k < to; k++) sum += advances[k];
-        return sum;
-    }
-
-    // Where the character after the one at `at` starts, no further than `end`.
-    private static int NextCharacter(ReadOnlySpan<char> text, int at, int end)
-    {
-        at++;
-        while (at < end && char.IsLowSurrogate(text[at])) at++;
-        return at;
+        float pen = width;
+        for (char c; i < end && (c = chars[i]) != ' ' && GlyphDirect(direct, c, out _, out float advance); i++) pen += advance;
+        width = pen;
+        return i;
     }
 }

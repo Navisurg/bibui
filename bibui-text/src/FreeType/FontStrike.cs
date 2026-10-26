@@ -192,38 +192,6 @@ public sealed unsafe class FontStrike
     }
 
     /// <summary>
-    /// The advance of each char of <paramref name="text"/> into
-    /// <paramref name="advances"/> (at least one entry per char): a code point's
-    /// at its first char, 0 at the second of a surrogate pair. Added up in order
-    /// from any char start, they give what <see cref="Measure(ReadOnlySpan{char})"/>
-    /// gives for that slice, to the bit: a line breaker walks the text once and
-    /// never measures a slice again.
-    /// </summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    internal void CharAdvances(ReadOnlySpan<char> text, Span<float> advances)
-    {
-        int i = 0;
-        while (i < text.Length)
-        {
-            i = CharAdvancesDirect(text, i, Direct, advances);
-            if (i == text.Length) break;
-            var (_, advance, next) = Next(text, i);
-            advances[i] = advance;
-            for (int k = i + 1; k < next; k++) advances[k] = 0f;
-            i = next;
-        }
-    }
-
-    // CharAdvances' hot loop, call-free as GlyphsDirect is.
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static int CharAdvancesDirect(ReadOnlySpan<char> text, int i, DirectGlyph[] direct, Span<float> advances)
-    {
-        for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++)
-            advances[i] = direct[c].Advance;
-        return i;
-    }
-
-    /// <summary>
     /// <paramref name="text"/>'s glyphs into <paramref name="glyphs"/> and their
     /// pen positions from its start into <paramref name="points"/>: what
     /// <see cref="FontStrike.Shape"/> makes in its nominal mode. Both spans hold

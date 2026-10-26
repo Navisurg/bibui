@@ -7,6 +7,7 @@ using Bibui.Core.Draw;
 using Bibui.Raster.Skia;
 using Bibui.Core.Runtime.Platform;
 using Bibui.Raster.Managed.Backend;
+using Bibui.Text;
 
 // ── Component Gallery ─────────────────────────────────────────────────────────
 // A page for each of bibui's components, and for the patterns an application
@@ -277,10 +278,10 @@ static void BuildContentPanel(BibuiRuntime runtime, GalleryState state, Gallery 
 static void Wrapped(BibuiRuntime runtime, string text, float width, ComponentSize size, TextColor color)
 {
     var lines = runtime.BeginParent(runtime.Column().Sized(Size.Fill));
-    var line = runtime.Fonts.Wrap(text, runtime.FontInScope(size), width);
-    if (line is null)   // nothing to say still takes its line
-        runtime.Text(text, size, color);
-    for (; line is not null; line = line.Next)
+    var font = runtime.FontInScope(size);
+    var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+    // Nothing to say is one empty line, which still takes its height.
+    foreach (var line in TextLayer.LinesFromText(runtime.Fonts, text, style, font.Scale, width, TextWrap.Words))
         runtime.Text(text.AsSpan(line.Start, line.End - line.Start), size, color);
     runtime.EndParent(lines);
 }

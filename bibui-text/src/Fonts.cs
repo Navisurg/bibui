@@ -83,17 +83,17 @@ public sealed class Fonts : IDisposable
 
     // ── Wraps ────────────────────────────────────────────────────────────────
 
-    // A wrap is kept until it goes KeepWrapFrames frames unasked; then its
-    // lines go on the free list, and the next miss builds from them, so once
-    // the free lines cover the working set a wrap allocates nothing.
-    // NOTE(k): a TextLine handed out is good while its wrap is kept; one held
-    // past that is some other wrap's line.
+    // A text's lines at a width (TextLayer.LinesFromText), kept until they go
+    // KeepWrapFrames frames unasked; then the node goes on the free list, its
+    // lines' array with it, and the next miss fills it, so once the free nodes
+    // cover the working set a wrap allocates nothing.
+    // NOTE(k): lines handed out are good until the frame ends (WrapsEvict); held
+    // past that, they may be some other wrap's.
     internal const ulong KeepWrapFrames = 60;
     internal readonly Dictionary<WrapKey, WrapNode> Wraps = [];
     internal readonly List<WrapKey> StaleWraps = [];   // TextLayer.WrapsEvict's scratch
     internal ulong WrapFrame;
-    internal TextLine? FirstFreeLine;                  // lines no wrap holds, linked by NextFree
-    internal float[] WrapAdvances = new float[1024];   // each char's advance, for the text being wrapped: grown, never shrunk
+    internal WrapNode? FirstFreeWrap;                  // evicted nodes, their arrays kept, linked by NextFree
 
     /// <summary>Fonts on a text engine of their own, which the renderer owns with them.</summary>
     internal Fonts()
@@ -153,26 +153,6 @@ public sealed class Fonts : IDisposable
     /// </summary>
     [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public int OffsetAt(ReadOnlySpan<char> text, in Font font, float x) => TextLayer.OffsetFromX(this, text, font, x);
-
-    /// <summary>
-    /// The lines <paramref name="text"/> breaks into at <paramref name="width"/>
-    /// logical px in <paramref name="font"/>: the first, the rest linked from it;
-    /// null for empty text. Offsets are chars into <paramref name="text"/>.
-    ///
-    /// <para><see cref="TextWrap.Words"/>, the default, is greedy at spaces: a
-    /// line holds as many words as fit, and a word wider than the width is a
-    /// line of its own, not broken. The space a line breaks at belongs to
-    /// neither line — it lies between one line's <see cref="TextLine.End"/> and
-    /// the next one's <see cref="TextLine.Start"/>.</para>
-    /// <para><see cref="TextWrap.Characters"/> is greedy at characters: a line
-    /// holds as many as fit, at least one, and the next starts where it ends.
-    /// Spaces are characters like any other.</para>
-    /// <para>Either way a line break (\n, \r, \r\n) always starts a new line,
-    /// and a blank line is a line of its own.</para>
-    /// </summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    public TextLine? Wrap(ReadOnlySpan<char> text, in Font font, float width, TextWrap wrap = TextWrap.Words)
-        => TextLayer.LinesFromChars(this, text, font, width, wrap);
 }
 
 /// <summary>
@@ -300,38 +280,23 @@ public readonly struct GlyphStep
         => (Start, Next, Advance, Style, ClusterFace, Glyph, Slot) = (start, next, advance, style, clusterFace, glyph, slot);
 }
 
-/// <summary>A kept wrap: its lines, and when it was last asked for.</summary>
-internal struct WrapNode
+/// <summary>
+/// A kept wrap: a text's lines at a width, and when they were last asked for. In
+/// Fonts.Wraps while kept; on Fonts' free list, by NextFree, once evicted, its
+/// array kept for the next miss.
+/// </summary>
+internal sealed class WrapNode
 {
-    public TextLine? First;   // its lines, linked by Next
-    public ulong Touched;     // the Fonts.WrapFrame it was last asked for
-}
-
-/// <summary>A chain of lines being built: its first line, which is what is kept, and its last, which is appended to.</summary>
-internal struct LineChain
-{
-    public TextLine? First;
-    public TextLine? Last;
+    public TextLine[] Lines = new TextLine[64];   // [0, Count) are the wrap's: grown, never shrunk
+    public int Count;
+    public ulong Touched;                         // the Fonts.WrapFrame it was last asked for
+    public WrapNode? NextFree;                    // the next free node, while this one is free
 }
 
 /// <summary>
-/// One line of a text broken at a width: the char range [Start, End) of the
-/// text it was broken from, which holds the characters themselves. Linked to the
-/// lines before and after it. A cached chain: read it, never relink it.
+/// One line of a text broken at a width: the chars [<see cref="Start"/>,
+/// <see cref="End"/>) of the text, and where the line after it starts
+/// (<see cref="Next"/>), past the space it broke at or the line break. The last
+/// line is the one that ends at the text's end; its Next is its End.
 /// </summary>
-public sealed class TextLine
-{
-    internal TextLine() { }
-
-    /// <summary>Where the line starts in its text.</summary>
-    public int Start { get; internal set; }
-
-    /// <summary>Where it ends: the offset after its last character.</summary>
-    public int End { get; internal set; }
-
-    public TextLine? Next { get; internal set; }
-    public TextLine? Prev { get; internal set; }
-
-    // In Fonts' free list, while no wrap holds the line.
-    internal TextLine? NextFree;
-}
+public readonly record struct TextLine(int Start, int End, int Next);

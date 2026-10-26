@@ -7005,56 +7005,59 @@ Run("Fonts.LineHeight and LineAdvance: what layout gives one line, and the next"
         $"three lines: {height} + 2 x {advance}, laid out {three}");
 });
 
-Run("Fonts.Wrap: lines at a width, the space between them in neither", () =>
+// The lines a text breaks into at a width in the font in scope: TextLayer.LinesFromText.
+TextLine[] LinesAt(BibuiRuntime runtime, string text, Font font, float width, TextWrap wrap = TextWrap.Words)
+    => TextLayer.LinesFromText(runtime.Fonts, text, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale, width, wrap).ToArray();
+
+Run("LinesFromText: lines at a width, the space between them in neither", () =>
 {
     var runtime = BibuiRuntime.Create();
     var font = runtime.FontInScope();
     var text = "one two three";
     // Room for "one two" but not "one two three".
     float width = runtime.Fonts.Measure("one two", font) + 1f;
-    var lines = new List<string>();
-    for (var line = runtime.Fonts.Wrap(text, font, width); line is not null; line = line.Next)
-        lines.Add($"{line.Start}..{line.End}");
-    Eq("0..7,8..13", string.Join(",", lines), "one two | three, the space at 7 in neither");
-    IsTrue(runtime.Fonts.Wrap("", font, width) is null, "nothing is no lines");
+    var lines = LinesAt(runtime, text, font, width);
+    Eq("0..7,8..13", string.Join(",", lines.Select(l => $"{l.Start}..{l.End}")), "one two | three, the space at 7 in neither");
+    Eq(8, lines[0].Next, "the second line starts past the space");
+    var nothing = LinesAt(runtime, "", font, width);
+    IsTrue(nothing.Length == 1 && nothing[0] == new TextLine(0, 0, 0), "nothing is one empty line");
 });
 
-Run("Fonts.Wrap: offsets are chars, and a line break starts a line", () =>
+Run("LinesFromText: offsets are chars, and a line break starts a line", () =>
 {
     var runtime = BibuiRuntime.Create();
     var font = runtime.FontInScope();
     var text = "grüße\nw👍🏽rld";   // ü and ß are a char each; 👍🏽 is four
-    var first = runtime.Fonts.Wrap(text, font, 1000f)!;
-    var second = first.Next!;
-    Eq(0, first.Start); Eq(5, first.End, "grüße is 5 chars");
-    Eq(6, second.Start, "after the \\n"); Eq(14, second.End, "w👍🏽rld is 8 chars");
-    IsTrue(second.Next is null && second.Prev == first, "two lines, linked both ways");
+    var lines = LinesAt(runtime, text, font, 1000f);
+    Eq(2, lines.Length, "two lines");
+    Eq(0, lines[0].Start); Eq(5, lines[0].End, "grüße is 5 chars");
+    Eq(6, lines[0].Next, "the next starts after the \\n");
+    Eq(6, lines[1].Start, "after the \\n"); Eq(14, lines[1].End, "w👍🏽rld is 8 chars");
+    Eq(lines[1].End, lines[1].Next, "the last line's Next is its End");
 });
 
-Run("Fonts.Wrap: by characters, a line holds what fits and the next starts where it ends", () =>
+Run("LinesFromText: by characters, a line holds what fits and the next starts where it ends", () =>
 {
     var runtime = BibuiRuntime.Create();
     var font = runtime.FontInScope();
     const string text = "/home/ada/grüße/a-path-longer-than-the-line.txt\nok";
     float width = runtime.Fonts.Measure("/home/ada/", font) + 0.5f;
 
-    var lines = new List<TextLine>();
-    for (var line = runtime.Fonts.Wrap(text, font, width, TextWrap.Characters); line is not null; line = line.Next)
-        lines.Add(line);
-    IsTrue(lines.Count > 3, $"the path is cut into several lines, got {lines.Count}");
+    var lines = LinesAt(runtime, text, font, width, TextWrap.Characters);
+    IsTrue(lines.Length > 3, $"the path is cut into several lines, got {lines.Length}");
     Eq(0, lines[0].Start);
     Eq(10, lines[0].End, "as many characters as fit: /home/ada/");
-    for (int i = 1; i < lines.Count - 1; i++)
+    for (int i = 1; i < lines.Length - 1; i++)
         Eq(lines[i - 1].End, lines[i].Start, "nothing between one line and the next");
     IsTrue(lines.All(l => runtime.Fonts.Measure(text.AsSpan(l.Start..l.End), font) <= width), "every line fits");
     IsTrue(lines.All(l => l.Start == l.End || !char.IsLowSurrogate(text[l.Start])), "a line starts on a character, not inside one");
     Eq("ok", text[lines[^1].Start..lines[^1].End], "a line break still starts a line");
 
-    var byWords = runtime.Fonts.Wrap(text, font, width)!;
-    Eq(text.IndexOf('\n'), byWords.End, "by words the path is one line, wider than the width");
+    var byWords = LinesAt(runtime, text, font, width);
+    Eq(text.IndexOf('\n'), byWords[0].End, "by words the path is one line, wider than the width");
 
-    var narrow = runtime.Fonts.Wrap("ab", font, 0.5f, TextWrap.Characters)!;
-    IsTrue(narrow.End == 1 && narrow.Next!.Start == 1, "a line too narrow for anything still holds one character");
+    var narrow = LinesAt(runtime, "ab", font, 0.5f, TextWrap.Characters);
+    IsTrue(narrow[0].End == 1 && narrow[0].Next == 1 && narrow[1].Start == 1, "a line too narrow for anything still holds one character");
 });
 
 Run("Fonts.Measure: a longer text is wider, and nothing has no width", () =>
