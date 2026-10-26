@@ -26,10 +26,10 @@ internal static class SurfaceScale
     /// <summary>
     /// Physical pixels for a logical extent: round half away from zero, as the
     /// protocol asks. The runtime sizes its frame by the same function
-    /// (<see cref="SurfaceOptions.PhysicalSize"/>), so the buffer the host draws
+    /// (<see cref="WindowFrame.PhysicalSize"/>), so the buffer the host draws
     /// into and the frame the runtime lays out are always the same size.
     /// </summary>
-    public static int Physical(int logical, uint scale120) => SurfaceOptions.PhysicalSize(logical, ToFactor(scale120));
+    public static int Physical(int logical, uint scale120) => WindowFrame.PhysicalSize(logical, ToFactor(scale120));
 }
 
 /// <summary>

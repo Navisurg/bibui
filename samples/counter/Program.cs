@@ -7,10 +7,13 @@ using Bibui.Core.Runtime;
 var runtime = BibuiRuntime.Create();
 using var app = BibuiApp.Open(runtime, new("Counter", 360, 160));
 int count = 0;
+app.Frame = Frame;
 
-while (app.BeginFrame())
+while (app.WaitForFrame()) Frame();
+
+void Frame()
 {
-    runtime.BeginBuild(app.Events);
+    runtime.BeginBuild(app.Window.Frame, app.Events);
 
     runtime.BeginCenterXY();
     var column = runtime.BeginParent(runtime.Column());
@@ -24,5 +27,5 @@ while (app.BeginFrame())
     runtime.EndCenterXY();
 
     runtime.EndBuild();
-    app.EndFrame();
+    app.Present();
 }

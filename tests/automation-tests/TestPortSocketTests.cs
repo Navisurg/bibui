@@ -219,6 +219,7 @@ static class TestPortSocketTests
         }
 
         private readonly BibuiRuntime _runtime = BibuiRuntime.Create();
+        private static readonly WindowFrame Window = new(400, 300, 1f, 60f);   // what a window the app had would report
         private readonly CounterState _state = new();
         private readonly List<CounterCmd> _pending = [];
         private readonly List<WindowEvent> _events = [];
@@ -234,7 +235,6 @@ static class TestPortSocketTests
         public CounterApp(bool draw = true, bool state = true, int requestBytes = 1 << 16, int rows = 0, TimeSpan? sendTimeout = null, bool list = false)
         {
             (_rows, _list, _reportsState, _cpu) = (rows, list, state, draw ? new SkiaCpuRenderer() : null);
-            _runtime.Surface = new SurfaceOptions { Width = 400, Height = 300, ScaleFactor = 1f };
             _runtime.SetTheme(ThemeRegistry.Load("bibui-dark"));
             Port = TestPort.Open(_runtime, new TestPortOptions
             {
@@ -283,7 +283,7 @@ static class TestPortSocketTests
                 foreach (var c in _pending)
                     _state.Count = c switch { CounterCmd.Increment => _state.Count + 1, CounterCmd.Set s => s.Value, _ => _state.Count };
                 _pending.Clear();
-                _runtime.BeginBuild(_events);
+                _runtime.BeginBuild(Window, _events);
                 _runtime.Text($"Count {_state.Count}");
                 if (_runtime.Button("add", "Add one").Clicked) _pending.Add(new CounterCmd.Increment());
                 for (int i = 0; i < _rows; i++) _runtime.Text("A row of text to make the tree large");

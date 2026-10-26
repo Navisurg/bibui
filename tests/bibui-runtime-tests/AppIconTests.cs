@@ -76,7 +76,7 @@ static class AppIconTests
                 }
                 return row;
             },
-            new SurfaceOptions { Width = 40, Height = 40 });
+            TestBuild.Window(40, 40));
         return runtime.Frame().RawBgraBytes.ToArray();
     }
 

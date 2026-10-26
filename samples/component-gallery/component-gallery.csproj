@@ -8,15 +8,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
+  <!-- The window and renderer: a Bibui.App package, SilkSkiaGl unless -p:App=... -->
+  <Import Project="../BibuiApp.props" />
   <ItemGroup>
-    <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
     <!-- The test port, opened when BIBUI_TEST_PORT=1 (test_all_pages.sh). -->
     <ProjectReference Include="../../bibui-automation/bibui-automation.csproj" />
-    <!-- The cross-platform host (GLFW + GL): SilkWindow.Open(runtime, ...) opens on it. -->
-    <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+    <!-- Skia on the CPU draws the headless pages (reference, check, first frame);
+         the texture page names each renderer it may run on. -->
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
-    <!-- For the "host wayland" and "raster managed" options: raw Wayland host + managed raster backend. -->
-    <ProjectReference Include="../../bibui-platform-wayland/bibui-platform-wayland.csproj" />
     <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
   </ItemGroup>
 </Project>

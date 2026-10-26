@@ -5,21 +5,16 @@ frames drawn on the CPU straight into `wl_shm` buffers and paced by the
 compositor's frame callbacks. No GLFW, no OpenGL, no SkiaSharp. Linux only.
 
 ```csharp
-var runtime = BibuiRuntime.Create();
-using var window = WaylandWindow.Open(runtime, new PlatformWindowOptions("My app", 960, 640),
+using var window = WaylandWindow.Open(new PlatformWindowOptions("My app", 960, 640),
     new WaylandHostOptions { AppId = "my-app" });
 using var managed = new ManagedRenderer(window.Cpu);   // Bibui.Raster.Managed.Backend
-while (WaylandWindow.BeginFrame(window, runtime))
-{
-    runtime.BeginBuild(window.Events);
-    /* your frame */
-    runtime.EndBuild();
-    WaylandWindow.BeginDraw(window);
-    managed.Draw(runtime.DrawList);
-    WaylandWindow.EndDraw(window);
-    WaylandWindow.EndFrame(window, runtime);
-}
 ```
+
+Most apps take it through `Bibui.App.WaylandManaged` or `WaylandSkiaCpu`,
+which run the loop. Written out ([as for any window](https://github.com/Navisurg/bibui/blob/main/docs/app-packages.md#writing-the-loop-yourself)),
+the Wayland window paces it: with a frame owed, `GetEvents(wait: false)` waits
+for the compositor's frame callback, as vsync would. `window.Frame` is the
+buffer's size, the scale and the output's refresh rate.
 
 `window.Cpu` is this frame's `wl_shm` buffer; a renderer bound to it draws
 there, so `new SkiaCpuRenderer(window.Cpu)` works too. `WaylandWindow.IsSupported`

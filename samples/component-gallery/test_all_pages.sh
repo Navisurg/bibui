@@ -39,13 +39,19 @@ entries() { ids nav- | grep -v -e '^nav-group-' -e '^nav-menu$'; }
 port list >/dev/null || exit 1
 printf '=== Component Gallery: every page ===\n  Screenshots: %s\n\n' "$shots"
 
-routes=0
-failures=()
-for group in $(ids nav-group-); do
-  # A window too narrow for the sidebar folds it behind the menu button.
+# A window too narrow for the sidebar folds it behind the menu button, which
+# shows it again; each click on a page folds it away.
+unfold() {
   if port tree --id nav-menu --depth 0 >/dev/null 2>&1 && ! port tree --id sidebar-scroll --depth 0 >/dev/null 2>&1; then
     port click nav-menu >/dev/null
   fi
+}
+
+routes=0
+failures=()
+unfold
+for group in $(ids nav-group-); do
+  unfold
   # One group is open at a time, so its entries are the pages in the tree. With
   # none, the click closed it (it was open already), and a second opens it.
   port click "$group" >/dev/null
@@ -56,6 +62,7 @@ for group in $(ids nav-group-); do
     route=${entry#nav-}
     routes=$((routes + 1))
     printf '  %-22s ' "$route"
+    unfold
     if ! why=$(port click "$entry" 2>&1 >/dev/null); then
       echo "FAIL ($why)"; failures+=("$route: $why"); continue
     fi

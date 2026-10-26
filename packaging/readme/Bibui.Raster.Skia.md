@@ -14,10 +14,10 @@ skia.Draw(runtime.DrawList, surface);   // an SKSurface of your own
 skia.Draw(runtime.DrawList, pixels);    // or RasterPixels: BGRA8888 premultiplied, yours
 ```
 
-Bound to a window's target, it draws there: `new SkiaGlRenderer(window.Gl)` on
-the GPU, through a `Bibui.Platform.Silk` window's GL framebuffer, or
+Bound to a window's target, it draws there: `new SkiaGlRenderer(SilkGl.Target(window))`
+on the GPU, through a `Bibui.Platform.Silk` window's GL framebuffer, or
 `new SkiaCpuRenderer(window.Cpu)` into the memory a window presents; then
-`skia.Draw(runtime.DrawList)` each frame. `SkiaGlRenderer.ForGl(window.Gl)`
+`skia.Draw(runtime.DrawList)` each frame. `SkiaGlRenderer.ForGl(gl)`
 answers null when Skia cannot use the GL context, and the app falls back to
 the CPU if it wants to.
 `CreateTexture(format, kind, width, height, pixels)`, `UpdateTexture` and

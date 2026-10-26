@@ -170,7 +170,7 @@ internal static class InputTests
             var events = new List<WindowEvent>();
             string? pasted = null;
             BrowserInput.Decode(data, strings, events, ref pasted);
-            runtime.BeginBuild(events);
+            runtime.BeginBuild(new WindowFrame(400, 300, 1f, 60f), events);
             var kinds = runtime.UnconsumedEvents.Select(e => e.Kind).ToList();
             runtime.EndBuild();
             Assert.Eq(string.Join(",", new[] { BibUiEventKind.Navigate, BibUiEventKind.Submit, BibUiEventKind.Edit,

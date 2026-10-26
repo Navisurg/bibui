@@ -296,11 +296,11 @@ static class MarkdownTests
             MarkdownWidget last = default;
             var runtime = BibuiRuntime.Create();
             runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () => last = runtime.Markdown("md", source, width: 400f)),
-                new SurfaceOptions { Width = 500, Height = 200, ScaleFactor = 1f });
+                TestBuild.Window(500, 200, 1f));
             runtime.Step();
             runtime.Step();
             IsTrue(last.ClickedLink is null, "nothing was clicked yet");
-            using var page = Bibui.Testing.BibuiPage.From(runtime, runtime.BuildTree);
+            using var page = runtime.Page();
             page.Click("md/0");
             Equal("https://example.com/docs", last.ClickedLink, "clicked link");
             Equal("Go to [the docs](https://example.com/docs) now.", source.ToString(), "source");
@@ -312,10 +312,10 @@ static class MarkdownTests
             MarkdownWidget last = default;
             var runtime = BibuiRuntime.Create();
             runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () => last = runtime.Markdown("tasks", source, width: 300f)),
-                new SurfaceOptions { Width = 400, Height = 200, ScaleFactor = 1f });
+                TestBuild.Window(400, 200, 1f));
             runtime.Step();
             runtime.Step();
-            using var page = Bibui.Testing.BibuiPage.From(runtime, runtime.BuildTree);
+            using var page = runtime.Page();
             page.Click("tasks/0");
             IsTrue(last.TaskClicked, "the first task box should report its click");
             Markdown.ToggleTask(source, last.ToggledTask);
@@ -329,7 +329,7 @@ static class MarkdownTests
         {
             var text = string.Concat(Enumerable.Repeat("## Section\n\nSome *text* with `code` and a [link](https://x.dev).\n\n- one\n- two\n\n", 20));
             var bytes = text.ToCharArray();
-            var surface = new SurfaceOptions { Width = 500, Height = 2000, ScaleFactor = 1f };
+            var surface = TestBuild.Window(500, 2000, 1f);
 
             var source = BibuiStr.FromStrLit(bytes);
             var runtime = BibuiRuntime.Create();
@@ -379,7 +379,7 @@ static class MarkdownTests
         var runtime = BibuiRuntime.Create();
         var source = BibuiStr.FromStrLit(markdown);
         runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () => runtime.Markdown("md", source, width: width)),
-            new SurfaceOptions { Width = (int)width + 40, Height = 1200, ScaleFactor = 1f });
+            TestBuild.Window((int)width + 40, 1200, 1f));
         runtime.Step();
         runtime.Step();
         return (runtime, runtime.FindById("md") ?? throw new Exception("the viewer was not built"));

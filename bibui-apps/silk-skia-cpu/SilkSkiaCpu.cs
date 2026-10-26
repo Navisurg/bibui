@@ -10,37 +10,40 @@ namespace Bibui.App;
 // shows on the window's GL framebuffer.
 public sealed partial class BibuiApp
 {
+    // The window's GL framebuffer, which _shown draws to.
+    private GlTarget _gl = null!;
     private GlCpuFramebuffer _shown = null!;
 
-    /// <summary>Called while the window is being resized, where the OS blocks the loop (Windows, macOS): set it to the loop's body to keep drawing.</summary>
-    public Action? OnRefresh { get => Window.OnRefresh; set => Window.OnRefresh = value; }
-
-    private static partial SilkWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options) =>
-        SilkWindow.Open(runtime, window);
+    private static partial SilkWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options)
+    {
+        var opened = SilkWindow.Open(SilkGl.Options(window));
+        runtime.WakeUp = opened.Wake;
+        runtime.WindowClipboard = (opened.GetClipboardText, opened.SetClipboardText);
+        return opened;
+    }
 
     private partial SkiaCpuRenderer MakeRenderer()
     {
-        _shown = new GlCpuFramebuffer(Window.Gl);
+        _gl = SilkGl.Target(Window);
+        _shown = new GlCpuFramebuffer(_gl);
         return new SkiaCpuRenderer(_shown.Cpu);
     }
 
-    private partial bool BeginWindowFrame() => SilkWindow.BeginFrame(Window, Runtime);
-
-    private partial void Present()
+    public partial void Present()
     {
-        SilkWindow.BeginDraw(Window);
+        SilkGl.BeginDraw(Window, _gl);
         _shown.BeginDraw();
         Renderer.Draw(Runtime.DrawList);
         _shown.EndDraw();
-        SilkWindow.EndDraw(Window);
+        SilkGl.EndDraw(Window);
     }
-
-    private partial void EndWindowFrame() => SilkWindow.EndFrame(Window, Runtime);
 
     // The app's own renderer, so screenshots hold its textures.
 
     private partial void DisposeRenderer()
     {
+        // The window goes next: nothing may wake it after.
+        if (Runtime.WakeUp == Window.Wake) Runtime.WakeUp = null;
         Renderer.Dispose();
         _shown.Dispose();
     }

@@ -14,8 +14,7 @@ public static class FramePixels
     /// <summary>BGRA8888 premultiplied, top row first, the frame's physical size.</summary>
     public static byte[] Bgra(BibuiRuntime runtime, DrawToPixels draw, out int width, out int height)
     {
-        width = SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor);
-        height = SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor);
+        (width, height) = (runtime.Window.Width, runtime.Window.Height);
         var bgra = GC.AllocateArray<byte>(width * height * 4, pinned: true);
         draw(runtime.DrawList, new RasterPixels(
             System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), width, height, width * 4));

@@ -16,7 +16,10 @@ using Bibui.Automation;
 using var port = TestPort.Open(runtime, new TestPortOptions { Name = "counter" });
 using var cpu = new SkiaCpuRenderer();   // what screenshots are drawn with: any renderer into memory
 
-while (app.BeginFrame())
+app.Frame = Frame;
+while (app.WaitForFrame()) Frame();
+
+void Frame()
 {
     while (port.TryPullCmd(out var cmd))
         switch (cmd.Kind)
@@ -26,11 +29,11 @@ while (app.BeginFrame())
             case TestCmdKind.App: /* the app's own command: cmd.Json */ break;
         }
 
-    runtime.BeginBuild(app.Events);
+    runtime.BeginBuild(app.Window.Frame, app.Events);
     Build();
     runtime.EndBuild();
     port.AnswerCmds();
-    app.EndFrame();
+    app.Present();
 }
 ```
 
