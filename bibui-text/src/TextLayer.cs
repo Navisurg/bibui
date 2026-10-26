@@ -24,6 +24,19 @@ public static class TextLayer
     /// <summary>The built-in Inter at <paramref name="weight"/>, for what draws text no theme set: an icon's fallback letter.</summary>
     internal static FontFace FaceBuiltIn(Fonts f, int weight) => f.Provider.Resolve(null, weight);
 
+    /// <summary>
+    /// Makes <paramref name="font"/>, opened in <paramref name="f"/>'s engine, the
+    /// face grapheme clusters are set in; bytes FreeType cannot open leave it as
+    /// it was. The same bytes open as one face however often they are handed over.
+    /// </summary>
+    internal static void ClusterFaceFromData(Fonts f, Bibui.Text.FreeType.FontData font)
+    {
+        // The font is the system's, handed over at start-up: one FreeType cannot
+        // open leaves the system without a cluster face, not the app.
+        try { f.ClusterFace = f.Provider.Face(f.Engine.Load(font)); }
+        catch (InvalidOperationException) { }
+    }
+
     // ── Styles ───────────────────────────────────────────────────────────────
 
     /// <summary>The style of <paramref name="face"/> at <paramref name="sizePx"/> physical px.</summary>

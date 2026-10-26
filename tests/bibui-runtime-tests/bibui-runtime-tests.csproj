@@ -9,6 +9,10 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <!-- A subset of Noto Color Emoji, OFL (Fixtures/OFL.txt): the colour emoji face's tests. -->
+    <None Include="Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../../bibui-testing/bibui-testing.csproj" />
     <!-- Silk.NET.Input, to pin Bibui.Core.Key to it, and the default-host registration. -->
     <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />

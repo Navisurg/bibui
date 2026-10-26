@@ -51,6 +51,12 @@ public sealed unsafe class FontStrike
 
     public FontMetrics Metrics { get; }
 
+    /// <summary>
+    /// How much a bitmap-only face's glyphs are scaled to reach <see cref="Size"/>:
+    /// the size over the bitmap size the strike picked. 1 for an outline face.
+    /// </summary>
+    internal float BitmapScale { get; } = 1f;
+
     /// <summary>Masks rendered so far (all four phases count separately).</summary>
     public int CachedMaskCount => _masks.Count;
 
@@ -67,18 +73,50 @@ public sealed unsafe class FontStrike
         // size off the 1/64 grid (14 px at scale 1.1) one step up, and every advance
         // with it (1.8 px over a paragraph). Metrics below still use the exact size.
         nint size26 = (nint)(sizePx * 64f);
-        FT.Check(FT.FT_Set_Char_Size(_ftFace, size26, size26, 72, 72), "FT_Set_Char_Size");
+        if (font.IsScalable)
+            FT.Check(FT.FT_Set_Char_Size(_ftFace, size26, size26, 72, 72), "FT_Set_Char_Size");
+        else
+        {
+            // A face with no outlines (CBDT colour emoji) has only the sizes its
+            // bitmaps were drawn at, and FreeType refuses any other. The strike
+            // takes the smallest at least this size (shrinking keeps it sharp),
+            // else the largest, and its glyphs are scaled from it.
+            var fixedSizes = font.FixedSizes;
+            if (fixedSizes.Length == 0) throw new InvalidOperationException($"{font}: no outlines and no bitmap sizes.");
+            int pick = 0;
+            for (int i = 1; i < fixedSizes.Length; i++)
+            {
+                float best = fixedSizes[pick], ppem = fixedSizes[i];
+                if (best < sizePx ? ppem > best : ppem >= sizePx && ppem < best) pick = i;
+            }
+            FT.Check(FT.FT_Select_Size(_ftFace, pick), "FT_Select_Size");
+            BitmapScale = sizePx / fixedSizes[pick];
+        }
 
         _advances = new float[font.GlyphCount];
         Array.Fill(_advances, float.NaN);
 
-        // SkScalerContext_FreeType::generateFontMetrics, scalable branch: design
-        // units over the em, then times the size, in that order.
-        float upem = font.UnitsPerEm;
-        float ascent = -(float)font.Ascender / upem;
-        float descent = -(float)font.Descender / upem;
-        float leading = (float)(font.LineHeight + (font.Descender - font.Ascender)) / upem;
-        Metrics = new FontMetrics(ascent * sizePx, descent * sizePx, leading * sizePx);
+        if (font.IsScalable)
+        {
+            // SkScalerContext_FreeType::generateFontMetrics, scalable branch: design
+            // units over the em, then times the size, in that order.
+            float upem = font.UnitsPerEm;
+            float ascent = -(float)font.Ascender / upem;
+            float descent = -(float)font.Descender / upem;
+            float leading = (float)(font.LineHeight + (font.Descender - font.Ascender)) / upem;
+            Metrics = new FontMetrics(ascent * sizePx, descent * sizePx, leading * sizePx);
+        }
+        else
+        {
+            // A bitmap-only face has no units per em (FreeType leaves it, and the
+            // face's ascender and descender, 0): its metrics are the picked
+            // size's, 26.6 px, scaled to this size, as Skia's bitmap branch takes them.
+            float k = BitmapScale / 64f;
+            float ascender = FT.Read<nint>(_ftSize, FT.Size_Ascender) * k;
+            float descender = FT.Read<nint>(_ftSize, FT.Size_Descender) * k;
+            float height = FT.Read<nint>(_ftSize, FT.Size_Height) * k;
+            Metrics = new FontMetrics(-ascender, -descender, height - (ascender - descender));
+        }
 
         _hbFont = HB.hb_font_create(font.HbFace);
         // The same truncated 26.6 size FreeType has, in 16.16, so shaped advances agree with linear ones.

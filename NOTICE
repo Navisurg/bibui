@@ -173,6 +173,18 @@ Licence:  MIT (Emscripten is MIT or University of Illinois/NCSA, at the
 Source:   https://emscripten.org
 
 -------------------------------------------------------------------------------
+12. Noto Color Emoji (a test fixture)
+-------------------------------------------------------------------------------
+What:     A subset of Noto Color Emoji, eleven code points, as the test
+          fixture for a colour emoji face (CBDT bitmaps) and its strike.
+Where:    tests/bibui-runtime-tests/Fixtures/NotoColorEmoji-subset.ttf (in
+          the source only, not in any package).
+Licence:  SIL Open Font License 1.1. The full licence is in
+          tests/bibui-runtime-tests/Fixtures/OFL.txt.
+          Copyright 2013 Google LLC
+Source:   https://github.com/googlefonts/noto-emoji
+
+-------------------------------------------------------------------------------
 Not redistributed by bibui
 -------------------------------------------------------------------------------
 These are used at run time but are not part of bibui's source or packages;
@@ -186,7 +198,9 @@ with their own licences:
 - System.IO.Hashing (MIT), referenced by Bibui.Core and Bibui.Text.
 - FreeType (FTL or GPLv2) and HarfBuzz (MIT-style "Old MIT"), loaded from
   the system by Bibui.Text on Linux (in the browser they are redistributed, 10.
-  above); libwayland-client and libxkbcommon
+  above); fontconfig (MIT-style), loaded from the system by Bibui.Text
+  on Linux to find the colour emoji font, which is the system's and
+  under its own licence; libwayland-client and libxkbcommon
   (MIT), loaded from the system by Bibui.Platform.Wayland.
 
 ===============================================================================

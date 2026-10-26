@@ -46,7 +46,7 @@ internal sealed class FontProvider
         return _engine.Resolve(null, weight);
     }
 
-    private FontFace Face(FtFont font)
+    internal FontFace Face(FtFont font)
     {
         if (!_faces.TryGetValue(font, out var face)) _faces[font] = face = new FontFace(font);
         return face;

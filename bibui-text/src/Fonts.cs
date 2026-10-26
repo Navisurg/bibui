@@ -60,6 +60,15 @@ public sealed class Fonts : IDisposable
     internal TextRun[] Runs = new TextRun[256];
     internal int RunCount;
 
+    // ── Grapheme clusters ────────────────────────────────────────────────────
+
+    // The face a grapheme cluster the text's own face cannot set is set in: the
+    // built-in Inter until a platform sets up the system's colour emoji font
+    // (UseClusterFont), at start-up. Always a face: with no emoji font, a
+    // cluster Inter cannot set is not one this face can either, so it stays in
+    // the text's own face as before. Tests set a fixture face here.
+    internal FontFace ClusterFace;
+
     // ── Wraps ────────────────────────────────────────────────────────────────
 
     // A wrap is kept until it goes KeepWrapFrames frames unasked; then its
@@ -78,12 +87,24 @@ public sealed class Fonts : IDisposable
     internal Fonts()
     {
         Provider = new FontProvider(Engine);
+        ClusterFace = TextLayer.FaceBuiltIn(this, 400);
     }
 
     public void Dispose()
     {
         Engine.Dispose();
     }
+
+    // ── Public: setting up ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sets the face grapheme clusters this text's own faces cannot set are set
+    /// in: the system's colour emoji font, as its bytes. A platform calls it once,
+    /// at start-up, with the font however it gets it (on Linux,
+    /// <see cref="Fontconfig.UseColorEmoji"/>). Bytes FreeType cannot open leave
+    /// the face as it was; with none set, clusters stay in the built-in Inter.
+    /// </summary>
+    public void UseClusterFont(Bibui.Text.FreeType.FontData font) => TextLayer.ClusterFaceFromData(this, font);
 
     // ── Public: measuring in a Font ──────────────────────────────────────────
 
