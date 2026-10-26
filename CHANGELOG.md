@@ -61,8 +61,9 @@ All notable changes to bibui are recorded here. The format is based on
   takes the fonts and the font the text is set in: a move by a character or a
   word crosses the clusters the text is drawn as (👍🏽, 🇩🇰, 1️⃣, a letter and its
   accent). Pass `runtime.Fonts` and `runtime.FontInScope()`.
-- A Markdown word too wide for its line is cut by the widths it is drawn at,
-  so a run of emoji fills the line.
+- Markdown measures its words, list numbers and underlines by the widths they
+  are drawn at, so an emoji is measured in the emoji face, and a word too wide
+  for its line is cut by them: a run of emoji fills the line.
 - **Breaking:** the text types are in namespace `Bibui.Text` (package
   `Bibui.Text`): `Fonts`, `Font`, `FontFace`, `FontRegistry`, `TextLine`,
   `TextWrap`, `TextMetrics`; and `Bibui.Core.FreeType` is `Bibui.Text.FreeType`.

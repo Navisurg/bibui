@@ -361,7 +361,7 @@ public static class Markdown
             float numberWidth = 0f;
             Span<char> number = stackalloc char[12];
             if (list.Ordered)
-                numberWidth = _runtime.Fonts.Measure(Number(list.Level + count - 1, number), font);
+                numberWidth = TextLayer.WidthFromChars(_runtime.Fonts, Number(list.Level + count - 1, number), TextLayer.StyleFromFont(_runtime.Fonts, font, font.Scale), font.Scale);
             bool tasks = false;
             for (int k = 0; k < count; k++) tasks |= list.Children[k].Task != MarkdownTask.None;
             float markerWidth = MathF.Ceiling(MathF.Max(px * 1.5f,
@@ -393,7 +393,7 @@ public static class Markdown
                     else if (list.Ordered)
                     {
                         var text = Number(list.Level + k, number);
-                        _runtime.Gap(markerWidth - px * 0.5f - _runtime.Fonts.Measure(text, font));
+                        _runtime.Gap(markerWidth - px * 0.5f - TextLayer.WidthFromChars(_runtime.Fonts, text, TextLayer.StyleFromFont(_runtime.Fonts, font, font.Scale), font.Scale));
                         _runtime.Text(text, look.Size, look.Color, look.Family);
                     }
                     else Bullet(lineHeight, look.Color);
@@ -628,16 +628,18 @@ public static class Markdown
                     continue;
                 }
                 Font font = RunFont(run, look);
+                var style = TextLayer.StyleFromFont(_runtime.Fonts, font, font.Scale);
                 int i = run.Start, end = run.Start + run.Length;
                 while (i < end)
                 {
                     bool space = text[i] == ' ';
                     int j = i;
                     while (j < end && (text[j] == ' ') == space) j++;
+                    // Measured as layout's walk sets the word.
                     _frags.Add(new Frag
                     {
                         Run = r, Start = i, Len = j - i, Space = space,
-                        Width = _runtime.Fonts.Measure(text[i..j], font),
+                        Width = TextLayer.WidthFromChars(_runtime.Fonts, text[i..j], style, font.Scale),
                     });
                     i = j;
                 }
@@ -798,7 +800,7 @@ public static class Markdown
                     x += pad + head;
                     content = true;
                     EndLine(ref lineStart, ref x, ref content);
-                    f = f with { Start = f.Start + cut, Len = f.Len - cut, Width = _runtime.Fonts.Measure(chars[cut..], font) };
+                    f = f with { Start = f.Start + cut, Len = f.Len - cut, Width = TextLayer.WidthFromChars(_runtime.Fonts, chars[cut..], style, font.Scale) };
                 }
             }
         }
@@ -886,7 +888,7 @@ public static class Markdown
             {
                 using (_runtime.FontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
                     _runtime.Text(chars, look.Size, color, family);
-                float width = _runtime.Fonts.Measure(chars, font);
+                float width = TextLayer.WidthFromChars(_runtime.Fonts, chars, TextLayer.StyleFromFont(_runtime.Fonts, font, font.Scale), font.Scale);
                 if (link) Overlay(padX, top + MathF.Round(textHeight * UnderlineAt), width, hovering ? StrongLine : LineWidth, color);
                 if (strike) Overlay(padX, top + MathF.Round(textHeight * StrikeAt), width, LineWidth, color);
             }

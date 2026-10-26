@@ -99,15 +99,10 @@ public static class TextField
         return line.Length;
     }
 
-    // How wide chars are on one line, in logical px: layout's own walk of them
-    // (RunsFromChars) and the width it leaves (WidthOfRuns), so it is what the
-    // field's Text parts are laid out and drawn at. The walk's glyphs are written
-    // to the frame's run table and not read; layout empties it.
+    // How wide chars are on one line, in logical px, as layout's walk sets them
+    // (TextLayer.WidthFromChars): what the field's Text parts are laid out and drawn at.
     internal static float WidthOfChars(Fonts fonts, Font font, ReadOnlySpan<char> chars)
-    {
-        var style = TextLayer.StyleFromFont(fonts, font, font.Scale);
-        return TextLayer.WidthOfRuns(fonts, TextLayer.RunsFromChars(fonts, chars, style), font.Scale);
-    }
+        => TextLayer.WidthFromChars(fonts, chars, TextLayer.StyleFromFont(fonts, font, font.Scale), font.Scale);
 
     // The pointer on one line of text: line holds its chars, x is from where it
     // starts, and the edit state is in the line's offsets. A press puts the
