@@ -6,7 +6,8 @@
 //                                                                    # headless: one frame, then exits (CI's start-up check)
 //
 // No GLFW, no GL: libwayland-client, an xdg-shell toplevel, and frames drawn on
-// the CPU by the managed rasterizer straight into wl_shm buffers. Input
+// the CPU by the managed rasterizer straight into wl_shm buffers, put together
+// by Bibui.App.WaylandManaged. Input
 // is live: the switch, the button and the text field take the pointer and
 // keyboard, and the pad at the bottom shows what the host delivered — pointer
 // position, buttons, wheel travel, and the modifiers the last event carried. HiDPI and cursors are
@@ -14,10 +15,12 @@
 //
 // Native AOT: dotnet publish tests/wayland-hello -c Release -r linux-x64 -p:PublishAot=true
 
+using Bibui.App;
 using Bibui.Core;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 using Bibui.Core.TextEdit;
 
 bool animate = !args.Contains("--still");
@@ -30,7 +33,6 @@ string lastButton = "none yet";
 KeyModifiers lastModifiers = KeyModifiers.None;
 
 var runtime = BibuiRuntime.Create();
-runtime.Surface = new SurfaceOptions { Width = 760, Height = 560, ScaleFactor = 1f };
 long frame = 0;
 
 // One frame of the app, built from the state above, top to bottom.
@@ -126,7 +128,7 @@ void Build()
 if (args.Contains("--first-frame"))
 {
     using var cpu = new ManagedRenderer();
-    runtime.BeginBuild();
+    runtime.BeginBuild(new WindowFrame(760, 560, 1f, 60f));
     Build();
     runtime.EndBuild();
     FramePixels.Bgra(runtime, cpu.Draw, out _, out _);
@@ -139,18 +141,16 @@ if (!WaylandWindow.IsSupported)
     return 1;
 }
 
-// The renderer is named: the Wayland window brings none, and Native AOT keeps only what is named.
-using var window = WaylandWindow.Open(runtime, new("bibui — wayland-hello", 760, 560),
-    new WaylandHostOptions { AppId = "bibui-wayland-hello" });
-using var managed = new ManagedRenderer(window.Cpu);
-while (WaylandWindow.BeginFrame(window, runtime))
+using var app = BibuiApp.Open(runtime, new("bibui — wayland-hello", 760, 560),
+    new BibuiAppOptions { AppId = "bibui-wayland-hello" });
+app.Frame = Frame;
+while (app.WaitForFrame()) Frame();
+return 0;
+
+void Frame()
 {
-    runtime.BeginBuild(window.Events);
+    runtime.BeginBuild(app.Window.Frame, app.Events);
     Build();
     runtime.EndBuild();
-    WaylandWindow.BeginDraw(window);
-    managed.Draw(runtime.DrawList);
-    WaylandWindow.EndDraw(window);
-    WaylandWindow.EndFrame(window, runtime);
+    app.Present();
 }
-return 0;

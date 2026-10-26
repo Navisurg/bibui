@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- A bibui app on the raw Wayland host. Publishes with Native AOT:
+  <!-- A bibui app on the raw Wayland host and the managed rasterizer, as the
+       Bibui.App.WaylandManaged package puts them together. Publishes with Native AOT:
        dotnet publish tests/wayland-hello -c Release -r linux-x64 -p:PublishAot=true -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -12,8 +13,6 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../bibui-platform-wayland/bibui-platform-wayland.csproj" />
-    <!-- The host brings no rasterizer: the managed one. -->
-    <ProjectReference Include="../../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />
+    <ProjectReference Include="../../bibui-apps/wayland-managed/bibui-app-wayland-managed.csproj" />
   </ItemGroup>
 </Project>

@@ -50,32 +50,39 @@ var runtime = BibuiRuntime.Create();
 var hello = "Hello, bibui";
 
 using var app = BibuiApp.Open(runtime, new("Stepper", 800, 600));
-while (app.BeginFrame())
+app.Frame = Frame;
+while (app.WaitForFrame()) Frame();
+
+void Frame()
 {
-    runtime.BeginBuild(app.Events);
+    runtime.BeginBuild(app.Window.Frame, app.Events);
     var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
     page.Style.Padding = EdgeInsets.All(24f);
     runtime.Text(hello);
     runtime.EndParent(page);
     runtime.EndBuild();
-    app.EndFrame();
+    app.Present();
 }
 ```
 
 `dotnet run` opens an 800 × 600 window.
 
-- The app owns the loop. `app.BeginFrame()` waits until there is a frame to
-  draw (input, or a frame the runtime asked for) and returns false once the
-  window closes. `app.EndFrame()` draws the frame into the window, puts it on
-  screen, and paces the loop.
+- The app owns the loop. `app.WaitForFrame()` waits until there is a frame to
+  draw (input, or a frame the runtime asked for), paced to the window's refresh
+  rate, and returns false once the window closes; with nothing happening it
+  waits on the OS and uses no CPU.
+- `Frame` is one whole frame: build it on the window as it is now
+  (`app.Window.Frame`: its size, scale and refresh rate), then `app.Present()`
+  draws it into the window and puts it on screen. `app.Frame = Frame` lets the
+  window draw it too, where the loop cannot run (a resize on Windows and macOS).
 - Between `BeginBuild` and `EndBuild` you build one frame. The runtime owns the
   frame's root: what you build with no parent begun lands under it.
   `EndBuild` lays the tree out and records it into `runtime.DrawList`.
 - `BibuiApp.Open` opens the window and makes the renderer the package names;
   bibui never looks one up at run time. `app.Window` and `app.Renderer` are
   those two, for when you need them (textures are made on the renderer). To
-  write the loop from the window and renderer yourself, see the README's
-  "Writing the loop yourself".
+  write the loop from the window and renderer yourself, see "Writing the loop
+  yourself" in [app-packages.md](app-packages.md).
 - `runtime.Column()` stacks its items vertically and is as large as they are.
   `.Sized(Size.Fill, Size.Fill)` makes it fill its parent, the window, on both
   axes. What is built between `BeginParent(page)` and `EndParent(page)` is
@@ -195,12 +202,15 @@ var runtime = BibuiRuntime.Create();
 var stepper = new App();
 
 using var app = BibuiApp.Open(runtime, new("Stepper", 480, 320));
-while (app.BeginFrame())
+app.Frame = Frame;
+while (app.WaitForFrame()) Frame();
+
+void Frame()
 {
-    runtime.BeginBuild(app.Events);
+    runtime.BeginBuild(app.Window.Frame, app.Events);
     stepper.Build(runtime);
     runtime.EndBuild();
-    app.EndFrame();
+    app.Present();
 }
 ```
 
@@ -300,7 +310,9 @@ dotnet run
 ```
 
 `BibuiPage.Launch` makes a runtime with no window and builds a frame with the
-build you hand it, as the app's loop does. `page.Click(id)` presses the middle
+build you hand it, as the app's loop does, on the page's `Window` (a
+`WindowFrame`, 800 × 600 at 60 Hz unless you pass one), so every frame steps
+animations by 1/60 s and the test runs the same each time. `page.Click(id)` presses the middle
 of the box with that id and builds the frame the press causes. `GetText`,
 `GetBounds`, `FindById`, `Fill`, `Press` and `Screenshot` cover reading and
 typing. The page draws its screenshots with Skia on the CPU, so the test needs

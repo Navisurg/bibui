@@ -1,6 +1,3 @@
-using System.Diagnostics;
-using Bibui.Core.Draw;
-using Bibui.Gl;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
@@ -11,67 +8,68 @@ using SilkKey = Silk.NET.Input.Key;
 namespace Bibui.Core.Runtime.Platform;
 
 /// <summary>
-/// A window on GLFW through Silk.NET, presenting with OpenGL: what
-/// <see cref="Open"/> makes, and <see cref="BeginFrame"/> and
-/// <see cref="EndFrame"/> bracket every frame of. It knows nothing of any
-/// renderer. Its one target is <see cref="Gl"/>, its GL framebuffer: whatever
-/// draws a frame draws it there with GL, between <see cref="BeginDraw"/> and
-/// <see cref="EndDraw"/>, which swaps. A
-/// renderer on the GPU draws into it (<c>new SkiaGlRenderer(window.Gl)</c>); a
-/// renderer on the CPU draws into memory that <c>Bibui.Gl</c>'s
-/// <c>GlCpuFramebuffer</c> shows on it.
+/// A window on GLFW through Silk.NET: what <see cref="Open"/> makes, and
+/// <see cref="WaitEvents"/> waits on between frames.
+/// It knows nothing of any renderer or graphics API: <see cref="DefaultOptions"/>
+/// opens it with none, and the route that draws into it asks for its own in the
+/// options. <see cref="SilkGl"/> is the OpenGL route: its options give the window
+/// a GL context, and <see cref="SilkGl.Target"/> is the framebuffer a renderer
+/// draws into, between <see cref="SilkGl.BeginDraw"/> and <see cref="SilkGl.EndDraw"/>.
 /// The clipboard goes through TextCopy (wl-clipboard on Wayland).
 ///
 /// <para>One thread: the one that opened it runs every frame.</para>
 /// <code>
-/// using var window = SilkWindow.Open(runtime, new("My app", 960, 640));
-/// using var skia = new SkiaGlRenderer(window.Gl);
-/// while (SilkWindow.BeginFrame(window, runtime))
+/// using var window = SilkWindow.Open(SilkGl.Options(new("My app", 960, 640)));
+/// runtime.WakeUp = window.Wake;
+/// runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+/// var gl = SilkGl.Target(window);
+/// using var skia = new SkiaGlRenderer(gl);
+/// while (!window.IsClosing)
 /// {
-///     runtime.BeginBuild(window.Events);
+///     bool idle = runtime.FramesRequested == 0 && window.Events.Count == 0;
+///     if (!idle) runtime.SleepUntilNextFrame();
+///     var events = window.GetEvents(wait: idle);
+///     if (runtime.FramesRequested == 0 && events.Count == 0) continue;
+///     runtime.ConsumeFrame();
+///     runtime.BeginBuild(window.Frame, events);
 ///     // ... build ...
 ///     runtime.EndBuild();
-///     SilkWindow.BeginDraw(window);
+///     SilkGl.BeginDraw(window, gl);
 ///     skia.Draw(runtime.DrawList);
-///     SilkWindow.EndDraw(window);
-///     SilkWindow.EndFrame(window, runtime);
+///     SilkGl.EndDraw(window);
 /// }
 /// </code>
 /// </summary>
 public sealed class SilkWindow : IDisposable
 {
-    internal readonly IWindow Native;
-    internal readonly BibuiRuntime Runtime;
+    public readonly IWindow Native;
 
     /// <summary>
     /// What the keyboard and mouse did since the last frame, in order: GLFW's
     /// callbacks append here and do nothing else, so no runtime call runs inside
     /// GLFW's own dispatch. The loop hands it to the runtime
-    /// (<c>runtime.BeginBuild(window.Events)</c>), which empties it.
+    /// (<c>runtime.BeginBuild(window.Frame, window.Events)</c>), which empties it.
     /// </summary>
     public readonly List<WindowEvent> Events = [];
 
-    internal SilkWindow(IWindow native, BibuiRuntime runtime)
+    internal SilkWindow(IWindow native)
     {
         Native = native;
-        Runtime = runtime;
     }
 
     /// <summary>
-    /// The app's loop body, called from GLFW's resize callback while GLFW holds
-    /// the thread in its own pump (a drag on Windows or macOS), so the window keeps
-    /// drawing. Optional; Linux never calls it, as GLFW does not block there.
+    /// The app's frame, called from GLFW's resize callback, so the window is drawn
+    /// at its new size, and keeps drawing while GLFW holds the thread in its own
+    /// pump (a drag on Windows or macOS). Without it a resize draws nothing until
+    /// the next input.
     /// </summary>
     public Action? OnRefresh { get; set; }
 
-    /// <summary>The window's GL framebuffer: FBO 0 at the current size, 8 stencil bits.</summary>
-    public GlTarget Gl { get; } = new() { Framebuffer = 0, StencilBits = 8 };
-
     /// <summary>Framebuffer size in physical px.</summary>
-    public int FramebufferWidth => Gl.Width;
+    public int FramebufferWidth { get; private set; }
 
     /// <inheritdoc cref="FramebufferWidth"/>
-    public int FramebufferHeight => Gl.Height;
+    public int FramebufferHeight { get; private set; }
 
     /// <summary>Physical px per logical px.</summary>
     public float Scale { get; internal set; } = 1f;
@@ -79,19 +77,49 @@ public sealed class SilkWindow : IDisposable
     /// <summary>True once the user or <see cref="Close"/> has asked the window to close.</summary>
     public bool IsClosing => Native.IsClosing;
 
-    /// <summary>Asks the window to close: the next <see cref="BeginFrame"/> returns false.</summary>
+    /// <summary>Asks the window to close: <see cref="IsClosing"/> turns true.</summary>
     public void Close() => Native.Close();
 
-    /// <summary>Makes a waiting <see cref="BeginFrame"/> return. Safe from any thread.</summary>
+    /// <summary>Makes a waiting <see cref="WaitEvents"/> return. Safe from any thread.</summary>
     public void Wake() => Native.ContinueEvents();
+
+    /// <summary>
+    /// The refresh rate of the monitor the window is on, in Hz, as that monitor
+    /// runs now: read every time it is asked, so a screen switched to another
+    /// rate has it on the next frame. 60 when GLFW knows no monitor. Which
+    /// monitor is looked up when the window opens, when it moves, and when a
+    /// monitor is connected or unplugged; on Wayland GLFW reports no moves and
+    /// cannot tell which monitor a window is on, so with several monitors this
+    /// may be another's.
+    /// </summary>
+    public float RefreshRate => _monitor?.VideoMode.RefreshRate is int hz && hz > 0 ? hz : 60f;
+
+    // The monitor the window is on. Silk's lookup (Native.Monitor) works it out
+    // from the window's position and allocates, so it runs when that can change,
+    // not every frame.
+    private IMonitor? _monitor;
+
+    /// <summary>
+    /// False: <see cref="GetEvents"/> takes what is queued and returns, so the
+    /// loop paces itself (<c>runtime.SleepUntilNextFrame</c>).
+    /// </summary>
+    public bool PacesFrames => false;
+
+    /// <summary>This frame's window, for <c>runtime.BeginBuild(window.Frame, window.Events)</c>.</summary>
+    public WindowFrame Frame => new(FramebufferWidth, FramebufferHeight, Scale, RefreshRate);
+
+    /// <summary>The system clipboard's text, or null when it holds none (TextCopy; wl-clipboard on Wayland).</summary>
+    public string? GetClipboardText() => Clipboard.GetText();
+
+    /// <summary>Puts <paramref name="text"/> on the system clipboard.</summary>
+    public void SetClipboardText(string text) => Clipboard.SetText(text);
 
     // ── Input ────────────────────────────────────────────────────────────────
 
-    // Wired after the first frame is shown: device enumeration does blocking
-    // xkbcommon keymap reads and libinput probing that can take 300+ ms, enough
-    // to miss several xdg_wm_base pings and fire Hyprland's not-responding
-    // dialog. Wiring after the first commit keeps the first frame fast.
-    internal int Frames;
+    // TODO: wired in Open, before the first frame. On Wayland the device
+    // enumeration does blocking xkbcommon keymap reads and libinput probing that
+    // can take 300+ ms, enough to miss several xdg_wm_base pings and fire
+    // Hyprland's not-responding dialog. Find out why it blocks and fix it there.
     private IKeyboard? _keyboard;
     private IMouse? _mouse;
     private CursorShape _cursor;
@@ -99,7 +127,7 @@ public sealed class SilkWindow : IDisposable
     private global::Silk.NET.GLFW.GlfwCallbacks.CharCallback? _onChar;
     private global::Silk.NET.GLFW.GlfwCallbacks.KeyCallback? _onKey;
 
-    internal unsafe void WireInput()
+    private unsafe void WireInput()
     {
         var input = Native.CreateInput();
         var events = Events;
@@ -180,45 +208,27 @@ public sealed class SilkWindow : IDisposable
         cursor.StandardCursor = standard;
     }
 
-    // ── Pacing ───────────────────────────────────────────────────────────────
-    // GLFW does not pace: EndFrame sleeps out what is left of the frame at the
-    // runtime's TargetHz, which the window sets to its monitor's refresh rate
-    // (ApplyRefresh), so it draws as often as the screen shows a frame.
-    // BeginFrame measures the runtime's Dt on Clock, so an animation takes as
-    // long at 120 Hz as at 60.
+    /// <summary>Looks up which monitor the window is on, for <see cref="RefreshRate"/>.</summary>
+    private void FindMonitor() => _monitor = Native.Monitor;
+
+    // Held so the GC keeps it while GLFW holds its function pointer.
+    private global::Silk.NET.GLFW.GlfwCallbacks.MonitorCallback? _onMonitor;
 
     /// <summary>
-    /// Sets the runtime's TargetHz to the refresh rate of the monitor GLFW puts
-    /// the window on, when it knows one. On Wayland GLFW cannot tell which
-    /// monitor a window is on, so with several monitors this may be another's.
-    /// </summary>
-    private static void ApplyRefresh(SilkWindow window)
-    {
-        if (window.Native.Monitor?.VideoMode.RefreshRate is int hz && hz > 0)
-            window.Runtime.TargetHz = hz;
-    }
-
-    internal readonly Stopwatch Clock = Stopwatch.StartNew();
-    internal double NextFrameMs;
-    // When the last frame started, on Clock: what the next frame's Dt is measured from.
-    internal double LastFrameSeconds;
-
-    /// <summary>
-    /// Closes the window and destroys it with its GL context. Dispose a renderer
-    /// bound to <see cref="Gl"/> first: its GPU context goes before the GL one.
+    /// Closes the window and destroys it with any graphics context it was opened
+    /// with. Dispose a renderer drawing into it first: its GPU context goes before
+    /// the window's.
     /// </summary>
     public void Dispose()
     {
-        if (Runtime.WakeUp == Wake) Runtime.WakeUp = null;
         Native.Reset();
         Native.Dispose();
     }
 
     // ── The module: open, then bracket every frame ──────────────────────────
 
-    // Restores the continuous loop, for comparing against the event-driven one.
-    private static readonly bool s_alwaysRender = Environment.GetEnvironmentVariable("BIBUI_ALWAYS_RENDER") == "1";
-
+    private static readonly Lock _glfwLock = new();
+    private static string? _bundledGlfw;
     /// <summary>
     /// Loads the GLFW that NuGet shipped (Ultz.Native.GLFW), by the path it
     /// shipped it to, and returns that path; null when there is none to load.
@@ -267,138 +277,103 @@ public sealed class SilkWindow : IDisposable
             return null;
         }
     }
-    private static readonly Lock _glfwLock = new();
-    private static string? _bundledGlfw;
 
     /// <summary>
-    /// Opens a window for <paramref name="runtime"/> and makes its GL context
-    /// current on this thread. The runtime's surface is sized to the framebuffer,
-    /// its <see cref="BibuiRuntime.WakeUp"/> wakes the window, and its default
-    /// clipboard is the system's. Set <see cref="SilkWindow.OnRefresh"/> to the
-    /// loop body to keep it drawing during a resize on Windows or macOS.
+    /// The options every bibui window opens with: <paramref name="options"/>'s
+    /// title and size, resizable, and no graphics API. A route that draws with
+    /// one asks for it on top of these (<see cref="SilkGl.Options"/>). Keep
+    /// IsEventDriven, FramesPerSecond and UpdatesPerSecond: Silk.NET's own loop
+    /// must not run, as <see cref="WaitEvents"/> waits on GLFW itself.
     /// </summary>
-    public static SilkWindow Open(BibuiRuntime runtime, PlatformWindowOptions options)
+    public static WindowOptions DefaultOptions(PlatformWindowOptions options) => WindowOptions.Default with
     {
-        ArgumentNullException.ThrowIfNull(runtime);
-        var windowOptions = WindowOptions.Default with
-        {
-            Title = options.Title,
-            Size = new Vector2D<int>(options.Width, options.Height),
-            WindowBorder = WindowBorder.Resizable,
-            API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(3, 3)),
-            // VSync off: on Wayland the compositor stops sending frame callbacks
-            // to an occluded window, and a vsynced SwapBuffers then blocks,
-            // starving the event pump until Hyprland's not-responding dialog.
-            VSync = false,
-            // DoEvents waits on the event queue instead of polling it, so an idle
-            // window runs no frames; ContinueEvents wakes it from any thread.
-            IsEventDriven = true,
-            FramesPerSecond = 0.0,
-            UpdatesPerSecond = 0.0,
-            // A renderer may clip with the stencil (Skia's GL backend does).
-            PreferredStencilBufferBits = 8,
-        };
+        Title = options.Title,
+        Size = new Vector2D<int>(options.Width, options.Height),
+        WindowBorder = WindowBorder.Resizable,
+        API = GraphicsAPI.None,
+        // VSync off: on Wayland the compositor stops sending frame callbacks
+        // to an occluded window, and a vsynced SwapBuffers then blocks,
+        // starving the event pump until Hyprland's not-responding dialog.
+        VSync = false,
+        // No frames of Silk.NET's own; ContinueEvents wakes WaitEvents from any thread.
+        IsEventDriven = true,
+        FramesPerSecond = 0.0,
+        UpdatesPerSecond = 0.0,
+    };
 
+    /// <summary>
+    /// Opens a window with <paramref name="windowOptions"/> (<see cref="DefaultOptions"/>,
+    /// or a route's on top of them), with its input wired. It knows no runtime:
+    /// the loop hands the runtime <see cref="Frame"/> and <see cref="Events"/>, and
+    /// wires <see cref="Wake"/> and the clipboard to it. Set
+    /// <see cref="SilkWindow.OnRefresh"/> to the loop body to keep it drawing
+    /// during a resize on Windows or macOS.
+    /// </summary>
+    public static SilkWindow Open(WindowOptions windowOptions)
+    {
         LoadBundledGlfw();
         // Silk.NET finds platforms by reflection, which Native AOT trims away.
         global::Silk.NET.Windowing.Glfw.GlfwWindowing.RegisterPlatform();
         global::Silk.NET.Input.Glfw.GlfwInput.RegisterPlatform();
 
         var native = global::Silk.NET.Windowing.Window.Create(windowOptions);
-        var window = new SilkWindow(native, runtime);
+        var window = new SilkWindow(native);
         native.Load += () =>
         {
-            var context = native.GLContext!;
-            // VSync = false above does not reach the context: on Wayland the swap
-            // interval stays EGL's default of 1, Mesa asks for a frame callback on
-            // every swap, and the hang the options comment describes happens
-            // anyway. Set it here, where the context is current.
-            context.SwapInterval(0);
-            window.Gl.GetProcAddress = name => context.TryGetProcAddress(name, out var at) ? at : 0;
-            Resize(window, native.FramebufferSize);
-            ApplyRefresh(window);
+            window.Resize(native.FramebufferSize);
+            window.FindMonitor();
         };
         // Moved onto another monitor (X11; Wayland reports no moves).
-        native.Move += _ => ApplyRefresh(window);
+        native.Move += _ => window.FindMonitor();
         native.FramebufferResize += size =>
         {
-            Resize(window, size);
-            // GLFW is in its own pump during a drag on Windows and macOS, and the
-            // app's loop is not running: draw from here. Linux never blocks there.
-            if (window.OnRefresh is { } refresh && !OperatingSystem.IsLinux()) refresh();
+            window.Resize(size);
+            // Draw at the new size from here: GLFW is in its own pump during a drag
+            // on Windows and macOS, and the app's loop is not running; and nothing
+            // else asks for a frame on a resize.
+            window.OnRefresh?.Invoke();
         };
         native.FocusChanged += focused => { if (!focused) window.Events.Add(WindowEvent.FocusLost()); };
         native.Initialize();
+        window.WireInput();
+        // A monitor connected or unplugged: look the monitor up again, as an
+        // unplugged one is freed under the IMonitor that names it. GLFW has one
+        // monitor callback for the process, so the one set before is called on.
+        // Unsafe only for the callback's type: the monitor pointer is never read.
+        unsafe
+        {
+            global::Silk.NET.GLFW.GlfwCallbacks.MonitorCallback? previous = null;
+            window._onMonitor = (monitor, state) =>
+            {
+                window.FindMonitor();
+                previous?.Invoke(monitor, state);
+            };
+            previous = global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetMonitorCallback(window._onMonitor);
+        }
 
-        runtime.WakeUp = window.Wake;
-        runtime.WindowClipboard = (Clipboard.GetText, Clipboard.SetText);
         return window;
     }
 
-    private static void Resize(SilkWindow window, Vector2D<int> framebuffer)
+    private void Resize(Vector2D<int> framebuffer)
     {
-        var size = window.Native.Size;
-        window.Gl.Width = framebuffer.X;
-        window.Gl.Height = framebuffer.Y;
-        window.Scale = size.X > 0 ? (float)framebuffer.X / size.X : 1f;
-        window.Runtime.ResizeSurface(framebuffer.X, framebuffer.Y, window.Scale);
+        var size = Native.Size;
+        FramebufferWidth = framebuffer.X;
+        FramebufferHeight = framebuffer.Y;
+        Scale = size.X > 0 ? (float)framebuffer.X / size.X : 1f;
     }
 
     /// <summary>
-    /// Waits until there is a frame to draw — input arrived, or the runtime owes
-    /// frames (<see cref="BibuiRuntime.RequestFrame"/>: an animation, a hot
-    /// reload, a worker) — and hands what happened to the runtime. False once the
-    /// window is closing: the loop ends.
+    /// Takes what the OS has queued into <see cref="Events"/> and returns them.
+    /// With <paramref name="wait"/>, for when nothing else is happening, it first
+    /// waits until something does: input, a <see cref="Wake"/> (from any thread),
+    /// or the window closing. Without, it takes what came while the loop slept.
+    /// The loop's pacing is the runtime's.
     /// </summary>
-    public static bool BeginFrame(SilkWindow window, BibuiRuntime runtime)
+    public List<WindowEvent> GetEvents(bool wait)
     {
-        // Nothing owed: the loop waits for input, and the wait is not frame time.
-        bool waited = !s_alwaysRender && runtime.FramesRequested == 0;
-        while (true)
-        {
-            if (window.IsClosing) return false;
-            // A frame owed must not wait on unrelated input.
-            if (s_alwaysRender || runtime.FramesRequested > 0) window.Wake();
-            window.Native.DoEvents();
-            if (window.IsClosing) return false;
-            bool any = window.Events.Count > 0;
-            // Awake is not the same as having something to draw: a focus change, a
-            // ping or a wake with nothing owed draws nothing, and waits again.
-            if (any || s_alwaysRender || runtime.FramesRequested > 0)
-            {
-                // Taken before the frame is built, so what the build asks for is still owed after it.
-                runtime.ConsumeFrame();
-                double now = window.Clock.Elapsed.TotalSeconds;
-                runtime.Dt = waited || window.LastFrameSeconds == 0 ? 1f / runtime.TargetHz : (float)(now - window.LastFrameSeconds);
-                window.LastFrameSeconds = now;
-                return true;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Makes the window's GL context current, to draw this frame into its
-    /// framebuffer: after the build, before the renderer draws. With one window
-    /// it already is; with several, each draws in its own.
-    /// </summary>
-    public static void BeginDraw(SilkWindow window) => window.Native.GLContext!.MakeCurrent();
-
-    /// <summary>Shows what was drawn into the framebuffer: swaps.</summary>
-    public static void EndDraw(SilkWindow window)
-    {
-        window.Native.GLContext!.SwapBuffers();
-        if (++window.Frames == 1) window.WireInput();
-    }
-
-    /// <summary>Paces the loop to the runtime's <see cref="BibuiRuntime.TargetHz"/>: sleeps until the next frame is due.</summary>
-    public static void EndFrame(SilkWindow window, BibuiRuntime runtime)
-    {
-
-        double targetMs = 1000.0 / runtime.TargetHz;
-        window.NextFrameMs += targetMs;
-        double remaining = window.NextFrameMs - window.Clock.Elapsed.TotalMilliseconds;
-        if (remaining > 1) Thread.Sleep((int)remaining);
-        // Fell more than a frame behind (a stall, or an idle wait): start again from now.
-        else if (remaining < -targetMs) window.NextFrameMs = window.Clock.Elapsed.TotalMilliseconds;
+        var glfw = global::Silk.NET.GLFW.GlfwProvider.GLFW.Value;
+        if (wait) glfw.WaitEvents();
+        else glfw.PollEvents();
+        return Events;
     }
 }

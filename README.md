@@ -48,10 +48,13 @@ using Bibui.Core.Runtime;
 var runtime = BibuiRuntime.Create();
 using var app = BibuiApp.Open(runtime, new("Counter", 360, 160));
 int count = 0;
+app.Frame = Frame;   // the window draws it too, during a resize
 
-while (app.BeginFrame())
+while (app.WaitForFrame()) Frame();
+
+void Frame()
 {
-    runtime.BeginBuild(app.Events);
+    runtime.BeginBuild(app.Window.Frame, app.Events);
 
     runtime.BeginCenterXY();
     var column = runtime.BeginParent(runtime.Column());
@@ -65,9 +68,15 @@ while (app.BeginFrame())
     runtime.EndCenterXY();
 
     runtime.EndBuild();
-    app.EndFrame();
+    app.Present();
 }
 ```
+
+The app owns the loop. `app.WaitForFrame()` waits until there is a frame to
+draw (input, or one the runtime owes) and returns false once the window
+closes; an app with nothing happening waits on the OS and uses no CPU.
+`Frame` builds the frame on the window as it is now (`app.Window.Frame`: its
+size, scale and refresh rate) and presents it.
 
 You can run the app using the Skia+OpenGL backend with
 
@@ -82,7 +91,7 @@ dotnet run --project samples/counter-gl
 
 bibui consists of a core part, [bibui-core](bibui-core), that defines
 how you build user interfaces with bibui through layout constraints
-and the builtin UI node typestypes.
+and the builtin UI node types.
 By itself it has no idea how to talk to the OS to get window and
 input events, or do any type of rendering of the UI.
 
@@ -139,34 +148,20 @@ with a `Text` inside. `button.Clicked` reports an [Interaction](bibui-core/src/P
 
 ## bibui app from scratch
 
-A `Bibui.App` package is a fast path for gluing together a window package and a renderer package.
+A `Bibui.App` package is a window package and a renderer package put together,
+with the loop's calls. You may instead reference `Bibui.Core`, a window
+(`Bibui.Platform.Silk`, `Bibui.Platform.Wayland`) and a renderer
+(`Bibui.Raster.Skia`, `Bibui.Raster.Managed.Backend`) directly, and write the
+loop yourself: [Writing the loop yourself](docs/app-packages.md#writing-the-loop-yourself)
+shows it.
 
-You may instead reference directly `Bibui.Core`, `Bibui.Platform.Silk`,
-`Bibui.Raster.Skia`, and then you will have to write the main app loop as:
-
-```csharp
-using var window = SilkWindow.Open(runtime, new("Counter", 360, 160));
-using var skia = new SkiaGlRenderer(window.Gl);
-
-while (SilkWindow.BeginFrame(window, runtime))  // window:   wait for a frame; Silk input → window.Events
-{
-    runtime.BeginBuild(window.Events);          // runtime:  WindowEvent → BibUiEvent; start a new tree
-    Build();                                    // your app: build boxes and text, read interactions
-    runtime.EndBuild();                         // runtime:  lay the tree out, record runtime.DrawList
-    SilkWindow.BeginDraw(window);               // renderer: draw the DrawList into the GL framebuffer
-    skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);                 // window:   swap; the frame is on screen
-    SilkWindow.EndFrame(window, runtime);       // window:   sleep until the next frame is due
-}
-```
-
-Each layer sends data only to layers below it, and each layer is free to interpret that data however it likes.
-With this design, you may target a new platform, by writing a new platform layer that produces `WindowEvent`s.
-You may be able to reuse any of the renderers, or write a new one for the platform that renders using the draw operations issued to a `DrawList`.
-
-[Bibui.Platform.Wayland](bibui-platform-wayland/) and the managed rasterizer are both built this way.
-
-This design enables us to have different combinations of platform layers for handling input and renderers, for rendering the bibui `DrawList`.
+Each layer sends data only to the layer below it. The window knows no runtime:
+each frame it hands the runtime a `WindowFrame` (its size, scale and refresh
+rate) and its `WindowEvent`s. The runtime lays the frame out, paces the loop,
+and records a `DrawList`, which a renderer draws. A new platform is a new
+window that produces those; any renderer can draw for it, or a new one can be
+written against the `DrawList`. [Bibui.Platform.Wayland](bibui-platform-wayland/)
+and the managed rasterizer are both built this way.
 
 ## Driving an app from outside
 

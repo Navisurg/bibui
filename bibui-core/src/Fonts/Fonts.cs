@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Bibui.Core.Draw;
 using Bibui.Core.Theming;
 using Bibui.Core.FreeType;
@@ -26,34 +27,21 @@ namespace Bibui.Core;
 /// </summary>
 public sealed class Fonts : IDisposable
 {
-    private readonly List<Action> _endFrames = [];
-    private readonly List<IDisposable> _disposables = [];
-
     // The one text engine every configuration measures with, whatever draws:
     // confined to the rendering thread, as Fonts is.
     private readonly TextEngine _engine = new();
     private readonly FontProvider _provider;
-    private readonly ResourceCache<WrapKey, TextLine> _lines;
 
     /// <summary>Fonts on a text engine of their own, which the renderer owns with them.</summary>
     internal Fonts()
     {
         _provider = new FontProvider(_engine);
-        _lines = Create<WrapKey, TextLine>();
-    }
-
-    private ResourceCache<TKey, TValue> Create<TKey, TValue>() where TKey : notnull
-    {
-        var cache = new ResourceCache<TKey, TValue>(keepFrames: 60);
-        _endFrames.Add(cache.EndFrame);
-        _disposables.Add(cache);
-        return cache;
     }
 
     /// <summary>Evicts what was not asked for; called once per frame, with the renderer's own caches.</summary>
     internal void EndFrame()
     {
-        foreach (var endFrame in _endFrames) endFrame();
+        EvictWraps();
         // The slots resolve again next frame, so the next frame's typography is
         // what they hold. The faces they resolve to come from FontProvider's
         // cache, which keeps what a (family, weight) first resolved to: a family
@@ -63,7 +51,6 @@ public sealed class Fonts : IDisposable
 
     public void Dispose()
     {
-        foreach (var disposable in _disposables) disposable.Dispose();
         _engine.Dispose();
     }
 
@@ -343,12 +330,70 @@ public sealed class Fonts : IDisposable
         // different key rather than a stale one.
         var style = StyleOf(font, font.Scale);
         var key = WrapKey.For(text, width, style.Key, font.Scale, wrap);
-        return _lines.TryGet(key, out var lines) ? lines : _lines.Add(key, WrapUncached(text, width, style, font.Scale, wrap));
+        ref var node = ref CollectionsMarshal.GetValueRefOrAddDefault(_wraps, key, out bool found);
+        if (!found) node.First = WrapUncached(text, width, style, font.Scale, wrap);
+        node.Touched = _wrapFrame;
+        return node.First;
     }
 
+    // ── The wraps kept ───────────────────────────────────────────────────────
+
+    // A wrap is kept until it goes KeepWrapFrames frames unasked; then its
+    // lines go on the free list, and the next miss builds from them, so once
+    // the free lines cover the working set a wrap allocates nothing.
+    // NOTE(k): a TextLine handed out is good while its wrap is kept; one held
+    // past that is some other wrap's line.
+    private const ulong KeepWrapFrames = 60;
+    private readonly Dictionary<WrapKey, WrapNode> _wraps = [];
+    private readonly List<WrapKey> _staleWraps = [];   // EvictWraps' scratch
+    private ulong _wrapFrame;
+    private TextLine? _firstFreeLine;   // lines no wrap holds, linked by NextFree
+
+    private struct WrapNode
+    {
+        public TextLine? First;   // its lines, linked by Next
+        public ulong Touched;     // the frame it was last asked for
+    }
+
+    // Once a frame: the lines of every wrap unasked for too long go back.
+    private void EvictWraps()
+    {
+        foreach (var (key, node) in _wraps)
+            if (_wrapFrame - node.Touched > KeepWrapFrames) _staleWraps.Add(key);
+        foreach (var key in _staleWraps)
+        {
+            _wraps.Remove(key, out var node);
+            for (var line = node.First; line is not null; line = line.Next)
+            {
+                line.NextFree = _firstFreeLine;
+                _firstFreeLine = line;
+            }
+        }
+        _staleWraps.Clear();
+        _wrapFrame++;
+    }
+
+    private TextLine TakeLine(int start, int end)
+    {
+        var line = _firstFreeLine ?? new TextLine();
+        _firstFreeLine = line.NextFree;
+        (line.Start, line.End, line.Next, line.Prev, line.NextFree) = (start, end, null, null, null);
+        return line;
+    }
+
+    // Each char's advance, for the text being wrapped: grown, never shrunk.
+    private float[] _advances = new float[1024];
+
+    // The text's advances, walked once; every line break below is then decided
+    // by adding them up, never by measuring a slice again. Added from a line's
+    // first char in order, they give what measuring that line gives, to the bit,
+    // so the breaks are the ones measuring each candidate made.
     private TextLine WrapUncached(ReadOnlySpan<char> text, float maxWidth, FontStyle style, float scale, TextWrap wrap)
     {
         var result = new Lines();
+        if (_advances.Length < text.Length) _advances = new float[Math.Max(text.Length, _advances.Length * 2)];
+        var adv = _advances.AsSpan(0, text.Length);
+        style.Strike.CharAdvances(text, adv);
 
         int idx = 0;
         while (idx <= text.Length)
@@ -358,12 +403,12 @@ public sealed class Fonts : IDisposable
             int segEnd = idx;
 
             var before = result.Last;
-            if (wrap == TextWrap.Characters) WrapCharacters(text, segStart, segEnd, maxWidth, style, scale, ref result);
-            else WrapSegment(text, segStart, segEnd, maxWidth, style, scale, ref result);
+            if (wrap == TextWrap.Characters) WrapCharacters(text, adv, segStart, segEnd, maxWidth, scale, ref result);
+            else WrapSegment(text, adv, segStart, segEnd, maxWidth, scale, ref result);
             // Always emit ≥1 entry per logical line so blank lines (\n\n, trailing \n)
             // produce empty lines that line up with what is drawn.
             if (result.Last == before)
-                result.Add(new TextLine(segStart, segStart));
+                result.Add(TakeLine(segStart, segStart));
 
             if (idx >= text.Length) break;
             // Consume the line break — \r\n counts as one.
@@ -387,12 +432,13 @@ public sealed class Fonts : IDisposable
     // spaces make empty words. A line's text is every word from its first
     // non-empty one to the last that fits, with the spaces between them as they
     // stand in the text — so a candidate line is one slice of it, never built.
-    private void WrapSegment(ReadOnlySpan<char> text, int segStart, int segEnd, float maxWidth, FontStyle style,
-                             float scale, ref Lines result)
+    private void WrapSegment(ReadOnlySpan<char> text, ReadOnlySpan<float> adv, int segStart, int segEnd,
+                             float maxWidth, float scale, ref Lines result)
     {
         int lineStart = segStart;   // where the line's range starts: its first word
         int textStart = -1;         // where its text starts: its first non-empty word, or none yet
         int lastEnd = segStart;     // the end of the last word that fit
+        float width = 0f;           // [textStart, lastEnd) summed from textStart: what measuring it gives
 
         int i = segStart;
         while (i <= segEnd)
@@ -401,17 +447,19 @@ public sealed class Fonts : IDisposable
             while (i < segEnd && text[i] != ' ') i++;
             int wordEnd = i;
 
-            var candidate = textStart < 0 ? text[wordStart..wordEnd] : text[textStart..wordEnd];
-            float w = style.Strike.Measure(candidate) / scale;
-            if (!Fits(w, maxWidth) && textStart >= 0)
+            // The candidate line, [textStart or wordStart, wordEnd), summed from its start.
+            float w = textStart < 0 ? Sum(adv, wordStart, wordEnd, 0f) : Sum(adv, lastEnd, wordEnd, width);
+            if (!Fits(w / scale, maxWidth) && textStart >= 0)
             {
-                result.Add(new TextLine(lineStart, lastEnd));
+                result.Add(TakeLine(lineStart, lastEnd));
                 lineStart = wordStart;
                 textStart = wordEnd > wordStart ? wordStart : -1;
+                width = Sum(adv, wordStart, wordEnd, 0f);
             }
-            else if (textStart < 0 && wordEnd > wordStart)
+            else
             {
-                textStart = wordStart;
+                if (textStart < 0 && wordEnd > wordStart) textStart = wordStart;
+                width = w;
             }
             lastEnd = wordEnd;
 
@@ -419,30 +467,39 @@ public sealed class Fonts : IDisposable
             i++; // skip the space separator
         }
         if (textStart >= 0)
-            result.Add(new TextLine(lineStart, lastEnd));
+            result.Add(TakeLine(lineStart, lastEnd));
     }
 
     // One logical line, [segStart, segEnd), cut into the longest runs of
     // characters that fit, each at least one character long.
-    private void WrapCharacters(ReadOnlySpan<char> text, int segStart, int segEnd, float maxWidth, FontStyle style,
-                                float scale, ref Lines result)
+    // A line grows a character at a time while it fits: advances are never
+    // negative, so its width only grows, and the first character that doesn't
+    // fit ends it (the longest prefix that fits, as a search over prefixes found).
+    private void WrapCharacters(ReadOnlySpan<char> text, ReadOnlySpan<float> adv, int segStart, int segEnd,
+                                float maxWidth, float scale, ref Lines result)
     {
         int start = segStart;
         while (start < segEnd)
         {
-            // Invariant: [start, lo) fits, or is the first character; nothing past hi does.
-            int lo = NextCharacter(text, start, segEnd), hi = segEnd;
-            while (lo < hi)
+            int end = NextCharacter(text, start, segEnd);
+            float w = Sum(adv, start, end, 0f);
+            while (end < segEnd)
             {
-                int mid = CharacterStart(text, (lo + hi + 1) / 2, lo);
-                if (mid <= lo) mid = NextCharacter(text, lo, segEnd);
-                float w = style.Strike.Measure(text[start..mid]) / scale;
-                if (Fits(w, maxWidth)) lo = mid;
-                else hi = CharacterStart(text, mid - 1, lo);
+                int next = NextCharacter(text, end, segEnd);
+                float wider = Sum(adv, end, next, w);
+                if (!Fits(wider / scale, maxWidth)) break;
+                (end, w) = (next, wider);
             }
-            result.Add(new TextLine(start, lo));
-            start = lo;
+            result.Add(TakeLine(start, end));
+            start = end;
         }
+    }
+
+    /// <summary>advances[from..to) added to <paramref name="sum"/>, in order: measuring goes the same way.</summary>
+    private static float Sum(ReadOnlySpan<float> advances, int from, int to, float sum)
+    {
+        for (int k = from; k < to; k++) sum += advances[k];
+        return sum;
     }
 
     // Where the character after the one at `at` starts, no further than `end`.
@@ -450,13 +507,6 @@ public sealed class Fonts : IDisposable
     {
         at++;
         while (at < end && char.IsLowSurrogate(text[at])) at++;
-        return at;
-    }
-
-    // The nearest character start at or before `at`, no earlier than `floor`.
-    private static int CharacterStart(ReadOnlySpan<char> text, int at, int floor)
-    {
-        while (at > floor && at < text.Length && char.IsLowSurrogate(text[at])) at--;
         return at;
     }
 }
@@ -511,16 +561,19 @@ internal sealed class FontStyle(ulong key, FontFace face, FontStrike strike, Tex
 /// </summary>
 public sealed class TextLine
 {
-    internal TextLine(int start, int end) { Start = start; End = end; }
+    internal TextLine() { }
 
     /// <summary>Where the line starts in its text.</summary>
-    public int Start { get; }
+    public int Start { get; internal set; }
 
     /// <summary>Where it ends: the offset after its last character.</summary>
-    public int End { get; }
+    public int End { get; internal set; }
 
-    public TextLine? Next { get; private set; }
-    public TextLine? Prev { get; private set; }
+    public TextLine? Next { get; internal set; }
+    public TextLine? Prev { get; internal set; }
+
+    // In Fonts' free list, while no wrap holds the line.
+    internal TextLine? NextFree;
 
     internal TextLine Append(TextLine line)
     {

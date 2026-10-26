@@ -18,8 +18,9 @@ internal static class DemoTexture
 {
     private const int Size = 32;
 
-    // The renderer the gallery chose at run time (--host, --raster): the one set
-    // is where its textures live. An app with one renderer names it once instead
+    // The renderer the gallery draws with: the window's (its Bibui.App package's,
+    // chosen at build time), or Skia on the CPU headless. The one set is where
+    // its textures live. An app with one renderer names it once instead
     // (global using Renderer = ...) and calls it directly.
     internal static SkiaGlRenderer? SkiaGl;
     internal static SkiaCpuRenderer? SkiaCpu;

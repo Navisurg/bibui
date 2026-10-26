@@ -1,19 +1,20 @@
 // Zenith: an observatory console, and the showcase of what bibui can do.
 //
-//   dotnet run --project samples/showcase -c Release                                   # Silk host + Skia
-//   dotnet run --project samples/showcase -c Release -- --host wayland --raster managed  # raw Wayland + managed raster
+//   dotnet run --project samples/showcase -c Release                                   # Silk + Skia on the GPU
+//   dotnet run --project samples/showcase -c Release -p:App=WaylandManaged             # raw Wayland + managed raster
 //   dotnet run --project samples/showcase -c Release -- --shots samples/showcase/screenshots
 //                                                     # headless: the README's pictures, no window
 //   dotnet run --project samples/showcase -c Release -- --png out.png --size 1280x800 --light
 //   dotnet run --project samples/showcase -c Release -- --first-frame                   # time to the first frame
 //
-// Native AOT, the Wayland + managed route only (Silk and Skia left out of the binary):
-//   dotnet publish samples/showcase -c Release -r linux-x64 -p:PublishAot=true -p:ShowcaseRoute=wayland
+// The window and renderer are a Bibui.App package, chosen at build time (-p:App=...,
+// samples/BibuiApp.props). Native AOT on Wayland + managed (no Silk, no Skia in the binary):
+//   dotnet publish samples/showcase -c Release -r linux-x64 -p:PublishAot=true -p:App=WaylandManaged
 
 using System.Diagnostics;
 using System.Globalization;
+using Bibui.App;
 using Bibui.Core;
-using Bibui.Platform.Wayland;
 using Bibui.Core.Draw;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Core.Runtime;
@@ -35,9 +36,10 @@ if (Has("--help") || Has("-h"))
     Console.WriteLine("""
         showcase: Zenith, an observatory console built with bibui.
 
-          (no arguments)              open the window: Silk host, Skia raster
-          --host silk|wayland         the window host
-          --raster skia|managed       the rasterizer (managed: C#, FreeType/HarfBuzz text)
+          (no arguments)              open the window, on the Bibui.App package built with
+                                      (SilkSkiaGl unless -p:App=... chose another)
+          --raster skia|managed       what draws the headless pictures (managed: C#,
+                                      FreeType/HarfBuzz text; skia where the package brings it)
           --accent #RRGGBB            the seed colour the theme is generated from
           --light                     start in light mode
           --shots DIR [--all]         render the README's screenshots headlessly into DIR and exit
@@ -49,44 +51,21 @@ if (Has("--help") || Has("-h"))
     return 0;
 }
 
-#if WAYLAND_ONLY
-string host = Arg("--host") ?? "wayland";
+#if APP_SKIA
+string raster = Arg("--raster") ?? "skia";
 #else
-string host = Arg("--host") ?? "silk";
-#endif
-string raster = Arg("--raster") ?? (host == "wayland" ? "managed" : "skia");
-#if WAYLAND_ONLY
-if (host != "wayland" || raster != "managed")
-{
-    Console.Error.WriteLine("This build carries only the Wayland host and the managed raster (ShowcaseRoute=wayland).");
-    if (host != "wayland" && !Has("--shots") && !Has("--png") && !Has("--first-frame") && !Has("--selftest")) return 2;
-    host = "wayland";
-    raster = "managed";
-}
+string raster = Arg("--raster") ?? "managed";
 #endif
 
-// What draws a frame's list into pixels: the renderer --raster names.
+// What draws a frame's list into pixels headless: the renderer --raster names.
 DrawToPixels NewDraw() => raster switch
 {
     "managed" => new ManagedRenderer().Draw,
-#if !WAYLAND_ONLY
+#if APP_SKIA
     "skia" => new Bibui.Raster.Skia.SkiaCpuRenderer().Draw,
 #endif
-    _ => throw new ArgumentException($"--raster {raster}: expected skia or managed"),
+    _ => throw new ArgumentException($"--raster {raster}: expected skia or managed (skia only where the Bibui.App package brings it)"),
 };
-
-// The renderer --raster names, bound to memory a window shows: what to draw a
-// frame with, and what to dispose when the window is done.
-(IDisposable Owner, Action<DrawList> Draw) RendererFor(CpuTarget target)
-{
-    if (raster == "managed") { var managed = new ManagedRenderer(target); return (managed, managed.Draw); }
-#if !WAYLAND_ONLY
-    var skia = new Bibui.Raster.Skia.SkiaCpuRenderer(target);
-    return (skia, skia.Draw);
-#else
-    throw new ArgumentException($"--raster {raster}: this build carries only the managed raster");
-#endif
-}
 
 AppIcons.Register();
 var themeFiles = RegisterThemeFiles();
@@ -134,67 +113,23 @@ if (Arg("--png") is { } png)
 }
 
 // ── The window ──────────────────────────────────────────────────────────────
-// The app's own loop: the window waits for input and shows frames, the app
-// builds them, a renderer draws them.
+// The app's own loop on its Bibui.App package: the window waits for input and
+// shows frames, the app builds them, the package's renderer draws them.
 
 var live = NewApp();
 var runtime = BibuiRuntime.Create();
 runtime.SetTheme(live.Theme());
-var options = new PlatformWindowOptions("Zenith — bibui showcase", 1440, 900);
+using var bibuiApp = BibuiApp.Open(runtime, new("Zenith — bibui showcase", 1440, 900),
+    new BibuiAppOptions { AppId = "bibui-showcase", MinWidth = 640, MinHeight = 480 });
+bibuiApp.Frame = Frame;
+while (bibuiApp.WaitForFrame()) Frame();
+return 0;
 
-if (host == "wayland")
+void Frame()
 {
-    if (!WaylandWindow.IsSupported)
-    {
-        Console.Error.WriteLine("--host wayland needs a Wayland session (WAYLAND_DISPLAY) and libwayland-client.");
-        return 1;
-    }
-    using var window = WaylandWindow.Open(runtime, options, new WaylandHostOptions { AppId = "bibui-showcase", MinWidth = 640, MinHeight = 480 });
-    var (renderer, draw) = RendererFor(window.Cpu);
-    using (renderer)
-    {
-        while (WaylandWindow.BeginFrame(window, runtime))
-        {
-            live.Frame(runtime, window.Events);
-            WaylandWindow.BeginDraw(window);
-            draw(runtime.DrawList);
-            WaylandWindow.EndDraw(window);
-            WaylandWindow.EndFrame(window, runtime);
-        }
-    }
-    return 0;
+    live.Frame(runtime, bibuiApp.Window.Frame, bibuiApp.Events);
+    bibuiApp.Present();
 }
-
-#if WAYLAND_ONLY
-return 2;
-#else
-{
-    using var window = SilkWindow.Open(runtime, options);
-    // Skia on the window's GL; --raster managed draws on the CPU, into memory
-    // shown on the window's GL framebuffer (Bibui.Gl).
-    using var shown = raster == "skia" ? null : new Bibui.Gl.GlCpuFramebuffer(window.Gl);
-    var (renderer, draw) = shown is null
-        ? new Bibui.Raster.Skia.SkiaGlRenderer(window.Gl) is var skia ? ((IDisposable)skia, (Action<DrawList>)skia.Draw) : default
-        : RendererFor(shown.Cpu);
-    using (renderer)
-    {
-        window.OnRefresh = Frame;   // keeps drawing during a resize on Windows and macOS
-        while (SilkWindow.BeginFrame(window, runtime)) Frame();
-    }
-    return 0;
-
-    void Frame()
-    {
-        live.Frame(runtime, window.Events);
-        SilkWindow.BeginDraw(window);
-        shown?.BeginDraw();
-        draw(runtime.DrawList);
-        shown?.EndDraw();
-        SilkWindow.EndDraw(window);
-        SilkWindow.EndFrame(window, runtime);
-    }
-}
-#endif
 
 static (int W, int H) ParseSize(string s)
 {

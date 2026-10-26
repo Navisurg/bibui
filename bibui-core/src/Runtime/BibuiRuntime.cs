@@ -47,7 +47,6 @@ public sealed partial class BibuiRuntime
 
     // ── Core app state ───────────────────────────────────────────────────────
     private ThemeTokens _theme = ThemeLoader.BibuiDark();
-    private SurfaceOptions _surface = new() { Width = 800, Height = 600, ScaleFactor = 1f };
     private UiNode? _lastTree;
     private Dictionary<string, Box> _interactiveBoxes = new();
 
@@ -65,22 +64,32 @@ public sealed partial class BibuiRuntime
     private BibUiEvent? _firstEvent, _lastEvent;
 
     /// <summary>
-    /// The display's refresh rate, which a window sets as it opens: the Silk
-    /// window paces its loop to it, and a frame after a wait for input stands
-    /// for one frame of it (<see cref="Dt"/>).
+    /// The window the last frame was built on (<see cref="BeginBuild"/>): its
+    /// physical size, scale and refresh rate. 800 × 600 at 1× and 60 Hz before
+    /// the first frame.
     /// </summary>
-    public float TargetHz { get; set; } = 60f;
+    public WindowFrame Window { get; private set; } = new(800, 600, 1f, 60f);
+
+    /// <summary>The display's refresh rate, from <see cref="Window"/>: the rate the loop is paced to, and one frame of it is <see cref="Dt"/>.</summary>
+    public float TargetHz => Window.RefreshRate;
+
+    /// <summary>Physical px per logical px, from <see cref="Window"/>.</summary>
+    public float ScaleFactor => Window.Scale;
+
+    /// <summary>The frame's width in logical px, from <see cref="Window"/>.</summary>
+    public int SurfaceWidth => Window.LogicalWidth;
+
+    /// <summary>The frame's height in logical px, from <see cref="Window"/>.</summary>
+    public int SurfaceHeight => Window.LogicalHeight;
 
     /// <summary>
-    /// Seconds this frame stands for: what every animation advances by. The
-    /// window measures it and sets it as each frame starts (its BeginFrame),
-    /// before the build, so it holds for the whole frame. A frame that follows
-    /// a wait for input is one frame at <see cref="TargetHz"/>: the wait is not
-    /// frame time, and a window woken after ten minutes must not step its
-    /// animations by ten minutes. Without a window (headless, a test) it stays
-    /// 1/60 unless set, so a run is deterministic.
+    /// Seconds this frame stands for: what every animation advances by. One
+    /// frame at <see cref="TargetHz"/>, the rate the loop is paced to
+    /// (<see cref="SleepUntilNextFrame"/>), never measured: a frame that drops
+    /// steps its animations by one frame all the same, a frame after a wait for
+    /// input does not count the wait, and a headless run is deterministic.
     /// </summary>
-    public float Dt { get; set; } = 1f / 60f;
+    public float Dt => 1f / TargetHz;
 
     /// <summary>
     /// How many frames one request buys. More than one deliberately: a request
@@ -95,7 +104,7 @@ public sealed partial class BibuiRuntime
 
     /// <summary>
     /// Frames the loop still owes. Zero means it may go back to waiting on
-    /// events. Public because a platform's BeginFrame reads it and takes one
+    /// events. Public because the loop's owner reads it and takes one
     /// (<see cref="ConsumeFrame"/>) for the frame it starts, as it sets
     /// <see cref="WakeUp"/>.
     /// </summary>
@@ -133,7 +142,7 @@ public sealed partial class BibuiRuntime
 
     /// <summary>
     /// Wakes a window that blocks between frames — for Silk, a call to
-    /// <c>ContinueEvents()</c>. Set by the platform when it opens a window; invoked on any state change,
+    /// <c>ContinueEvents()</c>. Set by whoever connects the window to the runtime (<c>BibuiApp</c>); invoked on any state change,
     /// from any thread (main, Timer thread, VideoService pump, etc.), so a
     /// handler must be non-blocking and thread-safe.
     /// </summary>
@@ -145,7 +154,19 @@ public sealed partial class BibuiRuntime
         if (Interlocked.CompareExchange(ref _framesRequested, 1, 0) == 0) WakeUp?.Invoke();
     }
 
-    /// <summary>Called by the platform as a frame starts (its BeginFrame), before it is built. Saturates at zero.</summary>
+    /// <summary>
+    /// Sleeps out what is left of one frame at <see cref="TargetHz"/> since the
+    /// last frame started: the loop's pacing, so an animation runs at the
+    /// display's rate. Returns at once when that is already up, as for the first
+    /// frame after a wait for input.
+    /// </summary>
+    public void SleepUntilNextFrame()
+    {
+        var left = TimeSpan.FromSeconds(Dt) - Stopwatch.GetElapsedTime(_buildStarted);
+        if (left > TimeSpan.Zero) Thread.Sleep(left);
+    }
+
+    /// <summary>Called by the loop's owner as a frame starts, before it is built. Saturates at zero.</summary>
     public void ConsumeFrame()
     {
         int n;
@@ -158,22 +179,6 @@ public sealed partial class BibuiRuntime
     }
 
     // ── Mounting ─────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// The surface frames are laid out on: logical size and scale. A window
-    /// sets it when it opens and on every resize; a headless caller sets it
-    /// once. Asks for a frame.
-    /// </summary>
-    public SurfaceOptions Surface
-    {
-        get => _surface;
-        set
-        {
-            _surface = value;
-            _lastTree = null;
-            RequestFrame();
-        }
-    }
 
     /// <summary>
     /// Replaces the active theme and asks for a frame, which is painted in it.
@@ -193,29 +198,39 @@ public sealed partial class BibuiRuntime
     // the app builds with nothing else pushed lands under it.
     private readonly Box _root = new();
 
-    // This frame's surface and theme, as BeginBuild found them: the whole frame
-    // is laid out and painted on the same pair, whatever another thread sets.
-    private SurfaceOptions _frameSurface = null!;
+    // This frame's theme, as BeginBuild found it: the whole frame is laid out
+    // and painted in it, whatever another thread sets.
     private ThemeTokens _frameTheme = null!;
+    // When the frame's build started: what SleepUntilNextFrame paces from.
     private long _buildStarted;
 
     /// <summary>
-    /// Opens a frame: everything built from here to <see cref="EndBuild"/> is
-    /// this frame's tree. The runtime's root is the parent in scope, so a
-    /// component built with nothing else pushed lands under it, and a node built
-    /// some other way is linked under <see cref="ParentInScope"/>. One node built
-    /// at the top is the frame's tree and fills the surface, as a window's
-    /// content does; several are stacked top to bottom.
+    /// Opens a frame laid out on <paramref name="window"/>: everything built from
+    /// here to <see cref="EndBuild"/> is this frame's tree. The runtime's root is
+    /// the parent in scope, so a component built with nothing else pushed lands
+    /// under it, and a node built some other way is linked under
+    /// <see cref="ParentInScope"/>. One node built at the top is the frame's tree
+    /// and fills the window, as a window's content does; several are stacked top
+    /// to bottom.
+    ///
+    /// <para><paramref name="window"/> is the frame's <see cref="Window"/>: its
+    /// size and scale are what the frame is laid out on, and its refresh rate is
+    /// <see cref="TargetHz"/>, of which the frame's <see cref="Dt"/> is one frame.</para>
     ///
     /// <para><paramref name="events"/> is what the keyboard and mouse did since the
     /// last frame (<c>window.Events</c>, or a test server's): the frame's input,
     /// which the boxes built from here ask about. It is emptied. None for a frame
     /// nothing happened to, as a headless one.</para>
     /// </summary>
-    public void BeginBuild(List<WindowEvent>? events = null)
+    public void BeginBuild(WindowFrame window, List<WindowEvent>? events = null)
     {
+        if (window.Width <= 0 || window.Height <= 0 || window.Scale <= 0f || window.RefreshRate <= 0f)
+            throw new ArgumentOutOfRangeException(nameof(window), window, "A window frame needs a size, a scale and a refresh rate.");
+        if (window.Width != Window.Width || window.Height != Window.Height || window.Scale != Window.Scale)
+            _lastTree = null;
+        Window = window;
+
         if (events is not null) ApplyInput(events);
-        _frameSurface = _surface;
         _frameTheme = PaintedTheme(_theme);
         Rates = MotionRates.From(_theme.Motion, Dt, Instant);
         _buildStarted = Stopwatch.GetTimestamp();
@@ -238,7 +253,7 @@ public sealed partial class BibuiRuntime
             throw new InvalidOperationException(
                 "EndBuild without its BeginBuild, or with a BeginParent still open.");
         _parentStack.RemoveAt(_parentStack.Count - 1);
-        var surface = _frameSurface;
+        var window = Window;
         var theme = _frameTheme;
 
         // The frame's tree. One node built at the top is it, and fills the
@@ -258,10 +273,10 @@ public sealed partial class BibuiRuntime
         var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
         // Every rect is solved before anything is recorded. A text measures
         // itself in this runtime's fonts.
-        (_measureTheme, _measureScale) = (theme, surface.ScaleFactor);
+        (_measureTheme, _measureScale) = (theme, window.Scale);
         _fonts.BeginFrameRuns();
         LayoutSolver.Layout(tree, System.Numerics.Vector2.Zero,
-            new System.Numerics.Vector2(surface.Width, surface.Height), _measure);
+            new System.Numerics.Vector2(window.LogicalWidth, window.LogicalHeight), _measure);
         var pointerTransforms = transformed ? PointerTransforms(tree) : null;
         var t2 = Stopwatch.GetTimestamp();
 
@@ -269,7 +284,7 @@ public sealed partial class BibuiRuntime
         // lands in this frame.
         FrameInput input;
         input = CaptureFrameInput();
-        _painter.Record(DrawList, tree, surface, theme, input);
+        _painter.Record(DrawList, tree, window, theme, input);
         // What nobody asked for lately is evicted from the caches recording read.
         _caches.EndFrame();
         _fonts.EndFrame();
@@ -381,23 +396,6 @@ public sealed partial class BibuiRuntime
         _eventsUsed = 0;
     }
 
-    /// <summary>
-    /// Updates the render surface to the given physical pixel dimensions and
-    /// triggers a re-render. Call this from the window's FramebufferResize event.
-    /// </summary>
-    public void ResizeSurface(int physicalWidth, int physicalHeight, float? scaleOverride = null)
-    {
-        var scale = scaleOverride ?? _surface.ScaleFactor;
-        _surface = new SurfaceOptions
-        {
-            Width       = SurfaceOptions.LogicalSize(physicalWidth,  scale),
-            Height      = SurfaceOptions.LogicalSize(physicalHeight, scale),
-            ScaleFactor = scale,
-        };
-        _lastTree = null;
-        RequestFrame();
-    }
-
     // ── Event dispatch ───────────────────────────────────────────────────────
     //
     // Nothing here renders: dispatch reads the last painted frame's rects, which
@@ -439,10 +437,6 @@ public sealed partial class BibuiRuntime
         });
         return true;
     }
-
-    public float ScaleFactor => _surface.ScaleFactor;
-    public int SurfaceWidth  => _surface.Width;
-    public int SurfaceHeight => _surface.Height;
 
     /// <summary>The tree the last frame laid out and painted.</summary>
     internal UiNode? LastTree => _lastTree;

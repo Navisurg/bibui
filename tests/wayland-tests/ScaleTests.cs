@@ -65,22 +65,21 @@ internal static unsafe class ScaleTests
                     int exact = (int)((l * n + 60) / 120); // half away from zero, in integers
                     int got = SurfaceScale.Physical(l, n);
                     if (got != exact) throw new Exception($"{l} at {n}/120: {got}, expected {exact}");
-                    int back = SurfaceOptions.LogicalSize(got, SurfaceScale.ToFactor(n));
+                    int back = WindowFrame.LogicalSize(got, SurfaceScale.ToFactor(n));
                     if (back != l) throw new Exception($"{l} at {n}/120 → {got} → {back}: does not round-trip");
                 }
         });
 
-        t.Run("scale: ResizeSurface at 1.25 keeps an odd logical size, and the frame is the buffer's size", () =>
+        t.Run("scale: a window frame at 1.25 keeps an odd logical size, and the frame is the buffer's size", () =>
         {
             var runtime = BibuiRuntime.Create();
-            runtime.SetBuild(() => runtime.Box().Sized(Bibui.Core.Size.Fill, Bibui.Core.Size.Fill),
-                new Bibui.Core.SurfaceOptions { Width = 100, Height = 100, ScaleFactor = 1f });
             var (w, h) = WaylandWindow.FramebufferSize(1001, 202, 150);
-            runtime.ResizeSurface(w, h, SurfaceScale.ToFactor(150));
-            Assert.Eq((1001, 202), (runtime.SurfaceWidth, runtime.SurfaceHeight), "logical, not truncated to 1000");
+            runtime.SetBuild(() => runtime.Box().Sized(Bibui.Core.Size.Fill, Bibui.Core.Size.Fill),
+                new WindowFrame(w, h, SurfaceScale.ToFactor(150), 60f));
             runtime.Step();
-            Assert.Eq((1251, 253), (SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor),
-                SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor)), "the frame's physical size");
+            Assert.Eq((1001, 202), (runtime.SurfaceWidth, runtime.SurfaceHeight), "logical, not truncated to 1000");
+            Assert.Eq((1251, 253), (WindowFrame.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor),
+                WindowFrame.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor)), "the frame's physical size");
         });
 
         // ── Which scale ──────────────────────────────────────────────────────
@@ -279,16 +278,15 @@ internal static unsafe class ScaleTests
                     runtime.Text("ÆØÅ fig. 0123");
                 }
                 return box;
-            }, new Bibui.Core.SurfaceOptions { Width = 64, Height = 48, ScaleFactor = 1f });
-            runtime.ResizeSurface(physW, physH, SurfaceScale.ToFactor(scale120)); // as the host does
+            }, new WindowFrame(physW, physH, SurfaceScale.ToFactor(scale120), 60f)); // as the host hands it
 
             pool = new BufferPool<ShmBuffer>(new ShmAllocator(_shm, bufferListener, null), depth: 2);
             var buffer = pool.TryAcquire(physW, physH)!;
             runtime.Step();
             skia.Draw(runtime.DrawList, buffer.Pixels);
             var shmPixels = new ReadOnlySpan<byte>((void*)buffer.Map, physW * physH * 4).ToArray();
-            Assert.Eq((physW, physH), (SurfaceOptions.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor),
-                SurfaceOptions.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor)), "the frame at the buffer's physical size");
+            Assert.Eq((physW, physH), (WindowFrame.PhysicalSize(runtime.SurfaceWidth, runtime.ScaleFactor),
+                WindowFrame.PhysicalSize(runtime.SurfaceHeight, runtime.ScaleFactor)), "the frame at the buffer's physical size");
             var reference = new byte[physW * physH * 4];
             fixed (byte* p = reference) skia.Draw(runtime.DrawList, new Bibui.Core.Draw.RasterPixels((nint)p, physW, physH, physW * 4));
             Assert.True(shmPixels.AsSpan().SequenceEqual(reference), "shm pixels equal the frame drawn packed, byte for byte");
