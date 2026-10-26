@@ -79,6 +79,7 @@ public readonly ref struct PixelTarget
 /// clip rectangle, against whichever layer is current; for a non-rectangular clip
 /// it multiplies its clip coverage into <c>table[coverage]</c> itself.</para>
 /// </summary>
+[Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
 internal static class GlyphCompositor
 {
     /// <summary>

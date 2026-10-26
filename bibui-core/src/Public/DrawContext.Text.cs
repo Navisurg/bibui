@@ -18,6 +18,7 @@ public readonly ref partial struct DrawContext
     /// walked straight into the list, so the backend draws exactly what was
     /// measured.
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     private void DrawRuns(ReadOnlySpan<char> text, float x, float baselineY, FontStyle style, Rgba color)
     {
         var glyphs = List.ReserveGlyphs(text.Length, out int glyphStart);
@@ -109,6 +110,7 @@ public readonly ref partial struct DrawContext
     /// physical px, its ascent at the top. Measure it with <see cref="Fonts"/> and
     /// the same font.
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public void DrawText(ReadOnlySpan<char> text, float x, float top, in Font font, Rgba color)
     {
         if (text.IsEmpty) return;

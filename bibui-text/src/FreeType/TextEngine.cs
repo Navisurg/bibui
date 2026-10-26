@@ -160,6 +160,7 @@ public sealed class TextEngine : IDisposable
     // ── Measure, metrics ─────────────────────────────────────────────────────
 
     /// <summary>Width of <paramref name="text"/> in physical px: the sum of its linear advances.</summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public float Measure(FontStrike strike, ReadOnlySpan<char> text) => strike.Measure(text);
 
     /// <summary>Ascent, descent and leading in physical px.</summary>
@@ -172,6 +173,7 @@ public sealed class TextEngine : IDisposable
     /// <paramref name="baselineY"/>), and returns
     /// its advance (what <see cref="FontStrike.Measure(ReadOnlySpan{char})"/> returns).
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public float DrawText(in PixelTarget dst, FontStrike strike, ReadOnlySpan<char> text, float x, float baselineY,
         TextColor color, PixelClip? clip = null, MaskBlend blend = MaskBlend.LegacyN32, ShapeOptions? options = null)
     {
@@ -184,6 +186,7 @@ public sealed class TextEngine : IDisposable
     }
 
     /// <summary>Draws a shaped run with its origin at (<paramref name="x"/>, <paramref name="baselineY"/>).</summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public void DrawRun(in PixelTarget dst, GlyphRun run, float x, float baselineY, TextColor color,
         PixelClip? clip = null, MaskBlend blend = MaskBlend.LegacyN32)
     {
@@ -197,6 +200,7 @@ public sealed class TextEngine : IDisposable
     /// Draws glyphs at explicit positions, relative to the origin (<paramref name="x"/>,
     /// <paramref name="baselineY"/>): the shape of a <c>Glyphs</c> draw op.
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public void DrawGlyphs(in PixelTarget dst, FontStrike strike, ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
         float x, float baselineY, TextColor color, PixelClip? clip = null, MaskBlend blend = MaskBlend.LegacyN32)
     {

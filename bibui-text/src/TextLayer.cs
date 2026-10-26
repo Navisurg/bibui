@@ -116,6 +116,7 @@ public static class TextLayer
     internal static bool Fits(float width, float room) => width <= room + FitSlack;
 
     /// <summary>The width of <paramref name="text"/> on one line in <paramref name="font"/>, in logical px.</summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     internal static float WidthFromChars(Fonts f, ReadOnlySpan<char> text, in Font font)
         => text.IsEmpty ? 0f : StyleFromFont(f, font, font.Scale).Strike.Measure(text) / font.Scale;
 
@@ -123,6 +124,7 @@ public static class TextLayer
     /// The char offset in <paramref name="text"/> nearest <paramref name="x"/>,
     /// logical px from where the text starts. See <see cref="Fonts.OffsetAt"/>.
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     internal static int OffsetFromX(Fonts f, ReadOnlySpan<char> text, in Font font, float x)
     {
         if (x <= 0f || text.IsEmpty) return 0;
@@ -460,6 +462,7 @@ public static class TextLayer
     // ── Wraps ────────────────────────────────────────────────────────────────
 
     /// <summary>The lines <paramref name="text"/> breaks into at <paramref name="width"/>. See <see cref="Fonts.Wrap"/>.</summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     internal static TextLine? LinesFromChars(Fonts f, ReadOnlySpan<char> text, in Font font, float width, TextWrap wrap)
     {
         if (text.IsEmpty) return null;
@@ -518,6 +521,7 @@ public static class TextLayer
     // by adding them up, never by measuring a slice again. Added from a line's
     // first char in order, they give what measuring that line gives, to the bit,
     // so the breaks are the ones measuring each candidate made.
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     private static TextLine LinesFromCharsUncached(Fonts f, ReadOnlySpan<char> text, float maxWidth, FontStyle style, float scale, TextWrap wrap)
     {
         var chain = new LineChain();

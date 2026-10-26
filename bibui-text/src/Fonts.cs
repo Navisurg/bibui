@@ -139,6 +139,7 @@ public sealed class Fonts : IDisposable
     /// <paramref name="font"/>, in logical px. The same number layout gives a
     /// text with that content, from the same cache.
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public float Measure(ReadOnlySpan<char> text, in Font font) => TextLayer.WidthFromChars(this, text, font);
 
     /// <summary>
@@ -150,6 +151,7 @@ public sealed class Fonts : IDisposable
     /// <para>Each candidate is the width of the chars before it, measured as a
     /// text of its own — which is how a text split at that offset is drawn.</para>
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public int OffsetAt(ReadOnlySpan<char> text, in Font font, float x) => TextLayer.OffsetFromX(this, text, font, x);
 
     /// <summary>
@@ -168,6 +170,7 @@ public sealed class Fonts : IDisposable
     /// <para>Either way a line break (\n, \r, \r\n) always starts a new line,
     /// and a blank line is a line of its own.</para>
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public TextLine? Wrap(ReadOnlySpan<char> text, in Font font, float width, TextWrap wrap = TextWrap.Words)
         => TextLayer.LinesFromChars(this, text, font, width, wrap);
 }

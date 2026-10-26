@@ -173,6 +173,7 @@ public sealed unsafe class FontStrike
     /// computes it: one glyph per code point, linear advances summed in order. No
     /// shaping, so no kerning and no ligatures. Allocates nothing.
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public float Measure(ReadOnlySpan<char> text)
     {
         var direct = Direct;
@@ -198,6 +199,7 @@ public sealed unsafe class FontStrike
     /// gives for that slice, to the bit: a line breaker walks the text once and
     /// never measures a slice again.
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     internal void CharAdvances(ReadOnlySpan<char> text, Span<float> advances)
     {
         int i = 0;
@@ -228,6 +230,7 @@ public sealed unsafe class FontStrike
     /// at least one entry per char. Returns how many glyphs; <paramref name="width"/>
     /// is the last pen position, as <see cref="Measure"/> answers.
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     internal int Glyphs(ReadOnlySpan<char> text, Span<ushort> glyphs, Span<System.Numerics.Vector2> points, out float width)
     {
         int n = 0, i = 0;
@@ -282,6 +285,7 @@ public sealed unsafe class FontStrike
     }
 
     /// <summary>Width of <paramref name="text"/> under <paramref name="options"/>.</summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public float Measure(ReadOnlySpan<char> text, ShapeOptions options)
     {
         if (options.Mode == ShapingMode.Nominal) return Measure(text);
