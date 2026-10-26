@@ -40,7 +40,7 @@ public static class TextLayer
     // ── Styles ───────────────────────────────────────────────────────────────
 
     /// <summary>The style of <paramref name="face"/> at <paramref name="sizePx"/> physical px.</summary>
-    internal static FontStyle StyleFromFaceSize(Fonts f, FontFace face, float sizePx)
+    public static FontStyle StyleFromFaceSize(Fonts f, FontFace face, float sizePx)
     {
         ulong key = (ulong)(uint)face.Id << 32 | (uint)BitConverter.SingleToInt32Bits(sizePx);
         if (f.LastStyle is { } last && last.Key == key) return last;
@@ -60,7 +60,7 @@ public static class TextLayer
     /// The style of <paramref name="font"/> measured at <paramref name="scale"/>: a
     /// draw measures at its canvas's scale, layout at the font's own.
     /// </summary>
-    internal static FontStyle StyleFromFont(Fonts f, in Font font, float scale)
+    public static FontStyle StyleFromFont(Fonts f, in Font font, float scale)
         => StyleFromFaceSize(f, font.Face ?? FaceBuiltIn(f, 400), font.Size * scale);
 
     // ── Line metrics ─────────────────────────────────────────────────────────
@@ -155,7 +155,7 @@ public static class TextLayer
     /// negative going left, 0 at the edge. The cursor is assumed to be on an
     /// element boundary.
     /// </summary>
-    internal static int ScanTextElement(ReadOnlySpan<char> str, int cursor, int delta)
+    public static int ScanTextElement(ReadOnlySpan<char> str, int cursor, int delta)
     {
         if (delta > 0)
             return cursor < str.Length ? StringInfo.GetNextTextElementLength(str[cursor..]) : 0;
@@ -246,77 +246,150 @@ public static class TextLayer
         return (last.X + last.Width) / scale;
     }
 
+    // ── Measuring blocks ─────────────────────────────────────────────────────
+    //
+    // What measuring a text is made of, for layout's walk and for usage code
+    // alike: each builds its own loop from these two, so both measure with the
+    // same code. GlyphDirect is the fast path's one char; GlyphNext the step for
+    // everything else.
+
+    /// <summary>
+    /// The fast path's one char: <paramref name="c"/>'s glyph and advance (physical
+    /// px) from <paramref name="strike"/>'s direct table, when it is below 256 and
+    /// its entry is filled; false for any other char, which <see cref="GlyphNext"/>
+    /// measures (and fills the entry of, for a char below 256).
+    /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static bool GlyphDirect(Bibui.Text.FreeType.FontStrike strike, char c, out ushort glyph, out float advance)
+        => GlyphDirect(strike.Direct, c, out glyph, out advance);
+
+    // The same, on the strike's table read once by a loop that asks it of many chars.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    internal static bool GlyphDirect(Bibui.Text.FreeType.FontStrike.DirectGlyph[] direct, char c, out ushort glyph, out float advance)
+    {
+        if (c < 256 && direct[c].Filled)
+        {
+            (glyph, advance) = (direct[c].Glyph, direct[c].Advance);
+            return true;
+        }
+        (glyph, advance) = (0, 0f);
+        return false;
+    }
+
+    /// <summary>
+    /// The step at <paramref name="chars"/>[<paramref name="i"/>] the fast path does
+    /// not take: a grapheme cluster the cluster face sets (ClusterStart: a code point
+    /// the text's face lacks, or a mark that asks for emoji; its shape from the
+    /// cluster cache, or HarfBuzz), else one code point in <paramref name="style"/>'s
+    /// face (<see cref="Bibui.Text.FreeType.FontStrike.Next"/>).
+    /// </summary>
+    public static GlyphStep GlyphNext(Fonts f, FontStyle style, ReadOnlySpan<char> chars, int i)
+    {
+        var clusterFace = f.ClusterFace;
+        if (clusterFace != style.Face)
+        {
+            int s = ClusterStart(chars, i, 0, style.Face, clusterFace);
+            if (s >= 0)
+            {
+                int e = s + StringInfo.GetNextTextElementLength(chars[s..]);
+                var clusterStyle = StyleFromFaceSize(f, clusterFace, style.Strike.Size);
+                int slot = ClusterSlotOf(f, clusterStyle, chars[s..e], out float clusterAdvance);
+                return new GlyphStep(s, e, clusterAdvance, clusterStyle, clusterFace: true, glyph: 0, slot);
+            }
+        }
+        var (glyph, advance, next) = style.Strike.Next(chars, i);
+        return new GlyphStep(i, next, advance, style, clusterFace: false, glyph, slot: 0);
+    }
+
     // RunsFromChars' walk, a function of its own so the check before it
     // (RunsAreCurrent) and the ask around it stay small enough to inline.
     // Pushes the text's glyphs, then its runs, and returns their handle.
     //
-    // The text is walked in its own face, a glyph per code point, as fast as the
-    // strike's tables go. Only a char the fast loop does not take (at or above
-    // 256) is looked at again: one that starts a grapheme cluster the text's face
-    // cannot set (ClusterStart) ends the run, and the cluster, with every cluster
-    // after it that goes the same way, is a run of its own in the cluster face,
-    // shaped by HarfBuzz (ClusterShape). Then the text's face goes on. Plain text
-    // never leaves the fast loop and its one-char step, and with no cluster face
-    // set up (the built-in Inter) nothing is looked at again at all.
+    // Layout's loop over the measuring blocks: stretches of the fast path's
+    // chars (GlyphDirect) in the text's face, and a GlyphNext step for each char
+    // they do not take. A cluster set in the cluster face ends the text's run,
+    // and it and the clusters after it are a run of their own; then the text's
+    // face goes on. The runs are the loop's own bookkeeping; the measuring is the
+    // blocks'.
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private static RunHandle RunsWalk(Fonts f, ReadOnlySpan<char> chars, FontStyle style)
     {
         var strike = style.Strike;
-        var clusterFace = f.ClusterFace;
-        bool clusters = clusterFace != style.Face;
         RunsGlyphRoom(f, f.RunGlyphCount + chars.Length);
+        Span<ushort> glyphs = f.RunGlyphs;
+        Span<System.Numerics.Vector2> points = f.RunPoints;
 
         int first = f.RunCount;
         int n = f.RunGlyphCount;
-        int runGlyph = n, runChar = 0;   // where the run being walked starts, in glyphs and in chars
+        int runGlyph = n;                // where the run being walked starts
+        var runStyle = style;            // and what it is set in
         float x = 0f, pen = 0f;          // its pen from the text's start, and the pen within it
         int i = 0;
         while (i < chars.Length)
         {
-            (i, n, pen) = Bibui.Text.FreeType.FontStrike.GlyphsDirect(chars, i, strike.Direct, f.RunGlyphs, f.RunPoints, n, pen);
-            if (i == chars.Length) break;
-
-            int s = clusters ? ClusterStart(chars, i, runChar, style.Face, clusterFace) : -1;
-            if (s >= 0)
+            if (runStyle == style)
             {
-                // The cluster's chars before i went into the text's run, a glyph
-                // per code point: take them back, and the pen with them.
-                int back = CodePointCount(chars[s..i]);
-                if (back > 0) { n -= back; pen = f.RunPoints[n].X; }
-
-                // The text's run so far: always the first (it says what the text
-                // was walked in), others when they have glyphs.
-                if (f.RunCount == first || n > runGlyph) { RunPush(f, style, runGlyph, n - runGlyph, x, pen); x += pen; }
-
-                // The clusters' run: this one, and every one after it that goes the same way.
-                var clusterStyle = StyleFromFaceSize(f, clusterFace, strike.Size);
-                int clusterGlyph = n;
-                pen = 0f;
-                do
-                {
-                    int e = s + StringInfo.GetNextTextElementLength(chars[s..]);
-                    n = ClusterShape(f, clusterStyle, chars[s..e], n, ref pen);
-                    s = e;
-                }
-                while (s < chars.Length && ClusterStart(chars, s, s, style.Face, clusterFace) == s);
-                RunPush(f, clusterStyle, clusterGlyph, n - clusterGlyph, x, pen);
+                // In the text's face: the fast stretch from here, then the step it stops at.
+                (i, n, pen) = RunsFast(chars, i, strike.Direct, glyphs, points, n, pen);
+                if (i == chars.Length) break;
+            }
+            else if (GlyphDirect(strike.Direct, chars[i], out _, out _))
+            {
+                // After a cluster, a fast char goes back to the text's face: a run of its own.
+                RunPush(f, runStyle, runGlyph, n - runGlyph, x, pen);
                 x += pen;
-
-                (i, runGlyph, runChar, pen) = (s, n, s, 0f);
-                RunsGlyphRoom(f, n + chars.Length - i);
+                (runStyle, runGlyph, pen) = (style, n, 0f);
                 continue;
             }
 
-            var (glyph, advance, next) = strike.Next(chars, i);
-            f.RunGlyphs[n] = glyph;
-            f.RunPoints[n] = new(pen, 0f);
-            pen += advance;
-            n++;
-            i = next;
+            var step = GlyphNext(f, style, chars, i);
+            if (step.ClusterFace)
+            {
+                if (runStyle == style)
+                {
+                    // The cluster's chars before i went into the text's run, a glyph
+                    // per code point: take them back, and the pen with them.
+                    int back = CodePointCount(chars[step.Start..i]);
+                    if (back > 0) { n -= back; pen = points[n].X; }
+                    // The text's run so far: always the first (it says what the text
+                    // was walked in), others when they have glyphs.
+                    if (f.RunCount == first || n > runGlyph) { RunPush(f, style, runGlyph, n - runGlyph, x, pen); x += pen; }
+                    (runStyle, runGlyph, pen) = (step.Style, n, 0f);
+                }
+                n = ClusterPlace(f, step, n, ref pen);
+                RunsGlyphRoom(f, n + chars.Length - step.Next);
+                glyphs = f.RunGlyphs;
+                points = f.RunPoints;
+            }
+            else
+            {
+                if (runStyle != style) { RunPush(f, runStyle, runGlyph, n - runGlyph, x, pen); x += pen; (runStyle, runGlyph, pen) = (style, n, 0f); }
+                glyphs[n] = step.Glyph;
+                points[n] = new(pen, 0f);
+                pen += step.Advance;
+                n++;
+            }
+            i = step.Next;
         }
-        if (f.RunCount == first || n > runGlyph) RunPush(f, style, runGlyph, n - runGlyph, x, pen);
+        if (f.RunCount == first || n > runGlyph) RunPush(f, runStyle, runGlyph, n - runGlyph, x, pen);
         f.RunGlyphCount = n;
         return new RunHandle(first, f.RunCount - first, f.RunFrame);
+    }
+
+    // Layout's fast stretch: from i, every char GlyphDirect takes, its glyph and
+    // point written at n. A function of its own, with nothing else live in it, so
+    // the JIT keeps the index, the count and the pen in registers.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static (int I, int N, float Pen) RunsFast(ReadOnlySpan<char> chars, int i, Bibui.Text.FreeType.FontStrike.DirectGlyph[] direct,
+        Span<ushort> glyphs, Span<System.Numerics.Vector2> points, int n, float pen)
+    {
+        for (; i < chars.Length && GlyphDirect(direct, chars[i], out ushort glyph, out float advance); i++, n++)
+        {
+            glyphs[n] = glyph;
+            points[n] = new(pen, 0f);
+            pen += advance;
+        }
+        return (i, n, pen);
     }
 
     // A run of a text, pushed onto the frame's table.
@@ -373,40 +446,30 @@ public static class TextLayer
         return count;
     }
 
-    // One grapheme cluster in the cluster face, appended at n with the pen at
-    // pen: its glyphs (a ligature makes 👍🏽 or 🧑‍🚀 one), each at the pen plus
-    // its place in the cluster, and the pen moved by the cluster's width. Returns
-    // the glyph count after it. The shape is HarfBuzz's, made once a cluster and
-    // style and kept in Fonts.Clusters by a hash of the chars seeded with the
-    // style's key; a hit and a miss place the glyphs the same way, to the bit.
-    private static int ClusterShape(Fonts f, FontStyle clusterStyle, ReadOnlySpan<char> cluster, int n, ref float pen)
+    // A grapheme cluster's shape in the cluster face, by a hash of its chars
+    // seeded with the style's key: its slot in Fonts.Clusters, made by HarfBuzz
+    // on a miss and kept; 0 when the shape is too long to keep (more than eight
+    // glyphs), which leaves it in the engine's scratch run. Its advance either way.
+    private static int ClusterSlotOf(Fonts f, FontStyle clusterStyle, ReadOnlySpan<char> cluster, out float advance)
     {
         ulong hash = System.IO.Hashing.XxHash3.HashToUInt64(MemoryMarshal.AsBytes(cluster), unchecked((long)clusterStyle.Key));
         if (f.ClusterSlots.TryGetValue(hash, out int slot))
         {
             ClusterLruUnlink(f, slot);
             ClusterLruPushFront(f, slot);
-            return ClusterCopy(f, ref f.Clusters[slot], n, ref pen);
+            advance = f.Clusters[slot].Advance;
+            return slot;
         }
 
         var run = clusterStyle.Strike.Font.Engine.ScratchRun;
         clusterStyle.Strike.Shape(cluster, run, Bibui.Text.FreeType.ShapeOptions.HarfBuzzDefault);
-        var shape = new ClusterShape { Hash = hash, GlyphCount = run.Count };
+        advance = 0f;
         if (run.Count > 8)
         {
-            // Too long to keep (a font with no ligature for a long sequence): placed as shaped, every walk.
-            RunsGlyphRoom(f, n + run.Count);
-            float at = 0f;
-            for (int k = 0; k < run.Count; k++, n++)
-            {
-                f.RunGlyphs[n] = (ushort)run.Glyphs[k];
-                f.RunPoints[n] = new(pen + (at + run.XOffsets[k]), run.YOffsets[k]);
-                at += run.Advances[k];
-            }
-            pen += at;
-            return n;
+            foreach (float a in run.Advances) advance += a;
+            return 0;
         }
-        float advance = 0f;
+        var shape = new ClusterShape { Hash = hash, GlyphCount = run.Count };
         for (int k = 0; k < run.Count; k++)
         {
             shape.Glyphs[k] = (ushort)run.Glyphs[k];
@@ -426,7 +489,26 @@ public static class TextLayer
         f.Clusters[slot] = shape;
         f.ClusterSlots[hash] = slot;
         ClusterLruPushFront(f, slot);
-        return ClusterCopy(f, ref f.Clusters[slot], n, ref pen);
+        return slot;
+    }
+
+    // A cluster step's glyphs into the frame's buffers at n, from the pen at pen:
+    // its kept shape's, or the scratch run's for one too long to keep. Returns the
+    // glyph count after it. A kept shape and a shaped one place glyphs the same way.
+    private static int ClusterPlace(Fonts f, in GlyphStep step, int n, ref float pen)
+    {
+        if (step.Slot > 0) return ClusterCopy(f, ref f.Clusters[step.Slot], n, ref pen);
+        var run = step.Style.Strike.Font.Engine.ScratchRun;
+        RunsGlyphRoom(f, n + run.Count);
+        float at = 0f;
+        for (int k = 0; k < run.Count; k++, n++)
+        {
+            f.RunGlyphs[n] = (ushort)run.Glyphs[k];
+            f.RunPoints[n] = new(pen + (at + run.XOffsets[k]), run.YOffsets[k]);
+            at += run.Advances[k];
+        }
+        pen += at;
+        return n;
     }
 
     // A kept shape's glyphs into the frame's buffers at n, from the pen at pen.

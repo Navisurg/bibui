@@ -212,7 +212,7 @@ public readonly record struct Font
 /// measures and shapes, and its metrics. <see cref="TextLayer.StyleFromFaceSize"/>
 /// keeps one per (face, size), under <see cref="Key"/>.
 /// </summary>
-internal sealed class FontStyle
+public sealed class FontStyle
 {
     public ulong Key;              // the face's id << 32 | the size's bits: what a cache key under this style holds of it
     public FontFace Face = null!;
@@ -270,6 +270,35 @@ internal struct ClusterGlyphs { private ushort _glyph; }
 
 [System.Runtime.CompilerServices.InlineArray(8)]
 internal struct ClusterPoints { private System.Numerics.Vector2 _point; }
+
+/// <summary>
+/// One step of measuring a text that is not the fast path's (<see cref="TextLayer.GlyphNext"/>):
+/// a grapheme cluster the cluster face sets, or one code point in the text's face.
+/// Its advance in physical px, the style it is set in, and its glyphs: one
+/// (<see cref="Glyph"/>), or a cluster's, kept in the cluster cache
+/// (<see cref="Slot"/>) or, too long to keep, in its engine's scratch run until
+/// the next shaping (<see cref="Slot"/> 0).
+/// </summary>
+public readonly struct GlyphStep
+{
+    /// <summary>Where the step starts: the char asked about, or before it, when a mark makes one cluster of chars already measured (1️⃣).</summary>
+    public readonly int Start;
+    /// <summary>Where the next step starts.</summary>
+    public readonly int Next;
+    /// <summary>How far it moves the pen, physical px.</summary>
+    public readonly float Advance;
+    /// <summary>The style it is set in: the text's own, or the cluster face's at the same size.</summary>
+    public readonly FontStyle Style;
+    /// <summary>Whether it is a cluster set in the cluster face.</summary>
+    public readonly bool ClusterFace;
+    /// <summary>A text-face step's glyph.</summary>
+    public readonly ushort Glyph;
+    /// <summary>A cluster's slot in the cluster cache; 0 when it was too long to keep.</summary>
+    public readonly int Slot;
+
+    internal GlyphStep(int start, int next, float advance, FontStyle style, bool clusterFace, ushort glyph, int slot)
+        => (Start, Next, Advance, Style, ClusterFace, Glyph, Slot) = (start, next, advance, style, clusterFace, glyph, slot);
+}
 
 /// <summary>A kept wrap: its lines, and when it was last asked for.</summary>
 internal struct WrapNode

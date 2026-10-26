@@ -149,12 +149,12 @@ public sealed unsafe class FontStrike
     }
 
     // For chars below 256, the glyph and its advance side by side, filled on
-    // first use (rad's utf8_class1Direct_map): a walk reads one entry per char.
+    // first use (rad's utf8_class1_direct_map): a walk reads one entry per char.
     // Anything else goes through the font's cmap and the strike's advances.
-    // Internal, with GlyphsDirect and Next, for a walk that interleaves them
-    // with steps of its own (TextLayer's, which sets grapheme clusters in another face).
+    // TextLayer.GlyphDirect reads it: the fast path's measuring block.
     internal readonly DirectGlyph[] Direct = new DirectGlyph[256];
 
+    // A char's entry: its glyph and advance in physical px, side by side, once Filled.
     internal struct DirectGlyph
     {
         public ushort Glyph;
