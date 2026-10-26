@@ -1,3 +1,4 @@
+using Bibui.Core.Draw;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
 
@@ -136,7 +137,16 @@ public sealed partial class BibuiApp : IDisposable
     // and a frame is drawn into it.
     private static partial AppWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options);
     private partial AppRenderer MakeRenderer();
-    /// <summary>Draws the runtime's <c>DrawList</c> into the window and shows it: the end of the app's frame.</summary>
-    public partial void Present();
+    /// <summary>
+    /// Draws the runtime's <c>DrawList</c> into the window and shows it: the end of
+    /// the app's frame. With <paramref name="into"/>, the frame is copied there
+    /// first, before it is shown: BGRA8888 premultiplied, top row first, at the
+    /// frame's size in physical pixels (<c>runtime.Window</c>), into memory the
+    /// caller owns. That is a screenshot of what the window shows, drawn by the
+    /// window's own renderer, textures and all. False when <paramref name="into"/>
+    /// is not the frame's size (a resize came between): nothing is copied, and
+    /// the next frame can be.
+    /// </summary>
+    public partial bool Present(RasterPixels? into = null);
     private partial void DisposeRenderer();
 }

@@ -71,6 +71,17 @@ static class TestPortSocketTests
             IsTrue(File.ReadAllBytes(png).AsSpan().StartsWith((ReadOnlySpan<byte>)[0x89, (byte)'P', (byte)'N', (byte)'G']), "written as a PNG");
         });
 
+        run("TestPort: a screenshot is answered once the app has written it, frames later", () =>
+        {
+            // As a window app writes one: from the frame it presents, which may not be
+            // the first (a resize came between); until then it is not settled.
+            using var app = new CounterApp(shotLate: 3);
+            using var client = app.Connect();
+            var png = Path.Combine(app.Folder, "late.png");
+            IsTrue(Ok(client.Ask("{\"$cmd\":\"test.screenshot\",\"path\":" + JsonSerializer.Serialize(png) + "}")), "a screenshot");
+            IsTrue(File.Exists(png), "written before the answer");
+        });
+
         run("TestPort: a box's claims are written one name per bit, and answers write ' and é as themselves", () =>
         {
             using var app = new CounterApp(list: true);
@@ -224,6 +235,10 @@ static class TestPortSocketTests
         private readonly List<CounterCmd> _pending = [];
         private readonly List<WindowEvent> _events = [];
         private readonly SkiaCpuRenderer? _cpu;    // what screenshots are drawn with; none, and they are refused
+        private readonly int _shotLate;            // frames a screenshot waits before it is written
+        private string? _shotPath;                 // the screenshot asked for, written at the end of a frame
+        private RectF? _shotRegion;
+        private int _shotWait;
         private readonly int _rows;
         private readonly bool _list;
         private readonly bool _reportsState;
@@ -232,9 +247,10 @@ static class TestPortSocketTests
 
         // list: a scrolling list of buttons below the counter, 100 px tall and far
         // taller inside: row-i sets the count to 100 + i.
-        public CounterApp(bool draw = true, bool state = true, int requestBytes = 1 << 16, int rows = 0, TimeSpan? sendTimeout = null, bool list = false)
+        // shotLate: a screenshot is written that many frames after it is asked for.
+        public CounterApp(bool draw = true, bool state = true, int requestBytes = 1 << 16, int rows = 0, TimeSpan? sendTimeout = null, bool list = false, int shotLate = 0)
         {
-            (_rows, _list, _reportsState, _cpu) = (rows, list, state, draw ? new SkiaCpuRenderer() : null);
+            (_rows, _list, _reportsState, _cpu, _shotLate) = (rows, list, state, draw ? new SkiaCpuRenderer() : null, shotLate);
             _runtime.SetTheme(ThemeRegistry.Load("bibui-dark"));
             Port = TestPort.Open(_runtime, new TestPortOptions
             {
@@ -268,9 +284,9 @@ static class TestPortSocketTests
                     {
                         case TestCmdKind.Events: _events.AddRange(cmd.Events); break;
                         case TestCmdKind.Screenshot:
-                            // The last frame's draw list is still the runtime's: the frame on screen.
+                            // Written from the frame this one builds, at its end, as a window app does.
                             if (_cpu is null) Port.RefuseCmd("This app takes no screenshots.");
-                            else File.WriteAllBytes(cmd.Path!, FramePixels.Png(_runtime, _cpu.Draw, cmd.Region));
+                            else (_shotPath, _shotRegion, _shotWait) = (cmd.Path, cmd.Region, _shotLate);
                             break;
                         case TestCmdKind.App:
                             try { _pending.Add(JsonSerializer.Deserialize(cmd.Json, CounterJson.Default.CounterCmd)!); }
@@ -301,12 +317,18 @@ static class TestPortSocketTests
                 }
                 _runtime.EndBuild();
                 if (_pending.Count > 0) _runtime.RequestFrame();
+                if (_shotPath is not null && _shotWait-- == 0)
+                {
+                    File.WriteAllBytes(_shotPath, FramePixels.Png(_runtime, _cpu!.Draw, _shotRegion));
+                    _shotPath = null;
+                }
+                bool settled = _pending.Count == 0 && _shotPath is null;
 
                 //- end of frame: answer, once settled
                 watch.Restart();
-                if (_reportsState) Port.AnswerCmds(_pending.Count == 0, _state, CounterJson.Default.CounterState);
-                else Port.AnswerCmds(_pending.Count == 0);
-                if (pulled && _pending.Count == 0)
+                if (_reportsState) Port.AnswerCmds(settled, _state, CounterJson.Default.CounterState);
+                else Port.AnswerCmds(settled);
+                if (pulled && settled)
                 {
                     LastAnswer = watch.Elapsed;
                     Volatile.Write(ref Answered, Answered + 1);

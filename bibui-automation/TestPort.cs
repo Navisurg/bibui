@@ -49,7 +49,7 @@ public readonly ref struct TestCmd
     public readonly string? Path;
     /// <summary>
     /// Screenshot: the part of the frame asked for, in logical pixels (a node's rect),
-    /// or null for all of it; for <c>FramePixels.Png(runtime, draw, cmd.Region)</c>.
+    /// or null for all of it; for <c>FramePixels.Png</c>'s region.
     /// </summary>
     public readonly RectF? Region;
     /// <summary>App: the command as sent, for the app's own deserializer.</summary>
