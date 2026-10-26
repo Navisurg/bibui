@@ -77,6 +77,57 @@ public static class TextField
         box.Style.BackgroundColor = disabled ? UiColor.SurfaceRaised : UiColor.Surface;
     }
 
+    // The char boundary nearest x on one line, x logical px from the line's
+    // start: the cluster under x, and the boundary before it when x is in its
+    // left half, after it when in its right half; 0 at or before the start, the
+    // line's length past its end. Measured as layout's walk measures, with the
+    // text layer's blocks: a cluster at a time from its start, each char in it
+    // by GlyphDirect (the fast path's table) or a GlyphNext step (an emoji
+    // cluster, or a code point the fast path does not take).
+    internal static int CharAtX(Fonts fonts, Font font, ReadOnlySpan<char> line, float x)
+    {
+        if (x <= 0f || line.IsEmpty) return 0;
+        var style = TextLayer.StyleFromFont(fonts, font, font.Scale);
+        float target = x * font.Scale;   // the blocks measure in physical px
+        float pen = 0f;                  // where the cluster at `at` starts
+        int at = 0;
+        while (at < line.Length)
+        {
+            int end = at + TextLayer.ScanTextElement(line, at, +1);
+            float width = 0f;
+            for (int k = at; k < end;)
+            {
+                if (TextLayer.GlyphDirect(style.Strike, line[k], out _, out float advance))
+                {
+                    width += advance;
+                    k++;
+                    continue;
+                }
+                var step = TextLayer.GlyphNext(fonts, style, line, k);
+                // A step that starts before k is the whole cluster, set in the cluster
+                // face (1️⃣: the digit was measured in the text's face before the mark
+                // that makes the cluster an emoji): its width is the step's alone.
+                if (step.Start < k) width = 0f;
+                width += step.Advance;
+                k = step.Next;
+            }
+            if (pen + width / 2f > target) return at;
+            pen += width;
+            at = end;
+        }
+        return line.Length;
+    }
+
+    // How wide chars are on one line, in logical px: layout's own walk of them
+    // (RunsFromChars) and the width it leaves (WidthOfRuns), so it is what the
+    // field's Text parts are laid out and drawn at. The walk's glyphs are written
+    // to the frame's run table and not read; layout empties it.
+    internal static float WidthOfChars(Fonts fonts, Font font, ReadOnlySpan<char> chars)
+    {
+        var style = TextLayer.StyleFromFont(fonts, font, font.Scale);
+        return TextLayer.WidthOfRuns(fonts, TextLayer.RunsFromChars(fonts, chars, style), font.Scale);
+    }
+
     // The pointer on one line of text: line holds its chars, x is from where it
     // starts, and the edit state is in the line's offsets. A press puts the
     // cursor at the text element under it and sets the mark, unless shift extends a
@@ -84,7 +135,7 @@ public static class TextField
     internal static void HandlePointer(BibuiRuntime runtime, Font font, Interaction interaction,
         ReadOnlySpan<char> line, TextEditState edit, float x, bool focused)
     {
-        int at = runtime.Fonts.OffsetAt(line, font, x);
+        int at = CharAtX(runtime.Fonts, font, line, x);
         bool extend = focused && (interaction.Modifiers & KeyModifiers.Shift) != 0;
 
         // Double click highlights word, and dragged selects by words: the
@@ -154,8 +205,8 @@ public static class TextField
     internal static void DrawCaret(BibuiRuntime runtime, Box view, Font font, ReadOnlySpan<char> line,
         int lo, int hi, int caret, float top, SemanticSize height, bool edited)
     {
-        float before = runtime.Fonts.Measure(line[..lo], font);
-        if (caret == hi && hi > lo) before += runtime.Fonts.Measure(line[lo..hi], font);
+        float before = WidthOfChars(runtime.Fonts, font, line[..lo]);
+        if (caret == hi && hi > lo) before += WidthOfChars(runtime.Fonts, font, line[lo..hi]);
 
         // The caret follows the cursor: 60 halvings a second by default, half the way each frame at 60 Hz.
         float rate = edited ? 1f : runtime.Rates.Follow;
@@ -281,8 +332,8 @@ public static class TextFieldExtensions
         if (!focused || empty)
             view.TargetViewOffset = view.TargetViewOffset with { X = 0f };
         else
-            ScrollToCaret(view, new Vector2(runtime.Fonts.Measure(shown[..caret], font), 0f), Vector2.Zero,
-                new Vector2(runtime.Fonts.Measure(shown, font), 0f), view.Extent / 4f);
+            ScrollToCaret(view, new Vector2(WidthOfChars(runtime.Fonts, font, shown[..caret]), 0f), Vector2.Zero,
+                new Vector2(WidthOfChars(runtime.Fonts, font, shown), 0f), view.Extent / 4f);
 
         using (runtime.Parent(view))
         {
@@ -413,7 +464,7 @@ public static class TextFieldExtensions
         var line = runtime.TextField(id, text, edit, focused, events, textColor, placeholder);
         bool empty = text.Length == 0;
         ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
-        if (focused || runtime.Fonts.Measure(shown, runtime.FontInScope()) <= room)
+        if (focused || WidthOfChars(runtime.Fonts, runtime.FontInScope(), shown) <= room)
             return line;   // fits, or being edited: it scrolls instead
 
         runtime.Gap(DotsGap);

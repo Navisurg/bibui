@@ -143,9 +143,9 @@ public static class TextLayer
 
     // ── Grapheme clusters ────────────────────────────────────────────────────
 
-    // How far back ScanTextElement looks for a certain boundary, in chars. Only
-    // an element longer than this — stacked marks, a long run of flags — can
-    // put the cursor inside it. TextOp.MaxLookBehind sets it.
+    // How far back ScanCluster (and ScanTextElement) looks for a certain
+    // boundary, in chars. Only a cluster longer than this — stacked marks, a long
+    // run of flags — can put the cursor inside it. TextOp.MaxLookBehind sets it.
     internal static int ElementLookBehind = 64;
 
     /// <summary>
@@ -155,6 +155,7 @@ public static class TextLayer
     /// negative going left, 0 at the edge. The cursor is assumed to be on an
     /// element boundary.
     /// </summary>
+    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
     public static int ScanTextElement(ReadOnlySpan<char> str, int cursor, int delta)
     {
         if (delta > 0)
@@ -168,7 +169,7 @@ public static class TextLayer
         // ZWJ sequence, the pairing of flags), so step back, a code point at a
         // time, to one that is certainly a boundary — within the line and
         // MaxLookBehind — and scan forward from there.
-        int floor = Math.Max(LineStart(str, cursor), cursor - ElementLookBehind);
+        int floor = Math.Max(ScanLine(str, cursor, -1), cursor - ElementLookBehind);
         int start = cursor;
         while (true)
         {
@@ -193,14 +194,6 @@ public static class TextLayer
         for (int i = start; i < cursor; i += StringInfo.GetNextTextElementLength(str[i..cursor]))
             boundary = i;
         return boundary - cursor;
-    }
-
-    // Where the line the cursor is on starts: just after the line break before it, or 0.
-    private static int LineStart(ReadOnlySpan<char> str, int cursor)
-    {
-        int i = cursor;
-        while (i > 0 && str[i - 1] != '\n') i--;
-        return i;
     }
 
     // ── Runs ─────────────────────────────────────────────────────────────────
@@ -300,6 +293,102 @@ public static class TextLayer
         var (glyph, advance, next) = style.Strike.Next(chars, i);
         return new GlyphStep(i, next, advance, style, clusterFace: false, glyph, slot: 0);
     }
+
+    /// <summary>
+    /// The cluster next to <paramref name="chars"/>[<paramref name="i"/>] in the
+    /// direction of <paramref name="delta"/> (sign only), as the walk sets it: the
+    /// index at its far side, i at the text's edge or for a delta of 0, and its width
+    /// (physical px) in <paramref name="advance"/>. i is on a cluster boundary.
+    ///
+    /// <para>Forward it is one <see cref="GlyphDirect"/> or <see cref="GlyphNext"/> step
+    /// and the steps after it that belong to it: one that starts back over it is it,
+    /// set whole in the cluster face (1️⃣), and one with no width sits on it (an
+    /// accent). A char below 256 never belongs: it is the direct table's, a step of its
+    /// own, so it always starts a cluster. Back, it is back to such a char, no more
+    /// than <see cref="ElementLookBehind"/> chars, and forward from there to i.</para>
+    /// </summary>
+    // NOTE(k): for a scan done once (a key press, a click). It takes the step after
+    // the cluster to see whether it belongs, and throws it away when not, so a loop
+    // over many clusters takes every GlyphNext step twice; a hot loop calls
+    // GlyphDirect and GlyphNext itself, as the walk does.
+    public static int ScanCluster(Fonts f, FontStyle style, ReadOnlySpan<char> chars, int i, int delta, out float advance)
+    {
+        advance = 0f;
+        if (delta < 0)
+        {
+            if (i <= 0) return 0;
+            int floor = Math.Max(0, i - ElementLookBehind);
+            int start = i - 1;
+            while (start > floor && chars[start] >= 256) start--;
+
+            // Forward to the last cluster that starts before i.
+            for (int next = ScanCluster(f, style, chars, start, +1, out advance); next < i; next = ScanCluster(f, style, chars, start, +1, out advance))
+                start = next;
+            return start;
+        }
+        if (delta == 0 || i >= chars.Length) return i;
+
+        int end = i + 1;
+        if (!GlyphDirect(style.Strike, chars[i], out _, out advance))
+        {
+            var first = GlyphNext(f, style, chars, i);
+            (end, advance) = (first.Next, first.Advance);
+        }
+
+        // The steps after it that belong to it.
+        while (end < chars.Length && chars[end] >= 256)
+        {
+            var step = GlyphNext(f, style, chars, end);
+            if (step.Start == end && step.Advance != 0f) break;
+            if (step.Start < end) advance = step.Advance;
+            end = step.Next;
+        }
+        return end;
+    }
+
+    /// <summary>
+    /// The word next to <paramref name="chars"/>[<paramref name="i"/>] in the direction
+    /// of <paramref name="delta"/> (sign only): the index at its far side, over the
+    /// spaces next to i and then the word, a cluster at a time (<see cref="ScanCluster"/>);
+    /// i at the text's edge or for a delta of 0. A word is a run of clusters that are
+    /// not spaces, punctuation included (Ctrl+← →). A cluster is a space when its first
+    /// char is: a space, a tab or a line break.
+    /// </summary>
+    // NOTE(k): for a scan done once, as ScanCluster.
+    public static int ScanWord(Fonts f, FontStyle style, ReadOnlySpan<char> chars, int i, int delta)
+    {
+        if (delta > 0)
+        {
+            while (i < chars.Length && IsWordSpace(chars[i])) i = ScanCluster(f, style, chars, i, +1, out _);
+            while (i < chars.Length && !IsWordSpace(chars[i])) i = ScanCluster(f, style, chars, i, +1, out _);
+        }
+        else if (delta < 0)
+        {
+            int start;
+            while (i > 0 && IsWordSpace(chars[start = ScanCluster(f, style, chars, i, -1, out _)])) i = start;
+            while (i > 0 && !IsWordSpace(chars[start = ScanCluster(f, style, chars, i, -1, out _)])) i = start;
+        }
+        return i;
+    }
+
+    /// <summary>
+    /// The end of the line <paramref name="chars"/>[<paramref name="i"/>] is on, in the
+    /// direction of <paramref name="delta"/> (sign only): back to just after the line
+    /// break before i or the text's start, forward to just before the next one or the
+    /// text's end; i for a delta of 0. A line break is below 256, so it always starts a
+    /// cluster (<see cref="ScanCluster"/>): a search for it lands on cluster boundaries,
+    /// with no cluster scan, however long the line.
+    /// </summary>
+    public static int ScanLine(ReadOnlySpan<char> chars, int i, int delta)
+    {
+        if (delta < 0) return chars[..i].LastIndexOf('\n') + 1;
+        if (delta == 0) return i;
+        int n = chars[i..].IndexOf('\n');
+        return n < 0 ? chars.Length : i + n;
+    }
+
+    // Whether a cluster that starts with c is a space between words.
+    private static bool IsWordSpace(char c) => c is ' ' or '\t' or '\n' or '\r';
 
     // RunsFromChars' walk, a function of its own so the check before it
     // (RunsAreCurrent) and the ask around it stay small enough to inline.
