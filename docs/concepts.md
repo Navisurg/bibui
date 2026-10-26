@@ -40,11 +40,10 @@ A whole frame, drawn headless to a PNG with Skia (`Bibui.Raster.Skia`):
 
 ```csharp
 var runtime = BibuiRuntime.Create();
-runtime.Surface = new SurfaceOptions { Width = 320, Height = 160, ScaleFactor = 1f };
 const string hello = "Hello, bibui";
 const string ok = "OK";
 
-runtime.BeginBuild();
+runtime.BeginBuild(new WindowFrame(320, 160, 1f, 60f));   // a 320 × 160 px window at 1×, 60 Hz
 var page = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
 page.Style.Padding = EdgeInsets.All(24f);
 runtime.Text(hello);
@@ -57,9 +56,13 @@ using var skia = new SkiaCpuRenderer();
 File.WriteAllBytes("hello.png", FramePixels.Png(runtime, skia.Draw));
 ```
 
-This one also needs `using Bibui.Raster.Skia;`.
+This one also needs `using Bibui.Raster.Skia;` and `using Bibui.Core.Runtime.Platform;`.
 
-`BeginBuild()` opens a frame and `EndBuild()` closes it. What is built between
+`BeginBuild(window)` opens a frame and `EndBuild()` closes it. The frame is laid
+out on `window`, a `WindowFrame`: the framebuffer's size in physical pixels,
+its scale (physical pixels per logical pixel; layout is in logical pixels) and
+the display's refresh rate. A window hands the runtime one each frame
+(`window.Frame`); a headless caller makes its own. What is built between
 them is the frame: the runtime owns its root, and what is built with no parent
 begun lands under it. `EndBuild()` lays the tree
 out and records it into `runtime.DrawList`, and draws nothing. The app's state
@@ -67,9 +70,9 @@ is its own fields: the build reads them, a click writes them, and the next
 frame sees the change. `FramePixels.Png` has the renderer you name draw the
 list into a new buffer and encodes it (`FramePixels.Bgra` gives the raw
 pixels). There is no screenshot method on the runtime. In a window, the app's
-own loop runs the same frame each time the platform's `BeginFrame` returns
-(input arrived, or something asked for a frame) and has its renderer draw it
-(see [Hosts and renderers](#hosts-and-renderers)).
+own loop runs the same frame each time there is one to draw (input arrived, or
+something asked for a frame) and has its renderer draw it (see
+[Hosts and renderers](#hosts-and-renderers)).
 Every frame starts cleared to the theme's `Background`, so the root needs no
 background of its own.
 
@@ -128,7 +131,7 @@ How the solver uses those sizes:
   parent.
 - **Floating nodes** (`.At(x, y)`) are out of the flow. They sit at that offset
   from the parent's top-left corner, and the parent's size does not count them.
-- **The root** is always the size of the surface, whatever it asks for. Its
+- **The root** is always the size of the window (`WindowFrame`, in logical pixels), whatever it asks for. Its
   children can fill it.
 
 ### No default size, no answer for a ring
@@ -599,7 +602,9 @@ Box sidebar = runtime.Box().Sized(Size.Px(48f + 192f * open), Size.Fill);
   `theme.Motion.Default`, and a theme with `Motion.Easing = MotionEasing.None`
   (reduced motion) makes every value arrive in one step.
 - While anything is still moving, the runtime keeps asking for frames, and
-  the window's `BeginFrame` keeps returning. When everything has arrived, the loop goes idle.
+  the loop keeps drawing them, one a refresh of the window's display: each
+  steps animations by `runtime.Dt`, one frame at that refresh rate. When
+  everything has arrived, the loop goes idle.
 - A value nobody asks for in a frame stops moving, and is forgotten soon after.
 
 ### Transitions, presence and transforms
@@ -762,7 +767,7 @@ It resolves colour tokens against the current theme as it goes.
 
 The painter only reads nodes. It never sizes or moves one, and it writes
 nothing back for the next frame. So the picture is a pure function of the tree
-and the theme. Given the same tree, theme, surface size and scale factor, a
+and the theme. Given the same tree, theme, window size and scale, a
 frame is the same image, byte for byte, every time.
 
 ### Custom drawing
@@ -826,89 +831,41 @@ The runtime is independent of the window and of the rasterizer. It holds no
 raster backend: each frame it records a `DrawList`, and a renderer that the
 owner of the loop chose draws that list. Two pieces connect it to the outside:
 
-- A **window** (`SilkWindow`, `WaylandWindow`, `BrowserWindow`) owns the native window, the
-  event pump, the framebuffer, presenting, the clipboard and the cursor. It
-  knows nothing of any renderer. The app owns the loop:
-  `while (SilkWindow.BeginFrame(window, runtime)) { runtime.BeginBuild(window.Events); build; runtime.EndBuild(); SilkWindow.BeginDraw(window); draw; SilkWindow.EndDraw(window); SilkWindow.EndFrame(window, runtime); }`.
-  `BeginFrame` sleeps while nothing is happening and returns when there is a
-  frame to draw, with what the keyboard and mouse did in `window.Events`;
-  `BeginBuild` turns that into the frame's events. `BeginDraw` readies the
-  window to be drawn into (its GL context current; on Wayland, a free buffer
-  in `window.Cpu`), `EndDraw` puts what was drawn on screen (a swap; a
-  commit), and `EndFrame` paces the loop. A window offers two targets:
-  `window.Gl`, a `GlTarget` (the GL framebuffer, Silk only; `Bibui.Gl`), and `window.Cpu`,
-  a `CpuTarget` (memory the window presents: a `wl_shm` buffer on Wayland,
-  the canvas's frame in the browser).
-  CPU memory on a Silk window is `GlCpuFramebuffer`'s, below. bibui does no discovery and no
-  reflection. The browser is the one host whose loop the app does not own,
-  below.
+- A **window** (`SilkWindow`, `WaylandWindow`, `BrowserWindow`) owns the native
+  window, the event pump, the framebuffer, presenting, the clipboard and the
+  cursor. It knows nothing of any renderer, and nothing of the runtime: each
+  frame it hands the runtime data, `window.Frame` (a `WindowFrame`: size,
+  scale, refresh rate) and its events, and waits for input when there is
+  nothing to draw. The runtime paces the loop to the window's refresh rate (on
+  Wayland the compositor's frame callback does). A window offers a target to
+  draw into: on Silk, `SilkGl.Target(window)`, the GL framebuffer of a window
+  opened with `SilkGl.Options`; on Wayland and in the browser, `window.Cpu`,
+  memory the window presents.
 - A **renderer** draws a `DrawList`: clipping, transforms, shapes, paths,
   textures and glyphs. Bound to a window's target, `renderer.Draw(runtime.DrawList)`
-  draws there: `new SkiaGlRenderer(window.Gl)`, `new SkiaCpuRenderer(window.Cpu)`
+  draws there: `new SkiaGlRenderer(gl)`, `new SkiaCpuRenderer(window.Cpu)`
   or `new ManagedRenderer(window.Cpu)`. Unbound, `SkiaCpuRenderer` draws into an
   `SKSurface` or into `RasterPixels` (BGRA8888 premultiplied memory the caller
   owns), and `ManagedRenderer` into `RasterPixels`. Each also makes the
   textures its lists draw. There is no default: you construct the one you
-  want. Code that draws into memory it owns (`FramePixels`, `BibuiPage`, an
-  app's screenshots for a test port) takes a `DrawToPixels`, a
-  `void (DrawList list, RasterPixels target)` delegate, and a renderer's `Draw`
-  method group converts to it.
+  want, and bibui does no discovery and no reflection. Code that draws into
+  memory it owns (`FramePixels`, `BibuiPage`, an app's screenshots for a test
+  port) takes a `DrawToPixels`, a `void (DrawList list, RasterPixels target)`
+  delegate, and a renderer's `Draw` method group converts to it.
 
-There are three complete combinations.
-
-[`samples/counter`](../samples/counter/Program.cs) is the first, in full.
-
-**Cross-platform: Silk window and Skia raster.** `SilkWindow` (package
-`Bibui.Platform.Silk`) opens a window through GLFW and presents with OpenGL. It
-references no renderer; the app adds `Bibui.Raster.Skia` and binds a
-`SkiaGlRenderer` to the window's GL framebuffer:
-
-```csharp
-using Bibui.Raster.Skia;
-using Bibui.Core.Runtime.Platform;
-
-var runtime = BibuiRuntime.Create();
-using var window = SilkWindow.Open(runtime, new PlatformWindowOptions("My app", 960, 640));
-using var skia = new SkiaGlRenderer(window.Gl);
-while (SilkWindow.BeginFrame(window, runtime))
-{
-    runtime.BeginBuild(window.Events);
-    BuildUi(runtime);
-    runtime.EndBuild();
-    SilkWindow.BeginDraw(window);
-    skia.Draw(runtime.DrawList);
-    SilkWindow.EndDraw(window);
-    SilkWindow.EndFrame(window, runtime);
-}
-```
+A `Bibui.App` package is one window and one renderer put together, with the
+loop's calls (`app.WaitForFrame()`, `app.Present()`): what an app normally
+runs on. [Bibui.App packages](app-packages.md) lists them, and shows the loop
+written out by hand for an app that combines the pieces itself. The browser is
+the one host whose loop the app does not own: see [bibui in the
+browser](browser.md).
 
 A Silk window only ever shows what is drawn into its GL framebuffer. A renderer
 that draws on the CPU draws into memory that `GlCpuFramebuffer` (package
 `Bibui.Gl`) shows there: each frame it uploads the memory into a texture and
-blits it onto the framebuffer. It takes a GPU renderer's place in the loop: a
-frame is drawn into the framebuffer by one or the other, never both.
-[`samples/counter-cpu`](../samples/counter-cpu/counter-cpu.csproj) is the counter drawn
-this way, with `SkiaCpuRenderer`.
-
-```csharp
-using var shown = new GlCpuFramebuffer(window.Gl);       // Bibui.Gl: memory shown on the GL framebuffer
-using var managed = new ManagedRenderer(shown.Cpu);       // or new SkiaCpuRenderer(shown.Cpu)
-while (SilkWindow.BeginFrame(window, runtime))
-{
-    runtime.BeginBuild(window.Events);
-    BuildUi(runtime);
-    runtime.EndBuild();
-    SilkWindow.BeginDraw(window);                         // the window's GL context current
-    shown.BeginDraw();                                    // the memory at the framebuffer's size now
-    managed.Draw(runtime.DrawList);
-    shown.EndDraw();                                      // upload, blit onto the framebuffer
-    SilkWindow.EndDraw(window);                           // swap
-    SilkWindow.EndFrame(window, runtime);                 // pace
-}
-```
-
-`SkiaGlRenderer.ForGl` answers null where Skia cannot drive the GL context;
-falling back to the CPU, as above, is the app's choice.
+blits it onto the framebuffer, in a GPU renderer's place. `Bibui.App.SilkSkiaCpu`
+and `SilkManaged` draw this way. `SkiaGlRenderer.ForGl` answers null where
+Skia cannot drive the GL context; falling back to the CPU is the app's choice.
 
 Every renderer has the same texture and draw calls (`CreateTexture`,
 `UpdateTexture`, `ReleaseTexture`, `Draw`), and build code never sees the
@@ -922,90 +879,21 @@ global using Renderer = Bibui.Raster.Skia.SkiaGlRenderer;   // or Bibui.Raster.M
 Textures belong to the renderer that made them: a renderer swapped while the
 app runs makes its textures again.
 
-**Linux, pure managed: Wayland window and managed raster.** `WaylandWindow`
-(package `Bibui.Platform.Wayland`) talks to the compositor directly through
-libwayland-client. It uses no GLFW and no GL, and presents shared-memory
-buffers. `ManagedRenderer` (package `Bibui.Raster.Managed.Backend`) is a
-rasterizer written in C#, with FreeType and HarfBuzz for text, so this
-combination ships no Skia. Bind it to the window's `Cpu`:
-
-```csharp
-using Bibui.Platform.Wayland;
-using Bibui.Raster.Managed.Backend;
-using Bibui.Core.Runtime.Platform;
-
-var runtime = BibuiRuntime.Create();
-if (!WaylandWindow.IsSupported) return;
-using var window = WaylandWindow.Open(runtime, new PlatformWindowOptions("My app", 960, 640),
-    new WaylandHostOptions { AppId = "my-app" });
-using var managed = new ManagedRenderer(window.Cpu);
-while (WaylandWindow.BeginFrame(window, runtime))
-{
-    runtime.BeginBuild(window.Events);
-    BuildUi(runtime);
-    runtime.EndBuild();
-    WaylandWindow.BeginDraw(window);
-    managed.Draw(runtime.DrawList);
-    WaylandWindow.EndDraw(window);
-    WaylandWindow.EndFrame(window, runtime);
-}
-```
-
-**In the browser: a canvas and managed raster.** `BrowserWindow` (package
-`Bibui.Platform.Browser`) is a `<canvas>` in a .NET WebAssembly app, drawn on
-the CPU by `ManagedRenderer` and shown with `putImageData`. A page may not
-block, so the browser owns the loop: the app hands the frame's body to
-`BrowserWindow.Run`, which returns at once, and the browser calls it on
-`requestAnimationFrame` whenever the window has input, owes frames or was
-resized, and its canvas is in view. Several windows on one page share one
-loop. [bibui in the browser](browser.md) has the details.
-
-```csharp
-using Bibui.Platform.Browser;
-using Bibui.Raster.Managed.Backend;
-
-var runtime = BibuiRuntime.Create();
-var window = await BrowserWindow.OpenAsync(runtime, "app");   // <canvas id="app">
-var managed = new ManagedRenderer(window.Cpu);
-BrowserWindow.Run(window, runtime, () =>
-{
-    runtime.BeginBuild(window.Events);
-    BuildUi(runtime);
-    runtime.EndBuild();
-    BrowserWindow.BeginDraw(window);
-    managed.Draw(runtime.DrawList);
-    BrowserWindow.EndDraw(window);
-});
-```
-
 **Damage tracking.** The managed rasterizer can rasterise only what changed.
 With `new ManagedRenderer { DamageTracking = true }` (or `BIBUI_DAMAGE=1`),
 the renderer compares each `DrawList` draw by draw with the one before, and rasterises only the
 rectangles that differ onto a surface that still holds an earlier frame, such
 as the Wayland window's shared-memory buffers. Nothing above the rasterizer
-changes: every frame is still built, laid out and recorded whole, and the window
-still tells the compositor the whole surface changed. The result is
+changes: every frame is still built, laid out and recorded whole. The result is
 byte-identical to a full repaint, and past half the surface the whole frame is
 drawn. Skia always draws whole frames. See [Performance](performance.md) for
 measurements.
 
-A Wayland window can also draw with Skia (`new SkiaCpuRenderer(window.Cpu)`), and
-a headless program (tests, a command-line tool that writes PNGs) needs no window
-at all. It builds between `runtime.BeginBuild()` and `runtime.EndBuild()` and
-draws `runtime.DrawList` into its own buffer, as in [The frame](#the-frame-build-layout-paint).
+A headless program (tests, a command-line tool that writes PNGs) needs no window
+at all. It builds between `runtime.BeginBuild(window)`, on a `WindowFrame` of its
+own, and `runtime.EndBuild()`, and draws `runtime.DrawList` into its own buffer,
+as in [The frame](#the-frame-build-layout-paint).
 
-**Native AOT.** Every bibui library is Native AOT compatible: there is no
-reflection-based serialization, no runtime code generation and no discovery.
-Theme files are read with `System.Text.Json`'s DOM, and renderers and windows are
-constructed by the app, not looked up. An app on the raw Wayland window and the managed
-rasterizer publishes as a single native executable:
-
-```bash
-dotnet publish -c Release -r linux-x64 -p:PublishAot=true
-```
-
-The Silk + Skia route is JIT-only for now: Silk.NET itself warns under AOT,
-so Native AOT is promised for the Wayland + managed route only.
-
-An AOT app chooses its renderer like any other, for example
-`new ManagedRenderer()`. Nothing is loaded by name.
+Every bibui library is Native AOT compatible: no reflection-based
+serialization, no runtime code generation, no discovery. Which windows and
+renderers publish with it is in [Publishing with Native AOT](aot.md).

@@ -10,18 +10,15 @@ namespace Bibui.Gl;
 /// into. A GL user like a GPU renderer is, and in its place: the app draws one
 /// or the other into the framebuffer each frame, never both.
 /// <code>
-/// using var shown = new GlCpuFramebuffer(window.Gl);
+/// var gl = SilkGl.Target(window);
+/// using var shown = new GlCpuFramebuffer(gl);
 /// using var managed = new ManagedRenderer(shown.Cpu);
-/// while (SilkWindow.BeginFrame(window, runtime))
-/// {
-///     runtime.BeginBuild(window.Events); Build(); runtime.EndBuild();
-///     SilkWindow.BeginDraw(window);
-///     shown.BeginDraw();                  // the memory at the framebuffer's size now
-///     managed.Draw(runtime.DrawList);
-///     shown.EndDraw();                    // upload, blit onto the framebuffer
-///     SilkWindow.EndDraw(window);         // swap
-///     SilkWindow.EndFrame(window, runtime);
-/// }
+/// // each frame, after the build:
+/// SilkGl.BeginDraw(window, gl);
+/// shown.BeginDraw();                  // the memory at the framebuffer's size now
+/// managed.Draw(runtime.DrawList);
+/// shown.EndDraw();                    // upload, blit onto the framebuffer
+/// SilkGl.EndDraw(window);             // swap
 /// </code>
 /// <para>The memory is uploaded into a BGRA8 texture (<see cref="GlTextures"/>)
 /// and copied onto the framebuffer with one blit, flipped: memory rows run

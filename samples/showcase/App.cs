@@ -127,19 +127,25 @@ internal sealed partial class App
         rt.EndParent(frame);
     }
 
-    /// <summary>One whole frame: BeginBuild with the frame's input (none, headless), the app, EndBuild.</summary>
-    public void Frame(BibuiRuntime rt, List<Bibui.Core.Runtime.Platform.WindowEvent>? events = null)
+    /// <summary>One whole frame on <paramref name="window"/>: BeginBuild with the frame's input, the app, EndBuild.</summary>
+    public void Frame(BibuiRuntime rt, Bibui.Core.Runtime.Platform.WindowFrame window, List<Bibui.Core.Runtime.Platform.WindowEvent>? events = null)
     {
-        rt.BeginBuild(events);
+        rt.BeginBuild(window, events);
         Build(rt);
         rt.EndBuild();
     }
 
-    /// <summary>A runtime for this app, headless, on a <paramref name="w"/> × <paramref name="h"/> surface in its theme.</summary>
+    /// <summary>One whole frame headless, on the window <see cref="Headless"/> gave the app, with no input.</summary>
+    public void Frame(BibuiRuntime rt) => Frame(rt, _headless);
+
+    // The window a headless runtime's frames are built on.
+    private Bibui.Core.Runtime.Platform.WindowFrame _headless = new(1440, 900, 1f, 60f);
+
+    /// <summary>A runtime for this app, headless, in its theme; its frames are <paramref name="w"/> × <paramref name="h"/> at 1×, 60 Hz.</summary>
     public BibuiRuntime Headless(int w, int h)
     {
         var rt = BibuiRuntime.Create();
-        rt.Surface = new SurfaceOptions { Width = w, Height = h, ScaleFactor = 1f };
+        _headless = new(w, h, 1f, 60f);
         rt.SetTheme(Theme());
         return rt;
     }

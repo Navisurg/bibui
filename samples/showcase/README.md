@@ -15,22 +15,23 @@ the targets, the numbers) is made up.
 
 ## Run it
 
-Two setups, one app:
+One app, on any `Bibui.App` package, chosen when it is built (`-p:App=...`,
+[`samples/BibuiApp.props`](../BibuiApp.props)):
 
 ```bash
-# Cross-platform: GLFW window, OpenGL when it can, Skia raster
+# Cross-platform: GLFW window, OpenGL, Skia raster (Bibui.App.SilkSkiaGl)
 dotnet run --project samples/showcase -c Release
 
 # Linux, pure managed: raw Wayland, managed raster with FreeType/HarfBuzz text
-dotnet run --project samples/showcase -c Release -- --host wayland --raster managed
+dotnet run --project samples/showcase -c Release -p:App=WaylandManaged
 ```
 
-The Wayland + managed route publishes as one Native AOT executable, with Silk
-and Skia left out of it:
+On Wayland + managed it publishes as one Native AOT executable, with no Silk
+or Skia in it:
 
 ```bash
 dotnet publish samples/showcase -c Release -r linux-x64 \
-  -p:PublishAot=true -p:ShowcaseRoute=wayland -o out/showcase
+  -p:PublishAot=true -p:App=WaylandManaged -o out/showcase
 out/showcase/showcase
 ```
 

@@ -43,6 +43,7 @@ public sealed partial class BibuiRuntime
     /// opens. What the default <see cref="ClipboardGet"/> and
     /// <see cref="ClipboardSet"/> reach; an app that set its own keeps it.
     /// </summary>
+    // TODO(K): This should be something we get from a window handle
     public (Func<string?>? Get, Action<string>? Set) WindowClipboard { get; set; }
 
     /// <summary>

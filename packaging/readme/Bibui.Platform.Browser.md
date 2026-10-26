@@ -7,11 +7,14 @@ static libraries, linked into the app.
 
 ```csharp
 var runtime = BibuiRuntime.Create();
-var window = await BrowserWindow.OpenAsync(runtime, "app");   // <canvas id="app">
+var window = await BrowserWindow.OpenAsync("app");            // <canvas id="app">
+runtime.WakeUp = window.Wake;
+runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
 var managed = new ManagedRenderer(window.Cpu);                // Bibui.Raster.Managed.Backend
-BrowserWindow.Run(window, runtime, () =>
+BrowserWindow.Run(window, () => runtime.FramesRequested > 0, () =>
 {
-    runtime.BeginBuild(window.Events);
+    runtime.ConsumeFrame();
+    runtime.BeginBuild(window.Frame, window.Events);
     /* your frame */
     runtime.EndBuild();
     BrowserWindow.BeginDraw(window);
@@ -22,7 +25,10 @@ BrowserWindow.Run(window, runtime, () =>
 
 The browser owns the loop, so the app hands its frame to `BrowserWindow.Run`,
 which returns at once; the frame is drawn on `requestAnimationFrame` whenever
-the window has input, owes frames or was resized, and its canvas is in view.
+the window has input, a frame is owed (`frameOwed`) or it was resized, and its
+canvas is in view. `window.Frame` is the canvas's size in device pixels,
+devicePixelRatio, and the display's refresh rate, measured from
+`requestAnimationFrame`.
 Several windows on one page share one loop. `window.Cpu` is the frame's memory
 at the canvas's size in device pixels.
 

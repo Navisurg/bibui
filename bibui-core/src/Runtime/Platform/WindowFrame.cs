@@ -1,11 +1,17 @@
-namespace Bibui.Core;
+namespace Bibui.Core.Runtime.Platform;
 
-public sealed class SurfaceOptions
+/// <summary>
+/// What the window is as a frame starts, handed to
+/// <see cref="BibuiRuntime.BeginBuild"/>: the runtime lays the frame out on it
+/// and paces animations to it. The window measures it; nothing in it refers
+/// back to the window. A headless caller makes one of its own.
+/// </summary>
+/// <param name="Width">Framebuffer width in physical px.</param>
+/// <param name="Height">Framebuffer height in physical px.</param>
+/// <param name="Scale">Physical px per logical px.</param>
+/// <param name="RefreshRate">The refresh rate of the display the window is on, in Hz.</param>
+public readonly record struct WindowFrame(int Width, int Height, float Scale, float RefreshRate)
 {
-    public int Width { get; init; } = 400;
-    public int Height { get; init; } = 200;
-    public float ScaleFactor { get; init; } = 1f;
-
     /// <summary>
     /// Physical pixels for <paramref name="logical"/> logical pixels at
     /// <paramref name="scale"/>: rounded half away from zero, as
@@ -28,4 +34,10 @@ public sealed class SurfaceOptions
     /// </summary>
     public static int LogicalSize(int physical, float scale) =>
         (int)Math.Round(physical / (double)scale);
+
+    /// <summary><see cref="Width"/> in logical px: what the frame is laid out in.</summary>
+    public int LogicalWidth => LogicalSize(Width, Scale);
+
+    /// <summary><see cref="Height"/> in logical px.</summary>
+    public int LogicalHeight => LogicalSize(Height, Scale);
 }

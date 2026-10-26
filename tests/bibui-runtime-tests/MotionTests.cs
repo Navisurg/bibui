@@ -4,6 +4,7 @@ using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
 using Bibui.Core.Theming;
 using Bibui.Raster.Skia;
+using Bibui.Core.Runtime.Platform;
 
 /// <summary>
 /// Motion: timed curves and springs beside Animate, colour in Oklab, presence
@@ -34,8 +35,8 @@ static class MotionTests
     static BibuiRuntime Asking(Action<BibuiRuntime> ask, float hz = 60f)
     {
         var runtime = BibuiRuntime.Create();
-        runtime.Dt = 1f / hz;
-        runtime.SetBuild(() => { ask(runtime); return Root(); }, new SurfaceOptions { Width = 200, Height = 100 });
+        // The window's refresh rate is what a frame's Dt is one frame of.
+        runtime.SetBuild(() => { ask(runtime); return Root(); }, new WindowFrame(200, 100, 1f, hz));
         return runtime;
     }
 
@@ -529,7 +530,7 @@ static class MotionTests
                     UiNode.PushIntoParent(holder, new Box().Sized(Size.Px(200f), Size.Px(40f)));
                 }
                 return root;
-            }, new SurfaceOptions { Width = 200, Height = 100 });
+            }, TestBuild.Window(200, 100));
             Frames(runtime, 2);
             Eq(40f, holder.Extent.Y, "at rest it is its row");
 
@@ -555,7 +556,7 @@ static class MotionTests
                 b = new Box { Style = style }.Sized(Size.Px(40f), Size.Px(40f)).At(10f, 10f);
                 UiNode.PushIntoParent(root, b);
                 return root;
-            }, new SurfaceOptions { Width = 200, Height = 100 });
+            }, TestBuild.Window(200, 100));
             var frame = runtime.Frame();
             Eq(new Vector2(10f, 10f), b.Rect, "laid out where it was put");
             Eq(((byte)0, (byte)0, (byte)0), Pixel(frame, 30, 30), "not drawn there");
@@ -581,7 +582,7 @@ static class MotionTests
                 card.Style.Translate = new Vector2(100f, 0f);
                 UiNode.PushIntoParent(root, card);
                 return root;
-            }, new SurfaceOptions { Width = 200, Height = 100 });
+            }, TestBuild.Window(200, 100));
             Frames(runtime, 2);
 
             runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = 30f, Y = 30f });
@@ -608,7 +609,7 @@ static class MotionTests
                 bar.Style.Rotate = 90f;             // now tall
                 UiNode.PushIntoParent(root, bar);
                 return root;
-            }, new SurfaceOptions { Width = 200, Height = 100 });
+            }, TestBuild.Window(200, 100));
             Frames(runtime, 2);
 
             void Press(float x, float y)
@@ -641,7 +642,7 @@ static class MotionTests
                 UiNode.PushIntoParent(list, row);
                 UiNode.PushIntoParent(root, list);
                 return root;
-            }, new SurfaceOptions { Width = 200, Height = 100 });
+            }, TestBuild.Window(200, 100));
             Frames(runtime, 2);
 
             runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = 150f, Y = 10f });
@@ -669,7 +670,7 @@ static class MotionTests
                 card.Style.Scale = new Vector2(0.5f, 0.5f);
                 UiNode.PushIntoParent(root, card);
                 return root;
-            }, new SurfaceOptions { Width = 200, Height = 100 });
+            }, TestBuild.Window(200, 100));
             Frames(runtime, 2);
             runtime.DispatchClick("card");
             runtime.Step();
@@ -684,7 +685,7 @@ static class MotionTests
             var light = new ThemeTokens { Colors = new ColorTokens { Background = "#FFFFFF" } };
             var runtime = BibuiRuntime.Create();
             runtime.SetBuild(() => new Box { Style = new Style { BackgroundColor = UiColor.Background } }.Sized(Size.Fill, Size.Fill),
-                dark, new SurfaceOptions { Width = 20, Height = 20 });
+                dark, TestBuild.Window(20, 20));
             runtime.Step();
 
             runtime.SetTheme(light, Transition.Timed(0.1f, Easing.Linear));
