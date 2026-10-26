@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Bibui.Core;
+using Bibui.Text;
 using Bibui.Core.Draw;
 using SkiaSharp;
 

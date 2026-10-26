@@ -1,8 +1,8 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Bibui.Core.FreeType.Native;
+using Bibui.Text.FreeType.Native;
 
-namespace Bibui.Core.FreeType;
+namespace Bibui.Text.FreeType;
 
 /// <summary>
 /// bibui's text on the system FreeType and HarfBuzz: fonts, strikes (a font at a

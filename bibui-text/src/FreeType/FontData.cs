@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Bibui.Core.FreeType;
+namespace Bibui.Text.FreeType;
 
 /// <summary>
 /// The bytes of one font file, copied once into native memory that never moves.
@@ -54,11 +54,11 @@ public sealed unsafe class FontData
 
     /// <summary>The embedded Inter Regular, the same bytes bibui embeds. Loaded once per process.</summary>
     public static FontData InterRegular => s_interRegular ?? Interlocked.CompareExchange(ref s_interRegular,
-        FromEmbeddedResource(typeof(FontData).Assembly, "Bibui.Core.Assets.Fonts.Inter-Regular.ttf"), null) ?? s_interRegular!;
+        FromEmbeddedResource(typeof(FontData).Assembly, "Bibui.Text.Assets.Fonts.Inter-Regular.ttf"), null) ?? s_interRegular!;
 
     /// <summary>The embedded Inter SemiBold, which bibui draws every weight from 600 up with.</summary>
     public static FontData InterSemiBold => s_interSemiBold ?? Interlocked.CompareExchange(ref s_interSemiBold,
-        FromEmbeddedResource(typeof(FontData).Assembly, "Bibui.Core.Assets.Fonts.Inter-SemiBold.ttf"), null) ?? s_interSemiBold!;
+        FromEmbeddedResource(typeof(FontData).Assembly, "Bibui.Text.Assets.Fonts.Inter-SemiBold.ttf"), null) ?? s_interSemiBold!;
 
     public override string ToString() => Name.Length > 0 ? Name : $"FontData({Length} bytes)";
 }

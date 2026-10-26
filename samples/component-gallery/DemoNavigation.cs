@@ -1,5 +1,6 @@
 using Bibui.Core;
 using Bibui.Core.Runtime;
+using Bibui.Text;
 
 namespace ComponentGallery;
 

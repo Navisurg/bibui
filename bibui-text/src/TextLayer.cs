@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Globalization;
 using System.Text;
 
-namespace Bibui.Core;
+namespace Bibui.Text;
 
 /// <summary>
 /// What is done with <see cref="Fonts"/>' data: its faces and styles, a font's

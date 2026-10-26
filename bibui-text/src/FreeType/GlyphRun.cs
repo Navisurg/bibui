@@ -1,4 +1,4 @@
-namespace Bibui.Core.FreeType;
+namespace Bibui.Text.FreeType;
 
 /// <summary>
 /// Shaped text in one strike: glyph ids, per-glyph advances and offsets, and the

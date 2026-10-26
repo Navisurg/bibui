@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Reflection;
 
-namespace Bibui.Core;
+namespace Bibui.Text;
 
 /// <summary>
 /// Process-wide registry letting a host app supply its own font bytes for a named

@@ -22,7 +22,7 @@ You need the .NET 10 SDK. On Linux, bibui's text and the Wayland host load
 system libraries at run time:
 
 - FreeType and HarfBuzz (`libfreetype6`, `libharfbuzz0b` on Debian/Ubuntu)
-  for `Bibui.Core`, which measures and shapes all text with them;
+  for `Bibui.Text`, the text layer `Bibui.Core` measures and shapes all text with;
 - `libwayland-client` and `libxkbcommon` for `Bibui.Platform.Wayland`.
 
 Each library is its own project: `bibui` holds the core, the runtime

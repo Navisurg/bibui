@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Bibui.Core.FreeType.Native;
+namespace Bibui.Text.FreeType.Native;
 
 /// <summary>
 /// The slice of libharfbuzz.so.0 the engine needs. Shaping uses HarfBuzz's own

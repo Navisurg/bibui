@@ -1,7 +1,7 @@
 using System.IO.Hashing;
 using System.Runtime.InteropServices;
 
-namespace Bibui.Core;
+namespace Bibui.Text;
 
 /// <summary>
 /// A greedy word-wrap layout — which chars land on which line — for one

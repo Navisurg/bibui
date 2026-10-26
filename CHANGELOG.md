@@ -42,8 +42,18 @@ All notable changes to bibui are recorded here. The format is based on
 - `BibuiPage.Window` and `BibuiPage.DefaultWindow`: a page builds every frame
   on a window, 800 × 600 at 1× and 60 Hz unless given, so a run is
   deterministic.
+- **`Bibui.Text`**, a package of its own: bibui's text layer (fonts and faces
+  on FreeType and HarfBuzz, measuring, a text's runs, line breaking, the
+  built-in Inter), which `Bibui.Core` depends on and lays text out with. It
+  knows nothing of nodes, themes or platforms.
 
 ### Changed
+
+- **Breaking:** the text types are in namespace `Bibui.Text` (package
+  `Bibui.Text`): `Fonts`, `Font`, `FontFace`, `FontRegistry`, `TextLine`,
+  `TextWrap`, `TextMetrics`; and `Bibui.Core.FreeType` is `Bibui.Text.FreeType`.
+  Code that names one adds `using Bibui.Text;`. `runtime.Text(...)`, the
+  components and `runtime.Fonts` are where they were.
 
 - The gallery's ScrollList page shows both lists; the showcase's target queue
   is a RowScrollList.

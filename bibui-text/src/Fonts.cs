@@ -1,6 +1,6 @@
-using Bibui.Core.FreeType;
+using Bibui.Text.FreeType;
 
-namespace Bibui.Core;
+namespace Bibui.Text;
 
 /// <summary>
 /// Everything about text that is not drawing it: the typefaces, a font's

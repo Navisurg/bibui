@@ -1,5 +1,6 @@
 using System.Text;
 using Bibui.Core;
+using Bibui.Text;
 using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
 using Bibui.Raster.Skia;

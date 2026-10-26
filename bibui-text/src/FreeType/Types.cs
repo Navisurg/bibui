@@ -1,4 +1,4 @@
-namespace Bibui.Core.FreeType;
+namespace Bibui.Text.FreeType;
 
 /// <summary>
 /// A text colour as 8-bit, unpremultiplied RGBA. Alpha scales the coverage; the

@@ -91,6 +91,7 @@ jobs:
         run: |
           set -euo pipefail
           projects=(
+            bibui-text/bibui-text.csproj
             bibui-core/bibui-core.csproj
             bibui-gl/bibui-gl.csproj
             bibui-testing/bibui-testing.csproj

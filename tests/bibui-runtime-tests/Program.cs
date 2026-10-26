@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Bibui.Core;
+using Bibui.Text;
 using Bibui.Core.Theming;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;

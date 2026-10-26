@@ -23,9 +23,9 @@ Source:   https://lucide.dev
 2. Inter typeface
 -------------------------------------------------------------------------------
 What:     Inter-Regular.ttf and Inter-SemiBold.ttf, embedded as resources.
-Where:    bibui-core/Assets/Fonts/ (embedded in Bibui.Core and Bibui.Text.FreeType).
+Where:    bibui-text/Assets/Fonts/ (embedded in Bibui.Text).
 Licence:  SIL Open Font License 1.1. The full licence is in
-          bibui-core/Assets/Fonts/Inter-LICENSE.txt and is packed into the
+          bibui-text/Assets/Fonts/Inter-LICENSE.txt and is packed into the
           licenses/ folder of each package that embeds the fonts.
           Copyright (c) 2016 The Inter Project Authors
 Source:   https://github.com/rsms/inter
@@ -183,9 +183,9 @@ with their own licences:
   Bibui.Raster.Skia as NuGet packages.
 - Silk.NET (MIT) and GLFW (zlib), referenced by Bibui.Platform.Silk.
 - TextCopy (MIT), referenced by Bibui.Platform.Silk.
-- System.IO.Hashing (MIT), referenced by Bibui.Core.
+- System.IO.Hashing (MIT), referenced by Bibui.Core and Bibui.Text.
 - FreeType (FTL or GPLv2) and HarfBuzz (MIT-style "Old MIT"), loaded from
-  the system by Bibui.Core on Linux (in the browser they are redistributed, 10.
+  the system by Bibui.Text on Linux (in the browser they are redistributed, 10.
   above); libwayland-client and libxkbcommon
   (MIT), loaded from the system by Bibui.Platform.Wayland.
 
