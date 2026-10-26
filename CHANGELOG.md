@@ -49,6 +49,9 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Changed
 
+- A tooltip with an anchor sits with its left edge at the anchor's middle,
+  above it, or below it when there is no room above in the window. It was
+  centred above it, which needed its text measured before layout.
 - **Breaking:** the text types are in namespace `Bibui.Text` (package
   `Bibui.Text`): `Fonts`, `Font`, `FontFace`, `FontRegistry`, `TextLine`,
   `TextWrap`, `TextMetrics`; and `Bibui.Core.FreeType` is `Bibui.Text.FreeType`.
