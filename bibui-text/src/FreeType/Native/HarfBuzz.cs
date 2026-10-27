@@ -38,6 +38,4 @@ internal static unsafe partial class HB
     [LibraryImport(Lib)] public static partial GlyphInfo* hb_buffer_get_glyph_infos(IntPtr buffer, out uint length);
     [LibraryImport(Lib)] public static partial GlyphPosition* hb_buffer_get_glyph_positions(IntPtr buffer, out uint length);
     [LibraryImport(Lib)] public static partial IntPtr hb_version_string();
-
-    public static uint Tag(string s) => (uint)(s[0] << 24 | s[1] << 16 | s[2] << 8 | s[3]);
 }

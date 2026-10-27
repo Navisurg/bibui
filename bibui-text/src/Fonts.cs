@@ -118,7 +118,7 @@ public sealed class Fonts : IDisposable
     /// </summary>
     public void UseClusterFont(Bibui.Text.FreeType.FontData font) => TextLayer.ClusterFaceFromData(this, font);
 
-    // ── Public: measuring in a Font ──────────────────────────────────────────
+    // ── Public: line metrics in a Font ───────────────────────────────────────
 
     /// <summary>
     /// The height of one line of text in <paramref name="font"/>, in logical px:

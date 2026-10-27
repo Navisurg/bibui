@@ -86,14 +86,7 @@ public static class TextLayer
     /// </summary>
     internal static float LineAdvanceFromSize(float fontSize) => fontSize * 1.4f;
 
-    /// <summary>
-    /// Total height of <paramref name="lines"/> stacked lines: the last line's em box
-    /// plus one advance for every line above it. One line is exactly its em box.
-    /// </summary>
-    internal static float BlockHeightFromLines(Fonts f, int lines, in Font font)
-        => LineBoxFromFont(f, font) + MathF.Max(0, lines - 1) * LineAdvanceFromSize(font.Size);
-
-    // ── Widths ───────────────────────────────────────────────────────────────
+    // ── Fitting ──────────────────────────────────────────────────────────────
 
     /// <summary>
     /// How far past its room a run of text may measure and still be said to fit, in logical px.
@@ -114,13 +107,6 @@ public static class TextLayer
 
     /// <summary>Whether a run <paramref name="width"/> wide fits in <paramref name="room"/>. See <see cref="FitSlack"/>.</summary>
     internal static bool Fits(float width, float room) => width <= room + FitSlack;
-
-    // ── Grapheme clusters ────────────────────────────────────────────────────
-
-    // How far back ScanCluster (and ScanTextElement) looks for a certain
-    // boundary, in chars. Only a cluster longer than this — stacked marks, a long
-    // run of flags — can put the cursor inside it. TextOp.MaxLookBehind sets it.
-    internal static int ElementLookBehind = 64;
 
     // ── Runs ─────────────────────────────────────────────────────────────────
 
@@ -235,6 +221,11 @@ public static class TextLayer
         var (glyph, advance, next) = style.Strike.Next(chars, i);
         return new GlyphStep(i, next, advance, style, clusterFace: false, glyph, slot: 0);
     }
+
+    // How far back ScanCluster looks for a certain boundary, in chars. Only a
+    // cluster longer than this — stacked marks, a long run of flags — can put the
+    // cursor inside it.
+    internal const int ElementLookBehind = 64;
 
     /// <summary>
     /// The cluster next to <paramref name="chars"/>[<paramref name="i"/>] in the
@@ -493,7 +484,7 @@ public static class TextLayer
         }
 
         var run = clusterStyle.Strike.Font.Engine.ScratchRun;
-        clusterStyle.Strike.Shape(cluster, run, Bibui.Text.FreeType.ShapeOptions.HarfBuzzDefault);
+        clusterStyle.Strike.Shape(cluster, run);
         advance = 0f;
         if (run.Count > 8)
         {

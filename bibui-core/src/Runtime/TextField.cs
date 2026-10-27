@@ -101,7 +101,7 @@ public static class TextField
 
     // The pointer on one line of text: line holds its chars, x is from where it
     // starts, and the edit state is in the line's offsets. A press puts the
-    // cursor at the text element under it and sets the mark, unless shift extends a
+    // cursor at the cluster under it and sets the mark, unless shift extends a
     // field already being edited; held, the cursor follows the pointer.
     internal static void HandlePointer(BibuiRuntime runtime, Font font, Interaction interaction,
         ReadOnlySpan<char> line, TextEditState edit, float x, bool focused)

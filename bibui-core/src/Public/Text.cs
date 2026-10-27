@@ -13,15 +13,6 @@ public ref struct TextOp
 
     public TextOp() { }
 
-    // How far back moving left looks for a certain cluster boundary, in chars.
-    // Only a cluster longer than this — stacked marks, a long run of flags — can
-    // put the cursor inside it. The text layer's (TextLayer.ElementLookBehind).
-    public static int MaxLookBehind
-    {
-        get => TextLayer.ElementLookBehind;
-        set => TextLayer.ElementLookBehind = value;
-    }
-
     /// <summary>
     /// What <paramref name="ev"/> does to <paramref name="str"/> with its
     /// caret and selection at <paramref name="state"/>. A
@@ -177,15 +168,15 @@ public enum TextActionFlags : UInt32
 /// Where the caret and the other end of the selection are in a text.
 ///
 /// <para>Every offset in text editing — Cursor and Mark here, and
-/// TextOp's Range, NewCursor and NewMark, and what its scans return —
-/// counts UTF-16 code units: chars, the index into a string or a
-/// Span&lt;char&gt;. Not code points (👨 is one code point but two chars),
-/// and not what reads as one character (👨‍👩‍👧 is one text element but
-/// five code points and eight chars). A cursor always sits on a text
-/// element boundary.</para>
+/// TextOp's Range, NewCursor and NewMark — counts UTF-16 code units: chars,
+/// the index into a string or a Span&lt;char&gt;. Not code points (👨 is one
+/// code point but two chars), and not what reads as one character (🧑‍🚀 is
+/// one cluster but three code points and five chars). A cursor always sits
+/// on a cluster boundary, as the text layer sets the text
+/// (TextLayer.ScanCluster).</para>
 /// </summary>
 public sealed class TextEditState
 {
-    public int Cursor = 0;  // In chars, on a text element boundary
-    public int Mark = 0;    // In chars, on a text element boundary
+    public int Cursor = 0;  // In chars, on a cluster boundary
+    public int Mark = 0;    // In chars, on a cluster boundary
 }

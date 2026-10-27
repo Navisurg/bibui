@@ -18,7 +18,6 @@ internal static unsafe partial class FT
     public const int LOAD_FORCE_AUTOHINT = 1 << 5;
     public const int LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH = 1 << 9;
     public const int LOAD_TARGET_NORMAL = 0;
-    public const int LOAD_TARGET_LIGHT = 1 << 16;
 
     // FT_FaceRec.face_flags
     public const long FACE_FLAG_SCALABLE = 1 << 0;
@@ -43,7 +42,6 @@ internal static unsafe partial class FT
     public static readonly int Face_Glyph = P64 ? 152 : 84;
 
     // FT_GlyphSlotRec
-    public static readonly int Slot_LinearHoriAdvance = P64 ? 112 : 56;
     public static readonly int Slot_Bitmap = P64 ? 152 : 76;
     public static readonly int Slot_BitmapLeft = P64 ? 192 : 100;
     public static readonly int Slot_BitmapTop = P64 ? 196 : 104;

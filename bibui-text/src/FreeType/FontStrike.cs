@@ -57,9 +57,6 @@ public sealed unsafe class FontStrike
     /// </summary>
     internal float BitmapScale { get; } = 1f;
 
-    /// <summary>Masks rendered so far (all four phases count separately).</summary>
-    public int CachedMaskCount => _masks.Count;
-
     internal FontStrike(Font font, float sizePx)
     {
         if (!(sizePx > 0f) || float.IsInfinity(sizePx))
@@ -162,25 +159,6 @@ public sealed unsafe class FontStrike
         public float Advance;
     }
 
-    // The walks below keep their index, count and pen in registers, which is
-    // most of their speed: nothing of theirs is passed by ref (a char is
-    // decoded by value, Next returning where the next starts), and the hot loop
-    // of Glyphs is a method of its own with no call in it. With either, the JIT
-    // sends them through the stack every char, about three times slower.
-
-    // Glyphs' hot loop: while the chars have filled direct entries.
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    internal static (int I, int N, float Pen) GlyphsDirect(ReadOnlySpan<char> text, int i, DirectGlyph[] direct,
-        Span<ushort> glyphs, Span<System.Numerics.Vector2> points, int n, float pen)
-    {
-        for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++, n++)
-        {
-            glyphs[n] = direct[c].Glyph;
-            points[n] = new(pen, 0f);
-            pen += direct[c].Advance;
-        }
-        return (i, n, pen);
-    }
 
     // The char at i the hot loops did not take: below 256, its direct entry
     // filled; above, its code point (a surrogate pair is one) looked up the slow
@@ -203,28 +181,16 @@ public sealed unsafe class FontStrike
     }
 
     /// <summary>
-    /// Shapes <paramref name="text"/> into <paramref name="into"/> (cleared first).
-    /// <see cref="ShapeOptions.Nominal"/> (the default) maps each character through
-    /// the cmap and takes its linear advance; HarfBuzz modes call hb_shape with the given features.
+    /// Shapes <paramref name="text"/> with HarfBuzz, the font's default features
+    /// on, into <paramref name="into"/> (cleared first): a grapheme cluster the
+    /// text layer sets in the cluster face, whose sequence the font's ligature
+    /// makes one glyph.
     /// </summary>
-    public void Shape(ReadOnlySpan<char> text, GlyphRun into, ShapeOptions? options = null)
+    public void Shape(ReadOnlySpan<char> text, GlyphRun into)
     {
-        options ??= ShapeOptions.Nominal;
         into.Clear();
         into.Strike = this;
         if (text.IsEmpty) return;
-
-        if (options.Mode == ShapingMode.Nominal)
-        {
-            into.Reserve(text.Length);
-            for (int i = 0; i < text.Length;)
-            {
-                var (glyph, advance, next) = Next(text, i);
-                into.Add(glyph, advance, 0f, 0f, i);
-                i = next;
-            }
-            return;
-        }
 
         IntPtr buffer = Font.Engine.HbBuffer;
         HB.hb_buffer_clear_contents(buffer);
@@ -232,14 +198,7 @@ public sealed unsafe class FontStrike
             HB.hb_buffer_add_utf16(buffer, p, text.Length, 0, text.Length);
         HB.hb_buffer_guess_segment_properties(buffer);
 
-        var features = options.Features;
-        Span<HB.Feature> hbFeatures = features.Count <= 16
-            ? stackalloc HB.Feature[features.Count]
-            : new HB.Feature[features.Count];
-        for (int i = 0; i < features.Count; i++)
-            hbFeatures[i] = new HB.Feature { Tag = features[i].TagValue, Value = features[i].Value, Start = 0, End = uint.MaxValue };
-        fixed (HB.Feature* f = hbFeatures)
-            HB.hb_shape(_hbFont, buffer, f, (uint)hbFeatures.Length);
+        HB.hb_shape(_hbFont, buffer, null, 0);
 
         HB.GlyphInfo* infos = HB.hb_buffer_get_glyph_infos(buffer, out uint n);
         HB.GlyphPosition* pos = HB.hb_buffer_get_glyph_positions(buffer, out _);
@@ -249,8 +208,7 @@ public sealed unsafe class FontStrike
             into.Add(infos[i].Codepoint,
                 pos[i].XAdvance / 65536f,
                 pos[i].XOffset / 65536f,
-                -pos[i].YOffset / 65536f,       // HarfBuzz y is up; ours is down
-                (int)infos[i].Cluster);
+                -pos[i].YOffset / 65536f);      // HarfBuzz y is up; ours is down
         }
     }
 
@@ -307,35 +265,10 @@ public sealed unsafe class FontStrike
     }
 
     /// <summary>
-    /// The coverage masks of <paramref name="run"/> drawn with its origin at
-    /// (<paramref name="originX"/>, <paramref name="baselineY"/>), written to
-    /// <paramref name="into"/> (which needs room for <c>run.Count</c>). Empty masks
-    /// (spaces) are skipped; the return is how many were written. This is the
-    /// hand-off to a rasterizer that composites masks itself.
-    /// </summary>
-    public int Place(GlyphRun run, float originX, float baselineY, Span<PlacedGlyph> into)
-    {
-        if (run.Strike is not null && run.Strike != this)
-            throw new ArgumentException("The run was shaped in a different strike.", nameof(run));
-        var glyphs = run.Glyphs;
-        var adv = run.Advances;
-        var xo = run.XOffsets;
-        var yo = run.YOffsets;
-        int n = 0;
-        float pen = originX;
-        for (int i = 0; i < glyphs.Length; i++)
-        {
-            var placed = PlaceGlyph(glyphs[i], pen + xo[i], baselineY + yo[i]);
-            if (!placed.Mask.IsEmpty) into[n++] = placed;
-            pen += adv[i];
-        }
-        return n;
-    }
-
-    /// <summary>
-    /// The masks of glyphs at explicit positions relative to an origin
-    /// (device x = <paramref name="originX"/> + position.X).
-    /// Empty masks are skipped; returns how many were written.
+    /// The masks of glyphs at explicit positions relative to an origin (device x =
+    /// <paramref name="originX"/> + position.X), written to <paramref name="into"/>:
+    /// the hand-off to a rasterizer that composites masks itself. Empty masks
+    /// (spaces) are skipped; returns how many were written.
     /// </summary>
     public int Place(ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions, float originX, float baselineY,
         Span<PlacedGlyph> into)
@@ -350,9 +283,6 @@ public sealed unsafe class FontStrike
         }
         return n;
     }
-
-    /// <summary>Drops every cached mask of this strike.</summary>
-    public void ClearMasks() => _masks.Clear();
 
     internal void Destroy()
     {

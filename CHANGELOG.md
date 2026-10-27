@@ -133,6 +133,13 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Removed
 
+- **Breaking:** what only the old text path used, in `Bibui.Text.FreeType`:
+  `ShapeOptions`, `ShapingMode` and `FontFeature` (`FontStrike.Shape` shapes
+  with HarfBuzz and the font's default features); `PixelTarget`, `PixelClip`,
+  `PixelOrder` and `MaskBlend`; `TextEngine.Strikes`, `ClearMasks` and
+  `Metrics`; `FontStrike.CachedMaskCount`, `ClearMasks` and
+  `Place(GlyphRun, …)`; `GlyphRun.Clusters`, `Width` and `GetPositions`; and
+  `TextColor.FromArgb` and `FromRgb`. And `TextOp.MaxLookBehind`.
 - **Breaking:** `Fonts.Wrap`. Use `TextLayer.LinesFromText`.
 - **Breaking:** `Fonts.Measure` and `Fonts.OffsetAt`, `FontStrike.Measure`, and
   `TextEngine.Measure`, `DrawText`, `DrawRun` and `DrawGlyphs`: text measured
