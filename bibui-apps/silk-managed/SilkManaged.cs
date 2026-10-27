@@ -29,15 +29,19 @@ public sealed partial class BibuiApp
         return new ManagedRenderer(_shown.Cpu);
     }
 
-    public partial bool Present(RasterPixels? into)
+    private partial void DrawFrame()
     {
         SilkGl.BeginDraw(Window, _gl);
         _shown.BeginDraw();
         Renderer.Draw(Runtime.DrawList);
-        bool copied = into is not { } pixels || _shown.Cpu.Pixels.CopyTo(pixels);
+    }
+
+    private partial bool ReadFrame(RasterPixels into) => _shown.Cpu.Pixels.CopyTo(into);
+
+    private partial void PresentFrame()
+    {
         _shown.EndDraw();
         SilkGl.EndDraw(Window);
-        return copied;
     }
 
     // The app's own renderer, so screenshots hold its textures.

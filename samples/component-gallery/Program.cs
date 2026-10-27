@@ -150,17 +150,18 @@ void Frame()
     }
     runtime.EndBuild();
 
-    // The frame shown, copied out for a screenshot asked for this frame, then answered.
-    if (shotPath is null) app.Present();
-    else
+    // Drawn, then read for a screenshot asked for this frame, then shown and answered.
+    app.Draw();
+    if (shotPath is not null)
     {
         var (w, h) = (runtime.Window.Width, runtime.Window.Height);
         var shot = GC.AllocateArray<byte>(Math.Max(1, w * h * 4), pinned: true);
         var into = new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(shot, 0), w, h, w * 4);
-        if (app.Present(into)) File.WriteAllBytes(shotPath, FramePixels.Png(shot, w, h, runtime.ScaleFactor, shotRegion));
+        if (app.ReadPixels(into)) File.WriteAllBytes(shotPath, FramePixels.Png(shot, w, h, runtime.ScaleFactor, shotRegion));
         else testPort!.RefuseCmd("The window changed size as the screenshot was taken: ask again.");
         shotPath = null;
     }
+    app.Present();
     testPort?.AnswerCmds(agentSettled);
 }
 

@@ -38,6 +38,9 @@ void Frame()
   refresh rate, which the runtime lays the frame out on and steps animations
   by.
 - `app.Present()` draws the runtime's draw list into the window and shows it.
+  A frame that wants its pixels (a screenshot) splits it: `app.Draw()`, then
+  `app.ReadPixels(into)` as often as it likes, then `app.Present()`. The
+  pixels are what the window shows, drawn by its own renderer, textures too.
 - `app.Frame` is the app's frame, for the window to call where the loop cannot
   run: a resize, which on Windows and macOS holds the loop. Without one, a
   resize asks the loop for a frame.

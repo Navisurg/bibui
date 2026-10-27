@@ -19,15 +19,16 @@ public sealed partial class BibuiApp
 
     private partial SkiaCpuRenderer MakeRenderer() => new(Window.Cpu);
 
-    public partial bool Present(RasterPixels? into)
+    private partial void DrawFrame()
     {
         WaylandWindow.BeginDraw(Window);
         Renderer.Draw(Runtime.DrawList);
-        // From the buffer drawn, before it is handed to the compositor.
-        bool copied = into is not { } pixels || Window.Cpu.Pixels.CopyTo(pixels);
-        WaylandWindow.EndDraw(Window);
-        return copied;
     }
+
+    // From the buffer drawn, before it is handed to the compositor.
+    private partial bool ReadFrame(RasterPixels into) => Window.Cpu.Pixels.CopyTo(into);
+
+    private partial void PresentFrame() => WaylandWindow.EndDraw(Window);
 
     // The app's own renderer, so screenshots hold its textures.
 
