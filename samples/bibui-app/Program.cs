@@ -6,8 +6,6 @@
 //   BIBUI_TEST_PORT=1 dotnet run --project samples/bibui-app  # with a test port (Bibui.Automation)
 
 using Bibui.Automation;
-using Bibui.Core;
-using Bibui.Core.Draw;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
 using Bibui.Raster.Skia;
@@ -33,28 +31,24 @@ if (args.Contains("--first-frame"))
 using var app = App.Open(runtime, new("bibui — interactive demo", 720, 1200));
 
 // A test port, off unless asked for (BIBUI_TEST_PORT=1): a client drives the app
-// through its socket. A screenshot is the frame the window shows, copied out as it
-// is presented: the path and region asked for wait here until then, and the
-// memory it is copied into is kept while the window's size holds.
+// through its socket. Its screenshots are drawn on the CPU, with a renderer of
+// their own beside the window's GPU one.
 using var testPort = Environment.GetEnvironmentVariable("BIBUI_TEST_PORT") == "1"
     ? TestPort.Open(runtime, new TestPortOptions { Name = "bibui-app" }) : null;
+using var shots = testPort is null ? null : new SkiaCpuRenderer();
 if (testPort is not null) Console.Error.WriteLine($"Test port: {testPort.SocketPath}");
-string? shotPath = null;
-RectF? shotRegion = null;
-byte[] shot = [];
-RasterPixels shotPixels = default;
 
 app.Frame = Frame;
 while (app.WaitForFrame())
 {
-    // A test port's requests: its events join the window's; a screenshot is taken
-    // from the frame presented next.
+    // A test port's requests: its events join the window's; the frame on screen is
+    // still the runtime's draw list here, so a screenshot is drawn from it.
     if (testPort is not null)
         while (testPort.TryPullCmd(out var cmd))
             switch (cmd.Kind)
             {
                 case TestCmdKind.Events: app.Events.AddRange(cmd.Events); break;
-                case TestCmdKind.Screenshot: (shotPath, shotRegion) = (cmd.Path, cmd.Region); break;
+                case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, shots!.Draw, cmd.Region)); break;
                 case TestCmdKind.App: testPort.RefuseCmd("This demo has no commands of its own."); break;
             }
     Frame();
@@ -65,15 +59,6 @@ void Frame()
     runtime.BeginBuild(app.Window.Frame, app.Events);
     Demo.Build(runtime, state);
     runtime.EndBuild();
-
-    // The frame shown, copied out if a screenshot asked for it; written, then answered.
-    // Not copied (a resize came between), it is taken from the next frame.
-    var (w, h) = (runtime.Window.Width, runtime.Window.Height);
-    if (shotPath is not null && (shotPixels.Width != w || shotPixels.Height != h)) shotPixels = FramePixels.Pinned(w, h, out shot);
-    if (app.Present(shotPath is null ? null : shotPixels) && shotPath is not null)
-    {
-        File.WriteAllBytes(shotPath, FramePixels.Png(shot, w, h, runtime.ScaleFactor, shotRegion));
-        shotPath = null;
-    }
-    testPort?.AnswerCmds(settled: shotPath is null);   // no state to report, and only a screenshot to wait for
+    testPort?.AnswerCmds();   // no state to report, and nothing pending to wait for
+    app.Present();
 }

@@ -40,9 +40,7 @@ public sealed partial class TestPort
     /// Answers the request in hand, at the end of the frame, after the build. Events
     /// and app commands are answered once <paramref name="settled"/>: when nothing
     /// they set off is still pending in the app; until then the port asks for another
-    /// frame and answers in a later one. So is a screenshot: an app that copies the
-    /// frame it shows (<c>BibuiApp.Present(into)</c>) has written it after the
-    /// present, and is not settled until then. <c>test.state</c> answers that the app
+    /// frame and answers in a later one. <c>test.state</c> answers that the app
     /// reports no state; an app that has one passes it to the other overload.
     /// </summary>
     public void AnswerCmds(bool settled = true) => AnswerCmds<object?>(settled, null, null);
@@ -55,7 +53,7 @@ public sealed partial class TestPort
     public void AnswerCmds<TState>(bool settled, TState state, JsonTypeInfo<TState>? stateType)
     {
         if (!_pulled) return;
-        if (_heldKind is TestCmdKind.Events or TestCmdKind.App or TestCmdKind.Screenshot && !settled)
+        if (_heldKind is TestCmdKind.Events or TestCmdKind.App && !settled)
         {
             _runtime?.RequestFrame();
             return;

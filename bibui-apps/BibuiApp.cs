@@ -139,13 +139,10 @@ public sealed partial class BibuiApp : IDisposable
     private partial AppRenderer MakeRenderer();
     /// <summary>
     /// Draws the runtime's <c>DrawList</c> into the window and shows it: the end of
-    /// the app's frame. With <paramref name="into"/>, the frame is copied there
-    /// first, before it is shown: BGRA8888 premultiplied, top row first, at the
-    /// frame's size in physical pixels (<c>runtime.Window</c>), into memory the
-    /// caller owns. That is a screenshot of what the window shows, drawn by the
-    /// window's own renderer, textures and all. False when <paramref name="into"/>
-    /// is not the frame's size (a resize came between): nothing is copied, and
-    /// the next frame can be.
+    /// the app's frame. With <paramref name="into"/>, the frame is first copied there
+    /// (BGRA8888 premultiplied, the frame's physical size): a screenshot of what the
+    /// window shows, textures and all. False when <paramref name="into"/> is not the
+    /// frame's size, and nothing is copied.
     /// </summary>
     public partial bool Present(RasterPixels? into = null);
     private partial void DisposeRenderer();

@@ -91,17 +91,13 @@ object renderer = app.Renderer;
     (renderer as SkiaGlRenderer, renderer as SkiaCpuRenderer, renderer as ManagedRenderer);
 
 // A test port, off unless asked for: BIBUI_TEST_PORT=1 (test_all_pages.sh says how).
-// A screenshot is the frame the window shows, copied out as it is presented, so
-// it holds what the window's renderer drew, textures too: the path and region
-// asked for wait here until then, and the memory it is copied into is kept while
-// the window's size holds.
+// A screenshot is the frame the window shows, copied out as it is presented, so it
+// holds what the window's renderer drew, textures too: what was asked for waits here.
 using var testPort = Environment.GetEnvironmentVariable("BIBUI_TEST_PORT") == "1"
     ? TestPort.Open(runtime, new TestPortOptions { Name = "component-gallery" }) : null;
 if (testPort is not null) Console.Error.WriteLine($"Test port: {testPort.SocketPath}");
 string? shotPath = null;
 RectF? shotRegion = null;
-byte[] shot = [];
-RasterPixels shotPixels = default;
 // The agent driving the gallery through its port, drawn over it while one is connected:
 // folded from the events it sends. BIBUI_AGENT_CURSOR says how: paced (the default)
 // draws it and holds each answer until it has shown the step, so a person watching
@@ -154,16 +150,18 @@ void Frame()
     }
     runtime.EndBuild();
 
-    // The frame shown, copied out if a screenshot asked for it; written, then answered.
-    // Not copied (a resize came between), it is taken from the next frame.
-    var (w, h) = (runtime.Window.Width, runtime.Window.Height);
-    if (shotPath is not null && (shotPixels.Width != w || shotPixels.Height != h)) shotPixels = FramePixels.Pinned(w, h, out shot);
-    if (app.Present(shotPath is null ? null : shotPixels) && shotPath is not null)
+    // The frame shown, copied out for a screenshot asked for this frame, then answered.
+    if (shotPath is null) app.Present();
+    else
     {
-        File.WriteAllBytes(shotPath, FramePixels.Png(shot, w, h, runtime.ScaleFactor, shotRegion));
+        var (w, h) = (runtime.Window.Width, runtime.Window.Height);
+        var shot = GC.AllocateArray<byte>(Math.Max(1, w * h * 4), pinned: true);
+        var into = new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(shot, 0), w, h, w * 4);
+        if (app.Present(into)) File.WriteAllBytes(shotPath, FramePixels.Png(shot, w, h, runtime.ScaleFactor, shotRegion));
+        else testPort!.RefuseCmd("The window changed size as the screenshot was taken: ask again.");
         shotPath = null;
     }
-    testPort?.AnswerCmds(agentSettled && shotPath is null);
+    testPort?.AnswerCmds(agentSettled);
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
