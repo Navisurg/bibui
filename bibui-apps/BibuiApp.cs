@@ -1,3 +1,4 @@
+using Bibui.Core.Draw;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
 
@@ -9,15 +10,6 @@ namespace Bibui.App;
 /// </summary>
 public sealed record BibuiAppOptions
 {
-    /// <summary>
-    /// Starts the test server. It also starts when the environment variable
-    /// <c>BIBUI_TEST_SERVER=1</c> is set; otherwise it is off.
-    /// </summary>
-    public bool TestServer { get; init; }
-
-    /// <summary>The port the test server listens on, on 127.0.0.1.</summary>
-    public int TestServerPort { get; init; } = BibuiTestServer.DefaultPort;
-
     /// <summary>The application id a Wayland compositor groups and themes the window by; the Silk window has none.</summary>
     public string AppId { get; init; } = "bibui";
 
@@ -47,6 +39,8 @@ public sealed record BibuiAppOptions
 ///     app.Present();
 /// }
 /// </code>
+/// A frame that reads its pixels (a screenshot) draws, reads, then shows:
+/// <c>app.Draw(); app.ReadPixels(into); app.Present();</c>
 /// The parts it is made of (the window, the renderer) are packages of their
 /// own, for an app that writes the loop itself.
 /// </summary>
@@ -65,12 +59,10 @@ public sealed partial class BibuiApp : IDisposable
     /// </summary>
     public readonly AppRenderer Renderer;
 
-    /// <summary>The test server, when it was started (<see cref="BibuiAppOptions.TestServer"/>); null otherwise.</summary>
-    public readonly BibuiTestServer? TestServer;
-
     /// <summary>
-    /// This frame's input, for <c>runtime.BeginBuild</c>: the window's events, or,
-    /// while a test-server command runs, the server's. Set by <see cref="WaitForFrame"/>.
+    /// This frame's input, for <c>runtime.BeginBuild</c>: the window's events. Set by
+    /// <see cref="WaitForFrame"/>. An app driven by a test port adds the port's events
+    /// to it.
     /// </summary>
     public List<WindowEvent> Events { get; private set; } = [];
 
@@ -97,7 +89,6 @@ public sealed partial class BibuiApp : IDisposable
         Runtime = runtime;
         Window = window;
         Renderer = MakeRenderer();
-        if (options.TestServer || BibuiTestServer.IsEnabled) TestServer = StartTestServer(runtime, options.TestServerPort);
         Window.OnRefresh = runtime.RequestFrame;
     }
 
@@ -129,7 +120,7 @@ public sealed partial class BibuiApp : IDisposable
             // Awake is not the same as having something to draw: a focus change or
             // a wake with nothing owed draws nothing, and waits again.
             if (Runtime.FramesRequested == 0 && Window.Events.Count == 0) continue;
-            Events = TestServer?.Step(Window.Events) ?? Window.Events;
+            Events = Window.Events;
             // Taken before the frame is built, so what the build asks for is still owed after it.
             Runtime.ConsumeFrame();
             return true;
@@ -137,31 +128,45 @@ public sealed partial class BibuiApp : IDisposable
         return false;
     }
 
-    // The server, with screenshots drawn as this combination can draw into memory.
-    private BibuiTestServer StartTestServer(BibuiRuntime runtime, int port)
-    {
-        var output = Environment.GetEnvironmentVariable(BibuiTestServer.OutputVariable);
-        if (string.IsNullOrWhiteSpace(output)) output = Path.Combine(Directory.GetCurrentDirectory(), "bibui-test-output");
-        var server = new BibuiTestServer(runtime, output, port, draw: ScreenshotDraw());
-        server.Start();
-        Console.Error.WriteLine($"[BibuiTestServer] listening on 127.0.0.1:{port}; token in {server.TokenFile}; output in {server.OutputDirectory}");
-        return server;
-    }
-
-    /// <summary>Stops the test server, then frees the renderer, then the window: GPU resources before the context they live on.</summary>
+    /// <summary>Frees the renderer, then the window: GPU resources before the context they live on.</summary>
     public void Dispose()
     {
-        TestServer?.Dispose();
         DisposeRenderer();
         Window.Dispose();
     }
 
-    // What each combination says: how its window opens, its renderer is made and
-    // a frame is drawn into it, and what draws a test-server screenshot.
+    // What each combination says: how its window opens, and its renderer is made
+    // and a frame is drawn into it.
     private static partial AppWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options);
     private partial AppRenderer MakeRenderer();
-    /// <summary>Draws the runtime's <c>DrawList</c> into the window and shows it: the end of the app's frame.</summary>
-    public partial void Present();
-    private partial Bibui.Core.Draw.DrawToPixels ScreenshotDraw();
+    private bool _drawn;   // a frame is drawn and not yet shown: what ReadPixels reads
+
+    /// <summary>Draws the runtime's <c>DrawList</c> into the window's buffer, not shown yet: after <c>runtime.EndBuild</c>.</summary>
+    public void Draw()
+    {
+        DrawFrame();
+        _drawn = true;
+    }
+
+    /// <summary>
+    /// Copies the frame <see cref="Draw"/> drew into <paramref name="into"/> (BGRA8888
+    /// premultiplied, the frame's physical size): what the window will show, textures
+    /// and all. Only between Draw and <see cref="Present"/>, while the buffer is still
+    /// the app's. False then, or when <paramref name="into"/> is not the frame's size,
+    /// and nothing is copied.
+    /// </summary>
+    public bool ReadPixels(RasterPixels into) => _drawn && ReadFrame(into);
+
+    /// <summary>Shows the frame: the end of the app's frame. Draws it first if <see cref="Draw"/> was not called.</summary>
+    public void Present()
+    {
+        if (!_drawn) DrawFrame();
+        PresentFrame();
+        _drawn = false;
+    }
+
+    private partial void DrawFrame();
+    private partial bool ReadFrame(RasterPixels into);
+    private partial void PresentFrame();
     private partial void DisposeRenderer();
 }

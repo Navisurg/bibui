@@ -9,7 +9,8 @@
             "bibui-core/bibui-core.csproj",
             "bibui-raster-skia/bibui-raster-skia.csproj",
             "bibui-platform-silk/bibui-platform-silk.csproj",
-            "bibui-testing/bibui-testing.csproj"
+            "bibui-testing/bibui-testing.csproj",
+            "bibui-automation/bibui-automation.csproj"
           ]
         }
       ],

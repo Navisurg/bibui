@@ -8,6 +8,42 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
+- **`Bibui.Automation`: a test port for a running app.** `TestPort.Open(runtime, options)`
+  makes a Unix socket only the user can reach (`$XDG_RUNTIME_DIR/bibui/<name>-<pid>.sock`)
+  and one thread that reads it; the app calls `port.TryPullCmd` at the top of each
+  frame and `port.AnswerCmds` at its end, so everything else happens on its loop.
+  A client sends one JSON line per request: `test.tree` (the UI tree the last frame
+  laid out, each box with its claims by name), `test.state`, `test.schema`, `test.events` (input, as a window reports
+  it), `test.screenshot` (written by the app, with a renderer of its choosing) and
+  the app's own commands; events and commands are answered once the app has
+  settled. An app that does not reference the package ships none of it. See
+  `packaging/readme/Bibui.Automation.md`.
+
+- **`bibui-port`: the test port from a shell.** `tools/bibui-port`, a
+  command-line client published with Native AOT: one native file that starts in
+  milliseconds, for scripts and agents. It finds the app's socket, prints the
+  tree as an outline (`tree`, `find`), clicks a node by id once it holds still
+  and is scrolled into view (`click add`), and sends the app's commands
+  (`cmd counter.set Value=10`), `state`, `schema` and `screenshot`. The
+  gallery's page walk, `samples/component-gallery/test_all_pages.sh`, is a
+  shell script on it.
+- **`AgentCursor`: what an agent driving the app does, drawn for a person
+  watching.** `AgentCursor.FromWindowEvents` folds the agent's pointer from the
+  events it sends; `AgentCursorUi.Build(runtime, cursor, size)` draws an arrow
+  there with a tag naming the agent and a ring on each click, gliding, fading in
+  while `TestPort.HasClient` and out a while after, and says when it has shown
+  what the agent did. `bibui-port move` moves the pointer without a click. The
+  gallery draws it when started with its test port.
+- **`runtime.IsAnimating`**: whether the frame just built left anything moving
+  (an eased value, a hover fade, an `Animate`, a transition, a drawing's own
+  animation). The runtime asked itself this every frame to request the next;
+  now it keeps the answer.
+- **Driving an app, further.** `test.screenshot` takes an `id` for one node's
+  rect, which the app passes on as `cmd.Region` to
+  `FramePixels.Png(runtime, draw, region)`. `bibui-port` gets `type`, `key`
+  (modifiers, `--repeat`), `drag`, `hover`, `scroll`, `click --right/--middle`,
+  and `screenshot --id`. While a button is held the agent
+  cursor follows the pointer at once, so a drag reads as one.
 - **RowScrollList** (`runtime.BeginRowScrollList`, `EndRowScrollList`): the
   list of rows of one pitch, building only those in sight, by rows or by
   pixels (`ScrollBy`). It eases.
@@ -104,6 +140,17 @@ All notable changes to bibui are recorded here. The format is based on
 - **Breaking:** `Fonts.Face(family, weight)`, and `DrawContext.LineBox` and
   `BlockHeight`, which took a family's name. Use `Fonts.LineHeight(font)` with
   a font from `runtime.FontInScope()`.
+- **Breaking: the test server is gone; `TestPort` replaces it.** `BibuiTestServer`,
+  `BIBUI_TEST_SERVER` and `BIBUI_TEST_SERVER_OUT`, `WorkflowClient`,
+  `BibuiAppOptions.TestServer` and `TestServerPort`, and `BibuiApp.TestServer`.
+  A `BibuiApp` opens no port: an app that wants one references `Bibui.Automation`
+  and opens a `TestPort`. The samples open one with `BIBUI_TEST_PORT=1`, and the
+  gallery's page walk is `samples/component-gallery/test_all_pages.sh`.
+- **Breaking: the test server no longer records video.** `start_recording` and
+  `stop_recording` are gone from `BibuiTestServer`, and `StartRecording` and
+  `StopRecording` from `WorkflowClient`. Encoding video is not the test
+  server's job: an app that wants a recording takes screenshots, or captures
+  its window with a tool of its own.
 - **Breaking:** `SurfaceOptions`, `runtime.Surface`, `runtime.ResizeSurface`
   and `runtime.BeginBuild(events)`: a frame is built on a `WindowFrame`
   (`runtime.BeginBuild(window, events)`). The rounding rule is

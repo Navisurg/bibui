@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+  <!-- Bibui.Automation: what lets a client drive a running app, out of the core,
+       so an app that does not reference it ships no automation code. TestPort is
+       its first part. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Automation</AssemblyName>
+    <RootNamespace>Bibui.Automation</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <UseAppHost>false</UseAppHost>
+    <PackageId>Bibui.Automation</PackageId>
+    <Description>A test port for a running bibui app: a test, a script or an agent drives it over a Unix socket only the user can reach, reading its UI tree and state, sending input events and the app's own commands, and asking for screenshots. TestPort is called twice a frame, from the app's loop.</Description>
+    <PackageTags>$(PackageTags);testing;automation;agents</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../bibui-core/bibui-core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The port thread's and AnswerCmds' steps (Publish, Release) are
+         tested directly, in place of a socket. -->
+    <InternalsVisibleTo Include="automation-tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+</Project>

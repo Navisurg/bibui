@@ -849,9 +849,9 @@ owner of the loop chose draws that list. Two pieces connect it to the outside:
   owns), and `ManagedRenderer` into `RasterPixels`. Each also makes the
   textures its lists draw. There is no default: you construct the one you
   want, and bibui does no discovery and no reflection. Code that draws into
-  memory it owns (`FramePixels`, `BibuiPage`, the test server) takes a
-  `DrawToPixels`, a `void (DrawList list, RasterPixels target)` delegate, and
-  a renderer's `Draw` method group converts to it.
+  memory it owns (`FramePixels`, `BibuiPage`, an app's screenshots for a test
+  port) takes a `DrawToPixels`, a `void (DrawList list, RasterPixels target)`
+  delegate, and a renderer's `Draw` method group converts to it.
 
 A `Bibui.App` package is one window and one renderer put together, with the
 loop's calls (`app.WaitForFrame()`, `app.Present()`): what an app normally

@@ -62,6 +62,7 @@ jobs:
             bibui-core/bibui-core.csproj \
             bibui-gl/bibui-gl.csproj \
             bibui-testing/bibui-testing.csproj \
+            bibui-automation/bibui-automation.csproj \
             bibui-raster-skia/bibui-raster-skia.csproj \
             bibui-raster-managed/src/Bibui.Raster.Managed.csproj \
             bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj \
@@ -75,9 +76,11 @@ jobs:
             bibui-apps/wayland-skia-cpu/bibui-app-wayland-skia-cpu.csproj \
             bibui-all/bibui-all.csproj \
             tools/wayland-scanner/wayland-scanner.csproj \
+            tools/bibui-port/bibui-port.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
             bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
             tests/bibui-runtime-tests/bibui-runtime-tests.csproj \
+            tests/automation-tests/automation-tests.csproj \
             tests/text-tests/text-tests.csproj \
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
@@ -103,6 +106,7 @@ jobs:
           set -euo pipefail
           for proj in \
             tests/bibui-runtime-tests/bibui-runtime-tests.csproj \
+            tests/automation-tests/automation-tests.csproj \
             tests/text-tests/text-tests.csproj \
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
@@ -160,6 +164,21 @@ jobs:
             -p:PublishAot=true -p:TreatWarningsAsErrors=true \
             --output aot/counter-wayland
           ls -l aot/counter-wayland/counter-wayland
+
+      # bibui-port is published as one native file, so a shell or an agent
+      # calling it pays no runtime start; tests/automation-tests runs its
+      # commands in-process, and this checks it publishes and starts.
+      - name: Native AOT publish of bibui-port
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish tools/bibui-port/bibui-port.csproj \
+            --configuration Release -r linux-x64 \
+            -p:TreatWarningsAsErrors=true \
+            --output aot/bibui-port
+          ls -l aot/bibui-port/bibui-port
+          aot/bibui-port/bibui-port help
+          aot/bibui-port/bibui-port list
 
   # The browser route: the wasm-tools workload, FreeType and HarfBuzz built
   # for the browser from their pinned releases, the package and the sample

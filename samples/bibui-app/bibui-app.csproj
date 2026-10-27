@@ -11,5 +11,7 @@
   <ItemGroup>
     <!-- The window (GLFW + GL) and Skia drawing into it, as one Bibui.App package. -->
     <ProjectReference Include="../../bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj" />
+    <!-- The test port, opened when BIBUI_TEST_PORT=1. -->
+    <ProjectReference Include="../../bibui-automation/bibui-automation.csproj" />
   </ItemGroup>
 </Project>

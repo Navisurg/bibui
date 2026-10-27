@@ -18,6 +18,7 @@ that puts them together:
 | `Bibui.Platform.Silk`, `Bibui.Platform.Wayland`, `Bibui.Platform.Browser` | A window on its own |
 | `Bibui.Raster.Skia`, `Bibui.Raster.Managed.Backend` | A renderer on its own |
 | `Bibui.Testing` | Headless pages for testing an app |
+| `Bibui.Automation` | A test port: drive a running app over a socket |
 
 ## Hello
 

@@ -111,6 +111,15 @@ public sealed partial class BibuiRuntime
     public int FramesRequested => Volatile.Read(ref _framesRequested);
 
     /// <summary>
+    /// Whether the frame just built left anything moving: what the build stepped
+    /// (hot and active, view offsets, <c>Animate</c>, transitions) or what its
+    /// drawings animate themselves. The runtime's: written at the end of every
+    /// <see cref="EndBuild"/>, which asks for another frame while it is true.
+    /// Read between frames, on the loop's thread.
+    /// </summary>
+    public bool IsAnimating;
+
+    /// <summary>
     /// Asks for the next few frames to run.
     ///
     /// Not "something changed" — "keep going". A view waiting on an async

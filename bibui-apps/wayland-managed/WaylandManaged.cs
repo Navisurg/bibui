@@ -19,15 +19,18 @@ public sealed partial class BibuiApp
 
     private partial ManagedRenderer MakeRenderer() => new(Window.Cpu);
 
-    public partial void Present()
+    private partial void DrawFrame()
     {
         WaylandWindow.BeginDraw(Window);
         Renderer.Draw(Runtime.DrawList);
-        WaylandWindow.EndDraw(Window);
     }
 
+    // From the buffer drawn, before it is handed to the compositor.
+    private partial bool ReadFrame(RasterPixels into) => Window.Cpu.Pixels.CopyTo(into);
+
+    private partial void PresentFrame() => WaylandWindow.EndDraw(Window);
+
     // The app's own renderer, so screenshots hold its textures.
-    private partial DrawToPixels ScreenshotDraw() => Renderer.Draw;
 
     private partial void DisposeRenderer()
     {

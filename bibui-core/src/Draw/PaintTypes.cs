@@ -65,7 +65,23 @@ public readonly record struct PixelRect(int Left, int Top, int Right, int Bottom
 /// </summary>
 /// <param name="Address">The first byte of the top row. Must stay valid and pinned while a renderer draws into it.</param>
 /// <param name="RowBytes">Bytes from one row to the next; at least <c>Width * 4</c>.</param>
-public readonly record struct RasterPixels(nint Address, int Width, int Height, int RowBytes);
+public readonly record struct RasterPixels(nint Address, int Width, int Height, int RowBytes)
+{
+    /// <summary>
+    /// Copies these pixels into <paramref name="into"/>, row by row, each side at
+    /// its own <see cref="RowBytes"/>. False, and nothing copied, when the two are
+    /// not the same size.
+    /// </summary>
+    public unsafe bool CopyTo(RasterPixels into)
+    {
+        if (into.Width != Width || into.Height != Height) return false;
+        int row = Width * 4;
+        for (int y = 0; y < Height; y++)
+            new ReadOnlySpan<byte>((byte*)Address + (nint)y * RowBytes, row)
+                .CopyTo(new Span<byte>((byte*)into.Address + (nint)y * into.RowBytes, row));
+        return true;
+    }
+}
 
 /// <summary>
 /// A linear or radial gradient, clamped at its ends. Immutable: a
