@@ -31,6 +31,7 @@
   <ItemGroup>
     <ProjectReference Include="../bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj" />
     <ProjectReference Include="../bibui-core/bibui-core.csproj" />
+    <ProjectReference Include="../bibui-text/bibui-text.csproj" />
     <ProjectReference Include="../bibui-gl/bibui-gl.csproj" />
     <ProjectReference Include="../bibui-platform-silk/bibui-platform-silk.csproj" />
     <ProjectReference Include="../bibui-platform-wayland/bibui-platform-wayland.csproj" />

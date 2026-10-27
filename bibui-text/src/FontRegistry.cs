@@ -1,11 +1,11 @@
 using System.Buffers.Binary;
 using System.Reflection;
 
-namespace Bibui.Core;
+namespace Bibui.Text;
 
 /// <summary>
 /// Process-wide registry letting a host app supply its own font bytes for a named
-/// (family, weight) pair, so a <see cref="Bibui.Core.Theming.ThemeTokens"/> can reference a
+/// (family, weight) pair, so a <c>ThemeTokens</c> can reference a
 /// brand font family by name and have it resolve to real bytes instead of only a
 /// system-installed-font lookup.
 ///

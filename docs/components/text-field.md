@@ -70,7 +70,7 @@ public const uint MultiLineEvents, MultiLineReadOnlyEvents;
 | `events` | Which events a focused field takes, as bits of `BibUiEventKind`. `SingleLineEvents` edits, `SingleLineReadOnlyEvents` selects and copies, and 0 only shows the text and takes no press. `MultiLineEvents` also takes `Submit` (Enter) as a new line. |
 | `textColor` | The text's colour. A placeholder is always `TextColor.Secondary`. |
 | `placeholder` | Shown, quieter, while the buffer is empty. |
-| `wrap` | `Multiline` breaks between words, or anywhere. |
+| `wrap` | `Multiline` breaks between words, or anywhere. `TextWrap` is in `Bibui.Text`. |
 
 Sizes: `SingleLine` is one line tall and as wide as its parent. `Ellipsis` needs
 a parent that is not sized by its children, because it measures the width that

@@ -268,9 +268,9 @@ public sealed class BibuiPage : IDisposable
             : null;
 
         // A text's own words, or the first text under the node: a button's label.
-        static Text? FirstText(UiNode n)
+        static Core.Text? FirstText(UiNode n)
         {
-            if (n is Text t) return t;
+            if (n is Core.Text t) return t;
             for (var c = n.FirstChild; c is not null; c = c.Next == c ? null : c.Next)
                 if (FirstText(c) is { } found) return found;
             return null;

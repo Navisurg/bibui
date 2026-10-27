@@ -42,8 +42,46 @@ All notable changes to bibui are recorded here. The format is based on
 - `BibuiPage.Window` and `BibuiPage.DefaultWindow`: a page builds every frame
   on a window, 800 × 600 at 1× and 60 Hz unless given, so a run is
   deterministic.
+- **`Bibui.Text`**, a package of its own: bibui's text layer (fonts and faces
+  on FreeType and HarfBuzz, measuring, a text's runs, line breaking, the
+  built-in Inter), which `Bibui.Core` depends on and lays text out with. It
+  knows nothing of nodes, themes or platforms.
+
+- `TextLayer.ScanCluster`, `ScanWord` and `ScanLine` (`Bibui.Text`): from an
+  index, across the cluster, word or line next to it in the direction of a
+  sign, as the text is drawn (`ScanCluster` also gives the cluster's width).
+  Each is for a scan done once, a key press or a click.
+- `TextLayer.WidthFromChars` (`Bibui.Text`): how wide a text is in a style, the
+  width layout gives it, without laying it out.
+- `TextLayer.LinesFromText` (`Bibui.Text`): a text's lines at a width, kept
+  and found again by the text and its settings, as a span of `TextLine`s.
+  `TextLayer.LineFromText` breaks one line, from a line's start, unkept.
 
 ### Changed
+
+- A tooltip with an anchor sits with its left edge at the anchor's middle,
+  above it, or below it when there is no room above in the window. It was
+  centred above it, which needed its text measured before layout.
+- `DrawContext.DrawText` draws a text as layout draws a `Text`, from the runs
+  `TextLayer` walks it into: an emoji in the emoji face.
+- **Breaking:** `TextLine` is a value, `TextLine(Start, End, Next)`: `Next` is
+  where the line after it starts, and the last line is the one that ends at
+  the text's end. It was a class linked to the lines before and after it.
+  An empty text is one empty line, and spaces with no text after them on
+  their line are that line's. Emoji are measured in the emoji face, and
+  `TextWrap.Characters` breaks between clusters rather than code points.
+- **Breaking:** `TextOp.FromStateAndEvent(fonts, font, str, state, ev, buf)`
+  takes the fonts and the font the text is set in: a move by a character or a
+  word crosses the clusters the text is drawn as (👍🏽, 🇩🇰, 1️⃣, a letter and its
+  accent). Pass `runtime.Fonts` and `runtime.FontInScope()`.
+- Markdown measures its words, list numbers and underlines by the widths they
+  are drawn at, so an emoji is measured in the emoji face, and a word too wide
+  for its line is cut by them: a run of emoji fills the line.
+- **Breaking:** the text types are in namespace `Bibui.Text` (package
+  `Bibui.Text`): `Fonts`, `Font`, `FontFace`, `FontRegistry`, `TextLine`,
+  `TextWrap`, `TextMetrics`; and `Bibui.Core.FreeType` is `Bibui.Text.FreeType`.
+  Code that names one adds `using Bibui.Text;`. `runtime.Text(...)`, the
+  components and `runtime.Fonts` are where they were.
 
 - The gallery's ScrollList page shows both lists; the showcase's target queue
   is a RowScrollList.
@@ -95,6 +133,21 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Removed
 
+- **Breaking:** what only the old text path used, in `Bibui.Text.FreeType`:
+  `ShapeOptions`, `ShapingMode` and `FontFeature` (`FontStrike.Shape` shapes
+  with HarfBuzz and the font's default features); `PixelTarget`, `PixelClip`,
+  `PixelOrder` and `MaskBlend`; `TextEngine.Strikes`, `ClearMasks` and
+  `Metrics`; `FontStrike.CachedMaskCount`, `ClearMasks` and
+  `Place(GlyphRun, …)`; `GlyphRun.Clusters`, `Width` and `GetPositions`; and
+  `TextColor.FromArgb` and `FromRgb`. And `TextOp.MaxLookBehind`.
+- **Breaking:** `Fonts.Wrap`. Use `TextLayer.LinesFromText`.
+- **Breaking:** `Fonts.Measure` and `Fonts.OffsetAt`, `FontStrike.Measure`, and
+  `TextEngine.Measure`, `DrawText`, `DrawRun` and `DrawGlyphs`: text measured
+  or drawn off the path layout uses. Measure with `TextLayer.WidthFromChars`,
+  find an offset with `TextLayer.ScanCluster`, and draw with
+  `DrawContext.DrawText`.
+- **Breaking:** `TextOp.WordScan` and `TextOp.ScanTextElement`. Use
+  `TextLayer.ScanWord` and `ScanCluster`.
 - **Breaking:** the pitch overloads `BeginScrollList(id, ref scroll, pitch,
   count)`, `EndScrollList(ref scroll)` and `Scrollbar(id, scroll, count,
   viewRows)`, `ScrollPt.First`, `Last`, `ViewRows` and `Target(idx, px,

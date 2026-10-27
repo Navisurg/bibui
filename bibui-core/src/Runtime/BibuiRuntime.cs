@@ -24,12 +24,18 @@ public sealed partial class BibuiRuntime
     // One set per runtime, for its life. What draws the list is the loop
     // owner's choice, and none of the runtime's business.
     private readonly Fonts _fonts = new();
+    // The face each theme slot is set in, [slot * 2 + bold]: filled from the
+    // frame's theme in BeginBuild (FontResolution.SlotFacesFill), so build,
+    // layout and paint read the same faces, one entry each.
+    private readonly FontFace[] _slotFaces = new FontFace[FontResolution.SlotFaceCount];
     private readonly RenderCaches _caches = new();
     private readonly Painter _painter;
 
     private BibuiRuntime()
     {
-        _painter = new Painter(_caches, _fonts);
+        _painter = new Painter(_caches, _fonts, _slotFaces);
+        // A font asked for before the first frame gets the default theme's faces.
+        FontResolution.SlotFacesFill(_slotFaces, _fonts, _theme);
         _measure = MeasureLeaf;
     }
 
@@ -223,6 +229,7 @@ public sealed partial class BibuiRuntime
 
         if (events is not null) ApplyInput(events);
         _frameTheme = PaintedTheme(_theme);
+        FontResolution.SlotFacesFill(_slotFaces, _fonts, _frameTheme);
         Rates = MotionRates.From(_theme.Motion, Dt, Instant);
         _buildStarted = Stopwatch.GetTimestamp();
         BeginDropDowns();
@@ -265,7 +272,7 @@ public sealed partial class BibuiRuntime
         // Every rect is solved before anything is recorded. A text measures
         // itself in this runtime's fonts.
         (_measureTheme, _measureScale) = (theme, window.Scale);
-        _fonts.BeginFrameRuns();
+        TextLayer.RunsBegin(_fonts);
         LayoutSolver.Layout(tree, System.Numerics.Vector2.Zero,
             new System.Numerics.Vector2(window.LogicalWidth, window.LogicalHeight), _measure);
         var pointerTransforms = transformed ? PointerTransforms(tree) : null;
@@ -278,7 +285,7 @@ public sealed partial class BibuiRuntime
         _painter.Record(DrawList, tree, window, theme, input);
         // What nobody asked for lately is evicted from the caches recording read.
         _caches.EndFrame();
-        _fonts.EndFrame();
+        TextLayer.FontsEndFrame(_fonts);
         var t3 = Stopwatch.GetTimestamp();
 
         if (_profile)
@@ -325,8 +332,20 @@ public sealed partial class BibuiRuntime
         switch (node)
         {
             case Text text:
-                var measured = _fonts.Measure(text, Fonts.FontOf(text, _measureTheme!, _measureScale));
-                return new System.Numerics.Vector2(measured.Width, measured.Height);
+                // As wide as its chars on one line, and one line tall: a text is
+                // one line whatever room it is given; what breaks into lines is
+                // composed from texts, as a multi-line field is. One style for
+                // both: its runs give the width, its metrics the height. Walked
+                // already this frame, in this style (layout asks once per axis),
+                // the handle the text has is the answer; otherwise walk, and keep
+                // the new one.
+                var font = FontResolution.FontFromText(_slotFaces, text, _measureTheme!, _measureScale);
+                var style = TextLayer.StyleFromFont(_fonts, font, font.Scale);
+                if (!TextLayer.RunsAreCurrent(_fonts, text.Runs, style))
+                    text.Runs = TextLayer.RunsFromChars(_fonts, text.Content, style);
+                return new System.Numerics.Vector2(
+                    TextLayer.WidthOfRuns(_fonts, text.Runs, font.Scale),
+                    TextLayer.LineHeightOfStyle(style, font.Scale));
             case Icon icon:
                 float side = icon.Size.In(_measureTheme!);
                 return new System.Numerics.Vector2(side, side);

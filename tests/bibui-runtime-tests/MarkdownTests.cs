@@ -1,5 +1,6 @@
 using System.Text;
 using Bibui.Core;
+using Bibui.Text;
 using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
 using Bibui.Raster.Skia;
@@ -255,7 +256,9 @@ static class MarkdownTests
             var source = string.Join(' ', Enumerable.Repeat("lorem", words));
             var (runtime, root) = Show(source, width);
             Font font = runtime.FontInScope();
-            float word = runtime.Fonts.Measure("lorem", font), space = runtime.Fonts.Measure(" ", font);
+            var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+            float word = TextLayer.WidthFromChars(runtime.Fonts, "lorem", style, font.Scale);
+            float space = TextLayer.WidthFromChars(runtime.Fonts, " ", style, font.Scale);
             int perLine = (int)MathF.Floor((width + space + 0.01f) / (word + space));
             var rows = Rows(root);
             Equal((words + perLine - 1) / perLine, rows.Count, "lines");

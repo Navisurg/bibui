@@ -1,6 +1,6 @@
-using Bibui.Core.FreeType.Native;
+using Bibui.Text.FreeType.Native;
 
-namespace Bibui.Core.FreeType;
+namespace Bibui.Text.FreeType;
 
 /// <summary>
 /// One <see cref="FontData"/> opened in one <see cref="TextEngine"/>: the size-free
@@ -36,6 +36,15 @@ public sealed unsafe class Font
     /// <summary>Number of glyphs in the face.</summary>
     public int GlyphCount { get; }
 
+    /// <summary>Whether the face has outlines that scale to any size; a bitmap font (CBDT colour emoji) has only its fixed sizes.</summary>
+    public bool IsScalable { get; }
+
+    /// <summary>Whether the face has colour glyphs (CBDT bitmaps, COLR layers).</summary>
+    public bool HasColor { get; }
+
+    /// <summary>The pixel sizes of the face's embedded bitmap sizes, as FreeType lists them; empty for an outline font.</summary>
+    internal float[] FixedSizes { get; }
+
     internal short Ascender { get; }
     internal short Descender { get; }
     internal short LineHeight { get; }
@@ -52,6 +61,14 @@ public sealed unsafe class Font
         Ascender = FT.Read<short>(_ftFace, FT.Face_Ascender);
         Descender = FT.Read<short>(_ftFace, FT.Face_Descender);
         LineHeight = FT.Read<short>(_ftFace, FT.Face_Height);
+        long flags = FT.Read<nint>(_ftFace, FT.Face_FaceFlags);
+        IsScalable = (flags & FT.FACE_FLAG_SCALABLE) != 0;
+        HasColor = (flags & FT.FACE_FLAG_COLOR) != 0;
+        int fixedCount = (flags & FT.FACE_FLAG_FIXED_SIZES) != 0 ? FT.Read<int>(_ftFace, FT.Face_NumFixedSizes) : 0;
+        FixedSizes = new float[Math.Max(0, fixedCount)];
+        IntPtr sizes = FT.Read<IntPtr>(_ftFace, FT.Face_AvailableSizes);
+        for (int i = 0; i < FixedSizes.Length; i++)
+            FixedSizes[i] = FT.Read<nint>(sizes + i * FT.BitmapSize_Size, FT.BitmapSize_YPpem) / 64f;   // 26.6
         _bmpCmap = new uint[65536];
 
         IntPtr blob = HB.hb_blob_create(data.Pointer, (uint)data.Length, HB.MEMORY_MODE_READONLY, 0, 0);

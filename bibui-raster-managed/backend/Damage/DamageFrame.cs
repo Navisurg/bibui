@@ -1,5 +1,6 @@
 using System.Numerics;
 using Bibui.Core;
+using Bibui.Text;
 using Bibui.Core.Draw;
 
 namespace Bibui.Raster.Managed.Backend.Damage;

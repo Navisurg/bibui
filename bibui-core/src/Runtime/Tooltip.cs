@@ -22,8 +22,9 @@ public static class Tooltip
 
     /// <summary>
     /// Builds a tooltip reading <paramref name="text"/> and returns its pill.
-    /// Centred above <paramref name="anchor"/>, where it was drawn last frame,
-    /// <see cref="Gap"/> px clear of it; with no anchor, by the mouse, where
+    /// Its left edge at the middle of <paramref name="anchor"/>, where it was
+    /// drawn last frame, above it <see cref="Gap"/> px clear, or below it when
+    /// there is no room above in the window; with no anchor, by the mouse, where
     /// <see cref="BibuiRuntime.DefaultToolTipOffset"/> puts it.
     /// </summary>
     public static Box Build(BibuiRuntime runtime, ReadOnlySpan<char> text, Box? anchor = null)
@@ -34,12 +35,14 @@ public static class Tooltip
         if (anchor is null) runtime.DefaultToolTipOffset(root);
         else
         {
-            // Its size is its text's and its padding, known before it is laid
-            // out, so it can be centred on the first frame it is shown.
-            Font font = runtime.FontInScope(ComponentSize.Sm);
-            float width = runtime.Fonts.Measure(text, font) + 2f * PadX;
-            float height = runtime.Fonts.LineHeight(font) + 2f * PadY;
-            root.At(anchor.Rect.X + (anchor.Extent.X - width) / 2f, anchor.Rect.Y - height - Gap);
+            // Placed by its left edge, so its width is layout's to find (the pill
+            // is its text's size). Above the anchor needs its height, one line
+            // and its padding, known before layout, so it is in place on the
+            // first frame it is shown.
+            float height = runtime.Fonts.LineHeight(runtime.FontInScope(ComponentSize.Sm)) + 2f * PadY;
+            float above = anchor.Rect.Y - Gap - height;
+            float y = above >= 0f ? above : anchor.Rect.Y + anchor.Extent.Y + Gap;
+            root.At(anchor.Rect.X + anchor.Extent.X / 2f, y);
         }
 
         Box pill;

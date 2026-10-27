@@ -23,9 +23,9 @@ Source:   https://lucide.dev
 2. Inter typeface
 -------------------------------------------------------------------------------
 What:     Inter-Regular.ttf and Inter-SemiBold.ttf, embedded as resources.
-Where:    bibui-core/Assets/Fonts/ (embedded in Bibui.Core and Bibui.Text.FreeType).
+Where:    bibui-text/Assets/Fonts/ (embedded in Bibui.Text).
 Licence:  SIL Open Font License 1.1. The full licence is in
-          bibui-core/Assets/Fonts/Inter-LICENSE.txt and is packed into the
+          bibui-text/Assets/Fonts/Inter-LICENSE.txt and is packed into the
           licenses/ folder of each package that embeds the fonts.
           Copyright (c) 2016 The Inter Project Authors
 Source:   https://github.com/rsms/inter
@@ -173,6 +173,18 @@ Licence:  MIT (Emscripten is MIT or University of Illinois/NCSA, at the
 Source:   https://emscripten.org
 
 -------------------------------------------------------------------------------
+12. Noto Color Emoji (a test fixture)
+-------------------------------------------------------------------------------
+What:     A subset of Noto Color Emoji, eleven code points, as the test
+          fixture for a colour emoji face (CBDT bitmaps) and its strike.
+Where:    tests/bibui-runtime-tests/Fixtures/NotoColorEmoji-subset.ttf (in
+          the source only, not in any package).
+Licence:  SIL Open Font License 1.1. The full licence is in
+          tests/bibui-runtime-tests/Fixtures/OFL.txt.
+          Copyright 2013 Google LLC
+Source:   https://github.com/googlefonts/noto-emoji
+
+-------------------------------------------------------------------------------
 Not redistributed by bibui
 -------------------------------------------------------------------------------
 These are used at run time but are not part of bibui's source or packages;
@@ -183,10 +195,12 @@ with their own licences:
   Bibui.Raster.Skia as NuGet packages.
 - Silk.NET (MIT) and GLFW (zlib), referenced by Bibui.Platform.Silk.
 - TextCopy (MIT), referenced by Bibui.Platform.Silk.
-- System.IO.Hashing (MIT), referenced by Bibui.Core.
+- System.IO.Hashing (MIT), referenced by Bibui.Core and Bibui.Text.
 - FreeType (FTL or GPLv2) and HarfBuzz (MIT-style "Old MIT"), loaded from
-  the system by Bibui.Core on Linux (in the browser they are redistributed, 10.
-  above); libwayland-client and libxkbcommon
+  the system by Bibui.Text on Linux (in the browser they are redistributed, 10.
+  above); fontconfig (MIT-style), loaded from the system by Bibui.Text
+  on Linux to find the colour emoji font, which is the system's and
+  under its own licence; libwayland-client and libxkbcommon
   (MIT), loaded from the system by Bibui.Platform.Wayland.
 
 ===============================================================================

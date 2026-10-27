@@ -77,14 +77,36 @@ public static class TextField
         box.Style.BackgroundColor = disabled ? UiColor.SurfaceRaised : UiColor.Surface;
     }
 
+    // The char boundary nearest x on one line, x logical px from the line's
+    // start: the cluster under x, and the boundary before it when x is in its
+    // left half, after it when in its right half; 0 at or before the start, the
+    // line's length past its end. The clusters are the text layer's, as the walk
+    // sets them (ScanCluster).
+    internal static int CharAtX(Fonts fonts, Font font, ReadOnlySpan<char> line, float x)
+    {
+        if (x <= 0f || line.IsEmpty) return 0;
+        var style = TextLayer.StyleFromFont(fonts, font, font.Scale);
+        float target = x * font.Scale;   // the text layer measures in physical px
+        float pen = 0f;                  // where the cluster at `at` starts
+        int at = 0;
+        while (at < line.Length)
+        {
+            int end = TextLayer.ScanCluster(fonts, style, line, at, +1, out float width);
+            if (pen + width / 2f > target) return at;
+            pen += width;
+            at = end;
+        }
+        return line.Length;
+    }
+
     // The pointer on one line of text: line holds its chars, x is from where it
     // starts, and the edit state is in the line's offsets. A press puts the
-    // cursor at the text element under it and sets the mark, unless shift extends a
+    // cursor at the cluster under it and sets the mark, unless shift extends a
     // field already being edited; held, the cursor follows the pointer.
     internal static void HandlePointer(BibuiRuntime runtime, Font font, Interaction interaction,
         ReadOnlySpan<char> line, TextEditState edit, float x, bool focused)
     {
-        int at = runtime.Fonts.OffsetAt(line, font, x);
+        int at = CharAtX(runtime.Fonts, font, line, x);
         bool extend = focused && (interaction.Modifiers & KeyModifiers.Shift) != 0;
 
         // Double click highlights word, and dragged selects by words: the
@@ -92,8 +114,9 @@ public static class TextField
         // away from the mark.
         if (interaction.PressCount > 1)
         {
-            int start = at + TextOp.WordScan(line, at, -1);
-            int end = start + TextOp.WordScan(line, start, +1);
+            var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+            int start = TextLayer.ScanWord(runtime.Fonts, style, line, at, -1);
+            int end = TextLayer.ScanWord(runtime.Fonts, style, line, start, +1);
             if (interaction.Pressed) { edit.Mark = start; edit.Cursor = end; }
             else edit.Cursor = at < edit.Mark ? start : end;
         }
@@ -154,8 +177,9 @@ public static class TextField
     internal static void DrawCaret(BibuiRuntime runtime, Box view, Font font, ReadOnlySpan<char> line,
         int lo, int hi, int caret, float top, SemanticSize height, bool edited)
     {
-        float before = runtime.Fonts.Measure(line[..lo], font);
-        if (caret == hi && hi > lo) before += runtime.Fonts.Measure(line[lo..hi], font);
+        var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+        float before = TextLayer.WidthFromChars(runtime.Fonts, line[..lo], style, font.Scale);
+        if (caret == hi && hi > lo) before += TextLayer.WidthFromChars(runtime.Fonts, line[lo..hi], style, font.Scale);
 
         // The caret follows the cursor: 60 halvings a second by default, half the way each frame at 60 Hz.
         float rate = edited ? 1f : runtime.Rates.Follow;
@@ -186,7 +210,7 @@ public static class TextField
                 ev.Eat();
                 continue;
             }
-            var op = TextOp.FromStateAndEvent(text, edit, ev, charBuf);
+            var op = TextOp.FromStateAndEvent(runtime.Fonts, font, text, edit, ev, charBuf);
             if (op.Range.Item1 != op.Range.Item2 || op.ReplaceString.Length > 0) edited = true;
             text.ReplaceRange(op.Range, op.ReplaceString);
             edit.Cursor = op.NewCursor;
@@ -204,29 +228,29 @@ public static class TextField
     internal static void MoveVertically(BibuiRuntime runtime, Font font, BibuiStr text, TextEditState edit,
         float wrapWidth, TextWrap wrap, BibUiEvent ev)
     {
-        // The cursor's line: the last that starts at or before it.
-        var line = runtime.Fonts.Wrap(text.Str, font, wrapWidth, wrap);
-        while (line?.Next is not null && edit.Cursor >= line.Next.Start) line = line.Next;
-
-        var target = ev.DeltaY > 0 ? line?.Next : line?.Prev;
-        if (target is null)
+        var fonts = runtime.Fonts;
+        var style = TextLayer.StyleFromFont(fonts, font, font.Scale);
+        var lines = TextLayer.LinesFromText(fonts, text.Str, style, font.Scale, wrapWidth, wrap);
+        int on = LineOf(lines, edit.Cursor);
+        int to = on + Math.Sign(ev.DeltaY);
+        if (to < 0 || to >= lines.Length)
         {
             edit.Cursor = ev.DeltaY > 0 ? (int)text.Length : 0;
         }
         else
         {
-            float caretX = runtime.Fonts.Measure(text.Str[line!.Start..edit.Cursor], font);
-            edit.Cursor = target.Start + runtime.Fonts.OffsetAt(text.Str[target.Start..target.End], font, caretX);
+            float caretX = TextLayer.WidthFromChars(fonts, text.Str[lines[on].Start..edit.Cursor], style, font.Scale);
+            edit.Cursor = lines[to].Start + CharAtX(fonts, font, text.Str[lines[to].Start..lines[to].End], caretX);
         }
         if ((ev.Flags & TextActionFlags.KeepMark) == 0) edit.Mark = edit.Cursor;
     }
 
-    // The line numbered index, counted from the first — clamped to the lines there are.
-    internal static TextLine? LineAt(TextLine? first, int index)
+    // The line an offset is on: the last that starts at or before it.
+    internal static int LineOf(ReadOnlySpan<TextLine> lines, int at)
     {
-        var line = first;
-        for (int i = 0; i < index && line?.Next is not null; i++) line = line.Next;
-        return line;
+        int k = 0;
+        while (k + 1 < lines.Length && at >= lines[k + 1].Start) k++;
+        return k;
     }
 }
 
@@ -281,8 +305,11 @@ public static class TextFieldExtensions
         if (!focused || empty)
             view.TargetViewOffset = view.TargetViewOffset with { X = 0f };
         else
-            ScrollToCaret(view, new Vector2(runtime.Fonts.Measure(shown[..caret], font), 0f), Vector2.Zero,
-                new Vector2(runtime.Fonts.Measure(shown, font), 0f), view.Extent / 4f);
+        {
+            var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+            ScrollToCaret(view, new Vector2(TextLayer.WidthFromChars(runtime.Fonts, shown[..caret], style, font.Scale), 0f), Vector2.Zero,
+                new Vector2(TextLayer.WidthFromChars(runtime.Fonts, shown, style, font.Scale), 0f), view.Extent / 4f);
+        }
 
         using (runtime.Parent(view))
         {
@@ -305,6 +332,7 @@ public static class TextFieldExtensions
         TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default, TextWrap wrap = TextWrap.Words)
     {
         Font font = runtime.FontInScope();
+        var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
 
         // The field's own view: as tall as the size pushed, scrolling, cut at its edge.
         var claims = InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip
@@ -327,9 +355,10 @@ public static class TextFieldExtensions
             float pointerX = interaction.X - view.Rect.X;   // from where the text starts
             float pointerY = interaction.Y - view.Rect.Y + view.ViewOffset.Y;   // in the lines, scrolled
             int lineUnderPointer = (int)MathF.Floor(pointerY / lineAdvance);
-            var line = LineAt(runtime.Fonts.Wrap(text.Str, font, room, wrap), lineUnderPointer);
-            int lineStart = line?.Start ?? 0, lineEnd = line?.End ?? 0;
-            ReadOnlySpan<char> lineText = text.Str[lineStart..lineEnd];
+            var pointerLines = TextLayer.LinesFromText(runtime.Fonts, text.Str, style, font.Scale, room, wrap);
+            var line = pointerLines[Math.Clamp(lineUnderPointer, 0, pointerLines.Length - 1)];
+            int lineStart = line.Start;
+            ReadOnlySpan<char> lineText = text.Str[line.Start..line.End];
 
             edit.Cursor -= lineStart; edit.Mark -= lineStart;
             HandlePointer(runtime, font, interaction, lineText, edit, pointerX, focused);
@@ -342,7 +371,7 @@ public static class TextFieldExtensions
         bool empty = text.Length == 0;
         ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
         TextColor color = empty ? TextColor.Secondary : textColor;
-        TextLine? lines = runtime.Fonts.Wrap(shown, font, room, wrap);
+        var lines = TextLayer.LinesFromText(runtime.Fonts, shown, style, font.Scale, room, wrap);
 
         // Not focused: no caret and nothing highlighted. Empty: the caret is
         // before the placeholder, which is not text to select.
@@ -353,12 +382,13 @@ public static class TextFieldExtensions
         using var inView = runtime.Parent(view);
 
         // A row per line, LineAdvance apart.
-        int index = 0, caretLine = -1;
-        for (var line = lines; line is not null; line = line.Next, index++)
+        int caretLine = -1;
+        for (int index = 0; index < lines.Length; index++)
         {
+            var line = lines[index];
             if (index > 0) runtime.Gap(lineAdvance - lineHeight);
             // The caret's line: the first that holds it, or the space after it does.
-            if (caretLine < 0 && caret <= (line.Next?.Start - 1 ?? int.MaxValue)) caretLine = index;
+            if (caretLine < 0 && caret <= (index + 1 < lines.Length ? line.Next - 1 : int.MaxValue)) caretLine = index;
 
             Box row = runtime.Box();
             row.ChildLayoutAxis = LayoutAxis.X;
@@ -375,8 +405,7 @@ public static class TextFieldExtensions
         if (focused)
         {
             int caretLineIndex = Math.Max(0, caretLine);
-            var onLine = LineAt(lines, caretLineIndex);
-            int lineStart = onLine?.Start ?? 0, lineEnd = onLine?.End ?? 0;
+            int lineStart = lines[caretLineIndex].Start, lineEnd = lines[caretLineIndex].End;
             // The caret and the selection in the caret's line's offsets.
             int selectionStart = Math.Clamp(lo, lineStart, lineEnd) - lineStart;
             int selectionEnd = Math.Clamp(hi, lineStart, lineEnd) - lineStart;
@@ -389,7 +418,7 @@ public static class TextFieldExtensions
             // Its line is kept in sight when it moves, so a wheel scroll is left alone.
             if (!empty && (edited || edit.Cursor != caretBefore))
                 ScrollToCaret(view, new Vector2(0f, lineTop), new Vector2(0f, lineHeight),
-                    new Vector2(0f, lineHeight + Math.Max(0, index - 1) * lineAdvance), new Vector2(0f, lineHeight));
+                    new Vector2(0f, lineHeight + Math.Max(0, lines.Length - 1) * lineAdvance), new Vector2(0f, lineHeight));
         }
         return new BibuiWidget(view, interaction);
     }
@@ -413,7 +442,8 @@ public static class TextFieldExtensions
         var line = runtime.TextField(id, text, edit, focused, events, textColor, placeholder);
         bool empty = text.Length == 0;
         ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
-        if (focused || runtime.Fonts.Measure(shown, runtime.FontInScope()) <= room)
+        Font font = runtime.FontInScope();
+        if (focused || TextLayer.WidthFromChars(runtime.Fonts, shown, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) <= room)
             return line;   // fits, or being edited: it scrolls instead
 
         runtime.Gap(DotsGap);

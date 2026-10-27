@@ -34,11 +34,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Text is part of the render, so the face it is drawn with cannot be
-         whatever the machine happens to have installed. Embedded here, in the
-         assembly FontProvider reads (Assembly.GetExecutingAssembly()). -->
-    <EmbeddedResource Include="Assets/Fonts/Inter-Regular.ttf" LogicalName="Bibui.Core.Assets.Fonts.Inter-Regular.ttf" />
-    <EmbeddedResource Include="Assets/Fonts/Inter-SemiBold.ttf" LogicalName="Bibui.Core.Assets.Fonts.Inter-SemiBold.ttf" />
+    <!-- The text layer: fonts, measuring, a text's runs, line breaking. The
+         core lays text out and paints it with it, in every file (Bibui.Text
+         is a global using here). -->
+    <ProjectReference Include="../bibui-text/bibui-text.csproj" />
+    <Using Include="Bibui.Text" />
   </ItemGroup>
 
   <ItemGroup>
@@ -48,10 +48,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The licence, the third-party notices and the embedded fonts' licence travel with the package. -->
+    <!-- The licence and the third-party notices travel with the package. -->
     <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
     <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
-    <None Include="Assets/Fonts/Inter-LICENSE.txt" Pack="true" PackagePath="licenses/" Visible="false" />
   </ItemGroup>
 
 </Project>

@@ -1,12 +1,14 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Bibui.Core.FreeType.Native;
+using Bibui.Text.FreeType.Native;
 
-namespace Bibui.Core.FreeType;
+namespace Bibui.Text.FreeType;
 
 /// <summary>
 /// bibui's text on the system FreeType and HarfBuzz: fonts, strikes (a font at a
-/// size), measuring, shaping, the glyph coverage cache, and drawing into pixels.
+/// size) with their advances, metrics and shaping, and the glyph coverage masks
+/// a rasterizer draws. Measuring and drawing a text is the text layer's
+/// (<see cref="TextLayer"/>); this is what it measures with.
 ///
 /// <para><b>Parity.</b> The fixture baselines are drawn by the Skia backend, so
 /// this engine reproduces SkiaSharp 2.88.8's text exactly: measured widths are
@@ -24,7 +26,7 @@ namespace Bibui.Core.FreeType;
 /// <item><see cref="FontData"/>: immutable, across threads and engines.</item>
 /// <item><see cref="GlyphMask"/>: immutable once returned; a rasterizer worker may
 /// read masks while the engine's thread goes on rendering others.</item>
-/// <item><see cref="MaskGamma"/> and <see cref="GlyphCompositor"/>: static and stateless.</item>
+/// <item><see cref="MaskGamma"/>: static and stateless.</item>
 /// <item><see cref="GlyphRun"/>: a mutable buffer the caller owns; one per thread.</item>
 /// </list>
 /// <para>Each engine has its own FT_Library, so several engines on several threads
@@ -37,7 +39,6 @@ public sealed class TextEngine : IDisposable
     private readonly Dictionary<(Font Font, int SizeBits), FontStrike> _strikes = new();
     private readonly Dictionary<(string Family, int Weight), Font> _registered = new();
     private readonly Dictionary<ulong, List<FontData>> _loadedBytes = new();
-    private PlacedGlyph[] _placed = new PlacedGlyph[64];
     private bool _disposed;
 
     internal IntPtr HbBuffer { get; }
@@ -147,63 +148,6 @@ public sealed class TextEngine : IDisposable
 
     /// <summary>The strike for a family, weight and physical size; see <see cref="Resolve"/>.</summary>
     public FontStrike Strike(string? family, int weight, float sizePx) => Strike(Resolve(family, weight), sizePx);
-
-    /// <summary>Every strike made so far.</summary>
-    public IReadOnlyCollection<FontStrike> Strikes => _strikes.Values;
-
-    /// <summary>Drops every cached glyph mask in every strike. Advances and metrics stay.</summary>
-    public void ClearMasks()
-    {
-        foreach (var s in _strikes.Values) s.ClearMasks();
-    }
-
-    // ── Measure, metrics ─────────────────────────────────────────────────────
-
-    /// <summary>Width of <paramref name="text"/> in physical px: the sum of its linear advances.</summary>
-    public float Measure(FontStrike strike, ReadOnlySpan<char> text) => strike.Measure(text);
-
-    /// <summary>Ascent, descent and leading in physical px.</summary>
-    public FontMetrics Metrics(FontStrike strike) => strike.Metrics;
-
-    // ── Draw ─────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Draws <paramref name="text"/> with its baseline at (<paramref name="x"/>,
-    /// <paramref name="baselineY"/>), and returns
-    /// its advance (what <see cref="FontStrike.Measure(ReadOnlySpan{char})"/> returns).
-    /// </summary>
-    public float DrawText(in PixelTarget dst, FontStrike strike, ReadOnlySpan<char> text, float x, float baselineY,
-        TextColor color, PixelClip? clip = null, MaskBlend blend = MaskBlend.LegacyN32, ShapeOptions? options = null)
-    {
-        var run = ScratchRun;
-        strike.Shape(text, run, options);
-        DrawRun(dst, run, x, baselineY, color, clip, blend);
-        float w = run.Width;
-        run.Clear();
-        return w;
-    }
-
-    /// <summary>Draws a shaped run with its origin at (<paramref name="x"/>, <paramref name="baselineY"/>).</summary>
-    public void DrawRun(in PixelTarget dst, GlyphRun run, float x, float baselineY, TextColor color,
-        PixelClip? clip = null, MaskBlend blend = MaskBlend.LegacyN32)
-    {
-        var strike = run.Strike ?? throw new ArgumentException("The run has not been shaped.", nameof(run));
-        if (_placed.Length < run.Count) _placed = new PlacedGlyph[Math.Max(run.Count, _placed.Length * 2)];
-        int n = strike.Place(run, x, baselineY, _placed);
-        GlyphCompositor.Composite(dst, _placed.AsSpan(0, n), color, clip ?? PixelClip.Of(dst.Width, dst.Height), blend);
-    }
-
-    /// <summary>
-    /// Draws glyphs at explicit positions, relative to the origin (<paramref name="x"/>,
-    /// <paramref name="baselineY"/>): the shape of a <c>Glyphs</c> draw op.
-    /// </summary>
-    public void DrawGlyphs(in PixelTarget dst, FontStrike strike, ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
-        float x, float baselineY, TextColor color, PixelClip? clip = null, MaskBlend blend = MaskBlend.LegacyN32)
-    {
-        if (_placed.Length < glyphs.Length) _placed = new PlacedGlyph[Math.Max(glyphs.Length, _placed.Length * 2)];
-        int n = strike.Place(glyphs, positions, x, baselineY, _placed);
-        GlyphCompositor.Composite(dst, _placed.AsSpan(0, n), color, clip ?? PixelClip.Of(dst.Width, dst.Height), blend);
-    }
 
     // ── Lifetime ─────────────────────────────────────────────────────────────
 

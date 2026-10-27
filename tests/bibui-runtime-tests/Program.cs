@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Bibui.Core;
+using Bibui.Text;
 using Bibui.Core.Theming;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
@@ -2501,7 +2502,7 @@ Run("Text: a mono text is set and laid out in the theme's mono family", () =>
     // Laid out at what the mono family measures. Not compared with the body
     // family's width: where neither family is installed both fall back to the
     // same face, and the two widths agree.
-    Eq(runtime.Fonts.Measure("194450e3", mono), page.GetBounds("mono").Width, "laid out at its mono width");
+    Eq(TextLayer.WidthFromChars(runtime.Fonts, "194450e3", TextLayer.StyleFromFont(runtime.Fonts, mono, mono.Scale), mono.Scale), page.GetBounds("mono").Width, "laid out at its mono font's width");
 });
 
 Run("FontSize: a text in pixels is measured and laid out at that size, between the steps", () =>
@@ -2518,7 +2519,7 @@ Run("FontSize: a text in pixels is measured and laid out at that size, between t
 
     var font = runtime.FontInScope(FontSize.Px(21f));
     Eq(21f, font.Size, "the font is the size asked for");
-    Eq(runtime.Fonts.Measure("Zoomed", font), page.GetBounds("px").Width, "laid out at what it measures");
+    Eq(TextLayer.WidthFromChars(runtime.Fonts, "Zoomed", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale), page.GetBounds("px").Width, "laid out at that font's width");
     Eq(runtime.Fonts.LineHeight(font), page.GetBounds("px").Height, "and a line of it tall");
     IsTrue(page.GetBounds("px").Width > page.GetBounds("sm").Width, "larger than the small step");
 });
@@ -2536,14 +2537,15 @@ Run("FontSize: a text's size is always said, and can be changed on the text that
         {
             plain = runtime.TextFromId("plain", "Zoomed".ToArray());
             runtime.TextFromId("changed", "Zoomed".ToArray()).Size = FontSize.Px(26f);
+            runtime.TextFromId("reference", "Zoomed".ToArray(), FontSize.Px(26f));
         }
         return root;
     }, TestBuild.Window(300, 120, 1f));
     using var page = runtime.Page();
 
     Eq((FontSize)ComponentSize.Md, plain.Size, "nothing passed and nothing pushed is Md");
-    Eq(runtime.Fonts.Measure("Zoomed", runtime.FontInScope(FontSize.Px(26f))), page.GetBounds("changed").Width,
-        "a size set afterwards is the one laid out");
+    Eq(page.GetBounds("reference").Width, page.GetBounds("changed").Width,
+        "a size set afterwards is the one laid out: as wide as the text made at that size");
 });
 
 Run("FontSize: what is built in scope takes the innermost size begun, unless it says its own", () =>
@@ -2568,17 +2570,22 @@ Run("FontSize: what is built in scope takes the innermost size begun, unless it 
                 runtime.TextFromId("own", "Zoomed".ToArray(), ComponentSize.Sm);
             }
             runtime.TextFromId("after", "Zoomed".ToArray());
+            // The same text at each size asked for itself, out of every scope: what each above should match.
+            runtime.TextFromId("at30", "Zoomed".ToArray(), FontSize.Px(30f));
+            runtime.TextFromId("at18", "Zoomed".ToArray(), FontSize.Px(18f));
+            runtime.TextFromId("atSm", "Zoomed".ToArray(), ComponentSize.Sm);
+            runtime.TextFromId("atMd", "Zoomed".ToArray(), ComponentSize.Md);
         }
         return root;
     }, TestBuild.Window(400, 200, 1f));
     using var page = runtime.Page();
 
-    float Wide(FontSize size) => runtime.Fonts.Measure("Zoomed", runtime.FontInScope(size));
-    Eq(Wide(FontSize.Px(30f)), page.GetBounds("outer").Width, "the pushed size");
-    Eq(Wide(FontSize.Px(18f)), page.GetBounds("inner").Width, "the innermost push");
+    float Wide(string id) => page.GetBounds(id).Width;
+    Eq(Wide("at30"), Wide("outer"), "the pushed size");
+    Eq(Wide("at18"), Wide("inner"), "the innermost push");
     Eq(18f, icon.Extent.X, "an icon takes it too");
-    Eq(Wide(ComponentSize.Sm), page.GetBounds("own").Width, "a text's own size wins");
-    Eq(Wide(ComponentSize.Md), page.GetBounds("after").Width, "and past the scope the default is back");
+    Eq(Wide("atSm"), Wide("own"), "a text's own size wins");
+    Eq(Wide("atMd"), Wide("after"), "and past the scope the default is back");
 });
 
 Run("BeginFontSize: a scope left open is an error at the end of the build", () =>
@@ -2695,20 +2702,26 @@ Run("Renderers: the managed rasterizer draws into memory with its own stride wha
 
 Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string", () =>
 {
-    // The canvas is handed glyphs FreeType shaped, never a string. On Skia they
+    // The canvas is handed glyphs layout's walk set, never a string. On Skia they
     // must land exactly where Skia's own string drawing puts them, with the
     // paint bibui draws text with, so the move to glyphs moved no pixel.
     using var fonts = new Fonts();
-    var face = fonts.BuiltIn(400);
+    var face = TextLayer.FaceBuiltIn(fonts, 400);
     IsTrue(face.HasGlyph('A') && !face.HasGlyph(0x10FFFD), "glyph coverage is the face's own");
 
     const float size = 17.5f;
     const string text = "Shaped runs, glyph by glyph — 0.5 ffi";
-    var glyphIds = new ushort[text.Length];
-    var positions = new System.Numerics.Vector2[text.Length];
-    int count = face.Strike(size).Glyphs(text, glyphIds, positions, out float width);
+    TextLayer.RunsBegin(fonts);
+    var style = TextLayer.StyleFromFaceSize(fonts, face, size);
+    var walked = TextLayer.RunsFromChars(fonts, text, style);
+    var run = TextLayer.RunsOf(fonts, walked)[0];
+    Eq(1, TextLayer.RunsOf(fonts, walked).Length, "one run, in the face");
+    int count = run.GlyphCount;
+    var glyphIds = fonts.RunGlyphs.AsSpan(run.GlyphStart, count).ToArray();
+    var positions = fonts.RunPoints.AsSpan(run.GlyphStart, count).ToArray();
+    float width = TextLayer.WidthOfRuns(fonts, walked, 1f);
     Eq(text.Length, count, "one glyph per char for this text (no ligatures)");
-    Eq(face.Strike(size).Measure(text), width, "the walked run is as wide as measuring says");
+    Eq(TextLayer.WidthFromChars(fonts, text, style, 1f), width, "the walked run is as wide as WidthFromChars says");
 
     var info = new SkiaSharp.SKImageInfo(360, 48, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
     static byte[] Read(SkiaSharp.SKSurface surface)
@@ -2865,15 +2878,17 @@ Run("DrawList: recording a frame after the first allocates nothing", () =>
 
     var caches = new Bibui.Core.Draw.RenderCaches();
     using var fonts = new Fonts();
-    var painter = new Bibui.Core.Draw.Painter(caches, fonts);
+    var theme = runtime.Theme;
+    var slotFaces = new FontFace[FontResolution.SlotFaceCount];
+    FontResolution.SlotFacesFill(slotFaces, fonts, theme);
+    var painter = new Bibui.Core.Draw.Painter(caches, fonts, slotFaces);
     var list = new Bibui.Core.Draw.DrawList();
     var surface = TestBuild.Window(400, 300);
-    var theme = runtime.Theme;
     for (int i = 0; i < 3; i++)
     {
         painter.Record(list, tree!, surface, theme, FrameInput.None);
         caches.EndFrame();
-        fonts.EndFrame();
+        TextLayer.FontsEndFrame(fonts);
     }
 
     long before = GC.GetAllocatedBytesForCurrentThread();
@@ -6940,32 +6955,6 @@ Run("Tooltip: claims nothing, so a press on it reaches what is beneath", () =>
     Eq(1, clicks, "the button beneath the tooltip has the click");
 });
 
-Run("Fonts.OffsetAt: the boundary nearer x, either side of every glyph", () =>
-{
-    var runtime = BibuiRuntime.Create();
-    var font = runtime.FontInScope();
-    const string text = "Hello";
-    for (int k = 1; k <= text.Length; k++)
-    {
-        float before = runtime.Fonts.Measure(text.AsSpan(0, k - 1), font);
-        float after = runtime.Fonts.Measure(text.AsSpan(0, k), font);
-        Eq(k, runtime.Fonts.OffsetAt(text, font, after - 0.5f), $"just left of glyph {k}'s right edge");
-        Eq(k - 1, runtime.Fonts.OffsetAt(text, font, before + 0.5f), $"just right of glyph {k}'s left edge");
-    }
-    Eq(0, runtime.Fonts.OffsetAt(text, font, -10f), "before the start");
-    Eq(text.Length, runtime.Fonts.OffsetAt(text, font, 1000f), "past the end");
-});
-
-Run("Fonts.OffsetAt: only ever a text element boundary", () =>
-{
-    var runtime = BibuiRuntime.Create();
-    var font = runtime.FontInScope();
-    const string text = "a👍🏽b";   // a | 👍🏽 (two code points, four chars) | b — boundaries 0, 1, 5, 6
-    float a = runtime.Fonts.Measure("a", font), at = runtime.Fonts.Measure("a👍🏽", font);
-    Eq(5, runtime.Fonts.OffsetAt(text, font, at - 0.5f), "after the 👍🏽, not inside it");
-    Eq(1, runtime.Fonts.OffsetAt(text, font, a + 0.5f), "before the 👍🏽");
-});
-
 Run("Fonts.LineHeight and LineAdvance: what layout gives one line, and the next", () =>
 {
     // One line is LineHeight tall, and a multi-line field as tall as its lines
@@ -7002,66 +6991,59 @@ Run("Fonts.LineHeight and LineAdvance: what layout gives one line, and the next"
         $"three lines: {height} + 2 x {advance}, laid out {three}");
 });
 
-Run("Fonts.Wrap: lines at a width, the space between them in neither", () =>
+// The lines a text breaks into at a width in the font in scope: TextLayer.LinesFromText.
+TextLine[] LinesAt(BibuiRuntime runtime, string text, Font font, float width, TextWrap wrap = TextWrap.Words)
+    => TextLayer.LinesFromText(runtime.Fonts, text, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale, width, wrap).ToArray();
+
+Run("LinesFromText: lines at a width, the space between them in neither", () =>
 {
     var runtime = BibuiRuntime.Create();
     var font = runtime.FontInScope();
     var text = "one two three";
     // Room for "one two" but not "one two three".
-    float width = runtime.Fonts.Measure("one two", font) + 1f;
-    var lines = new List<string>();
-    for (var line = runtime.Fonts.Wrap(text, font, width); line is not null; line = line.Next)
-        lines.Add($"{line.Start}..{line.End}");
-    Eq("0..7,8..13", string.Join(",", lines), "one two | three, the space at 7 in neither");
-    IsTrue(runtime.Fonts.Wrap("", font, width) is null, "nothing is no lines");
+    float width = TextLayer.WidthFromChars(runtime.Fonts, "one two", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) + 1f;
+    var lines = LinesAt(runtime, text, font, width);
+    Eq("0..7,8..13", string.Join(",", lines.Select(l => $"{l.Start}..{l.End}")), "one two | three, the space at 7 in neither");
+    Eq(8, lines[0].Next, "the second line starts past the space");
+    var nothing = LinesAt(runtime, "", font, width);
+    IsTrue(nothing.Length == 1 && nothing[0] == new TextLine(0, 0, 0), "nothing is one empty line");
 });
 
-Run("Fonts.Wrap: offsets are chars, and a line break starts a line", () =>
+Run("LinesFromText: offsets are chars, and a line break starts a line", () =>
 {
     var runtime = BibuiRuntime.Create();
     var font = runtime.FontInScope();
     var text = "grüße\nw👍🏽rld";   // ü and ß are a char each; 👍🏽 is four
-    var first = runtime.Fonts.Wrap(text, font, 1000f)!;
-    var second = first.Next!;
-    Eq(0, first.Start); Eq(5, first.End, "grüße is 5 chars");
-    Eq(6, second.Start, "after the \\n"); Eq(14, second.End, "w👍🏽rld is 8 chars");
-    IsTrue(second.Next is null && second.Prev == first, "two lines, linked both ways");
+    var lines = LinesAt(runtime, text, font, 1000f);
+    Eq(2, lines.Length, "two lines");
+    Eq(0, lines[0].Start); Eq(5, lines[0].End, "grüße is 5 chars");
+    Eq(6, lines[0].Next, "the next starts after the \\n");
+    Eq(6, lines[1].Start, "after the \\n"); Eq(14, lines[1].End, "w👍🏽rld is 8 chars");
+    Eq(lines[1].End, lines[1].Next, "the last line's Next is its End");
 });
 
-Run("Fonts.Wrap: by characters, a line holds what fits and the next starts where it ends", () =>
+Run("LinesFromText: by characters, a line holds what fits and the next starts where it ends", () =>
 {
     var runtime = BibuiRuntime.Create();
     var font = runtime.FontInScope();
     const string text = "/home/ada/grüße/a-path-longer-than-the-line.txt\nok";
-    float width = runtime.Fonts.Measure("/home/ada/", font) + 0.5f;
+    float width = TextLayer.WidthFromChars(runtime.Fonts, "/home/ada/", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) + 0.5f;
 
-    var lines = new List<TextLine>();
-    for (var line = runtime.Fonts.Wrap(text, font, width, TextWrap.Characters); line is not null; line = line.Next)
-        lines.Add(line);
-    IsTrue(lines.Count > 3, $"the path is cut into several lines, got {lines.Count}");
+    var lines = LinesAt(runtime, text, font, width, TextWrap.Characters);
+    IsTrue(lines.Length > 3, $"the path is cut into several lines, got {lines.Length}");
     Eq(0, lines[0].Start);
     Eq(10, lines[0].End, "as many characters as fit: /home/ada/");
-    for (int i = 1; i < lines.Count - 1; i++)
+    for (int i = 1; i < lines.Length - 1; i++)
         Eq(lines[i - 1].End, lines[i].Start, "nothing between one line and the next");
-    IsTrue(lines.All(l => runtime.Fonts.Measure(text.AsSpan(l.Start..l.End), font) <= width), "every line fits");
+    IsTrue(lines.All(l => TextLayer.WidthFromChars(runtime.Fonts, text.AsSpan(l.Start..l.End), TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) <= width), "every line fits");
     IsTrue(lines.All(l => l.Start == l.End || !char.IsLowSurrogate(text[l.Start])), "a line starts on a character, not inside one");
     Eq("ok", text[lines[^1].Start..lines[^1].End], "a line break still starts a line");
 
-    var byWords = runtime.Fonts.Wrap(text, font, width)!;
-    Eq(text.IndexOf('\n'), byWords.End, "by words the path is one line, wider than the width");
+    var byWords = LinesAt(runtime, text, font, width);
+    Eq(text.IndexOf('\n'), byWords[0].End, "by words the path is one line, wider than the width");
 
-    var narrow = runtime.Fonts.Wrap("ab", font, 0.5f, TextWrap.Characters)!;
-    IsTrue(narrow.End == 1 && narrow.Next!.Start == 1, "a line too narrow for anything still holds one character");
-});
-
-Run("Fonts.Measure: a longer text is wider, and nothing has no width", () =>
-{
-    var runtime = BibuiRuntime.Create();
-    using var bold = runtime.FontFace(weight: FontWeight.Bold);
-    var font = runtime.FontInScope(ComponentSize.Lg);
-    float word = runtime.Fonts.Measure("Grüße", font);
-    IsTrue(word > 0f && runtime.Fonts.Measure("Grüße, wörld", font) > word, "measured over its code points");
-    Eq(0f, runtime.Fonts.Measure("", font), "nothing is no width");
+    var narrow = LinesAt(runtime, "ab", font, 0.5f, TextWrap.Characters);
+    IsTrue(narrow[0].End == 1 && narrow[0].Next == 1 && narrow[1].Start == 1, "a line too narrow for anything still holds one character");
 });
 
 // ── TextField ────────────────────────────────────────────────────────────────
@@ -7125,7 +7107,7 @@ Run("runtime.TextField: a press puts the caret at the byte under it, and focuses
     var edit = new TextEditState();
     var (runtime, focused, _) = MountField(text, edit);
     var font = runtime.FontInScope();
-    float afterHe = runtime.Fonts.Measure("He", font);
+    float afterHe = TextLayer.WidthFromChars(runtime.Fonts, "He", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
     ClickAt(runtime, afterHe + 0.5f, 5f);
     runtime.Step();
     IsTrue(focused(), "the press is reported, and the caller focuses");
@@ -7155,7 +7137,7 @@ Run("runtime.TextField: in a padded box, a press is measured from where the text
     }, TestBuild.Window(400, 300));
     runtime.Step();
     var font = runtime.FontInScope();
-    float afterHe = runtime.Fonts.Measure("He", font);
+    float afterHe = TextLayer.WidthFromChars(runtime.Fonts, "He", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
     ClickAt(runtime, 20f + afterHe + 0.5f, 15f);
     runtime.Step();
     Eq(2, edit.Cursor, "after He, counted from inside the padding");
@@ -7238,7 +7220,8 @@ Run("runtime.EllipsisTextField: \"…\" only when the line is wider than its box
         bool dots = Texts(runtime).Contains("\u2026");
         Eq(cut, dots, $"\"{words}\" ends in \"…\"");
         var line = box.FirstChild!;   // the line's own box, inside the label
-        float dotsWidth = runtime.Fonts.Measure("\u2026", runtime.FontInScope());
+        var font = runtime.FontInScope();
+        float dotsWidth = TextLayer.WidthFromChars(runtime.Fonts, "\u2026", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
         Eq(cut ? 120f - 2f - dotsWidth : 120f, line.Extent.X, "the line takes what the gap and the \"…\" leave");
     }
 });
@@ -7268,7 +7251,7 @@ Run("runtime.TextField: a line wider than its box scrolls to the caret, and back
     for (int i = 0; i < 60; i++) runtime.Step();
 
     var font = runtime.FontInScope();
-    float width = runtime.Fonts.Measure(text.Str, font);
+    float width = TextLayer.WidthFromChars(runtime.Fonts, text.Str, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
     var view = field.FirstChild!;   // the line's own view, inside the field
     IsTrue(MathF.Abs(width - 100f - view.TargetViewOffset.X) < 0.01f,
         $"at the end, the view is the line's width less the box's: {view.TargetViewOffset.X} vs {width - 100f}");
@@ -7379,7 +7362,7 @@ Run("runtime.MultilineTextField: a press on the second row lands on the second l
     var (runtime, _, _) = MountField(text, edit, multiline: true);
     var font = runtime.FontInScope();
     float secondRowY = runtime.Fonts.LineAdvance(font) + 2f;
-    ClickAt(runtime, runtime.Fonts.Measure("sec", font) + 0.5f, secondRowY);
+    ClickAt(runtime, TextLayer.WidthFromChars(runtime.Fonts, "sec", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) + 0.5f, secondRowY);
     runtime.Step();
     Eq(11 + 3, edit.Cursor, "after \"sec\" on the second line");
 });
@@ -8022,6 +8005,9 @@ IconNameTests.Register(Run);
 Console.WriteLine();
 Console.WriteLine("App icons");
 AppIconTests.Register(Run);
+Console.WriteLine();
+Console.WriteLine("Cluster face");
+ClusterFaceTests.Register(Run);
 Console.WriteLine();
 Console.WriteLine("Motion");
 MotionTests.Register(Run);

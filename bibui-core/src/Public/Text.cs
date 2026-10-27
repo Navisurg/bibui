@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text;
 
 namespace Bibui.Core.TextEdit;
 
@@ -15,113 +13,6 @@ public ref struct TextOp
 
     public TextOp() { }
 
-    // How far back ScanTextElement looks for a certain boundary, in chars. Only
-    // an element longer than this — stacked marks, a long run of flags — can
-    // put the cursor inside it.
-    public static int MaxLookBehind = 64;
-
-    /// <summary>
-    /// Scan one text element — what reads as one character: 👍🏽, 🇩🇰, e and an
-    /// accent, \r\n — in the direction of <paramref name="delta"/> (sign only).
-    /// Returns the char offset from <paramref name="cursor"/>, negative going
-    /// left, 0 at the edge. The cursor is assumed to be on an element boundary.
-    /// </summary>
-    public static int ScanTextElement(ReadOnlySpan<char> str, int cursor, int delta)
-    {
-        if (delta > 0)
-            return cursor < str.Length ? StringInfo.GetNextTextElementLength(str[cursor..]) : 0;
-        if (delta == 0 || cursor == 0) return 0;
-
-        // A line break is a boundary on both sides, and \r\n is one element.
-        if (str[cursor - 1] == '\n') return cursor >= 2 && str[cursor - 2] == '\r' ? -2 : -1;
-
-        // Whether a position is a boundary can depend on what comes before it (a
-        // ZWJ sequence, the pairing of flags), so step back, a code point at a
-        // time, to one that is certainly a boundary — within the line and
-        // MaxLookBehind — and scan forward from there.
-        int floor = Math.Max(cursor + LineScan(str, cursor, -1), cursor - MaxLookBehind);
-        int start = cursor;
-        while (true)
-        {
-            Rune.DecodeLastFromUtf16(str[..start], out _, out int length);
-            start -= Math.Max(1, length);
-            if (start <= floor) break;
-
-            // The pair test: a boundary .NET finds between the two code points
-            // alone holds whatever came before, unless the first is a mark or a
-            // format char — a ZWJ (emoji sequences) and a virama (Indic
-            // conjuncts) join by what precedes them, which the pair can't see.
-            Rune.DecodeLastFromUtf16(str[..start], out Rune before, out int beforeLength);
-            Rune.DecodeFromUtf16(str[start..], out _, out int afterLength);
-            if (Rune.GetUnicodeCategory(before) is not (UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark
-                    or UnicodeCategory.EnclosingMark or UnicodeCategory.Format)
-                && StringInfo.GetNextTextElementLength(str[(start - beforeLength)..(start + afterLength)]) == beforeLength)
-                break;
-        }
-
-        // The last element boundary before the cursor.
-        int boundary = start;
-        for (int i = start; i < cursor; i += StringInfo.GetNextTextElementLength(str[i..cursor]))
-            boundary = i;
-        return boundary - cursor;
-    }
-
-    /// <summary>
-    /// Scan to the next word boundary in the direction of <paramref name="delta"/>
-    /// (sign only; magnitude ignored). Returns the char offset from <paramref name="cursor"/>
-    /// to the boundary — negative going left, positive going right, 0 at the edge.
-    ///
-    /// A "word" is a run of non-whitespace chars (punctuation included). Going forward
-    /// from inside whitespace skips the whitespace and then the next word; going forward
-    /// from inside a word skips the rest of the word — the usual Ctrl+Arrow behaviour.
-    /// </summary>
-    public static int WordScan(ReadOnlySpan<char> str, int cursor, int delta)
-    {
-        if (delta == 0 || str.Length == 0) return 0;
-
-        if (delta > 0)
-        {
-            int i = cursor;
-            while (i < str.Length && IsSpace(str[i])) i++;       // skip leading whitespace
-            while (i < str.Length && !IsSpace(str[i])) i++;      // skip the word
-            return i - cursor;
-        }
-        else
-        {
-            int i = cursor;
-            while (i > 0 && IsSpace(str[i - 1])) i--;            // skip trailing whitespace
-            while (i > 0 && !IsSpace(str[i - 1])) i--;           // skip the word
-            return i - cursor;                                    // negative
-        }
-    }
-
-    /// <summary>
-    /// Scan to the end of the line in the direction of <paramref name="delta"/>:
-    /// backwards to just after the preceding line break, forwards to just before
-    /// the next one — so in a single-line buffer, to its start or its end.
-    /// Returns the offset in chars from the cursor, like the other scans.
-    /// </summary>
-    internal static int LineScan(ReadOnlySpan<char> str, int cursor, int delta)
-    {
-        if (delta == 0) return 0;
-
-        if (delta > 0)
-        {
-            int i = cursor;
-            while (i < str.Length && str[i] != '\n') i++;
-            return i - cursor;
-        }
-        else
-        {
-            int i = cursor;
-            while (i > 0 && str[i - 1] != '\n') i--;
-            return i - cursor;                                    // negative
-        }
-    }
-
-    private static bool IsSpace(char c) =>
-        c == ' ' || c == '\t' || c == '\n' || c == '\r';
-
     /// <summary>
     /// What <paramref name="ev"/> does to <paramref name="str"/> with its
     /// caret and selection at <paramref name="state"/>. A
@@ -129,10 +20,17 @@ public ref struct TextOp
     /// cursor and lets go of the selection; the selected text stays. A text
     /// that has one line does not pass it Submit.
     ///
+    /// <para>A move by one character crosses one cluster as the text layer sets
+    /// <paramref name="str"/> in <paramref name="font"/> (TextLayer.ScanCluster):
+    /// 👍🏽, 🇩🇰, e and an accent; by a word or to a line's end, TextLayer.ScanWord
+    /// and ScanLine.</para>
+    ///
     /// <para><paramref name="buf"/> holds a typed code point, encoded: at least
     /// <see cref="MaxCharsPerCodePoint"/> chars.</para>
     /// </summary>
-    public static TextOp FromStateAndEvent(BibuiStr str,
+    public static TextOp FromStateAndEvent(Fonts fonts,
+                                           in Font font,
+                                           BibuiStr str,
                                            TextEditState state,
                                            BibUiEvent ev,
                                            Span<char> buf)
@@ -160,10 +58,13 @@ public ref struct TextOp
             return op;
         }
 
+        // A move by a character or a word goes by the clusters the text is set in.
+        var style = TextLayer.StyleFromFont(fonts, font, font.Scale);
+        int cursor = state.Cursor;
         int charsDelta =
-              ev.Flags.HasFlag(TextActionFlags.WordScan) ? WordScan(str.Str, state.Cursor, ev.Delta)
-            : ev.Flags.HasFlag(TextActionFlags.LineScan) ? LineScan(str.Str, state.Cursor, ev.Delta)
-            : ScanTextElement(str.Str, state.Cursor, ev.Delta);
+              ev.Flags.HasFlag(TextActionFlags.WordScan) ? TextLayer.ScanWord(fonts, style, str.Str, cursor, ev.Delta) - cursor
+            : ev.Flags.HasFlag(TextActionFlags.LineScan) ? TextLayer.ScanLine(str.Str, cursor, ev.Delta) - cursor
+            : TextLayer.ScanCluster(fonts, style, str.Str, cursor, ev.Delta, out _) - cursor;
 
         // On this type of select we don't move the cursor since this
         // would for delete delete the point also before the cursor
@@ -267,15 +168,15 @@ public enum TextActionFlags : UInt32
 /// Where the caret and the other end of the selection are in a text.
 ///
 /// <para>Every offset in text editing — Cursor and Mark here, and
-/// TextOp's Range, NewCursor and NewMark, and what its scans return —
-/// counts UTF-16 code units: chars, the index into a string or a
-/// Span&lt;char&gt;. Not code points (👨 is one code point but two chars),
-/// and not what reads as one character (👨‍👩‍👧 is one text element but
-/// five code points and eight chars). A cursor always sits on a text
-/// element boundary.</para>
+/// TextOp's Range, NewCursor and NewMark — counts UTF-16 code units: chars,
+/// the index into a string or a Span&lt;char&gt;. Not code points (👨 is one
+/// code point but two chars), and not what reads as one character (🧑‍🚀 is
+/// one cluster but three code points and five chars). A cursor always sits
+/// on a cluster boundary, as the text layer sets the text
+/// (TextLayer.ScanCluster).</para>
 /// </summary>
 public sealed class TextEditState
 {
-    public int Cursor = 0;  // In chars, on a text element boundary
-    public int Mark = 0;    // In chars, on a text element boundary
+    public int Cursor = 0;  // In chars, on a cluster boundary
+    public int Mark = 0;    // In chars, on a cluster boundary
 }

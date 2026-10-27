@@ -60,9 +60,6 @@ public static class Markdown
 
     internal static readonly ConditionalWeakTable<BibuiRuntime, Cache> Caches = new();
 
-    // Whether a run fits its room, with the hundredth of a pixel the layout's own fit test allows.
-    internal static bool Fits(float width, float room) => width <= room + 0.01f;
-
 
 
     /// <summary>
@@ -361,7 +358,7 @@ public static class Markdown
             float numberWidth = 0f;
             Span<char> number = stackalloc char[12];
             if (list.Ordered)
-                numberWidth = _runtime.Fonts.Measure(Number(list.Level + count - 1, number), font);
+                numberWidth = TextLayer.WidthFromChars(_runtime.Fonts, Number(list.Level + count - 1, number), TextLayer.StyleFromFont(_runtime.Fonts, font, font.Scale), font.Scale);
             bool tasks = false;
             for (int k = 0; k < count; k++) tasks |= list.Children[k].Task != MarkdownTask.None;
             float markerWidth = MathF.Ceiling(MathF.Max(px * 1.5f,
@@ -393,7 +390,7 @@ public static class Markdown
                     else if (list.Ordered)
                     {
                         var text = Number(list.Level + k, number);
-                        _runtime.Gap(markerWidth - px * 0.5f - _runtime.Fonts.Measure(text, font));
+                        _runtime.Gap(markerWidth - px * 0.5f - TextLayer.WidthFromChars(_runtime.Fonts, text, TextLayer.StyleFromFont(_runtime.Fonts, font, font.Scale), font.Scale));
                         _runtime.Text(text, look.Size, look.Color, look.Family);
                     }
                     else Bullet(lineHeight, look.Color);
@@ -628,16 +625,18 @@ public static class Markdown
                     continue;
                 }
                 Font font = RunFont(run, look);
+                var style = TextLayer.StyleFromFont(_runtime.Fonts, font, font.Scale);
                 int i = run.Start, end = run.Start + run.Length;
                 while (i < end)
                 {
                     bool space = text[i] == ' ';
                     int j = i;
                     while (j < end && (text[j] == ' ') == space) j++;
+                    // Measured as layout's walk sets the word.
                     _frags.Add(new Frag
                     {
                         Run = r, Start = i, Len = j - i, Space = space,
-                        Width = _runtime.Fonts.Measure(text[i..j], font),
+                        Width = TextLayer.WidthFromChars(_runtime.Fonts, text[i..j], style, font.Scale),
                     });
                     i = j;
                 }
@@ -726,7 +725,7 @@ public static class Markdown
                 }
                 if (group == i) continue;   // spaces before a break or the end
 
-                if (content && Fits(x + spaceWidth + groupWidth, room))
+                if (content && TextLayer.Fits(x + spaceWidth + groupWidth, room))
                 {
                     for (int k = spaces; k < group; k++) _placed.Add(_frags[k]);
                     for (int k = group; k < i; k++) _placed.Add(_frags[k]);
@@ -734,7 +733,7 @@ public static class Markdown
                     continue;
                 }
                 if (content) EndLine(ref lineStart, ref x, ref content);
-                if (Fits(groupWidth, room + _breakSlack))
+                if (TextLayer.Fits(groupWidth, room + _breakSlack))
                 {
                     for (int k = group; k < i; k++) _placed.Add(_frags[k]);
                     x = groupWidth;
@@ -767,7 +766,7 @@ public static class Markdown
                 while (true)
                 {
                     float pad = code && (x == 0f || k == from) ? 2f * CodePadX : 0f;
-                    if (Fits(x + pad + f.Width, room))
+                    if (TextLayer.Fits(x + pad + f.Width, room))
                     {
                         _placed.Add(f);
                         x += pad + f.Width;
@@ -776,22 +775,29 @@ public static class Markdown
                     }
                     var chars = text.Slice(f.Start, f.Len);
                     float avail = room - x - pad;
-                    // Cut between text elements, so a word too wide for the line never splits 👨‍👩‍👧.
-                    int cut = avail > 0f ? _runtime.Fonts.OffsetAt(chars, font, avail) : 0;
-                    while (cut > 0 && !Fits(_runtime.Fonts.Measure(chars[..cut], font), avail))
-                        cut += TextOp.ScanTextElement(chars, cut, -1);
+                    // Cut between clusters, so a word too wide for the line never splits 🧑‍🚀:
+                    // as many as fit in avail, measured as the walk sets them (physical px).
+                    var style = TextLayer.StyleFromFont(_runtime.Fonts, font, font.Scale);
+                    int cut = 0;
+                    float cutWidth = 0f;
+                    while (cut < chars.Length)
+                    {
+                        int end = TextLayer.ScanCluster(_runtime.Fonts, style, chars, cut, +1, out float width);
+                        if (!TextLayer.Fits((cutWidth + width) / font.Scale, avail)) break;
+                        (cut, cutWidth) = (end, cutWidth + width);
+                    }
                     if (cut == 0)
                     {
                         if (content) { EndLine(ref lineStart, ref x, ref content); continue; }
-                        cut = TextOp.ScanTextElement(chars, 0, +1);   // one character, whatever its width
+                        cut = TextLayer.ScanCluster(_runtime.Fonts, style, chars, 0, +1, out cutWidth);   // one cluster, whatever its width
                     }
                     if (cut >= f.Len) { _placed.Add(f); x += pad + f.Width; content = true; break; }
-                    float head = _runtime.Fonts.Measure(chars[..cut], font);
+                    float head = cutWidth / font.Scale;
                     _placed.Add(f with { Len = cut, Width = head });
                     x += pad + head;
                     content = true;
                     EndLine(ref lineStart, ref x, ref content);
-                    f = f with { Start = f.Start + cut, Len = f.Len - cut, Width = _runtime.Fonts.Measure(chars[cut..], font) };
+                    f = f with { Start = f.Start + cut, Len = f.Len - cut, Width = TextLayer.WidthFromChars(_runtime.Fonts, chars[cut..], style, font.Scale) };
                 }
             }
         }
@@ -820,20 +826,23 @@ public static class Markdown
                 {
                     var first = _placed[p];
                     int q = p + 1, end = first.Start + first.Len;
+                    float width = first.Width;
                     while (q < line.End && _placed[q].Run == first.Run && _placed[q].Start == end)
                     {
                         end += _placed[q].Len;
+                        width += _placed[q].Width;
                         q++;
                     }
-                    Piece(runs[first.Run], first.Start, end - first.Start, look, lineHeight);
+                    Piece(runs[first.Run], first.Start, end - first.Start, width, look, lineHeight);
                     p = q;
                 }
             }
         }
 
         // One stretch of a run on a line: a text, in a box when it needs one —
-        // a code span's background, a link's press and underline, a strike.
-        private void Piece(in MarkdownRun run, int start, int length, Look look, float lineHeight)
+        // a code span's background, a link's press and underline, a strike. Its
+        // width is its words', as line breaking measured them: what a line through it spans.
+        private void Piece(in MarkdownRun run, int start, int length, float width, Look look, float lineHeight)
         {
             var style = run.Style;
             Font font = RunFont(run, look);
@@ -879,7 +888,6 @@ public static class Markdown
             {
                 using (_runtime.FontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
                     _runtime.Text(chars, look.Size, color, family);
-                float width = _runtime.Fonts.Measure(chars, font);
                 if (link) Overlay(padX, top + MathF.Round(textHeight * UnderlineAt), width, hovering ? StrongLine : LineWidth, color);
                 if (strike) Overlay(padX, top + MathF.Round(textHeight * StrikeAt), width, LineWidth, color);
             }

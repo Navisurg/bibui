@@ -1,5 +1,6 @@
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
+using Bibui.Text;
 
 namespace Bibui.App;
 
@@ -106,6 +107,8 @@ public sealed partial class BibuiApp : IDisposable
     {
         ArgumentNullException.ThrowIfNull(runtime);
         options ??= new BibuiAppOptions();
+        // Before the first frame: what of text is the system's (its colour emoji font).
+        SetUpText(runtime.Fonts);
         return new BibuiApp(runtime, OpenWindow(runtime, window, options), options);
     }
 
@@ -156,8 +159,10 @@ public sealed partial class BibuiApp : IDisposable
         Window.Dispose();
     }
 
-    // What each combination says: how its window opens, its renderer is made and
-    // a frame is drawn into it, and what draws a test-server screenshot.
+    // What each combination says: how its platform sets up the text layer, how
+    // its window opens, its renderer is made and a frame is drawn into it, and
+    // what draws a test-server screenshot.
+    private static partial void SetUpText(Fonts fonts);
     private static partial AppWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options);
     private partial AppRenderer MakeRenderer();
     /// <summary>Draws the runtime's <c>DrawList</c> into the window and shows it: the end of the app's frame.</summary>

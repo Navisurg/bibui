@@ -13,4 +13,8 @@
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
     <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The runtime tests' subset of Noto Color Emoji (OFL), the cluster face clusters are measured in. -->
+    <None Include="../bibui-runtime-tests/Fixtures/NotoColorEmoji-subset.ttf" Link="Fixtures/NotoColorEmoji-subset.ttf" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
