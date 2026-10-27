@@ -81,8 +81,8 @@ Where they differ:
   `new BibuiAppOptions { AppId = "dev.example.app" }`.
   Both publish with Native AOT: `WaylandManaged` as one binary with no native
   dependency beyond libwayland-client, `WaylandSkiaCpu` beside Skia's
-  `libSkiaSharp.so`. The Silk packages run on the JIT: Silk.NET is not
-  trim-safe.
+  `libSkiaSharp.so`. The Silk packages run on the JIT
+  ([Publishing with Native AOT](https://github.com/Navisurg/bibui/blob/main/docs/aot.md) says why).
 - **There is no `Bibui.App` package for the browser.** `BibuiApp` is a loop
   the app owns (`while (app.WaitForFrame())`), and a page may not block: in the
   browser the frame is handed to `BrowserWindow.Run` and called on

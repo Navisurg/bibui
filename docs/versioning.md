@@ -25,14 +25,6 @@ Given a version `MAJOR.MINOR.PATCH`:
 Pre-releases carry a suffix: `0.10.0-preview.1`, `1.0.0-rc.1`. A pre-release
 promises nothing about the API it adds; it may change before the release.
 
-The first public release is **0.9.0**. Before it, bibui was developed and used
-privately, and the versions it carried then were never published.
-
-**Before 1.0.0**, as semantic versioning allows for `0.y.z`, a **minor**
-release (0.9 → 0.10) could change or remove public API; a **patch** release
-(0.9.0 → 0.9.1) never did. Every such change is listed in the changelog with
-what to use instead. **From 1.0.0** the full promise above holds.
-
 ## What counts as public API
 
 The public API is every public and protected type and member of the public
@@ -55,8 +47,8 @@ Also part of the promise:
   the browser through .NET 10's WebAssembly), and
   the native libraries a package needs at run time. Dropping a platform or a
   target framework, or requiring a new native library, is a major change;
-- Native AOT compatibility of the packages that promise it (the Wayland host
-  and the managed backend).
+- Native AOT compatibility of the packages that promise it (the Wayland host,
+  the managed backend, and the `Bibui.App.Wayland*` packages).
 
 Not part of it:
 
@@ -66,7 +58,7 @@ Not part of it:
   minor or patch release may change what a component looks like (a fixed
   anti-aliasing edge, a theme colour, a new default). The changelog says when
   it does;
-- environment variables for diagnostics (`BIBUI_GPU`, `BIBUI_PROFILE`,
+- environment variables for diagnostics (`BIBUI_PROFILE`,
   `BIBUI_DAMAGE_TRACE`, ...), performance characteristics, and the text of
   exception messages;
 - samples, tests and tools in this repository.
