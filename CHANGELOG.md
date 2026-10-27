@@ -51,6 +51,8 @@ All notable changes to bibui are recorded here. The format is based on
   index, across the cluster, word or line next to it in the direction of a
   sign, as the text is drawn (`ScanCluster` also gives the cluster's width).
   Each is for a scan done once, a key press or a click.
+- `TextLayer.WidthFromChars` (`Bibui.Text`): how wide a text is in a style, the
+  width layout gives it, without laying it out.
 - `TextLayer.LinesFromText` (`Bibui.Text`): a text's lines at a width, kept
   and found again by the text and its settings, as a span of `TextLine`s.
   `TextLayer.LineFromText` breaks one line, from a line's start, unkept.
@@ -60,6 +62,8 @@ All notable changes to bibui are recorded here. The format is based on
 - A tooltip with an anchor sits with its left edge at the anchor's middle,
   above it, or below it when there is no room above in the window. It was
   centred above it, which needed its text measured before layout.
+- `DrawContext.DrawText` draws a text as layout draws a `Text`, from the runs
+  `TextLayer` walks it into: an emoji in the emoji face.
 - **Breaking:** `TextLine` is a value, `TextLine(Start, End, Next)`: `Next` is
   where the line after it starts, and the last line is the one that ends at
   the text's end. It was a class linked to the lines before and after it.
@@ -130,6 +134,11 @@ All notable changes to bibui are recorded here. The format is based on
 ### Removed
 
 - **Breaking:** `Fonts.Wrap`. Use `TextLayer.LinesFromText`.
+- **Breaking:** `Fonts.Measure` and `Fonts.OffsetAt`, `FontStrike.Measure`, and
+  `TextEngine.Measure`, `DrawText`, `DrawRun` and `DrawGlyphs`: text measured
+  or drawn off the path layout uses. Measure with `TextLayer.WidthFromChars`,
+  find an offset with `TextLayer.ScanCluster`, and draw with
+  `DrawContext.DrawText`.
 - **Breaking:** `TextOp.WordScan` and `TextOp.ScanTextElement`. Use
   `TextLayer.ScanWord` and `ScanCluster`.
 - **Breaking:** the pitch overloads `BeginScrollList(id, ref scroll, pitch,

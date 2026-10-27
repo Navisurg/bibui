@@ -134,25 +134,6 @@ public sealed class Fonts : IDisposable
     /// </summary>
     public float LineAdvance(in Font font) => TextLayer.LineAdvanceFromSize(font.Size);
 
-    /// <summary>
-    /// The width of <paramref name="text"/> on one line in
-    /// <paramref name="font"/>, in logical px. The same number layout gives a
-    /// text with that content, from the same cache.
-    /// </summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    public float Measure(ReadOnlySpan<char> text, in Font font) => TextLayer.WidthFromChars(this, text, font);
-
-    /// <summary>
-    /// The char offset in <paramref name="text"/> nearest <paramref name="x"/>,
-    /// logical px from where the text starts: a text element boundary, the one
-    /// after a character when <paramref name="x"/> is past its middle. 0 at or before
-    /// the start, the length past the end.
-    ///
-    /// <para>Each candidate is the width of the chars before it, measured as a
-    /// text of its own — which is how a text split at that offset is drawn.</para>
-    /// </summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    public int OffsetAt(ReadOnlySpan<char> text, in Font font, float x) => TextLayer.OffsetFromX(this, text, font, x);
 }
 
 /// <summary>

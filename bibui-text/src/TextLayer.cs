@@ -115,86 +115,12 @@ public static class TextLayer
     /// <summary>Whether a run <paramref name="width"/> wide fits in <paramref name="room"/>. See <see cref="FitSlack"/>.</summary>
     internal static bool Fits(float width, float room) => width <= room + FitSlack;
 
-    /// <summary>The width of <paramref name="text"/> on one line in <paramref name="font"/>, in logical px.</summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    internal static float WidthFromChars(Fonts f, ReadOnlySpan<char> text, in Font font)
-        => text.IsEmpty ? 0f : StyleFromFont(f, font, font.Scale).Strike.Measure(text) / font.Scale;
-
-    /// <summary>
-    /// The char offset in <paramref name="text"/> nearest <paramref name="x"/>,
-    /// logical px from where the text starts. See <see cref="Fonts.OffsetAt"/>.
-    /// </summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    internal static int OffsetFromX(Fonts f, ReadOnlySpan<char> text, in Font font, float x)
-    {
-        if (x <= 0f || text.IsEmpty) return 0;
-        int previous = 0;
-        float previousWidth = 0f;
-        while (previous < text.Length)
-        {
-            int next = previous + ScanTextElement(text, previous, +1);
-            float width = WidthFromChars(f, text[..next], font);
-            if (width >= x) return x - previousWidth < width - x ? previous : next;
-            previous = next;
-            previousWidth = width;
-        }
-        return text.Length;
-    }
-
     // ── Grapheme clusters ────────────────────────────────────────────────────
 
     // How far back ScanCluster (and ScanTextElement) looks for a certain
     // boundary, in chars. Only a cluster longer than this — stacked marks, a long
     // run of flags — can put the cursor inside it. TextOp.MaxLookBehind sets it.
     internal static int ElementLookBehind = 64;
-
-    /// <summary>
-    /// Scan one text element — a grapheme cluster, what reads as one character:
-    /// 👍🏽, 🇩🇰, e and an accent, \r\n — in the direction of <paramref name="delta"/>
-    /// (sign only). Returns the char offset from <paramref name="cursor"/>,
-    /// negative going left, 0 at the edge. The cursor is assumed to be on an
-    /// element boundary.
-    /// </summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    public static int ScanTextElement(ReadOnlySpan<char> str, int cursor, int delta)
-    {
-        if (delta > 0)
-            return cursor < str.Length ? StringInfo.GetNextTextElementLength(str[cursor..]) : 0;
-        if (delta == 0 || cursor == 0) return 0;
-
-        // A line break is a boundary on both sides, and \r\n is one element.
-        if (str[cursor - 1] == '\n') return cursor >= 2 && str[cursor - 2] == '\r' ? -2 : -1;
-
-        // Whether a position is a boundary can depend on what comes before it (a
-        // ZWJ sequence, the pairing of flags), so step back, a code point at a
-        // time, to one that is certainly a boundary — within the line and
-        // MaxLookBehind — and scan forward from there.
-        int floor = Math.Max(ScanLine(str, cursor, -1), cursor - ElementLookBehind);
-        int start = cursor;
-        while (true)
-        {
-            Rune.DecodeLastFromUtf16(str[..start], out _, out int length);
-            start -= Math.Max(1, length);
-            if (start <= floor) break;
-
-            // The pair test: a boundary .NET finds between the two code points
-            // alone holds whatever came before, unless the first is a mark or a
-            // format char — a ZWJ (emoji sequences) and a virama (Indic
-            // conjuncts) join by what precedes them, which the pair can't see.
-            Rune.DecodeLastFromUtf16(str[..start], out Rune before, out int beforeLength);
-            Rune.DecodeFromUtf16(str[start..], out _, out int afterLength);
-            if (Rune.GetUnicodeCategory(before) is not (UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark
-                    or UnicodeCategory.EnclosingMark or UnicodeCategory.Format)
-                && StringInfo.GetNextTextElementLength(str[(start - beforeLength)..(start + afterLength)]) == beforeLength)
-                break;
-        }
-
-        // The last element boundary before the cursor.
-        int boundary = start;
-        for (int i = start; i < cursor; i += StringInfo.GetNextTextElementLength(str[i..cursor]))
-            boundary = i;
-        return boundary - cursor;
-    }
 
     // ── Runs ─────────────────────────────────────────────────────────────────
 
@@ -241,12 +167,12 @@ public static class TextLayer
 
     /// <summary>
     /// How wide <paramref name="chars"/> are in <paramref name="style"/>, in logical px
-    /// over <paramref name="scale"/>, as layout's walk sets them, for usage code that
-    /// measures without laying out (a word to break a line at). A text the fast path
+    /// over <paramref name="scale"/>, as layout's walk sets them, for code that
+    /// measures without laying out (a word to break a line at, a caret's x). A text the fast path
     /// takes whole is summed here, as RunsFast sums it: the same advances, in the same
     /// order, from 0, so the same float. Any other is walked (RunsFromChars, WidthOfRuns).
     /// </summary>
-    internal static float WidthFromChars(Fonts f, ReadOnlySpan<char> chars, FontStyle style, float scale)
+    public static float WidthFromChars(Fonts f, ReadOnlySpan<char> chars, FontStyle style, float scale)
     {
         var direct = style.Strike.Direct;
         float pen = 0f;

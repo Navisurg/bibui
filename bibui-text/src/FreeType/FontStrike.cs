@@ -168,56 +168,6 @@ public sealed unsafe class FontStrike
     // of Glyphs is a method of its own with no call in it. With either, the JIT
     // sends them through the stack every char, about three times slower.
 
-    /// <summary>
-    /// Width of <paramref name="text"/> in physical px, exactly as <c>SKPaint.MeasureText</c>
-    /// computes it: one glyph per code point, linear advances summed in order. No
-    /// shaping, so no kerning and no ligatures. Allocates nothing.
-    /// </summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    public float Measure(ReadOnlySpan<char> text)
-    {
-        var direct = Direct;
-        float total = 0f;
-        int i = 0;
-        while (i < text.Length)
-        {
-            for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++)
-                total += direct[c].Advance;
-            if (i == text.Length) break;
-            var (_, advance, next) = Next(text, i);
-            total += advance;
-            i = next;
-        }
-        return total;
-    }
-
-    /// <summary>
-    /// <paramref name="text"/>'s glyphs into <paramref name="glyphs"/> and their
-    /// pen positions from its start into <paramref name="points"/>: what
-    /// <see cref="FontStrike.Shape"/> makes in its nominal mode. Both spans hold
-    /// at least one entry per char. Returns how many glyphs; <paramref name="width"/>
-    /// is the last pen position, as <see cref="Measure"/> answers.
-    /// </summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    internal int Glyphs(ReadOnlySpan<char> text, Span<ushort> glyphs, Span<System.Numerics.Vector2> points, out float width)
-    {
-        int n = 0, i = 0;
-        float pen = 0f;
-        while (i < text.Length)
-        {
-            (i, n, pen) = GlyphsDirect(text, i, Direct, glyphs, points, n, pen);
-            if (i == text.Length) break;
-            var (glyph, advance, next) = Next(text, i);
-            glyphs[n] = glyph;
-            points[n] = new(pen, 0f);
-            pen += advance;
-            n++;
-            i = next;
-        }
-        width = pen;
-        return n;
-    }
-
     // Glyphs' hot loop: while the chars have filled direct entries.
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     internal static (int I, int N, float Pen) GlyphsDirect(ReadOnlySpan<char> text, int i, DirectGlyph[] direct,
@@ -250,18 +200,6 @@ public sealed unsafe class FontStrike
             cp = char.ConvertToUtf32(c, text[next++]);
         uint glyph = Font.GlyphIndex(cp);
         return ((ushort)glyph, Advance(glyph), next);
-    }
-
-    /// <summary>Width of <paramref name="text"/> under <paramref name="options"/>.</summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    public float Measure(ReadOnlySpan<char> text, ShapeOptions options)
-    {
-        if (options.Mode == ShapingMode.Nominal) return Measure(text);
-        var run = Font.Engine.ScratchRun;
-        Shape(text, run, options);
-        float w = run.Width;
-        run.Clear();
-        return w;
     }
 
     /// <summary>

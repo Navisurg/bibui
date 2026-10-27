@@ -71,7 +71,8 @@ internal static class DemoNavigation
     {
         var button = runtime.Button(id, label, ghost, disabled);
         Font font = runtime.FontInScope();
-        float padX = MathF.Max(0f, (width - runtime.Fonts.Measure(label, font)) / 2f);
+        float labelWidth = TextLayer.WidthFromChars(runtime.Fonts, label, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
+        float padX = MathF.Max(0f, (width - labelWidth) / 2f);
         float padY = MathF.Max(0f, (height - runtime.Fonts.LineHeight(font)) / 2f);
         button.Node.Style.Padding = EdgeInsets.Symmetric(horizontal: padX, vertical: padY);
         return button;

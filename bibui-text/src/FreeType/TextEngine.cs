@@ -159,55 +159,10 @@ public sealed class TextEngine : IDisposable
 
     // ── Measure, metrics ─────────────────────────────────────────────────────
 
-    /// <summary>Width of <paramref name="text"/> in physical px: the sum of its linear advances.</summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    public float Measure(FontStrike strike, ReadOnlySpan<char> text) => strike.Measure(text);
-
     /// <summary>Ascent, descent and leading in physical px.</summary>
     public FontMetrics Metrics(FontStrike strike) => strike.Metrics;
 
     // ── Draw ─────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Draws <paramref name="text"/> with its baseline at (<paramref name="x"/>,
-    /// <paramref name="baselineY"/>), and returns
-    /// its advance (what <see cref="FontStrike.Measure(ReadOnlySpan{char})"/> returns).
-    /// </summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    public float DrawText(in PixelTarget dst, FontStrike strike, ReadOnlySpan<char> text, float x, float baselineY,
-        TextColor color, PixelClip? clip = null, MaskBlend blend = MaskBlend.LegacyN32, ShapeOptions? options = null)
-    {
-        var run = ScratchRun;
-        strike.Shape(text, run, options);
-        DrawRun(dst, run, x, baselineY, color, clip, blend);
-        float w = run.Width;
-        run.Clear();
-        return w;
-    }
-
-    /// <summary>Draws a shaped run with its origin at (<paramref name="x"/>, <paramref name="baselineY"/>).</summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    public void DrawRun(in PixelTarget dst, GlyphRun run, float x, float baselineY, TextColor color,
-        PixelClip? clip = null, MaskBlend blend = MaskBlend.LegacyN32)
-    {
-        var strike = run.Strike ?? throw new ArgumentException("The run has not been shaped.", nameof(run));
-        if (_placed.Length < run.Count) _placed = new PlacedGlyph[Math.Max(run.Count, _placed.Length * 2)];
-        int n = strike.Place(run, x, baselineY, _placed);
-        GlyphCompositor.Composite(dst, _placed.AsSpan(0, n), color, clip ?? PixelClip.Of(dst.Width, dst.Height), blend);
-    }
-
-    /// <summary>
-    /// Draws glyphs at explicit positions, relative to the origin (<paramref name="x"/>,
-    /// <paramref name="baselineY"/>): the shape of a <c>Glyphs</c> draw op.
-    /// </summary>
-    [Obsolete("Not on the curated text path that layout and drawing use; to be moved onto it or removed.")]
-    public void DrawGlyphs(in PixelTarget dst, FontStrike strike, ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
-        float x, float baselineY, TextColor color, PixelClip? clip = null, MaskBlend blend = MaskBlend.LegacyN32)
-    {
-        if (_placed.Length < glyphs.Length) _placed = new PlacedGlyph[Math.Max(glyphs.Length, _placed.Length * 2)];
-        int n = strike.Place(glyphs, positions, x, baselineY, _placed);
-        GlyphCompositor.Composite(dst, _placed.AsSpan(0, n), color, clip ?? PixelClip.Of(dst.Width, dst.Height), blend);
-    }
 
     // ── Lifetime ─────────────────────────────────────────────────────────────
 

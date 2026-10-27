@@ -1,5 +1,6 @@
 using Bibui.Core;
 using Bibui.Core.Runtime;
+using Bibui.Text;
 using Bibui.Core.TextEdit;
 
 namespace ComponentGallery;
@@ -511,7 +512,9 @@ internal static class DemoInputs
         if (loading)
         {
             // As wide as icon and label would be, the spinner centred across it.
-            float width = runtime.Fonts.Measure(text, runtime.FontInScope(ComponentSize.Md)) + 32f;
+            var font = runtime.FontInScope(ComponentSize.Md);
+            var textStyle = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+            float width = TextLayer.WidthFromChars(runtime.Fonts, text, textStyle, font.Scale) + 32f;
             if (icon is not null) width += 24f;
             box.SizeX = SemanticSize.Pixels(width);
             runtime.BeginParent(box);

@@ -66,7 +66,7 @@ static class ClusterFaceTests
             var (fonts, style, runs) = Walk("Hello, wörld → done");
             using var _ = fonts;
             Check(runs.Length == 1 && runs[0].Style == style && runs[0].X == 0f, Describe(fonts, runs));
-            Check(runs[0].Width == style.Strike.Measure("Hello, wörld → done"), "as wide as measuring it says");
+            Check(runs[0].Width == TextLayer.WidthFromChars(fonts, "Hello, wörld → done", style, 1f), "as wide as WidthFromChars says");
         });
 
         run("Walk: with no cluster face set up, an emoji stays in the text's face, as before", () =>

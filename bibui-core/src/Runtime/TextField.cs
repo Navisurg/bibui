@@ -99,11 +99,6 @@ public static class TextField
         return line.Length;
     }
 
-    // How wide chars are on one line, in logical px, as layout's walk sets them
-    // (TextLayer.WidthFromChars): what the field's Text parts are laid out and drawn at.
-    internal static float WidthOfChars(Fonts fonts, Font font, ReadOnlySpan<char> chars)
-        => TextLayer.WidthFromChars(fonts, chars, TextLayer.StyleFromFont(fonts, font, font.Scale), font.Scale);
-
     // The pointer on one line of text: line holds its chars, x is from where it
     // starts, and the edit state is in the line's offsets. A press puts the
     // cursor at the text element under it and sets the mark, unless shift extends a
@@ -182,8 +177,9 @@ public static class TextField
     internal static void DrawCaret(BibuiRuntime runtime, Box view, Font font, ReadOnlySpan<char> line,
         int lo, int hi, int caret, float top, SemanticSize height, bool edited)
     {
-        float before = WidthOfChars(runtime.Fonts, font, line[..lo]);
-        if (caret == hi && hi > lo) before += WidthOfChars(runtime.Fonts, font, line[lo..hi]);
+        var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+        float before = TextLayer.WidthFromChars(runtime.Fonts, line[..lo], style, font.Scale);
+        if (caret == hi && hi > lo) before += TextLayer.WidthFromChars(runtime.Fonts, line[lo..hi], style, font.Scale);
 
         // The caret follows the cursor: 60 halvings a second by default, half the way each frame at 60 Hz.
         float rate = edited ? 1f : runtime.Rates.Follow;
@@ -243,7 +239,7 @@ public static class TextField
         }
         else
         {
-            float caretX = WidthOfChars(fonts, font, text.Str[lines[on].Start..edit.Cursor]);
+            float caretX = TextLayer.WidthFromChars(fonts, text.Str[lines[on].Start..edit.Cursor], style, font.Scale);
             edit.Cursor = lines[to].Start + CharAtX(fonts, font, text.Str[lines[to].Start..lines[to].End], caretX);
         }
         if ((ev.Flags & TextActionFlags.KeepMark) == 0) edit.Mark = edit.Cursor;
@@ -309,8 +305,11 @@ public static class TextFieldExtensions
         if (!focused || empty)
             view.TargetViewOffset = view.TargetViewOffset with { X = 0f };
         else
-            ScrollToCaret(view, new Vector2(WidthOfChars(runtime.Fonts, font, shown[..caret]), 0f), Vector2.Zero,
-                new Vector2(WidthOfChars(runtime.Fonts, font, shown), 0f), view.Extent / 4f);
+        {
+            var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+            ScrollToCaret(view, new Vector2(TextLayer.WidthFromChars(runtime.Fonts, shown[..caret], style, font.Scale), 0f), Vector2.Zero,
+                new Vector2(TextLayer.WidthFromChars(runtime.Fonts, shown, style, font.Scale), 0f), view.Extent / 4f);
+        }
 
         using (runtime.Parent(view))
         {
@@ -443,7 +442,8 @@ public static class TextFieldExtensions
         var line = runtime.TextField(id, text, edit, focused, events, textColor, placeholder);
         bool empty = text.Length == 0;
         ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
-        if (focused || WidthOfChars(runtime.Fonts, runtime.FontInScope(), shown) <= room)
+        Font font = runtime.FontInScope();
+        if (focused || TextLayer.WidthFromChars(runtime.Fonts, shown, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) <= room)
             return line;   // fits, or being edited: it scrolls instead
 
         runtime.Gap(DotsGap);
