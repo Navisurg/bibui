@@ -91,13 +91,13 @@ object renderer = app.Renderer;
     (renderer as SkiaGlRenderer, renderer as SkiaCpuRenderer, renderer as ManagedRenderer);
 
 // A test port, off unless asked for: BIBUI_TEST_PORT=1 (test_all_pages.sh says how).
-// Its screenshots draw with a CPU renderer of their own: the window's draws on the
-// GPU, or keeps damage state for the window's buffers.
+// A screenshot is the frame the window shows, copied out as it is presented, so it
+// holds what the window's renderer drew, textures too: what was asked for waits here.
 using var testPort = Environment.GetEnvironmentVariable("BIBUI_TEST_PORT") == "1"
     ? TestPort.Open(runtime, new TestPortOptions { Name = "component-gallery" }) : null;
-DrawToPixels? shots = testPort is null ? null
-    : renderer is ManagedRenderer ? new ManagedRenderer().Draw : new SkiaCpuRenderer().Draw;
 if (testPort is not null) Console.Error.WriteLine($"Test port: {testPort.SocketPath}");
+string? shotPath = null;
+RectF? shotRegion = null;
 // The agent driving the gallery through its port, drawn over it while one is connected:
 // folded from the events it sends. BIBUI_AGENT_CURSOR says how: paced (the default)
 // draws it and holds each answer until it has shown the step, so a person watching
@@ -120,7 +120,7 @@ app.Frame = Frame;
 while (app.WaitForFrame())
 {
     // A test port's requests, at the top of the frame: its events join the window's;
-    // the frame on screen is still the runtime's draw list, so a screenshot is drawn from it.
+    // a screenshot is taken from the frame presented next.
     if (testPort is not null)
         while (testPort.TryPullCmd(out var cmd))
             switch (cmd.Kind)
@@ -129,7 +129,7 @@ while (app.WaitForFrame())
                     app.Events.AddRange(cmd.Events);
                     agent = AgentCursor.FromWindowEvents(agent, cmd.Events);
                     break;
-                case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, shots!, cmd.Region)); break;
+                case TestCmdKind.Screenshot: (shotPath, shotRegion) = (cmd.Path, cmd.Region); break;
                 case TestCmdKind.App: testPort.RefuseCmd("The gallery has no commands of its own."); break;
             }
     Frame();
@@ -149,8 +149,20 @@ void Frame()
         if (agentMode == AgentMode.Paced) agentSettled = shown;
     }
     runtime.EndBuild();
-    testPort?.AnswerCmds(agentSettled);
+
+    // Drawn, then read for a screenshot asked for this frame, then shown and answered.
+    app.Draw();
+    if (shotPath is not null)
+    {
+        var (w, h) = (runtime.Window.Width, runtime.Window.Height);
+        var shot = GC.AllocateArray<byte>(Math.Max(1, w * h * 4), pinned: true);
+        var into = new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(shot, 0), w, h, w * 4);
+        if (app.ReadPixels(into)) File.WriteAllBytes(shotPath, FramePixels.Png(shot, w, h, runtime.ScaleFactor, shotRegion));
+        else testPort!.RefuseCmd("The window changed size as the screenshot was taken: ask again.");
+        shotPath = null;
+    }
     app.Present();
+    testPort?.AnswerCmds(agentSettled);
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────

@@ -29,11 +29,17 @@ public sealed partial class BibuiApp
         return new ManagedRenderer(_shown.Cpu);
     }
 
-    public partial void Present()
+    private partial void DrawFrame()
     {
         SilkGl.BeginDraw(Window, _gl);
         _shown.BeginDraw();
         Renderer.Draw(Runtime.DrawList);
+    }
+
+    private partial bool ReadFrame(RasterPixels into) => _shown.Cpu.Pixels.CopyTo(into);
+
+    private partial void PresentFrame()
+    {
         _shown.EndDraw();
         SilkGl.EndDraw(Window);
     }

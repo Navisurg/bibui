@@ -27,12 +27,18 @@ public static class FramePixels
     /// (a node's, from the tree) cut to the frame.
     /// </summary>
     public static byte[] Png(BibuiRuntime runtime, DrawToPixels draw, RectF? region = null)
+        => Png(Bgra(runtime, draw, out int w, out int h), w, h, runtime.ScaleFactor, region);
+
+    /// <summary>
+    /// A frame's pixels already in hand (BGRA8888 premultiplied, rows packed, as
+    /// <c>BibuiApp.Present</c> copies them) as a PNG, cut to <paramref name="region"/>
+    /// as above; <paramref name="scale"/> is physical pixels per logical one.
+    /// </summary>
+    public static byte[] Png(ReadOnlySpan<byte> bgra, int w, int h, float scale, RectF? region = null)
     {
-        var bgra = Bgra(runtime, draw, out int w, out int h);
         if (region is not { } r) return Imaging.Png.Encode(bgra, w, h, w * 4, ChannelOrder.Bgra, AlphaMode.Premultiplied);
 
         // The region in physical pixels, whole pixels covering it, inside the frame.
-        float scale = runtime.ScaleFactor;
         int left = Math.Clamp((int)MathF.Floor(r.Left * scale), 0, w), top = Math.Clamp((int)MathF.Floor(r.Top * scale), 0, h);
         int right = Math.Clamp((int)MathF.Ceiling(r.Right * scale), left, w), bottom = Math.Clamp((int)MathF.Ceiling(r.Bottom * scale), top, h);
         int cw = Math.Max(1, right - left), ch = Math.Max(1, bottom - top);
@@ -40,7 +46,7 @@ public static class FramePixels
         if (top + ch > h) top = h - ch;
         var cut = new byte[cw * ch * 4];
         for (int y = 0; y < ch; y++)
-            bgra.AsSpan(((top + y) * w + left) * 4, cw * 4).CopyTo(cut.AsSpan(y * cw * 4));
+            bgra.Slice(((top + y) * w + left) * 4, cw * 4).CopyTo(cut.AsSpan(y * cw * 4));
         return Imaging.Png.Encode(cut, cw, ch, cw * 4, ChannelOrder.Bgra, AlphaMode.Premultiplied);
     }
 }

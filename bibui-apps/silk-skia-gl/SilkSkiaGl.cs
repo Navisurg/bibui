@@ -9,8 +9,10 @@ namespace Bibui.App;
 // A Silk window, drawn by Skia on its GL context: everything on the GPU.
 public sealed partial class BibuiApp
 {
-    // The window's GL framebuffer, which Renderer draws into.
+    // The window's GL framebuffer, which Renderer draws into, and what reads a frame back
+    // out of it: made the first time a frame is read.
     private GlTarget _gl = null!;
+    private GlFramebufferReader? _read;
 
     private static partial SilkWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options)
     {
@@ -22,12 +24,16 @@ public sealed partial class BibuiApp
 
     private partial SkiaGlRenderer MakeRenderer() => new(_gl = SilkGl.Target(Window));
 
-    public partial void Present()
+    private partial void DrawFrame()
     {
         SilkGl.BeginDraw(Window, _gl);
         Renderer.Draw(Runtime.DrawList);
-        SilkGl.EndDraw(Window);
     }
+
+    // Before the swap: after it the back buffer's pixels are undefined.
+    private partial bool ReadFrame(RasterPixels into) => (_read ??= new GlFramebufferReader(_gl)).Read(into);
+
+    private partial void PresentFrame() => SilkGl.EndDraw(Window);
 
     private partial void DisposeRenderer()
     {

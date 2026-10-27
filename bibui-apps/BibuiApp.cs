@@ -1,3 +1,4 @@
+using Bibui.Core.Draw;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
 
@@ -38,6 +39,8 @@ public sealed record BibuiAppOptions
 ///     app.Present();
 /// }
 /// </code>
+/// A frame that reads its pixels (a screenshot) draws, reads, then shows:
+/// <c>app.Draw(); app.ReadPixels(into); app.Present();</c>
 /// The parts it is made of (the window, the renderer) are packages of their
 /// own, for an app that writes the loop itself.
 /// </summary>
@@ -136,7 +139,34 @@ public sealed partial class BibuiApp : IDisposable
     // and a frame is drawn into it.
     private static partial AppWindow OpenWindow(BibuiRuntime runtime, PlatformWindowOptions window, BibuiAppOptions options);
     private partial AppRenderer MakeRenderer();
-    /// <summary>Draws the runtime's <c>DrawList</c> into the window and shows it: the end of the app's frame.</summary>
-    public partial void Present();
+    private bool _drawn;   // a frame is drawn and not yet shown: what ReadPixels reads
+
+    /// <summary>Draws the runtime's <c>DrawList</c> into the window's buffer, not shown yet: after <c>runtime.EndBuild</c>.</summary>
+    public void Draw()
+    {
+        DrawFrame();
+        _drawn = true;
+    }
+
+    /// <summary>
+    /// Copies the frame <see cref="Draw"/> drew into <paramref name="into"/> (BGRA8888
+    /// premultiplied, the frame's physical size): what the window will show, textures
+    /// and all. Only between Draw and <see cref="Present"/>, while the buffer is still
+    /// the app's. False then, or when <paramref name="into"/> is not the frame's size,
+    /// and nothing is copied.
+    /// </summary>
+    public bool ReadPixels(RasterPixels into) => _drawn && ReadFrame(into);
+
+    /// <summary>Shows the frame: the end of the app's frame. Draws it first if <see cref="Draw"/> was not called.</summary>
+    public void Present()
+    {
+        if (!_drawn) DrawFrame();
+        PresentFrame();
+        _drawn = false;
+    }
+
+    private partial void DrawFrame();
+    private partial bool ReadFrame(RasterPixels into);
+    private partial void PresentFrame();
     private partial void DisposeRenderer();
 }
