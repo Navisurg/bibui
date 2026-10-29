@@ -29,6 +29,11 @@ All notable changes to bibui are recorded here. The format is based on
   `Bibui.Text.FreeType.Native`) are public: what a rasterizer loads a strike's
   glyphs through.
 
+- Page Up and Page Down, without Ctrl or Alt, in a multi-line field: a page
+  of lines, the lines in sight less one, at the caret's column, the view
+  moving with it; Shift selects. `TextActionFlags.PageScan` marks the move as
+  a page.
+
 ### Changed
 
 - **Breaking:** rendering glyphs into masks is no longer the text layer's.
@@ -37,6 +42,12 @@ All notable changes to bibui are recorded here. The format is based on
   `Bibui.Glyphs`: use `GlyphMasks.PlacedFromGlyphs(cache, strike, ...)` with
   a cache of your own. `TextColor` is gone; `MaskGamma.Table(r, g, b)`
   takes the colour. Pixels are unchanged.
+
+- Page Up and Page Down without Ctrl or Alt are `Navigate` events with
+  `TextActionFlags.PageScan`, as Up and Down are `Navigate`; they were
+  `Press`. A handler that filters on `Kind == Press` no longer sees them,
+  focused field or not; filter on `IsKeyDown`, as the docs ask. A focused
+  multi-line field takes them; a single-line field leaves them to the app.
 
 ## [1.1.0] - 2026-11-06
 

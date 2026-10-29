@@ -10,7 +10,7 @@ public enum BibUiEventKind
     Null,       // unset / sentinel — also the default for events not yet tagged
     Press,      // any other key down. A shortcut filters on BibUiEvent.IsKeyDown, not on this
     Text,       // typed character (layout-resolved, IME-composed); CodePoint is set
-    Navigate,   // cursor movement intent (arrows / home / end); Delta is set
+    Navigate,   // cursor movement intent (arrows / home / end / page up and down); Delta or DeltaY is set
     Edit,       // mutating intent (delete / backspace / cut / paste); Flags carry the action
 
     // Mouse. These carry X/Y of their own rather than reading the pointer,
@@ -69,7 +69,8 @@ public sealed class BibUiEvent
     /// <summary>
     /// A key went down, whatever kind the text fields' translation gave it:
     /// <see cref="BibUiEventKind.Press"/>, <see cref="BibUiEventKind.Navigate"/>
-    /// (arrows, Home, End, Ctrl+A), <see cref="BibUiEventKind.Submit"/> (Enter),
+    /// (arrows, Home, End, Page Up and Page Down without Ctrl or Alt, Ctrl+A),
+    /// <see cref="BibUiEventKind.Submit"/> (Enter),
     /// <see cref="BibUiEventKind.Edit"/> (Backspace, Delete, Ctrl+X, Ctrl+V) or
     /// <see cref="BibUiEventKind.Copy"/> (Ctrl+C). What an app's shortcut handler
     /// filters on before it reads <see cref="Key"/>: filtering on Press alone never
@@ -154,7 +155,8 @@ public sealed class BibUiEvent
 
     /// <summary>
     /// For a <see cref="BibUiEventKind.Navigate"/>: how many lines to move, up
-    /// when negative. Only a text with lines can say what that means, so
+    /// when negative, or with <see cref="TextActionFlags.PageScan"/> how many
+    /// pages. Only a text with lines can say what that means, so
     /// <see cref="TextOp"/> leaves a vertical move alone.
     /// </summary>
     public int DeltaY { get; set; }
@@ -310,6 +312,19 @@ public sealed class BibUiEvent
             case Key.Down:
                 ev.Kind   = BibUiEventKind.Navigate;
                 ev.DeltaY = 1;
+                break;
+            // With Ctrl they are the app's, as Ctrl+Page Up and Down commonly
+            // switch tabs, so they stay a Press; with Alt too, which the runtime
+            // knows only once it stamps the modifiers held (BeginBuild).
+            case Key.PageUp when !ev.Ctrl:
+                ev.Kind   = BibUiEventKind.Navigate;
+                ev.DeltaY = -1;
+                ev.Flags |= TextActionFlags.PageScan;
+                break;
+            case Key.PageDown when !ev.Ctrl:
+                ev.Kind   = BibUiEventKind.Navigate;
+                ev.DeltaY = 1;
+                ev.Flags |= TextActionFlags.PageScan;
                 break;
             case Key.X when ev.Ctrl:
                 // Cut = Copy + Delete; the Copy block fills CopyString first,
