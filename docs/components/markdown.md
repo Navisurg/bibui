@@ -48,8 +48,11 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
 | `width` | The viewer's width. With null, it is as wide as its parent, which must then have a width of its own. It is as tall as the document. |
 | `textSize` | Body text size. Headings use the steps above it. |
 
-Italics are set in the body face, because the type system has no oblique face
-yet.
+Emphasis is set in the italic, strong emphasis in the semibold, and the two
+together in the semibold italic (`FontWeight.Italic`, `Bold` and
+`BoldItalic`): Inter's, or the theme's body family's when it registers them
+(`FontRegistry`). Code inside emphasis is set in the mono family's italic,
+which, with no mono family, is Inter Italic.
 
 ## Source spans
 

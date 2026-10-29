@@ -41,8 +41,8 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
 /// character between its brackets, for the caller to rewrite with
 /// <see cref="ToggleTask"/> if it wants to.</para>
 ///
-/// <para>Italics: the type system has no oblique face yet, so <c>*emphasis*</c>
-/// is set in the body face. Strong, code, strikethrough and links are shown.</para>
+/// <para>Emphasis is set in the italic, strong in the semibold, and the two
+/// together in the semibold italic. Code, strikethrough and links are shown.</para>
 /// </summary>
 public static class Markdown
 {
@@ -300,7 +300,8 @@ public static class Markdown
         private readonly List<Frag> _frags = [];
         private readonly List<Frag> _placed = [];
         private readonly List<Line> _lines = [];
-        private readonly Font[] _fonts = new Font[4];   // body, body bold, mono, mono bold
+        // One block of weights for the body or heading family, one for mono (FontAt).
+        private readonly Font?[] _fonts = new Font?[2 * (int)FontWeight.Count];
         private BibuiRuntime _runtime = null!;
         private Entry _entry = null!;
         private MarkdownDocument _doc = null!;
@@ -746,26 +747,40 @@ public static class Markdown
 
         // ── Inline text ─────────────────────────────────────────────────────
 
-        private Font FontOf(Look look) => FontOf(look.Size, look.Family, look.Bold);
+        private Font FontOf(Look look) => FontOf(look.Size, look.Family, look.Bold ? FontWeight.Bold : FontWeight.Regular);
 
-        private Font FontOf(FontSize size, FontSlot family, bool bold)
+        private Font FontOf(FontSize size, FontSlot family, FontWeight weight)
         {
-            using (_runtime.FontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
+            using (_runtime.FontFace(family, weight))
                 return _runtime.FontInScope(size, family);
         }
 
+        // The italics are resolved the first time a run asks (RunFont), so a block
+        // with no emphasis opens no italic face.
         private void PrepareFonts(Look look)
         {
-            _fonts[0] = FontOf(look.Size, look.Family, look.Bold);
-            _fonts[1] = FontOf(look.Size, look.Family, true);
-            _fonts[2] = FontOf(look.Size, FontSlot.Mono, look.Bold);
-            _fonts[3] = FontOf(look.Size, FontSlot.Mono, true);
+            var bold = look.Bold ? FontWeight.Bold : FontWeight.Regular;
+            _fonts[FontAt(false, FontWeight.Regular)] = FontOf(look.Size, look.Family, bold);
+            _fonts[FontAt(false, FontWeight.Bold)] = FontOf(look.Size, look.Family, FontWeight.Bold);
+            _fonts[FontAt(true, FontWeight.Regular)] = FontOf(look.Size, FontSlot.Mono, bold);
+            _fonts[FontAt(true, FontWeight.Bold)] = FontOf(look.Size, FontSlot.Mono, FontWeight.Bold);
+            _fonts[FontAt(false, FontWeight.Italic)] = _fonts[FontAt(false, FontWeight.BoldItalic)] = null;
+            _fonts[FontAt(true, FontWeight.Italic)] = _fonts[FontAt(true, FontWeight.BoldItalic)] = null;
         }
 
-        private static int FontIndex(MarkdownStyle style, Look look)
-            => ((style & MarkdownStyle.Code) != 0 ? 2 : 0) + (look.Bold || (style & MarkdownStyle.Strong) != 0 ? 1 : 0);
+        private static int FontAt(bool code, FontWeight weight) => (code ? (int)FontWeight.Count : 0) + (int)weight;
 
-        private Font RunFont(in MarkdownRun run, Look look) => _fonts[FontIndex(run.Style, look)];
+        // Italic for emphasis, bold for strong or a bold look (a heading's), BoldItalic for both.
+        private static FontWeight WeightOf(MarkdownStyle style, Look look)
+            => (look.Bold || (style & MarkdownStyle.Strong) != 0 ? FontWeight.Bold : FontWeight.Regular)
+             | ((style & MarkdownStyle.Emphasis) != 0 ? FontWeight.Italic : FontWeight.Regular);
+
+        private Font RunFont(in MarkdownRun run, Look look)
+        {
+            bool code = (run.Style & MarkdownStyle.Code) != 0;
+            var weight = WeightOf(run.Style, look);
+            return _fonts[FontAt(code, weight)] ??= FontOf(look.Size, code ? FontSlot.Mono : look.Family, weight);
+        }
 
         // The block's runs as words and spaces, each measured in its run's font.
         private void Fragments(ReadOnlySpan<MarkdownRun> runs, Look look)
@@ -842,8 +857,8 @@ public static class Markdown
 
         private (float LineHeight, float Advance) LineMetrics()
         {
-            float lineHeight = MathF.Max(_runtime.Fonts.LineHeight(_fonts[0]), _runtime.Fonts.LineHeight(_fonts[2]));
-            float advance = MathF.Max(lineHeight, _runtime.Fonts.LineAdvance(_fonts[0]));
+            float lineHeight = MathF.Max(_runtime.Fonts.LineHeight(_fonts[FontAt(false, FontWeight.Regular)]!.Value), _runtime.Fonts.LineHeight(_fonts[FontAt(true, FontWeight.Regular)]!.Value));
+            float advance = MathF.Max(lineHeight, _runtime.Fonts.LineAdvance(_fonts[FontAt(false, FontWeight.Regular)]!.Value));
             return (lineHeight, advance);
         }
 
@@ -1005,7 +1020,7 @@ public static class Markdown
             bool code = (style & MarkdownStyle.Code) != 0;
             bool link = run.Link >= 0;
             bool strike = (style & MarkdownStyle.Strike) != 0;
-            bool bold = look.Bold || (style & MarkdownStyle.Strong) != 0;
+            var weight = WeightOf(style, look);
             FontSlot family = code ? FontSlot.Mono : look.Family;
             UiColor color = link ? UiColor.Accent : look.Color;
             var chars = _doc.Text.Span.Slice(start, length);
@@ -1014,7 +1029,7 @@ public static class Markdown
 
             if (!code && !link && !strike && top <= 0f)
             {
-                using (_runtime.FontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
+                using (_runtime.FontFace(family, weight))
                     _runtime.Text(chars, look.Size, color, family);
                 return;
             }
@@ -1042,7 +1057,7 @@ public static class Markdown
 
             using (_runtime.Parent(box))
             {
-                using (_runtime.FontFace(family, bold ? FontWeight.Bold : FontWeight.Regular))
+                using (_runtime.FontFace(family, weight))
                     _runtime.Text(chars, look.Size, color, family);
                 if (link) Overlay(padX, top + MathF.Round(textHeight * UnderlineAt), width, hovering ? StrongLine : LineWidth, color);
                 if (strike) Overlay(padX, top + MathF.Round(textHeight * StrikeAt), width, LineWidth, color);

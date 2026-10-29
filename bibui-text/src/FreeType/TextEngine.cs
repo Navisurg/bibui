@@ -35,7 +35,7 @@ public sealed class TextEngine : IDisposable
     private IntPtr _ftLibrary;
     private readonly Dictionary<FontData, Font> _fonts = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<(Font Font, int SizeBits), FontStrike> _strikes = new();
-    private readonly Dictionary<(string Family, int Weight), Font> _registered = new();
+    private Font? _defaultItalic, _defaultSemiBoldItalic;
     private readonly Dictionary<ulong, List<FontData>> _loadedBytes = new();
     private bool _disposed;
 
@@ -50,6 +50,12 @@ public sealed class TextEngine : IDisposable
 
     /// <summary>The built-in face for weights 600 and up: embedded Inter SemiBold.</summary>
     public Font DefaultSemiBold { get; }
+
+    /// <summary>The built-in italic for weights below 600: embedded Inter Italic, opened the first time it is asked for.</summary>
+    public Font DefaultItalic => _defaultItalic ??= Open(FontData.InterItalic, "", 400);
+
+    /// <summary>The built-in italic for weights 600 and up: embedded Inter SemiBold Italic, opened the first time it is asked for.</summary>
+    public Font DefaultSemiBoldItalic => _defaultSemiBoldItalic ??= Open(FontData.InterSemiBoldItalic, "", 600);
 
     public TextEngine()
     {
@@ -91,26 +97,10 @@ public sealed class TextEngine : IDisposable
         return font;
     }
 
-    /// <summary>Makes <paramref name="data"/> the face for (<paramref name="family"/>, <paramref name="weight"/>).</summary>
-    public Font Register(string family, int weight, FontData data)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(family);
-        var font = Open(data, family, weight);
-        _registered[(family, weight)] = font;
-        return font;
-    }
-
-    /// <summary>
-    /// The font for a family and weight, as bibui's FontProvider resolves its
-    /// default path: an exact registration, else the built-in Inter, Regular below
-    /// 600 and SemiBold from 600 up. Looking up installed families is fontconfig's
-    /// job and is not done yet.
-    /// </summary>
-    public Font Resolve(string? family, int weight)
-    {
-        if (family is not null && _registered.TryGetValue((family, weight), out var f)) return f;
-        return weight >= 600 ? DefaultSemiBold : DefaultRegular;
-    }
+    /// <summary>The built-in Inter at <paramref name="weight"/>, upright or <paramref name="italic"/>.</summary>
+    internal Font BuiltIn(int weight, bool italic) => italic
+        ? weight >= 600 ? DefaultSemiBoldItalic : DefaultItalic
+        : weight >= 600 ? DefaultSemiBold : DefaultRegular;
 
     private Font Open(FontData data, string family, int weight)
     {
@@ -143,9 +133,6 @@ public sealed class TextEngine : IDisposable
             _strikes[key] = strike = new FontStrike(font, sizePx);
         return strike;
     }
-
-    /// <summary>The strike for a family, weight and physical size; see <see cref="Resolve"/>.</summary>
-    public FontStrike Strike(string? family, int weight, float sizePx) => Strike(Resolve(family, weight), sizePx);
 
     // ── Lifetime ─────────────────────────────────────────────────────────────
 

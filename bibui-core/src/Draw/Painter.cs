@@ -18,9 +18,9 @@ internal sealed class Painter
 {
     private readonly RenderCaches _caches;
     private readonly Fonts _fonts;
-    private readonly FontFace[] _slotFaces;   // the runtime's, filled once a frame
+    private readonly FontFace?[] _slotFaces;   // the runtime's, filled when the typography changes
 
-    internal Painter(RenderCaches caches, Fonts fonts, FontFace[] slotFaces)
+    internal Painter(RenderCaches caches, Fonts fonts, FontFace?[] slotFaces)
     {
         _caches = caches;
         _fonts = fonts;
@@ -107,7 +107,7 @@ internal sealed class Painter
 
         switch (node)
         {
-            case Text text: DrawText(text, frame, theme, ctx, _slotFaces); break;
+            case Text text: DrawText(text, frame, theme, ctx, _fonts, _slotFaces); break;
             case Icon icon: DrawIcon(icon, frame, theme, ctx); break;
             case Spinner spinner: SpinnerPainter.Draw(SpinnerPainter.FromNative(spinner), frame, theme, ctx); break;
         }
@@ -153,9 +153,9 @@ internal sealed class Painter
 
     // A text is one line, drawn from the top-left of its rect as it was
     // measured. Nothing is wrapped, aligned or cut here.
-    private static void DrawText(Text text, Frame frame, ThemeTokens theme, DrawContext ctx, FontFace[] slotFaces)
+    private static void DrawText(Text text, Frame frame, ThemeTokens theme, DrawContext ctx, Fonts fonts, FontFace?[] slotFaces)
     {
-        var font = FontResolution.FontFromText(slotFaces, text, theme, ctx.Scale);
+        var font = FontResolution.FontFromText(fonts, slotFaces, text, theme, ctx.Scale);
         ctx.DrawTextTop(text, frame.X, frame.Y, font, (text.Color ?? UiColor.TextPrimary).Resolve(theme.Colors));
     }
 

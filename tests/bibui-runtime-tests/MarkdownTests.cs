@@ -425,6 +425,19 @@ static class MarkdownTests
 
         // ── Layout ──────────────────────────────────────────────────────────
 
+        run("Markdown: emphasis is italic, strong emphasis bold, both bold italic; emphasis in a heading is bold italic", () =>
+        {
+            var (_, root) = Show("plain *em* **strong** ***both***\n\n# Head *slant*\n\n*a `code` b*", 600f);
+            var texts = TextsUnder(root).Where(t => new string(t.Content).Trim().Length > 0)
+                .ToDictionary(t => new string(t.Content).Trim(), t => t);
+            IsTrue(texts["plain"].Weight == FontWeight.Regular, "plain upright");
+            IsTrue(texts["em"].Weight == FontWeight.Italic, "emphasis italic");
+            IsTrue(texts["strong"].Weight == FontWeight.Bold, "strong bold");
+            IsTrue(texts["both"].Weight == FontWeight.BoldItalic, "both bold italic");
+            IsTrue(texts["slant"].Weight == FontWeight.BoldItalic, "a heading's emphasis bold italic");
+            IsTrue(texts["code"].Weight == FontWeight.Italic && texts["code"].Family == FontSlot.Mono, "code in emphasis: the mono family's italic");
+        });
+
         run("Markdown layout: a paragraph of equal words wraps greedily into the lines the width allows", () =>
         {
             const float width = 200f;
@@ -631,6 +644,15 @@ static class MarkdownTests
         long before = GC.GetAllocatedBytesForCurrentThread();
         runtime.Step();
         return GC.GetAllocatedBytesForCurrentThread() - before;
+    }
+
+    private static IEnumerable<Text> TextsUnder(UiNode node)
+    {
+        for (var child = node.FirstChild; child is not null; child = child.Next == child ? null : child.Next)
+        {
+            if (child is Text text) yield return text;
+            foreach (var deeper in TextsUnder(child)) yield return deeper;
+        }
     }
 
     // The viewer alone on a surface, wrapped at `width` and laid out twice: the

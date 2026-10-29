@@ -15,7 +15,8 @@ the two stacks with each other, not with your own machine.
 
 ## End to end
 
-The same small dashboard app was built on each stack and published with Native AOT.
+The same small dashboard app was built on each stack and published with Native AOT,
+before the embedded italic faces, which add about 0.84 MB to each output.
 
 | | Silk + Skia | Wayland + managed |
 |---|---|---|

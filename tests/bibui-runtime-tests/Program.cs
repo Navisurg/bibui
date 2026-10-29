@@ -2651,20 +2651,228 @@ Run("BeginFontFace: a scope left open is an error at the end of the build", () =
     Throws<InvalidOperationException>(() => runtime.Step());
 });
 
-Run("FontRegistry: IsRegistered is keyed per (family, weight), and invalid font bytes are rejected", () =>
+Run("FontRegistry: invalid bytes are refused, and a refused call registers nothing", () =>
 {
     FontRegistry.Clear();
     const string family = "Test Registry Family";
-    IsTrue(!FontRegistry.IsRegistered(family, 400), "should not be registered before Register() is called");
-    IsTrue(!FontRegistry.IsRegistered(family, 700), "a different weight for the same family should be independently unregistered");
+    IsTrue(!FontRegistry.IsRegistered(family), "not registered before Register() is called");
 
     bool threw = false;
-    try { FontRegistry.Register(family, 400, [0x00, 0x01, 0x02]); }
+    try { FontRegistry.Register(family, [0x00, 0x01, 0x02]); }
     catch (ArgumentException) { threw = true; }
-    IsTrue(threw, "Register with bytes Skia can't parse as a font should throw ArgumentException, not silently succeed");
-    IsTrue(!FontRegistry.IsRegistered(family, 400), "a failed Register() call should not leave a partial registration behind");
+    IsTrue(threw, "bytes that are not a font file throw ArgumentException, not silently succeed");
+    IsTrue(!FontRegistry.IsRegistered(family), "a refused call leaves no registration behind");
     FontRegistry.Clear();
 });
+
+Run("Italic: a runtime that sets nothing in italic opens no italic face", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    runtime.SetBuild(() => runtime.Into(runtime.Column(), () => { runtime.Text("upright"); runtime.Text("bold", weight: FontWeight.Bold); }),
+        TestBuild.Window(300, 100));
+    runtime.Step();
+    runtime.Step();
+    var engine = runtime.Fonts.Engine;
+    var opened = typeof(Bibui.Text.FreeType.TextEngine).GetField("_defaultItalic", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+    var openedBold = typeof(Bibui.Text.FreeType.TextEngine).GetField("_defaultSemiBoldItalic", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+    IsTrue(opened.GetValue(engine) is null && openedBold.GetValue(engine) is null, "no italic opened");
+    var plain = BibuiStr.FromStrLit("# A heading\n\nSome **bold** text, `code` and a [link](https://x.dev).");
+    runtime.SetBuild(() => runtime.Into(runtime.Column(), () => runtime.Markdown("md", plain, width: 280f)), TestBuild.Window(300, 300));
+    runtime.Step();
+    runtime.Step();
+    IsTrue(opened.GetValue(engine) is null && openedBold.GetValue(engine) is null, "nor a Markdown document with no emphasis");
+    runtime.SetBuild(() => runtime.Into(runtime.Column(), () => runtime.Text("slanted", weight: FontWeight.Italic)), TestBuild.Window(300, 100));
+    runtime.Step();
+    IsTrue(opened.GetValue(engine) is not null, "the italic, once asked for");
+});
+
+Run("Italic: Italic and BoldItalic are the built-in italics, and a text is laid out and drawn in them", () =>
+{
+    const string words = "Sphinx of black quartz";
+    var runtime = BibuiRuntime.Create();
+    var engine = runtime.Fonts.Engine;
+    Text upright = null!, italic = null!;
+    Font slanted = default, boldSlanted = default;
+    runtime.SetBuild(() => runtime.Into(runtime.Column(), () =>
+    {
+        upright = runtime.Text(words);
+        italic = runtime.Text(words, weight: FontWeight.Italic);
+        using (runtime.FontFace(weight: FontWeight.Italic)) slanted = runtime.FontInScope();
+        using (runtime.FontFace(weight: FontWeight.BoldItalic)) boldSlanted = runtime.FontInScope();
+    }), TestBuild.Window(400, 200));
+    runtime.Step();
+    runtime.Step();
+    IsTrue(slanted.Face.FreeType == engine.DefaultItalic, "Italic is Inter Italic");
+    IsTrue(boldSlanted.Face.FreeType == engine.DefaultSemiBoldItalic, "BoldItalic is Inter SemiBold Italic");
+    IsTrue(MathF.Abs(upright.Extent.X - italic.Extent.X) > 0.5f, $"italic measures as itself: {italic.Extent.X} vs {upright.Extent.X}");
+    float measured = TextLayer.WidthFromChars(runtime.Fonts, words, TextLayer.StyleFromFont(runtime.Fonts, slanted, slanted.Scale), slanted.Scale);
+    IsTrue(MathF.Abs(italic.Extent.X - measured) < 0.01f, $"laid out at the italic face's width: {italic.Extent.X} vs {measured}");
+    var frame = runtime.LastFrame();
+    IsTrue(!Rows(frame, (int)upright.Rect.Y, (int)upright.Extent.Y).SequenceEqual(Rows(frame, (int)italic.Rect.Y, (int)italic.Extent.Y)), "and is drawn differently");
+
+    static byte[] Rows(Pixels frame, int top, int height) =>
+        frame.RawBgraBytes.AsSpan(top * frame.Width * 4, height * frame.Width * 4).ToArray();
+});
+
+Run("Italic: a family with no italic is set in its own upright, not Inter's italic", () =>
+{
+    FontRegistry.Clear();
+    try
+    {
+        FontRegistry.Register("Plain Brand", InterBytes("SemiBold"));
+        var provider = BibuiRuntime.Create().Fonts.Provider;
+        var face = provider.Resolve("Plain Brand", 400, italic: true);
+        IsTrue(face == provider.Resolve("Plain Brand", 400) && face == provider.Resolve("Plain Brand", 600),
+            "its upright, its only file, at Regular and Bold alike");
+        IsTrue(face.FontFile.SequenceEqual(InterBytes("SemiBold")), "from its own bytes");
+    }
+    finally
+    {
+        FontRegistry.Clear();
+    }
+});
+
+Run("FontRegistry: Register(family, files) reads each file's weight and slant from the file", () =>
+{
+    FontRegistry.Clear();
+    try
+    {
+        byte[] italic = InterBytes("Italic"), semiBold = InterBytes("SemiBold");
+        FontRegistry.Register("Files", italic, semiBold);
+        IsTrue(FontRegistry.IsRegistered("Files"), "registered");
+        IsTrue(FontRegistry.TryResolve("Files", 400, italic: true)!.SequenceEqual(italic), "Italic is (400, italic)");
+        IsTrue(FontRegistry.TryResolve("Files", 600, italic: false)!.SequenceEqual(semiBold), "SemiBold is (600, upright)");
+    }
+    finally
+    {
+        FontRegistry.Clear();
+    }
+});
+
+Run("FontRegistry: a family resolves to its file nearest the weight, in the slant asked for, else upright", () =>
+{
+    FontRegistry.Clear();
+    try
+    {
+        byte[] regular = InterBytes("Regular"), semiBold = InterBytes("SemiBold");
+        FontRegistry.Register("Near", regular, semiBold);
+        IsTrue(FontRegistry.TryResolve("Near", 500, false)!.SequenceEqual(semiBold), "500, between 400 and 600: a tie goes to the heavier");
+        IsTrue(FontRegistry.TryResolve("Near", 700, false)!.SequenceEqual(semiBold), "700: the heaviest, 600");
+        IsTrue(FontRegistry.TryResolve("Near", 300, false)!.SequenceEqual(regular), "300: the lightest, 400");
+        IsTrue(FontRegistry.TryResolve("Near", 400, true)!.SequenceEqual(regular), "no italic: the nearest upright");
+        IsTrue(FontRegistry.TryResolve("Unknown", 400, false) is null, "an unknown family is null");
+    }
+    finally
+    {
+        FontRegistry.Clear();
+    }
+});
+
+Run("FontRegistry: Register(family, files) refuses a file with no OS/2 table, and registers none of the call's", () =>
+{
+    FontRegistry.Clear();
+    byte[] noOs2 = [0x00, 0x01, 0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 0];
+    bool threw = false;
+    try { FontRegistry.Register("Bare", InterBytes("SemiBold"), noOs2); }
+    catch (ArgumentException) { threw = true; }
+    IsTrue(threw, "no OS/2 table: ArgumentException");
+    IsTrue(!FontRegistry.IsRegistered("Bare"), "nothing of the call registered");
+    FontRegistry.Clear();
+});
+
+Run("FontRegistry: RegisterFromEmbeddedResource registers each file at its own weight, and a missing resource throws", () =>
+{
+    FontRegistry.Clear();
+    try
+    {
+        var assembly = typeof(Bibui.Text.FreeType.FontData).Assembly;
+        FontRegistry.RegisterFromEmbeddedResource("Embedded", assembly,
+            "Bibui.Text.Assets.Fonts.Inter-Regular.ttf", "Bibui.Text.Assets.Fonts.Inter-SemiBoldItalic.ttf");
+        IsTrue(FontRegistry.IsRegistered("Embedded"), "registered");
+        IsTrue(FontRegistry.TryResolve("Embedded", 400, false)!.SequenceEqual(InterBytes("Regular")), "Regular is (400, upright)");
+        IsTrue(FontRegistry.TryResolve("Embedded", 600, true)!.SequenceEqual(InterBytes("SemiBoldItalic")), "SemiBold Italic is (600, italic)");
+
+        Throws<ArgumentException>(() => FontRegistry.RegisterFromEmbeddedResource("Missing", assembly,
+            "Bibui.Text.Assets.Fonts.Inter-Regular.ttf", "No.Such.Font.ttf"), "a missing resource throws ArgumentException");
+        IsTrue(!FontRegistry.IsRegistered("Missing"), "nothing of the call registered");
+    }
+    finally
+    {
+        FontRegistry.Clear();
+    }
+});
+
+Run("Slot faces: a second frame under the same theme keeps the italic the first resolved", () =>
+{
+    bool italic = true;
+    var runtime = BibuiRuntime.Create();
+    runtime.SetBuild(() => runtime.Into(runtime.Column(), () =>
+    {
+        runtime.Text("upright");
+        if (italic) runtime.Text("slanted", weight: FontWeight.Italic);
+    }), TestBuild.Window(300, 100));
+    runtime.Step();
+    var resolved = SlotFaces(runtime)[FontResolution.SlotFace(FontSlot.Body, FontWeight.Italic)];
+    IsTrue(resolved is not null, "frame 1 resolved the italic");
+    italic = false;
+    runtime.Step();
+    IsTrue(SlotFaces(runtime)[FontResolution.SlotFace(FontSlot.Body, FontWeight.Italic)] == resolved, "frame 2, with no italic text, did not refill the table");
+});
+
+Run("Slot faces: a theme whose typography changes is in effect from the next frame", () =>
+{
+    FontRegistry.Clear();
+    try
+    {
+        FontRegistry.Register("Swapped Body", InterBytes("SemiBold"));
+        var runtime = BibuiRuntime.Create();
+        runtime.SetBuild(() => runtime.Into(runtime.Column(), () => runtime.Text("slanted", weight: FontWeight.Italic)), TestBuild.Window(300, 100));
+        runtime.Step();
+        var before = SlotFaces(runtime)[FontResolution.SlotFace(FontSlot.Body, FontWeight.Regular)];
+        runtime.SetTheme(runtime.Theme with { Typography = new TypographyTokens { FontFamilyBody = "Swapped Body" } });
+        runtime.Step();
+        var after = SlotFaces(runtime)[FontResolution.SlotFace(FontSlot.Body, FontWeight.Regular)]!;
+        IsTrue(after != before && after.FontFile.SequenceEqual(InterBytes("SemiBold")), "the body is the new family's file");
+        IsTrue(SlotFaces(runtime)[FontResolution.SlotFace(FontSlot.Body, FontWeight.Italic)]!.FontFile.SequenceEqual(InterBytes("SemiBold")),
+            "and the italic, cleared by the refill, is resolved again in it");
+    }
+    finally
+    {
+        FontRegistry.Clear();
+    }
+});
+
+Run("Slot faces: a theme fade, colours only, never refills the table", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    bool italic = true;
+    runtime.SetBuild(() => runtime.Into(runtime.Column(), () =>
+    {
+        if (italic) runtime.Text("slanted", weight: FontWeight.Italic);
+        else runtime.Text("upright");
+    }), TestBuild.Window(300, 100));
+    runtime.Step();
+    var resolved = SlotFaces(runtime)[FontResolution.SlotFace(FontSlot.Body, FontWeight.Italic)];
+    IsTrue(resolved is not null, "the italic resolved");
+    italic = false;
+    runtime.SetTheme(runtime.Theme with { Colors = new ColorTokens { Background = "#FFFFFF" } }, Transition.Timed(0.1f, Easing.Linear));
+    for (int i = 0; i < 10; i++)
+    {
+        runtime.Step();
+        IsTrue(SlotFaces(runtime)[FontResolution.SlotFace(FontSlot.Body, FontWeight.Italic)] == resolved, $"frame {i} of the fade kept the table");
+    }
+});
+
+static FontFace?[] SlotFaces(BibuiRuntime runtime) => (FontFace?[])typeof(BibuiRuntime)
+    .GetField("_slotFaces", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(runtime)!;
+
+static byte[] InterBytes(string face)
+{
+    using var stream = typeof(Bibui.Text.FreeType.FontData).Assembly.GetManifestResourceStream($"Bibui.Text.Assets.Fonts.Inter-{face}.ttf")!;
+    using var ms = new MemoryStream();
+    stream.CopyTo(ms);
+    return ms.ToArray();
+}
 
 // ── Renderers ─────────────────────────────────────────────────────────────
 
@@ -2880,8 +3088,10 @@ Run("DrawList: recording a frame after the first allocates nothing", () =>
     var caches = new Bibui.Core.Draw.RenderCaches();
     using var fonts = new Fonts();
     var theme = runtime.Theme;
-    var slotFaces = new FontFace[FontResolution.SlotFaceCount];
-    FontResolution.SlotFacesFill(slotFaces, fonts, theme);
+    var slotFaces = new FontFace?[FontResolution.SlotFaceCount];
+    FontResolution.SlotFacesFill(slotFaces, fonts, theme.Typography);
+    IsTrue(slotFaces.Length == 16 && slotFaces.Select((f, i) => (f is null) == ((i & 2) != 0)).All(x => x),
+        "16 entries: the uprights filled, the italics left for their first ask");
     var painter = new Bibui.Core.Draw.Painter(caches, fonts, slotFaces);
     var list = new Bibui.Core.Draw.DrawList();
     var surface = TestBuild.Window(400, 300);

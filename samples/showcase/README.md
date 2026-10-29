@@ -94,5 +94,5 @@ Each is worked around in the open where the code says so:
   corners and the blur shows square.
 - **Scrim and token groups.** The dialog scrim is a fixed near-black, heavy in light mode; token
   groups are not records, so reduced motion copies `MotionTokens` field by field.
-- **Faces.** No italic face, no embedded monospace face, so code
-  blocks are set in the body face.
+- **Faces.** No embedded monospace face, so code blocks are set in the body
+  face.
