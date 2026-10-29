@@ -1,5 +1,6 @@
 using Bibui.Core;
 using Bibui.Core.Runtime.Platform;
+using Bibui.Platform.Wayland.Protocol;
 
 namespace Bibui.Platform.Wayland;
 
@@ -17,11 +18,15 @@ namespace Bibui.Platform.Wayland;
 ///
 /// <para><b>Scroll units</b> are the Silk host's: GLFW's sign (positive Y is
 /// the wheel turned away from the user — up; positive X is left) and one wheel
-/// notch is 1.0, which the runtime multiplies by 32 px. A wheel says how far it
-/// turned in value120 (120 a notch, a fraction of that from a high-resolution
-/// wheel), or before version 8 in whole axis_discrete steps; a touchpad or
-/// other continuous source has only the axis value, in surface pixels, which
-/// is divided by 10 as GLFW divides it.</para>
+/// notch is 1.0, which the runtime multiplies by 32 px. A wheel says
+/// how far it turned in value120 (120 a notch, a fraction of that from a
+/// high-resolution wheel), or before version 8 in whole axis_discrete steps. A
+/// touchpad or other continuous source has only the axis value, in surface
+/// pixels; it is reported as a continuous scroll (<see cref="WindowEvent.Continuous"/>)
+/// of <see cref="ContinuousScale"/> logical px a surface pixel. Which a frame
+/// is comes from wl_pointer.axis_source (version 5); without it, a frame with
+/// no discrete or value120 step on either axis is taken to be continuous, so
+/// on a compositor older than version 5 a wheel scrolls as a touchpad.</para>
 ///
 /// <para>Positions are surface-local, which is logical window coordinates —
 /// what the Silk host reports too. The scale does not change them.</para>
@@ -33,6 +38,12 @@ internal sealed class PointerFrame(Action<WindowEvent> emit, Func<KeyModifiers> 
 
     /// <summary>value120 per wheel notch.</summary>
     public const float Value120PerNotch = 120f;
+
+    /// <summary>
+    /// The Wayland host's touchpad speed: logical px a surface pixel of a
+    /// continuous source scrolls.
+    /// </summary>
+    public const float ContinuousScale = 32f / ContinuousPerNotch;
 
     private readonly Action<WindowEvent> _emit = emit;
     // The modifiers held now, stamped on each event as it is reported.
@@ -55,6 +66,7 @@ internal sealed class PointerFrame(Action<WindowEvent> emit, Func<KeyModifiers> 
     private bool _moved;
     private readonly List<(MouseButton Button, bool Down)> _buttons = [];
     private Axis _vertical, _horizontal;
+    private WlPointer.AxisSource? _source;   // the frame's, when the compositor says
 
     private struct Axis
     {
@@ -69,6 +81,9 @@ internal sealed class PointerFrame(Action<WindowEvent> emit, Func<KeyModifiers> 
             : HasDiscrete ? Discrete
             : HasValue ? Value / ContinuousPerNotch
             : 0f;
+
+        /// <summary>Only the axis value: a touchpad or other source with no notches.</summary>
+        public readonly bool Continuous => HasValue && !HasDiscrete && !HasValue120;
     }
 
     public void Enter(float x, float y)
@@ -116,6 +131,9 @@ internal sealed class PointerFrame(Action<WindowEvent> emit, Func<KeyModifiers> 
         EndUnframed();
     }
 
+    /// <summary>wl_pointer.axis_source (version 5): what the frame's axis events come from.</summary>
+    public void AxisSource(WlPointer.AxisSource source) => _source = source;
+
     /// <summary>wl_pointer.axis_discrete (versions 5–7): whole wheel steps.</summary>
     public void AxisDiscrete(bool horizontal, int steps)
     {
@@ -154,10 +172,19 @@ internal sealed class PointerFrame(Action<WindowEvent> emit, Func<KeyModifiers> 
         _buttons.Clear();
 
         // wl_pointer: positive is down or right. GLFW (and so the Silk host): positive is up or left.
-        float sx = 0f - _horizontal.Notches, sy = 0f - _vertical.Notches; // 0f - x: no -0
-        if (sx != 0f || sy != 0f) _emit(WindowEvent.Wheel(X, Y, sx, sy, _modifiers()));
+        // A frame's axis events are one source's: the compositor says which (axis_source),
+        // else continuous when no axis of it said notches.
+        bool continuous = _source is { } source
+            ? source is WlPointer.AxisSource.Finger or WlPointer.AxisSource.Continuous
+            : (_horizontal.Continuous || _vertical.Continuous)
+              && !(_horizontal.HasDiscrete || _horizontal.HasValue120 || _vertical.HasDiscrete || _vertical.HasValue120);
+        float sx = continuous ? 0f - _horizontal.Value * ContinuousScale : 0f - _horizontal.Notches; // 0f - x: no -0
+        float sy = continuous ? 0f - _vertical.Value * ContinuousScale : 0f - _vertical.Notches;
+        if (sx != 0f || sy != 0f)
+            _emit(continuous ? WindowEvent.ContinuousScroll(X, Y, sx, sy, _modifiers()) : WindowEvent.Wheel(X, Y, sx, sy, _modifiers()));
         _horizontal = default;
         _vertical = default;
+        _source = null;
     }
 
     /// <summary>Releases every button still held, at the last position. Focus left, or the pointer did.</summary>

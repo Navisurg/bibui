@@ -37,8 +37,26 @@ public readonly struct WindowEvent
     public float Y { get; private init; }
 
     public MouseButton Button { get; private init; }
+
+    /// <summary>
+    /// How far a <see cref="WindowEventKind.Scroll"/> went, in GLFW's sign
+    /// (positive Y is up, positive X is left): wheel notches, 32 logical px
+    /// each, or for a <see cref="Continuous"/> scroll, logical px, which the
+    /// runtime does not scale.
+    /// </summary>
     public float ScrollX { get; private init; }
+
+    /// <inheritdoc cref="ScrollX"/>
     public float ScrollY { get; private init; }
+
+    /// <summary>
+    /// For a <see cref="WindowEventKind.Scroll"/> only: from a source with no
+    /// notches, as a touchpad is, its <see cref="ScrollX"/> and
+    /// <see cref="ScrollY"/> in logical px, scrolled as they are. A platform
+    /// that knows a source has none says so (<see cref="ContinuousScroll"/>),
+    /// and turns its own units into px. False for a wheel.
+    /// </summary>
+    public bool Continuous { get; private init; }
 
     public Key Key { get; private init; }
     /// <summary>
@@ -62,8 +80,16 @@ public readonly struct WindowEvent
     public static WindowEvent Mouse(WindowEventKind kind, float x, float y, MouseButton button, KeyModifiers modifiers = KeyModifiers.None)
         => new() { Kind = kind, X = x, Y = y, Button = button, Modifiers = modifiers };
 
+    /// <summary>A wheel turned: <paramref name="scrollX"/> and <paramref name="scrollY"/> notches, a fraction from a high-resolution wheel.</summary>
     public static WindowEvent Wheel(float x, float y, float scrollX, float scrollY, KeyModifiers modifiers = KeyModifiers.None)
         => new() { Kind = WindowEventKind.Scroll, X = x, Y = y, ScrollX = scrollX, ScrollY = scrollY, Modifiers = modifiers };
+
+    /// <summary>
+    /// A scroll from a source with no notches, as a touchpad is (<see cref="Continuous"/>):
+    /// <paramref name="pixelsX"/> and <paramref name="pixelsY"/> logical px, positive up and left.
+    /// </summary>
+    public static WindowEvent ContinuousScroll(float x, float y, float pixelsX, float pixelsY, KeyModifiers modifiers = KeyModifiers.None)
+        => new() { Kind = WindowEventKind.Scroll, X = x, Y = y, ScrollX = pixelsX, ScrollY = pixelsY, Modifiers = modifiers, Continuous = true };
 
     public static WindowEvent KeyPress(Key key, KeyModifiers modifiers = KeyModifiers.None) => new() { Kind = WindowEventKind.KeyDown, Key = key, Modifiers = modifiers };
     /// <summary>A key held down, reported again: a <see cref="WindowEventKind.KeyDown"/> with <see cref="Repeat"/> set.</summary>

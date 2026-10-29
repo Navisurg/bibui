@@ -40,4 +40,8 @@
     <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="bibui-runtime-tests" />
+  </ItemGroup>
+
 </Project>

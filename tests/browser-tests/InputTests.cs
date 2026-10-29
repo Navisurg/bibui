@@ -106,7 +106,7 @@ internal static class InputTests
             Assert.Eq(WindowEventKind.MouseUp, events[2].Kind);
             Assert.Eq(MouseButton.Right, events[2].Button);
             Assert.Eq(WindowEventKind.Scroll, events[3].Kind);
-            Assert.Eq(-1f, events[3].ScrollY, "a 100 px wheel down is one notch down");
+            Assert.Eq(-32f, events[3].ScrollY, "a 100 px wheel down: 32 logical px, a continuous scroll");
             Assert.Eq(WindowEventKind.KeyDown, events[4].Kind);
             Assert.Eq(Key.A, events[4].Key);
             Assert.Eq(WindowEventKind.KeyChar, events[5].Kind, "the character follows its key-down");
@@ -156,6 +156,21 @@ internal static class InputTests
             Assert.Eq((1f, 0f), BrowserInput.Notches(-100, 0, 0));
             Assert.Eq((0f, -1f), BrowserInput.Notches(0, 3, 1));
             Assert.Eq((0f, 3f), BrowserInput.Notches(0, -1, 2));
+        });
+
+        t.Run("records: pixels are a continuous scroll at 0.32 px each, lines and pages a wheel's notches", () =>
+        {
+            var px = BrowserInput.WheelEvent(5, 6, 0, 100, 0, KeyModifiers.None);
+            Assert.True(px.Continuous, "pixels: continuous");
+            Assert.Eq((0f, -32f), (px.ScrollX, px.ScrollY), "100 px down: 32 logical px, as before");
+            var lines = BrowserInput.WheelEvent(5, 6, 0, 3, 1, KeyModifiers.None);
+            Assert.True(!lines.Continuous, "lines: a wheel");
+            Assert.Eq((0f, -1f), (lines.ScrollX, lines.ScrollY), "three lines down: a notch");
+            var (data, strings) = Records((BrowserInput.Wheel, [5, 6, 0, 100, 0, 0], []));
+            var events = new List<WindowEvent>();
+            string? pasted = null;
+            BrowserInput.Decode(data, strings, events, ref pasted);
+            Assert.Eq((0f, -32f), (events.Single().ScrollX, events.Single().ScrollY), "a decoded record the same");
         });
 
         t.Run("records: the runtime makes intents of them as it does a desktop window's", () =>

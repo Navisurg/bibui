@@ -413,7 +413,7 @@ internal static unsafe class InputTests
             f.Enter(0, 0); f.Frame(); ev.Clear();
             f.AxisValue(false, 30f); f.AxisDiscrete(false, 2); f.Frame();       // two clicks, v5–7
             f.AxisValue(false, 25f); f.Frame();                                  // a touchpad: px / 10, as GLFW
-            Assert.Eq("Scroll 0,-2 @0,0; Scroll 0,-2.5 @0,0", Describe(ev));
+            Assert.Eq("Scroll 0,-2 @0,0; Scroll continuous 0,-80 @0,0", Describe(ev), "a touchpad's 25 px: 80 logical px, as it always scrolled");
         });
 
         t.Run("pointer: both axes of one frame are one scroll; right is negative X, as GLFW", () =>
@@ -421,10 +421,31 @@ internal static unsafe class InputTests
             var (f, ev) = Pointer();
             f.Enter(0, 0); f.Frame(); ev.Clear();
             f.AxisValue(true, 10f); f.AxisValue(false, -20f); f.Frame();
-            Assert.Eq("Scroll -1,2 @0,0", Describe(ev));
+            Assert.Eq("Scroll continuous -32,64 @0,0", Describe(ev));
             ev.Clear();
             f.AxisValue(true, -15f); f.AxisValue120(true, -120); f.Frame();
             Assert.Eq("Scroll 1,0 @0,0", Describe(ev), "a tilt left");
+        });
+
+        t.Run("pointer: axis_source says what a frame is: a finger or continuous source scrolls px, a wheel notches", () =>
+        {
+            var (f, ev) = Pointer();
+            f.Enter(0, 0); f.Frame(); ev.Clear();
+            f.AxisSource(WlPointer.AxisSource.Finger); f.AxisValue(false, 10f); f.Frame();
+            f.AxisSource(WlPointer.AxisSource.Wheel); f.AxisValue(false, 5f); f.Frame();          // a high-resolution wheel, v5–7: a sub-notch frame
+            f.AxisSource(WlPointer.AxisSource.WheelTilt); f.AxisValue(true, 15f); f.AxisDiscrete(true, 1); f.Frame();
+            f.AxisSource(WlPointer.AxisSource.Continuous); f.AxisValue(true, -2f); f.Frame();
+            f.AxisValue(false, 10f); f.Frame();                                                    // no source: the frame before's is not kept
+            Assert.Eq("Scroll continuous 0,-32 @0,0; Scroll 0,-0.5 @0,0; Scroll -1,0 @0,0; Scroll continuous 6.4,0 @0,0; Scroll continuous 0,-32 @0,0",
+                Describe(ev));
+        });
+
+        t.Run("pointer: without axis_source, a frame with a notch on either axis is a wheel's", () =>
+        {
+            var (f, ev) = Pointer();
+            f.Enter(0, 0); f.Frame(); ev.Clear();
+            f.AxisValue(false, 15f); f.AxisValue120(false, 120); f.AxisValue(true, 10f); f.Frame();
+            Assert.Eq("Scroll -1,-1 @0,0", Describe(ev));
         });
 
         t.Run("pointer: values in one frame add up; an empty frame says nothing", () =>
@@ -444,7 +465,7 @@ internal static unsafe class InputTests
             f.Motion(3, 4);
             f.Button(BTN_LEFT, true);
             f.AxisValue(false, 10f);
-            Assert.Eq("MouseMove 1,2; MouseMove 3,4; MouseDown Left 3,4; Scroll 0,-1 @3,4", Describe(ev));
+            Assert.Eq("MouseMove 1,2; MouseMove 3,4; MouseDown Left 3,4; Scroll continuous 0,-32 @3,4", Describe(ev));
         });
     }
 
@@ -463,7 +484,7 @@ internal static unsafe class InputTests
             {
                 WindowEventKind.MouseMove => $"MouseMove {P(e.X)},{P(e.Y)}",
                 WindowEventKind.MouseDown or WindowEventKind.MouseUp => $"{e.Kind} {e.Button} {P(e.X)},{P(e.Y)}",
-                WindowEventKind.Scroll => $"Scroll {P(e.ScrollX)},{P(e.ScrollY)} @{P(e.X)},{P(e.Y)}",
+                WindowEventKind.Scroll => $"Scroll{(e.Continuous ? " continuous" : "")} {P(e.ScrollX)},{P(e.ScrollY)} @{P(e.X)},{P(e.Y)}",
                 WindowEventKind.KeyDown or WindowEventKind.KeyUp => $"{e.Kind} {e.Key}",
                 WindowEventKind.KeyChar => $"KeyChar {e.CodePoint}",
                 _ => e.Kind.ToString(),

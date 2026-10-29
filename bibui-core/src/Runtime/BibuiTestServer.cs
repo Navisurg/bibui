@@ -499,15 +499,15 @@ public sealed class BibuiTestServer : IDisposable
         for (int i = 0; i < SettleFrames; i++) yield return true;
     }
 
-    // dx and dy are logical px, as a box reads them; a wheel notch is 32 of them,
-    // and wheel up is content up.
+    // dx and dy are logical px, as a box reads them, sent as a continuous
+    // scroll so they arrive exactly; wheel up is content up.
     private IEnumerable<bool> Scroll(JsonNode node)
     {
         var (x, y) = Point(node, "scroll");
         float dy = node["dy"]?.GetValue<float>() ?? throw new ArgumentException("scroll requires 'dy'");
         float dx = node["dx"]?.GetValue<float>() ?? 0f;
         (_pointerX, _pointerY) = (x, y);
-        _events.Add(WindowEvent.Wheel(x, y, dx / 32f, -dy / 32f));
+        _events.Add(WindowEvent.ContinuousScroll(x, y, dx, -dy));
         for (int i = 0; i < SettleFrames; i++) yield return true;
     }
 

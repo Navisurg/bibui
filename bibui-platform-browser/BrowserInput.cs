@@ -64,8 +64,7 @@ internal static class BrowserInput
                     break;
                 case Wheel:
                 {
-                    var (dx, dy) = Notches(r[3], r[4], (int)r[5]);
-                    into.Add(WindowEvent.Wheel((float)r[1], (float)r[2], dx, dy, BrowserKeys.FromDomModifiers((int)r[6])));
+                    into.Add(WheelEvent((float)r[1], (float)r[2], r[3], r[4], (int)r[5], BrowserKeys.FromDomModifiers((int)r[6])));
                     break;
                 }
                 case KeyDown:
@@ -93,9 +92,28 @@ internal static class BrowserInput
     }
 
     /// <summary>
+    /// A wheel event as the runtime takes it. Lines and pages (deltaMode 1 and
+    /// 2) are a wheel's notches. Pixels (0) may be a touchpad's or a wheel's,
+    /// and a browser does not say which (Chrome and Safari report a wheel in
+    /// pixels too), so they are a continuous scroll at <see cref="PixelScale"/>
+    /// px a pixel.
+    /// </summary>
+    public static WindowEvent WheelEvent(float x, float y, double deltaX, double deltaY, int deltaMode, KeyModifiers modifiers)
+    {
+        if (deltaMode == 0)
+            return WindowEvent.ContinuousScroll(x, y, (float)(-deltaX * PixelScale), (float)(-deltaY * PixelScale), modifiers);
+        var (dx, dy) = Notches(deltaX, deltaY, deltaMode);
+        return WindowEvent.Wheel(x, y, dx, dy, modifiers);
+    }
+
+    // The browser's touchpad speed: logical px a deltaMode 0 pixel scrolls.
+    private const double PixelScale = 0.32;
+
+    /// <summary>
     /// A wheel's deltas as notches, positive up and left, as GLFW reports a
-    /// wheel: a browser reports pixels (deltaMode 0, about 100 to a notch),
-    /// lines (1, three to a notch) or pages (2), positive down and right.
+    /// wheel: a browser reports lines (deltaMode 1, three to a notch) or pages
+    /// (2), positive down and right; pixels (0) are about 100 to a notch, though
+    /// <see cref="WheelEvent"/> scrolls them as px instead.
     /// </summary>
     public static (float X, float Y) Notches(double deltaX, double deltaY, int deltaMode)
     {

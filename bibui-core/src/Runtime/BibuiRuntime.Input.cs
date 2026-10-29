@@ -123,9 +123,11 @@ public sealed partial class BibuiRuntime
 
                 case WindowEventKind.Scroll:
                 {
-                    // A notch is 32px. Wheel up is content up: a negative offset.
-                    // Without a horizontal wheel, Shift+wheel scrolls across.
-                    float dx = e.ScrollX * 32f, dy = -e.ScrollY * 32f;
+                    // A notch is 32px; a continuous scroll is px already. Wheel up is
+                    // content up: a negative offset. Without a horizontal wheel,
+                    // Shift+wheel scrolls across.
+                    float step = e.Continuous ? 1f : 32f;
+                    float dx = e.ScrollX * step, dy = -e.ScrollY * step;
                     if ((held & KeyModifiers.Shift) != 0 && dx == 0f) (dx, dy) = (dy, 0f);
                     var ev = PushEvent();
                     ev.Kind = BibUiEventKind.Scroll;

@@ -34,6 +34,11 @@ All notable changes to bibui are recorded here. The format is based on
   moving with it; Shift selects. `TextActionFlags.PageScan` marks the move as
   a page.
 
+- `WindowEvent.ContinuousScroll(x, y, pixelsX, pixelsY)` and
+  `WindowEvent.Continuous`: a scroll from a source with no notches, as a
+  touchpad is, in logical px, which the runtime does not scale. Each host now
+  tells a wheel's notches from a touchpad's pixels; both scroll as before.
+
 ### Changed
 
 - **Breaking:** rendering glyphs into masks is no longer the text layer's.

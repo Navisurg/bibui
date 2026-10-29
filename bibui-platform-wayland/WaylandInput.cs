@@ -339,7 +339,8 @@ internal sealed unsafe class WaylandInput : IWaylandFeature
     private static readonly WlPointer.Listener* PointerListener = WlPointer.Listener.Create(new()
     {
         Enter = &OnPointerEnter, Leave = &OnPointerLeave, Motion = &OnPointerMotion, Button = &OnPointerButton,
-        Axis = &OnPointerAxis, Frame = &OnPointerFrame, AxisDiscrete = &OnPointerAxisDiscrete, AxisValue120 = &OnPointerAxisValue120,
+        Axis = &OnPointerAxis, Frame = &OnPointerFrame, AxisSource = &OnPointerAxisSource, AxisDiscrete = &OnPointerAxisDiscrete,
+        AxisValue120 = &OnPointerAxisValue120,
     });
 
     private static readonly WlKeyboard.Listener* KeyboardListener = WlKeyboard.Listener.Create(new()
@@ -394,6 +395,10 @@ internal sealed unsafe class WaylandInput : IWaylandFeature
     [UnmanagedCallersOnly]
     private static void OnPointerAxis(void* data, WlPointer pointer, uint time, WlPointer.Axis axis, WlFixed value) =>
         Self(data)._frame.AxisValue(axis == WlPointer.Axis.HorizontalScroll, (float)value.ToDouble());
+
+    [UnmanagedCallersOnly]
+    private static void OnPointerAxisSource(void* data, WlPointer pointer, WlPointer.AxisSource source) =>
+        Self(data)._frame.AxisSource(source);
 
     [UnmanagedCallersOnly]
     private static void OnPointerAxisDiscrete(void* data, WlPointer pointer, WlPointer.Axis axis, int discrete) =>

@@ -128,6 +128,23 @@ public sealed class SilkWindow : IDisposable
     private global::Silk.NET.GLFW.GlfwCallbacks.CharCallback? _onChar;
     private global::Silk.NET.GLFW.GlfwCallbacks.KeyCallback? _onKey;
 
+    // GLFW's scroll offsets as an event. GLFW does not say what a scroll came
+    // from: a wheel's offsets are whole notches (a high-resolution wheel's can be
+    // fractions), a touchpad's are fractions of one, its pixels over 10. A
+    // fraction is taken to be a touchpad's, and scrolls TouchpadScale px a
+    // unit; a whole offset is a wheel's notches. A touchpad event that
+    // happens to come out whole (ten of its pixels) is then taken for a notch.
+    // On X11, where GLFW reads a touchpad as wheel clicks, both are notches.
+    internal static WindowEvent ScrollEvent(float x, float y, float offsetX, float offsetY, KeyModifiers modifiers)
+    {
+        bool whole = offsetX == MathF.Round(offsetX) && offsetY == MathF.Round(offsetY);
+        return whole ? WindowEvent.Wheel(x, y, offsetX, offsetY, modifiers)
+            : WindowEvent.ContinuousScroll(x, y, offsetX * TouchpadScale, offsetY * TouchpadScale, modifiers);
+    }
+
+    // The Silk host's touchpad speed: logical px a unit of GLFW's offset scrolls.
+    private const float TouchpadScale = 32f;
+
     private unsafe void WireInput()
     {
         var input = Native.CreateInput();
@@ -137,7 +154,7 @@ public sealed class SilkWindow : IDisposable
             mouse.MouseDown += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseDown, m.Position.X, m.Position.Y, (Bibui.Core.MouseButton)b, HeldModifiers));
             mouse.MouseUp   += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseUp,   m.Position.X, m.Position.Y, (Bibui.Core.MouseButton)b, HeldModifiers));
             mouse.MouseMove += (_, p) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseMove, p.X, p.Y, Bibui.Core.MouseButton.Unknown, HeldModifiers));
-            mouse.Scroll    += (m, w) => events.Add(WindowEvent.Wheel(m.Position.X, m.Position.Y, w.X, w.Y, HeldModifiers));
+            mouse.Scroll    += (m, w) => events.Add(ScrollEvent(m.Position.X, m.Position.Y, w.X, w.Y, HeldModifiers));
         }
         // Text straight from GLFW, not Silk.NET's KeyChar: that casts GLFW's code
         // point to a char, which turns 😀 (U+1F600) into U+F600. Taking the window's

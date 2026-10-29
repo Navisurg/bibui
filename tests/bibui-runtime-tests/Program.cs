@@ -3537,6 +3537,16 @@ Run("TestServer press: a control key reaches the frame queue as the window would
         IsTrue(ev!.Kind == BibUiEventKind.Edit, "Delete must arrive as an Edit, as the window builds it");
     }));
 
+Run("TestServer scroll: its px arrive exactly", () =>
+    WithKeyboardServer((send, seen) =>
+    {
+        var reply = send(new { cmd = "scroll", x = 50, y = 50, dy = 90 });
+        IsTrue(reply.Contains("\"ok\":true"), $"scroll must succeed, got {reply}");
+        var scrolls = seen.Where(e => e.Kind == BibUiEventKind.Scroll).ToList();
+        Eq(1, scrolls.Count, "one scroll");
+        Eq(90f, scrolls[0].ScrollY, "90 px down");
+    }));
+
 Run("TestServer press: the key is let go of, in a later frame, as a keyboard does", () =>
     WithKeyboardServer((send, seen) =>
     {
@@ -7815,6 +7825,32 @@ Run("BeginBuild: Super held is reported as Ctrl too", () =>
     var seen = ModifiersOfPress(rt, [WindowEvent.KeyPress(Key.F5, KeyModifiers.Super)]);
     IsTrue((seen & KeyModifiers.Ctrl) != 0, $"Cmd+key should read as Ctrl+key, saw {seen}");
     IsTrue((seen & KeyModifiers.Super) != 0, "and stay distinguishable as Super");
+});
+
+// The Scroll events a frame's window events became, as (ScrollX, ScrollY) in logical px.
+List<(float X, float Y)> ScrollsOf(BibuiRuntime rt, params WindowEvent[] events)
+{
+    rt.BeginBuild(rt.WindowOf(), [.. events]);
+    var scrolls = rt.UnconsumedEvents.Where(e => e.Kind == BibUiEventKind.Scroll).Select(e => (e.ScrollX, e.ScrollY)).ToList();
+    rt.BuildTree();
+    rt.EndBuild();
+    return scrolls;
+}
+
+Run("BeginBuild: a wheel notch scrolls 32 px; a continuous scroll is not scaled", () =>
+{
+    var (rt, _) = MountButton();
+    rt.Step();
+    IsTrue(ScrollsOf(rt, WindowEvent.Wheel(5f, 5f, 0f, -1f)).SequenceEqual([(0f, 32f)]), "a notch down is 32 px down");
+    IsTrue(ScrollsOf(rt, WindowEvent.ContinuousScroll(5f, 5f, 0f, -80f)).SequenceEqual([(0f, 80f)]), "a continuous scroll's px, as they are");
+});
+
+Run("SilkWindow: a whole GLFW offset is a wheel's notches; a fraction, a touchpad's, at 32 px a unit as before", () =>
+{
+    var notch = SilkWindow.ScrollEvent(1f, 2f, 0f, -1f, KeyModifiers.None);
+    IsTrue(!notch.Continuous && notch.ScrollY == -1f, "a notch");
+    var touch = SilkWindow.ScrollEvent(1f, 2f, 0f, -0.25f, KeyModifiers.None);
+    IsTrue(touch.Continuous && touch.ScrollY == -8f, $"a quarter: 8 px, got {touch.ScrollY}");
 });
 
 Run("BeginBuild: moves in a frame are one move, where the pointer ended up", () =>
