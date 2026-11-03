@@ -267,6 +267,7 @@ public sealed partial class BibuiRuntime
 
         var t0 = _buildStarted;
         EndDropDowns(tree);
+        EndFocus();
         var t1 = Stopwatch.GetTimestamp();
         var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
         // Every rect is solved before anything is recorded. A text measures

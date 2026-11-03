@@ -40,7 +40,7 @@ internal static class DemoDisplay
         box.Style.Padding = EdgeInsets.All(8);
         runtime.BeginParent(box);
         runtime.BeginSizeY(rows is { } r ? TextField.Rows(runtime, r) : SemanticSize.ChildrenSum());
-        runtime.MultilineTextField(id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0);
+        runtime.MultilineTextField(id, GalleryHelpers.Held(id, text), NoEdit, events: 0);
         runtime.EndSizeY();
         runtime.EndParent(box);
     }
@@ -49,7 +49,6 @@ internal static class DemoDisplay
     private static readonly BibuiStr EllipsisText = BibuiStr.FromStrLit(
         "This is a very long label that gets truncated with an ellipsis character");
     private static readonly Bibui.Core.TextEdit.TextEditState EllipsisEdit = new();
-    private static bool EllipsisFocused;
 
     // A line in a dark box of the given width, ending in "…" when it is wider
     // than the box. A press edits it, and then it scrolls rather than ending
@@ -63,18 +62,10 @@ internal static class DemoDisplay
         box.Style.CornerRadius = 6f;
         box.Style.Padding = EdgeInsets.All(8);
         box.Style.BorderWidth = 1f;
-        box.Style.BorderColor = EllipsisFocused ? UiColor.BorderFocus : UiColor.Border;
+        box.Style.BorderColor = runtime.IsFocused(id) ? UiColor.BorderFocus : UiColor.Border;
         runtime.BeginParent(box);
-        BibuiWidget line = runtime.EllipsisTextField(id, EllipsisText, EllipsisEdit, EllipsisFocused, events: TextField.SingleLineEvents);
+        runtime.EllipsisTextField(id, EllipsisText, EllipsisEdit, events: TextField.SingleLineEvents);
         runtime.EndParent(box);
-        if (line.Pressed) EllipsisFocused = true;
-        if (EllipsisFocused)
-            foreach (var ev in runtime.UnconsumedEvents)
-                if (ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape } or { Kind: Bibui.Core.TextEdit.BibUiEventKind.Submit })
-                {
-                    EllipsisFocused = false;
-                    ev.Eat();
-                }
     }
 
     internal static void Build(BibuiRuntime runtime, string route, DisplayState state, Action<DisplayState> set)
@@ -341,7 +332,7 @@ internal static class DemoDisplay
             lines.SizeY = SemanticSize.ChildrenSum();
             runtime.BeginParent(lines);
             runtime.BeginSizeY(SemanticSize.ChildrenSum());
-            runtime.MultilineTextField(id, GalleryHelpers.Held(id, body), NoEdit, focused: false, events: 0);
+            runtime.MultilineTextField(id, GalleryHelpers.Held(id, body), NoEdit, events: 0);
             runtime.EndSizeY();
             runtime.EndParent(lines);
         }

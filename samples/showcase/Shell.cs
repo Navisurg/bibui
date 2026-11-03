@@ -77,7 +77,6 @@ internal sealed partial class App
             if (NavItem(rt, "nav-" + label.ToLowerInvariant(), icon, label, key, Page == page, open).Clicked)
             {
                 Page = page;
-                SearchFocused = false;
             }
             rt.Gap(4f);
         }
@@ -384,7 +383,7 @@ internal sealed partial class App
     private Box SearchField(BibuiRuntime rt, float width)
     {
         Box field = rt.BoxFromId("search-box");
-        TextField.InputStyle(rt, field, SearchFocused);
+        TextField.InputStyle(rt, field, rt.IsFocused("search"));
         field.Sized(Size.Px(width), Size.Px(36f));
         rt.BeginParent(field);
         rt.BeginCenterAcross();
@@ -393,9 +392,8 @@ internal sealed partial class App
         rt.Gap(8f);
         var input = rt.BeginParent(rt.Column().Sized(Size.Fill, Size.Fill));
         rt.BeginCenter();
-        var line = rt.TextField("search", Search, SearchEdit, SearchFocused, placeholder: "Search targets");
+        var line = rt.TextField("search", Search, SearchEdit, placeholder: "Search targets");
         line.Node.Sized(Size.Fill);
-        if (line.Pressed) { SearchFocused = true; NoteFocused = false; }
         rt.EndCenter();
         rt.EndParent(input);
         rt.Gap(8f);

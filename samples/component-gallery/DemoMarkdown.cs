@@ -39,7 +39,6 @@ internal static class DemoMarkdown
         + "```\n");
 
     private static readonly TextEditState Edit = new();
-    private static bool _focused;
     private static string? _lastLink;
 
     internal static void Page(BibuiRuntime runtime)
@@ -52,17 +51,16 @@ internal static class DemoMarkdown
         bool sideBySide = ShellLayout.PageWidth(runtime) >= FieldWidth + 24f + ViewerWidth;
         var panes = runtime.BeginParent(sideBySide ? runtime.Row() : runtime.Column());
         Box frame = runtime.Box();
-        TextField.InputStyle(runtime, frame, _focused);
+        TextField.InputStyle(runtime, frame, runtime.IsFocused("demo-markdown-source"));
         frame.SizeX = SemanticSize.Pixels(FieldWidth);
         frame.SizeY = SemanticSize.ChildrenSum();
         runtime.BeginParent(frame);
         runtime.BeginSizeY(TextField.Rows(runtime, 26));
         runtime.BeginFontSize(ComponentSize.Sm);
-        BibuiWidget field = runtime.MultilineTextField("demo-markdown-source", Source, Edit, _focused);
+        runtime.MultilineTextField("demo-markdown-source", Source, Edit);
         runtime.EndFontSize();
         runtime.EndSizeY();
         runtime.EndParent(frame);
-        if (field.Pressed) _focused = true;
 
         runtime.Gap(24f);
 
@@ -81,13 +79,5 @@ internal static class DemoMarkdown
         runtime.Gap(16f);
         runtime.Text(_lastLink is null ? "Click a link in the viewer." : $"Clicked: {_lastLink}",
             ComponentSize.Sm, TextColor.Secondary);
-
-        if (_focused)
-            foreach (var ev in runtime.UnconsumedEvents)
-                if (ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape })
-                {
-                    _focused = false;
-                    ev.Eat();
-                }
     }
 }

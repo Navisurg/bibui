@@ -98,9 +98,37 @@ public record struct Interaction
     public float DragDeltaX { get; set; }
     public float DragDeltaY { get; set; }
 
+    /// <summary>
+    /// It has focus this frame. For now only a box that claims the keyboard
+    /// (<see cref="InteractionKinds.Keyboard"/>) can take it, so its keys go to
+    /// it. The same for every ask in a frame: focus changes between frames.
+    /// </summary>
+    public bool Focused { get; set; }
+
+    /// <summary>
+    /// It has focus this frame and did not last frame: a press on it, or
+    /// <c>BibuiRuntime.Focus</c>. Where an edit starts, from the value it edits.
+    /// </summary>
+    public bool FocusGained { get; set; }
+
+    /// <summary>
+    /// Enter, while it had focus: the edit is done. Reported by the component
+    /// that read the key (a single-line text field); it gives up focus.
+    /// </summary>
+    public bool Submitted { get; set; }
+
+    /// <summary>
+    /// Escape, while it had focus: the edit is abandoned. Reported by the
+    /// component that read the key; it gives up focus. Focus that ends any
+    /// other way (a press elsewhere, focus moving on) is not a cancel: the box
+    /// is just no longer <see cref="Focused"/>.
+    /// </summary>
+    public bool Cancelled { get; set; }
+
     /// <summary>Nothing at all happened to this node.</summary>
     public bool None => !Hovering && !Pressed && !Released && !RightPressed
                      && !MiddlePressed && !RightReleased && !MiddleReleased
                      && !Dragging && !RightDragging && !MiddleDragging
-                     && ScrollX == 0f && ScrollY == 0f;
+                     && ScrollX == 0f && ScrollY == 0f
+                     && !FocusGained && !Submitted && !Cancelled;
 }

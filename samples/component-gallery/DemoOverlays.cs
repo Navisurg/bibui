@@ -59,7 +59,7 @@ internal static class DemoOverlays
     {
         runtime.BeginFontSize(ComponentSize.Sm);
         runtime.BeginSizeY(SemanticSize.ChildrenSum());
-        runtime.MultilineTextField(id, GalleryHelpers.Held(id, text), NoEdit, focused: false, events: 0,
+        runtime.MultilineTextField(id, GalleryHelpers.Held(id, text), NoEdit, events: 0,
             textColor: TextColor.Secondary);
         runtime.EndSizeY();
         runtime.EndFontSize();
@@ -340,8 +340,10 @@ internal static class DemoOverlays
         runtime.EndParent(lowered);
         runtime.Gap(12f);
         var field = runtime.BeginParent(runtime.Row().Sized(Size.Fill));
-        focus = runtime.TextField("demo-command-search", CommandQuery, CommandEdit, state.CommandPaletteOpen,
-            textColor: TextColor.Primary, placeholder: "Type a command…").Pressed;
+        var searchField = runtime.TextField("demo-command-search", CommandQuery, CommandEdit,
+            textColor: TextColor.Primary, placeholder: "Type a command…");
+        focus = searchField.Pressed;
+        bool cancelled = searchField.Interaction.Cancelled;   // Escape, read by the field while it had focus
         runtime.EndParent(field);
         runtime.EndParent(search);
         Box rule = runtime.Box().Sized(Size.Fill, Size.Px(1f));
@@ -383,8 +385,9 @@ internal static class DemoOverlays
         runtime.TextFromId("demo-command-state", (state.CommandPaletteOpen ? "Command palette: open" : "Command palette: closed")
             + (CommandRan is null ? "" : $" — ran: {CommandRan}"), ComponentSize.Sm, TextColor.Secondary);
 
-        // Escape ends the search, as it ends editing a field elsewhere.
-        bool escape = false;
+        // Escape ends the search, as it ends editing a field elsewhere: the
+        // field's own while it has focus, the page's once a press took it away.
+        bool escape = cancelled;
         if (state.CommandPaletteOpen)
             foreach (var ev in runtime.UnconsumedEvents)
                 if (ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape })
@@ -398,9 +401,14 @@ internal static class DemoOverlays
             CommandRan = ran;
             CommandQuery.ReplaceRange((0, (int)CommandQuery.Length), default);
             CommandEdit.Cursor = CommandEdit.Mark = 0;
+            runtime.Focus("");
             set(state with { CommandPaletteOpen = false });
         }
-        else if (toggled || escape) set(state with { CommandPaletteOpen = !state.CommandPaletteOpen });
+        else if (toggled || escape)
+        {
+            runtime.Focus(state.CommandPaletteOpen ? "" : "demo-command-search");   // opened by the button: typed into at once
+            set(state with { CommandPaletteOpen = !state.CommandPaletteOpen });
+        }
         else if (focus && !state.CommandPaletteOpen) set(state with { CommandPaletteOpen = true });
     }
 

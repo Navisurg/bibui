@@ -36,19 +36,19 @@ unfocused, empty field showing its placeholder.
 
 ```cs
 public static BibuiWidget TextField(
-    this BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
+    this BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit,
     uint events = SingleLineEvents,
     TextColor textColor = TextColor.Primary,
     ReadOnlySpan<char> placeholder = default)
 
 public static BibuiWidget EllipsisTextField(
-    this BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
+    this BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit,
     uint events = 0,
     TextColor textColor = TextColor.Primary,
     ReadOnlySpan<char> placeholder = default)
 
 public static BibuiWidget MultilineTextField(
-    this BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, bool focused,
+    this BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit,
     uint events = MultiLineEvents,
     TextColor textColor = TextColor.Primary,
     ReadOnlySpan<char> placeholder = default,
@@ -64,10 +64,9 @@ public const uint MultiLineEvents, MultiLineReadOnlyEvents;
 | Parameter | Meaning |
 |---|---|
 | `id` | The field's retained view box, inside the parent in scope. |
-| `text` | Your buffer. A focused field edits it in place. |
+| `text` | Your buffer. The field edits it in place while it has focus. |
 | `edit` | Your caret (`Cursor`) and selection anchor (`Mark`), as char offsets (UTF-16 code units), always on a character's boundary. A press or drag moves them. |
-| `focused` | Shows the caret and selection, and applies the frame's text events. |
-| `events` | Which events a focused field takes, as bits of `BibUiEventKind`. `SingleLineEvents` edits, `SingleLineReadOnlyEvents` selects and copies, and 0 only shows the text and takes no press. `MultiLineEvents` also takes `Submit` (Enter) as a new line. |
+| `events` | Which events the field takes while it has focus, as bits of `BibUiEventKind`. `SingleLineEvents` edits, `SingleLineReadOnlyEvents` selects and copies, and 0 only shows the text, takes no press and never has focus. `MultiLineEvents` also takes `Submit` (Enter) as a new line. |
 | `textColor` | The text's colour. A placeholder is always `TextColor.Secondary`. |
 | `placeholder` | Shown, quieter, while the buffer is empty. |
 | `wrap` | `Multiline` breaks between words, or anywhere. `TextWrap` is in `Bibui.Text`. |
@@ -79,7 +78,8 @@ parent had last frame. `Multiline` is as tall as the size begun with
 `TextField.Rows(runtime, n)` for `n` lines, or a share.
 
 `InputStyle(runtime, box, focused, error, disabled)` pads and outlines a box you
-hold. It uses the focus ring while focused, the destructive colour on an error,
+hold, built before the field, so pass `runtime.IsFocused(id)`. It uses the focus
+ring while focused, the destructive colour on an error,
 and the raised surface when disabled. It claims nothing, so a disabled input
 should also acquire its frame with `InteractionKinds.Disabled`, as the
 `input-disabled` fixture does.
@@ -87,19 +87,25 @@ should also acquire its frame with `InteractionKinds.Disabled`, as the
 ## Claims and reports
 
 - The view box claims `InteractionKinds.Clip` with `ClampX` (single line) or
-  `ViewScrollY | ClampY` (multi-line), and adds `LeftPress` when `events` is not
-  0.
-- It returns a `BibuiWidget` whose `Node` is the view. `Pressed` is your cue to
-  focus the field. A press or drag places the caret and selects. A double press
-  selects a word.
-- While focused, it eats the frame's events of the kinds in `events`. Copy and
-  cut go to the clipboard through `runtime.ClipboardSet`.
+  `ViewScrollY | ClampY` (multi-line), and adds `LeftPress` and `Keyboard` when
+  `events` is not 0.
+- It returns a `BibuiWidget` whose `Node` is the view. A press or drag places the
+  caret and selects; a double press selects a word.
+- Focus is the runtime's. A press on the field gives it focus from the next
+  frame (`Interaction.Focused`, and `FocusGained` in the first of them). It keeps
+  focus while it is built and no press lands elsewhere; a press on another field
+  moves it there. `runtime.Focus(id)` gives it focus from code.
+- While it has focus, it eats the frame's events of the kinds in `events`. Copy
+  and cut go to the clipboard through `runtime.ClipboardSet`.
+- Escape ends the edit: `Interaction.Cancelled`, and the field gives up focus.
+  On a single line that edits, Enter does too, as `Interaction.Submitted`. A
+  multi-line field takes Enter as a line break.
 
 ## State the caller owns
 
-The text (`BibuiStr`), the caret and selection (`TextEditState`), and whether the
-field is focused. The field never changes focus: set it on `Pressed`, and clear
-it yourself on Escape, on Submit, or on a press elsewhere.
+The text (`BibuiStr`) and the caret and selection (`TextEditState`). Focus is the
+runtime's: read it from the result, or with `runtime.IsFocused(id)` before the
+field is built.
 
 ## Theme tokens
 
@@ -124,28 +130,22 @@ sealed class EmailInput
 
     readonly BibuiStr _email = new(64);              // the caller's state
     readonly TextEditState _edit = new();
-    bool _focused;
+    public string? Sent;
 
     public UiNode Build(BibuiRuntime runtime)
     {
         // The frame: the input look around one line, 240 px wide.
         Box frame = runtime.Box();
-        TextField.InputStyle(runtime, frame, _focused);
+        TextField.InputStyle(runtime, frame, runtime.IsFocused("email"));
         frame.SizeX = SemanticSize.Pixels(240f);
         frame.SizeY = SemanticSize.ChildrenSum();
 
         runtime.BeginParent(frame);
-        BibuiWidget line = runtime.TextField("email", _email, _edit, _focused, placeholder: Placeholder);
+        BibuiWidget line = runtime.TextField("email", _email, _edit, placeholder: Placeholder);
         runtime.EndParent(frame);
-        if (line.Pressed) _focused = true;
 
-        // Escape or Enter ends editing.
-        foreach (var ev in runtime.UnconsumedEvents)
-            if (_focused && ev is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
-            {
-                _focused = false;
-                ev.Eat();
-            }
+        // A press focuses it; Enter submits it, Escape abandons it, each ending the edit.
+        if (line.Interaction.Submitted) Sent = _email.ToString();
         return frame;
     }
 }
@@ -164,19 +164,17 @@ sealed class MessageBox
 
     readonly BibuiStr _message = new(256);           // the caller's state
     readonly TextEditState _edit = new();
-    bool _focused;
 
     public UiNode Build(BibuiRuntime runtime)
     {
         Box frame = runtime.Box();
-        TextField.InputStyle(runtime, frame, _focused);
+        TextField.InputStyle(runtime, frame, runtime.IsFocused("message"));
         frame.SizeX = SemanticSize.Pixels(400f);
         frame.SizeY = SemanticSize.ChildrenSum();
 
         runtime.BeginParent(frame);
         runtime.BeginSizeY(TextField.Rows(runtime, 3));
-        if (runtime.MultilineTextField("message", _message, _edit, _focused, placeholder: Placeholder).Pressed)
-            _focused = true;
+        runtime.MultilineTextField("message", _message, _edit, placeholder: Placeholder);
         runtime.EndSizeY();
         runtime.EndParent(frame);
         return frame;

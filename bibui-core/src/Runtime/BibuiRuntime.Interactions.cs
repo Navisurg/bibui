@@ -275,6 +275,7 @@ public sealed partial class BibuiRuntime
             interaction.DragDeltaY = mouseY - _pressPos[anchor].Y;
         }
 
+        if ((claims & InteractionKinds.Keyboard) != 0) AskFocus(id, ref interaction);
         return interaction;
     }
 
