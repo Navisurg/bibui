@@ -56,9 +56,22 @@ All notable changes to bibui are recorded here. The format is based on
 - `TextLayer.LinesFromText` (`Bibui.Text`): a text's lines at a width, kept
   and found again by the text and its settings, as a span of `TextLine`s.
   `TextLayer.LineFromText` breaks one line, from a line's start, unkept.
+- **Focus** is the runtime's: one box at a time, by id. A box claiming
+  `InteractionKinds.Keyboard` takes it with a left press, from the next frame,
+  and keeps it while it is built and no press lands elsewhere.
+  `Interaction.Focused` and `FocusGained` report it; `Submitted` and
+  `Cancelled` report an edit a component ended (a text field on Enter and
+  Escape). `runtime.Focus(id)` gives it from code (`""` to none), and
+  `runtime.IsFocused(id)` reads it before a box is built.
 
 ### Changed
 
+- **Breaking:** `TextField`, `MultilineTextField` and `EllipsisTextField` take
+  no `focused` argument. A field that takes events claims the keyboard and has
+  focus as the runtime gives it. Escape ends its edit, as `Cancelled`, and so
+  does Enter on a single line, as `Submitted`, which the field eats; it was
+  left to the caller. An app drops the focus it kept for a field, and passes
+  `runtime.IsFocused(id)` to `InputStyle` for the outline.
 - A tooltip with an anchor sits with its left edge at the anchor's middle,
   above it, or below it when there is no room above in the window. It was
   centred above it, which needed its text measured before layout.

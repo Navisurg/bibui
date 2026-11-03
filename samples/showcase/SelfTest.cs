@@ -60,14 +60,14 @@ internal static class SelfTest
             Check(app.SortDescending, "a second click reverses it");
 
             Key(app, rt, Bibui.Core.Key.Slash);
-            Check(app.SearchFocused, "/ gives the search field the keyboard");
+            Check(rt.IsFocused("search"), "/ gives the search field the keyboard");
             Type(app, rt, "kes");
             Check(app.Search.ToString() == "kes", "typing goes into the search field, and the slash does not");
             Check(app.VisibleTargets().Count == 1, "the search filters the queue to one target");
             Key(app, rt, Bibui.Core.Key.L);
             Check(app.Dark, "a letter typed into the field is not a shortcut");
             Key(app, rt, Bibui.Core.Key.Escape);
-            Check(!app.SearchFocused, "Escape gives the keyboard back");
+            Check(!rt.IsFocused("search"), "Escape gives the keyboard back");
 
             Key(app, rt, Bibui.Core.Key.L);
             Frames(app, rt, 2);

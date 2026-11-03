@@ -32,7 +32,6 @@ internal sealed partial class App
     public bool SortDescending;
     public readonly BibuiStr Search = new(64);
     public readonly TextEditState SearchEdit = new();
-    public bool SearchFocused;
     public string? MenuFor;                         // the target the context menu, row-menu, was opened on
     public float MenuX, MenuY;
     public bool SettingsOpen;
@@ -157,31 +156,25 @@ internal sealed partial class App
     private void Keyboard(BibuiRuntime rt)
     {
         bool focusedNow = false;
+        bool fieldHasKeys = rt.IsFocused("search") || rt.IsFocused("note");
         foreach (var ev in rt.UnconsumedEvents)
         {
             // The slash that gives the search field the keyboard is not typed into it.
-            if (ev is { Kind: BibUiEventKind.Text, Char: '/' } && (focusedNow || !SearchFocused && !NoteFocused))
+            if (ev is { Kind: BibUiEventKind.Text, Char: '/' } && (focusedNow || !fieldHasKeys))
             {
                 ev.Eat();
                 continue;
             }
-            if (SearchFocused || NoteFocused)
-            {
-                // A field has the keyboard: only Escape (and Enter, in the one-line search) takes it back.
-                if (ev is { IsKeyDown: true, Key: Key.Escape } || SearchFocused && ev.Kind == BibUiEventKind.Submit)
-                {
-                    SearchFocused = NoteFocused = false;
-                    ev.Eat();
-                }
-                continue;
-            }
+            // A field has the keyboard: its keys are its own, Escape (and Enter, in the one-line search) included.
+            if (fieldHasKeys) continue;
             // Any key that went down, arrows (Navigate) and Enter (Submit) included.
             if (!ev.IsKeyDown) continue;
             bool used = true;
             switch (ev.Key)
             {
                 case Key.Slash:
-                    SearchFocused = focusedNow = true;
+                    rt.Focus("search");
+                    focusedNow = true;
                     if (Page is Page.Telemetry or Page.Journal) Page = Page.Overview;
                     break;
                 case Key.Escape:

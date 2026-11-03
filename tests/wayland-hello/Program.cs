@@ -27,7 +27,6 @@ bool animate = !args.Contains("--still");
 int clicks = 0;
 var typed = new BibuiStr(64);
 var typedEdit = new TextEditState();
-bool typing = false;
 float wheelX = 0f, wheelY = 0f;
 string lastButton = "none yet";
 KeyModifiers lastModifiers = KeyModifiers.None;
@@ -63,19 +62,12 @@ void Build()
 
     // A press focuses the field; Escape or Enter lets it go.
     Box field = runtime.Box();
-    TextField.InputStyle(runtime, field, typing);
+    TextField.InputStyle(runtime, field, runtime.IsFocused("typed"));
     field.Sized(Size.Fill, Size.Px(40f));
     runtime.BeginParent(field);
-    BibuiWidget line = runtime.TextField("typed", typed, typedEdit, typing,
+    runtime.TextField("typed", typed, typedEdit,
         placeholder: "Type here: dead keys, AltGr, held keys repeat, Ctrl+A, Ctrl+Left");
     runtime.EndParent(field);
-    if (line.Pressed) typing = true;
-    foreach (var ev in runtime.UnconsumedEvents)
-        if (typing && ev is { IsKeyDown: true, Key: Key.Escape } or { Kind: BibUiEventKind.Submit })
-        {
-            typing = false;
-            ev.Eat();
-        }
     runtime.Gap(16f);
 
     // The bar a frame moves: a groove and a fill inside it.

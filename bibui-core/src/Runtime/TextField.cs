@@ -10,7 +10,11 @@ namespace Bibui.Core.Runtime;
 /// Text fields drawn from the caller's buffer and edit state. Each is a box of
 /// its own, retained under its id inside the box the caller pushed; it claims
 /// and asks for what it takes, and returns what happened. It owns no state:
-/// while focused it applies the frame's text events, as <see cref="TextOp"/> says.
+/// while it has focus it applies the frame's text events, as <see cref="TextOp"/>
+/// says. A field that takes events claims the keyboard, so a press on it gives
+/// it focus (<see cref="Interaction.Focused"/>); Escape ends the edit
+/// (<see cref="Interaction.Cancelled"/>), and so does Enter on a single line
+/// (<see cref="Interaction.Submitted"/>), each giving focus up.
 /// </summary>
 public static class TextField
 {
@@ -221,6 +225,20 @@ public static class TextField
         return edited;
     }
 
+    // The keys that end an edit, read after the field took its own: Escape on
+    // any field, Enter on one that submits (a single line that edits; a
+    // multi-line field took Enter as a line break). Eaten, reported, and focus
+    // given up.
+    internal static void EndingKeys(BibuiRuntime runtime, ref Interaction interaction, bool submits)
+    {
+        foreach (var ev in runtime.UnconsumedEvents)
+        {
+            if (submits && ev.Kind == BibUiEventKind.Submit) { interaction.Submitted = true; ev.Eat(); }
+            else if (ev is { IsKeyDown: true, Key: Key.Escape }) { interaction.Cancelled = true; ev.Eat(); }
+        }
+        if (interaction.Submitted || interaction.Cancelled) runtime.Focus("");
+    }
+
     // Up or down a line, by the sign of ev.DeltaY, to the char nearest the
     // caret's x on that line. With no line there — above the first, below the
     // last, or anywhere in a single line — the start or end of the text.
@@ -259,14 +277,16 @@ public static class TextFieldExtensions
 {
     /// <summary>
     /// One line of <paramref name="text"/>, the field named <paramref name="id"/>
-    /// in the box in scope, edited while <paramref name="focused"/>. A line tall,
+    /// in the box in scope, edited while it has focus. A line tall,
     /// cut at the box's edge, and scrolled a quarter of its width at a time to
     /// keep the caret in sight.
     /// <paramref name="events"/>: <see cref="SingleLineEvents"/> to edit,
-    /// <see cref="SingleLineReadOnlyEvents"/> to select, none to only show it.
+    /// <see cref="SingleLineReadOnlyEvents"/> to select, none to only show it
+    /// (it never takes focus). Enter, when it edits, reports
+    /// <see cref="Interaction.Submitted"/>.
     /// </summary>
     public static BibuiWidget TextField(this BibuiRuntime runtime, string id, BibuiStr text,
-        TextEditState edit, bool focused, uint events = global::Bibui.Core.Runtime.TextField.SingleLineEvents,
+        TextEditState edit, uint events = global::Bibui.Core.Runtime.TextField.SingleLineEvents,
         TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default)
     {
         Font font = runtime.FontInScope();
@@ -274,9 +294,10 @@ public static class TextFieldExtensions
 
         // The field's own view: a line tall, cut at its edge, scrolling along the line.
         var claims = InteractionKinds.Clip | InteractionKinds.ClampX
-            | (events != 0 ? InteractionKinds.LeftPress : InteractionKinds.None);
+            | (events != 0 ? InteractionKinds.LeftPress | InteractionKinds.Keyboard : InteractionKinds.None);
         Box view = runtime.BoxFromId(id, claims);
         Interaction interaction = runtime.InteractionsFor(view);
+        bool focused = interaction.Focused;
         view.ChildLayoutAxis = LayoutAxis.X;
         view.SizeX = SemanticSize.ParentPct(1f);
         view.SizeY = SemanticSize.Pixels(lineHeight);
@@ -289,6 +310,7 @@ public static class TextFieldExtensions
         }
 
         bool edited = focused && ApplyEdits(runtime, text, edit, events, font, float.PositiveInfinity, TextWrap.Words);
+        if (focused) EndingKeys(runtime, ref interaction, submits: (events & 1u << (int)BibUiEventKind.Text) != 0);
 
         // An empty buffer shows the placeholder, in a quieter colour, the same way.
         bool empty = text.Length == 0;
@@ -322,13 +344,14 @@ public static class TextFieldExtensions
 
     /// <summary>
     /// <paramref name="text"/> as lines, the field named <paramref name="id"/> in
-    /// the box in scope, wrapped at its width and edited while <paramref name="focused"/>.
+    /// the box in scope, wrapped at its width and edited while it has focus;
+    /// Enter breaks the line.
     /// Its height is the size pushed on the stack — <c>ChildrenSum()</c>,
     /// <see cref="Rows"/> or a share — and the wheel scrolls past it. Lines
     /// break as <paramref name="wrap"/> says: between words, or anywhere.
     /// </summary>
     public static BibuiWidget MultilineTextField(this BibuiRuntime runtime, string id, BibuiStr text,
-        TextEditState edit, bool focused, uint events = global::Bibui.Core.Runtime.TextField.MultiLineEvents,
+        TextEditState edit, uint events = global::Bibui.Core.Runtime.TextField.MultiLineEvents,
         TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default, TextWrap wrap = TextWrap.Words)
     {
         Font font = runtime.FontInScope();
@@ -336,9 +359,10 @@ public static class TextFieldExtensions
 
         // The field's own view: as tall as the size pushed, scrolling, cut at its edge.
         var claims = InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip
-            | (events != 0 ? InteractionKinds.LeftPress : InteractionKinds.None);
+            | (events != 0 ? InteractionKinds.LeftPress | InteractionKinds.Keyboard : InteractionKinds.None);
         Box view = runtime.BoxFromId(id, claims);
         Interaction interaction = runtime.InteractionsFor(view);
+        bool focused = interaction.Focused;
         view.ChildLayoutAxis = LayoutAxis.Y;
         view.SizeX = SemanticSize.ParentPct(1f);
         view.AllowOverflowY = true;
@@ -366,6 +390,7 @@ public static class TextFieldExtensions
         }
 
         bool edited = focused && ApplyEdits(runtime, text, edit, events, font, room, wrap);
+        if (focused) EndingKeys(runtime, ref interaction, submits: false);
 
         // An empty buffer shows the placeholder, in a quieter colour, the same way.
         bool empty = text.Length == 0;
@@ -426,11 +451,11 @@ public static class TextFieldExtensions
     /// <summary>
     /// A <see cref="SingleLine"/> named <paramref name="id"/> in the box in scope,
     /// ending in "…" when it is wider than the box: the line gives up room for
-    /// the "…". Edited, it scrolls instead. The box must not be sized by its
+    /// the "…". Focused, it scrolls instead. The box must not be sized by its
     /// children, and whether the line fits is told by its width last frame.
     /// </summary>
     public static BibuiWidget EllipsisTextField(this BibuiRuntime runtime, string id, BibuiStr text,
-        TextEditState edit, bool focused, uint events = 0,
+        TextEditState edit, uint events = 0,
         TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default)
     {
         UiNode box = runtime.ParentInScope;   // holds the line, and the "…" when it is cut
@@ -439,11 +464,11 @@ public static class TextFieldExtensions
             : float.PositiveInfinity;
         box.ChildLayoutAxis = LayoutAxis.X;
 
-        var line = runtime.TextField(id, text, edit, focused, events, textColor, placeholder);
+        var line = runtime.TextField(id, text, edit, events, textColor, placeholder);
         bool empty = text.Length == 0;
         ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
         Font font = runtime.FontInScope();
-        if (focused || TextLayer.WidthFromChars(runtime.Fonts, shown, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) <= room)
+        if (line.Interaction.Focused || TextLayer.WidthFromChars(runtime.Fonts, shown, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) <= room)
             return line;   // fits, or being edited: it scrolls instead
 
         runtime.Gap(DotsGap);

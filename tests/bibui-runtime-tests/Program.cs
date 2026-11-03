@@ -935,7 +935,7 @@ Run("HitTest D: Next button fills column width", () =>
 // way a user does: emptying Delete, Home, End, SelectAll, Copy, Cut or Paste
 // left the suite green.
 
-// A TextField with known text, always focused: the page, and the buffer and
+// A TextField with known text, given focus: the page, and the buffer and
 // edit state it edits, which the tests read and set directly.
 (BibuiPage Page, BibuiStr Text, TextEditState Edit) TextFieldPage(string initial = "hello world")
 {
@@ -957,10 +957,11 @@ Run("HitTest D: Next button fills column width", () =>
         using (runtime.Parent(frame))
         {
             var field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
-            using (runtime.Parent(field)) runtime.TextField("txt", text, edit, focused: true);
+            using (runtime.Parent(field)) runtime.TextField("txt", text, edit);
         }
         return frame;
     }, TestBuild.Window(300, 60));
+    runtime.Focus("txt");
     runtime.Step();
     return (runtime, text, edit);
 }
@@ -2395,7 +2396,7 @@ Run("Box: a fixed Width box holds a multi-line field wrapped at that width, not 
             using (runtime.Parent(bubble))
             using (runtime.Parent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
             using (runtime.SizeY(SemanticSize.ChildrenSum()))
-                runtime.MultilineTextField("words", Str(words), new TextEditState(), focused: false, events: 0);
+                runtime.MultilineTextField("words", Str(words), new TextEditState(), events: 0);
         }),
         TestBuild.Window(1000, 300, 1f));
     runtime.Step();   // a field wraps at the width it was laid out at last frame
@@ -2422,7 +2423,7 @@ Run("runtime.MultilineTextField: wrapped by characters, a token longer than the 
             using (runtime.Parent(runtime.Column().Sized(Size.Px(160f))))
             using (runtime.SizeY(SemanticSize.ChildrenSum()))
                 runtime.MultilineTextField("log", BibuiStr.FromStrLit(path), new TextEditState(),
-                    focused: false, events: 0, wrap: wrap);
+                    events: 0, wrap: wrap);
         }),
         TestBuild.Window(400, 400));
 
@@ -2459,7 +2460,7 @@ Run("runtime.MultilineTextField: a hard line break is laid out as a line, not on
             using (runtime.SizeY(SemanticSize.ChildrenSum()))
                 runtime.MultilineTextField("words",
                 BibuiStr.FromStrLit("Yes, I'll take it.\nI will send it before Friday.\r\nThanks."), new TextEditState(),
-                focused: false, events: 0);
+                events: 0);
         }),
         TestBuild.Window(800, 300, 1.25f));
     runtime.Step();
@@ -6974,7 +6975,7 @@ Run("Fonts.LineHeight and LineAdvance: what layout gives one line, and the next"
             using (runtime.Parent(field))
             using (runtime.SizeY(SemanticSize.ChildrenSum()))
                 runtime.MultilineTextField("three", BibuiStr.FromStrLit("A line\nanother\nand a third"),
-                new TextEditState(), focused: false, events: 0);
+                new TextEditState(), events: 0);
         }
         return column;
     }, TestBuild.Window(400, 300));
@@ -7048,13 +7049,13 @@ Run("LinesFromText: by characters, a line holds what fits and the next starts wh
 
 // ── TextField ────────────────────────────────────────────────────────────────
 
-// A field in a 300 px parent with no padding, which a press focuses, as an app
-// would; it also notes whether a Submit was left for the caller after the field.
-(BibuiRuntime Runtime, Func<bool> Focused, Func<bool> SubmitLeft) MountField(BibuiStr text, TextEditState edit, bool multiline = false,
+// A field in a 300 px parent with no padding, which a press focuses; with
+// whether it has focus, and what it reported in the last frame.
+(BibuiRuntime Runtime, Func<bool> Focused, Func<Interaction> Last) MountField(BibuiStr text, TextEditState edit, bool multiline = false,
     uint events = uint.MaxValue)
 {
     var runtime = BibuiRuntime.Create();
-    bool focused = false, submitLeft = false;
+    Interaction last = default;
     runtime.SetBuild(() =>
     {
         var parent = runtime.BoxFromId("parent");
@@ -7069,23 +7070,22 @@ Run("LinesFromText: by characters, a line holds what fits and the next starts wh
                 var field = FieldFrame(runtime, SemanticSize.ChildrenSum());
                 using (runtime.Parent(field))
                 using (runtime.SizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
-                    line = runtime.MultilineTextField("field", text, edit, focused,
+                    line = runtime.MultilineTextField("field", text, edit,
                         events == uint.MaxValue ? Bibui.Core.Runtime.TextField.MultiLineEvents : events);
             }
             else
             {
                 var field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
-                using (runtime.Parent(field)) line = runtime.TextField("field", text, edit, focused,
+                using (runtime.Parent(field)) line = runtime.TextField("field", text, edit,
                     events == uint.MaxValue ? Bibui.Core.Runtime.TextField.SingleLineEvents : events);
             }
-            if (line.Pressed) focused = true;
-            submitLeft |= runtime.UnconsumedEvents.Any(h => h.Kind == BibUiEventKind.Submit);
+            last = line.Interaction;
         }
         return parent;
     }, TestBuild.Window(400, 300));
     runtime.Step();
     runtime.Step();   // a second frame: the multi-line field wraps at its width from the first
-    return (runtime, () => focused, () => submitLeft);
+    return (runtime, () => runtime.IsFocused("field"), () => last);
 }
 
 void TypeInto(BibuiRuntime runtime, string chars)
@@ -7110,7 +7110,7 @@ Run("runtime.TextField: a press puts the caret at the byte under it, and focuses
     float afterHe = TextLayer.WidthFromChars(runtime.Fonts, "He", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
     ClickAt(runtime, afterHe + 0.5f, 5f);
     runtime.Step();
-    IsTrue(focused(), "the press is reported, and the caller focuses");
+    IsTrue(focused(), "the press gives it focus");
     Eq(2, edit.Cursor, "after He"); Eq(2, edit.Mark);
 });
 
@@ -7131,10 +7131,11 @@ Run("runtime.TextField: in a padded box, a press is measured from where the text
         {
             field = FieldFrame(runtime, SemanticSize.Pixels(40f));
             field.Style.Padding = new EdgeInsets(10f, 20f, 10f, 20f);
-            using (runtime.Parent(field)) runtime.TextField("field", text, edit, focused: true);
+            using (runtime.Parent(field)) runtime.TextField("field", text, edit);
         }
         return parent;
     }, TestBuild.Window(400, 300));
+    runtime.Focus("field");
     runtime.Step();
     var font = runtime.FontInScope();
     float afterHe = TextLayer.WidthFromChars(runtime.Fonts, "He", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
@@ -7153,17 +7154,14 @@ Run("runtime.EllipsisTextField: a press is the field's, and being edited it scro
 {
     var text = BibuiStr.FromStrLit("A label far too long for a box this narrow");
     var edit = new TextEditState();
-    bool focused = false;
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() => runtime.Into(runtime.Column(), () =>
     {
         var box = runtime.Box();
         box.SizeX = SemanticSize.Pixels(120f);
         box.SizeY = SemanticSize.ChildrenSum();
-        BibuiWidget line;
         using (runtime.Parent(box))
-            line = runtime.EllipsisTextField("label", text, edit, focused, events: Bibui.Core.Runtime.TextField.SingleLineEvents);
-        if (line.Pressed) focused = true;
+            runtime.EllipsisTextField("label", text, edit, events: Bibui.Core.Runtime.TextField.SingleLineEvents);
     }), TestBuild.Window(400, 100));
     runtime.Step();
     runtime.Step();
@@ -7172,7 +7170,7 @@ Run("runtime.EllipsisTextField: a press is the field's, and being edited it scro
 
     runtime.DispatchClick("label");
     runtime.Step();
-    IsTrue(focused, "the press is the field's, by its id");
+    IsTrue(runtime.IsFocused("label"), "the press is the field's, by its id, and gives it focus");
     runtime.Step();
     IsTrue(!Dots(), "being edited, it has no \"…\"");
 });
@@ -7212,7 +7210,7 @@ Run("runtime.EllipsisTextField: \"…\" only when the line is wider than its box
             box = runtime.BoxFromId("label");
             box.SizeX = SemanticSize.Pixels(120f);
             box.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.Parent(box)) runtime.EllipsisTextField("line", Str(words), new TextEditState(), focused: false);
+            using (runtime.Parent(box)) runtime.EllipsisTextField("line", Str(words), new TextEditState());
         }), TestBuild.Window(400, 100));
         runtime.Step();
         runtime.Step();   // whether it fits is told by last frame's width
@@ -7242,10 +7240,11 @@ Run("runtime.TextField: a line wider than its box scrolls to the caret, and back
             field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
             field.SizeX = SemanticSize.Pixels(100f);
             using (runtime.Parent(field))
-                runtime.TextField("field", text, edit, focused: true);
+                runtime.TextField("field", text, edit);
         }
         return parent;
     }, TestBuild.Window(400, 300));
+    runtime.Focus("field");
     for (int i = 0; i < 3; i++) runtime.Step();   // laid out, then scrolled
     PressKey(runtime, Bibui.Core.Key.End);      // an edit-free move: the view eases rather than jumps
     for (int i = 0; i < 60; i++) runtime.Step();
@@ -7268,7 +7267,6 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
 {
     var text = BibuiStr.FromStrLit("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten");
     var edit = new TextEditState();
-    bool focused = false;
     var runtime = BibuiRuntime.Create();
     Box view = null!;
     runtime.SetBuild(() =>
@@ -7280,9 +7278,8 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
         using (runtime.Parent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
         using (runtime.SizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
         {
-            var field = runtime.MultilineTextField("field", text, edit, focused);
+            var field = runtime.MultilineTextField("field", text, edit);
             view = (Box)field.Node;
-            if (field.Pressed) focused = true;
         }
         return parent;
     }, TestBuild.Window(400, 300));
@@ -7290,7 +7287,7 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
     runtime.Step();
     ClickAt(runtime, 10f, 5f);
     runtime.Step();
-    IsTrue(focused, "a press focuses it");
+    IsTrue(runtime.IsFocused("field"), "a press focuses it");
     Eq(0f, view.TargetViewOffset.Y, "on the first line, nothing to scroll");
 
     for (int i = 0; i < 6; i++) { PressKey(runtime, Bibui.Core.Key.Down); runtime.Step(); }
@@ -7308,18 +7305,19 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
         $"the wheel moved it, and the caret did not pull it back: {view.TargetViewOffset.Y} after {scrolled}");
 });
 
-Run("runtime.TextField: typing edits the caller's buffer; Enter is left to the caller", () =>
+Run("runtime.TextField: typing edits the caller's buffer; Enter submits and gives focus up", () =>
 {
     var text = BibuiStr.FromStrLit("Hello");
     var edit = new TextEditState();
-    var (runtime, _, submitLeft) = MountField(text, edit);
+    var (runtime, focused, last) = MountField(text, edit);
     ClickAt(runtime, 200f, 5f);   // past the end
     runtime.Step();
     TypeInto(runtime, ", world");
     Eq("Hello, world", text.ToString());
     PressKey(runtime, Bibui.Core.Key.Enter);
     Eq("Hello, world", text.ToString(), "a single line takes no line break");
-    IsTrue(submitLeft(), "Submit is still the caller's");
+    IsTrue(last().Submitted, "Enter is reported as Submitted");
+    IsTrue(!focused(), "and the field no longer has focus");
 });
 
 Run("runtime.MultilineTextField: Enter ends the line, and Up goes back to it", () =>
@@ -7365,6 +7363,128 @@ Run("runtime.MultilineTextField: a press on the second row lands on the second l
     ClickAt(runtime, TextLayer.WidthFromChars(runtime.Fonts, "sec", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) + 0.5f, secondRowY);
     runtime.Step();
     Eq(11 + 3, edit.Cursor, "after \"sec\" on the second line");
+});
+
+// ── Focus ──────────────────────────────────────────────────────────────────
+
+// Two fields, a over b, and under them a box that takes presses but not focus;
+// what each reported in the last frame, by id. a is built while ShowA says.
+(BibuiRuntime Runtime, Dictionary<string, Interaction> Last, Action<bool> ShowA) MountFocus()
+{
+    var runtime = BibuiRuntime.Create();
+    var last = new Dictionary<string, Interaction>();
+    bool showA = true;
+    BibuiStr a = BibuiStr.FromStrLit("a"), b = BibuiStr.FromStrLit("b");
+    TextEditState aEdit = new(), bEdit = new();
+    runtime.SetBuild(() =>
+    {
+        var column = runtime.BoxFromId("column");
+        column.ChildLayoutAxis = LayoutAxis.Y;
+        column.Sized(Size.Px(300f), Size.Px(200f));
+        using (runtime.Parent(column))
+        {
+            using (runtime.Parent(runtime.Box().Sized(Size.Fill, Size.Px(30f))))
+                if (showA) last["a"] = runtime.TextField("a", a, aEdit).Interaction;
+            using (runtime.Parent(runtime.Box().Sized(Size.Fill, Size.Px(30f))))
+                last["b"] = runtime.TextField("b", b, bEdit).Interaction;
+            var plain = runtime.BoxFromId("plain", InteractionKinds.LeftPress);
+            plain.Sized(Size.Fill, Size.Px(30f));
+            last["plain"] = runtime.InteractionsFor(plain);
+        }
+        return column;
+    }, TestBuild.Window(400, 300));
+    runtime.Step();
+    runtime.Step();
+    return (runtime, last, v => showA = v);
+}
+
+Run("Focus: a press on a field gives it focus from the next frame, gained once", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    IsTrue(!last["a"].Focused, "not in the frame of the press");
+    runtime.Step();
+    IsTrue(last["a"].Focused && last["a"].FocusGained, "focused, and gained, the next frame");
+    runtime.Step();
+    IsTrue(last["a"].Focused && !last["a"].FocusGained, "still focused, not gained again");
+});
+
+Run("Focus: Enter submits a single line and gives focus up", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    PressKey(runtime, Bibui.Core.Key.Enter);
+    IsTrue(last["a"].Submitted, "submitted");
+    IsTrue(!runtime.IsFocused("a"), "no longer focused");
+});
+
+Run("Focus: Escape cancels and gives focus up", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    PressKey(runtime, Bibui.Core.Key.Escape);
+    IsTrue(last["a"].Cancelled, "cancelled");
+    IsTrue(!runtime.IsFocused("a"), "no longer focused");
+});
+
+Run("Focus: a press on another field moves focus, and is no cancel", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    ClickAt(runtime, 10f, 35f);
+    IsTrue(runtime.IsFocused("b") && !runtime.IsFocused("a"), "b has it, a does not");
+    runtime.Step();
+    IsTrue(!last["a"].Cancelled, "a was not cancelled");
+});
+
+Run("Focus: a press on nothing ends it", () =>
+{
+    var (runtime, _, _) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    ClickAt(runtime, 350f, 250f);
+    IsTrue(!runtime.IsFocused("a"), "no longer focused");
+});
+
+Run("Focus: a field not built for a frame loses it", () =>
+{
+    var (runtime, _, showA) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    showA(false);
+    runtime.Step();
+    showA(true);
+    runtime.Step();
+    IsTrue(!runtime.IsFocused("a"), "not focused when built again");
+});
+
+Run("Focus: runtime.Focus gives it from the next frame", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    runtime.Focus("b");
+    runtime.Step();
+    runtime.Step();
+    IsTrue(last["b"].Focused && last["b"].FocusGained, "focused, and gained");
+});
+
+Run("Focus: a box that does not claim the keyboard never takes it", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    ClickAt(runtime, 10f, 65f);
+    IsTrue(last["plain"].Clicked, "the press was its");
+    runtime.Step();
+    IsTrue(!last["plain"].Focused && !runtime.IsFocused("plain"), "but not focus");
+});
+
+Run("Focus: a field named \"\" never has it", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    Interaction last = default;
+    var text = BibuiStr.FromStrLit("x");
+    var edit = new TextEditState();
+    runtime.SetBuild(() => { var line = runtime.TextField("", text, edit); last = line.Interaction; return line.Node; },
+        TestBuild.Window(300, 60));
+    runtime.Step();
+    runtime.Step();
+    IsTrue(!last.Focused, "not focused, though no box is");
 });
 
 Run("BibuiPage.Fill types into a TextField as a person would", () =>
@@ -8041,7 +8161,8 @@ Run("A held Backspace keeps deleting in a text field", () =>
     var rt = BibuiRuntime.Create();
     var text = BibuiStr.FromStrLit("abcd");
     var edit = new TextEditState { Cursor = 4, Mark = 4 };
-    rt.SetBuild(() => rt.TextField("field", text, edit, focused: true).Node, TestBuild.Window(300, 60));
+    rt.SetBuild(() => rt.TextField("field", text, edit).Node, TestBuild.Window(300, 60));
+    rt.Focus("field");
     rt.Step();
     rt.Step([WindowEvent.KeyPress(Key.Backspace)]);
     rt.Step([WindowEvent.KeyRepeat(Key.Backspace)]);
