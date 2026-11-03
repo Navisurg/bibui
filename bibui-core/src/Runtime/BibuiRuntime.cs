@@ -267,7 +267,9 @@ public sealed partial class BibuiRuntime
 
         var t0 = _buildStarted;
         EndDropDowns(tree);
-        EndFocus();
+        // What the build decided is the next frame's focus.
+        if (_focusedNext != _focused) RequestFrame();
+        (_focusedLast, _focused, _focusedNext) = (_focused, _focusedNext, "");
         var t1 = Stopwatch.GetTimestamp();
         var interactiveBoxes = CollectInteractiveBoxes(tree, out bool transformed);
         // Every rect is solved before anything is recorded. A text measures

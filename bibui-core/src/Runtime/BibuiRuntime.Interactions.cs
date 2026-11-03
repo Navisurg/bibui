@@ -11,6 +11,36 @@ public sealed partial class BibuiRuntime
     private readonly Vector2[] _pressPos = new Vector2[3];
     private int _leftPressCount;   // the streak the left press being held carried
 
+    // Focus: the one box the keyboard goes to, by id; "" is no box, and a box
+    // named "" never has it. Decided during a build for the next frame and
+    // fixed for the whole of a frame, so every ask in a frame gets the same
+    // answer. A box that claims the keyboard takes it with a left press on it,
+    // and keeps it by asking again in a frame with no press: so a box no longer
+    // built, or a press anywhere else, ends it with nothing to clear, and a
+    // press on another such box moves it. A component that ends an edit itself
+    // (Enter, Escape) gives it up with Focus(""). Swapped at the end of the build.
+    private string _focused = "";       // the box with focus this frame
+    private string _focusedNext = "";   // next frame's: "" unless a box takes or keeps it, or Focus names one
+    private string _focusedLast = "";   // last frame's: a box focused now and not then has just gained it
+
+    /// <summary>
+    /// Gives focus to the box named <paramref name="id"/> from the next frame;
+    /// <c>""</c> gives it to none. For what the app knows and the pointer does
+    /// not: a shortcut that sends the keys to a search field, a palette that
+    /// opens with its query focused. A box claiming
+    /// <see cref="InteractionKinds.Keyboard"/> takes focus by itself on a press.
+    /// </summary>
+    public void Focus(string id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        if (_focusedNext == id) return;
+        _focusedNext = id;
+        RequestFrame();
+    }
+
+    /// <summary>Whether the box named <paramref name="id"/> has focus this frame: for a look drawn before the box asks (an input's outline). <c>""</c>: whether none has.</summary>
+    public bool IsFocused(string id) => id == _focused;
+
     private const InteractionKinds Pressable = InteractionKinds.LeftPress
         | InteractionKinds.MiddlePress
         | InteractionKinds.RightPress;
@@ -275,7 +305,20 @@ public sealed partial class BibuiRuntime
             interaction.DragDeltaY = mouseY - _pressPos[anchor].Y;
         }
 
-        if ((claims & InteractionKinds.Keyboard) != 0) AskFocus(id, ref interaction);
+        // Focus, for what can take it (for now, what claims the keyboard): whether
+        // it has it, and whether it takes it (a press on it) or keeps it (it has
+        // it, nothing else has taken it, and no press landed this frame,
+        // wherever the box that took the press was built).
+        if ((claims & InteractionKinds.Keyboard) != 0 && id.Length > 0)
+        {
+            interaction.Focused = id == _focused;
+            interaction.FocusGained = interaction.Focused && id != _focusedLast;
+            bool pressedThisFrame = false;
+            for (var ev = _firstEvent; ev is not null && !pressedThisFrame; ev = ev.Next)
+                pressedThisFrame = ev.Kind == BibUiEventKind.MouseDown;
+            if (interaction.Pressed) _focusedNext = id;
+            else if (interaction.Focused && _focusedNext.Length == 0 && !pressedThisFrame) _focusedNext = id;
+        }
         return interaction;
     }
 

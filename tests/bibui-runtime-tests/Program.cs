@@ -7474,6 +7474,19 @@ Run("Focus: a box that does not claim the keyboard never takes it", () =>
     IsTrue(!last["plain"].Focused && !runtime.IsFocused("plain"), "but not focus");
 });
 
+Run("Focus: a field named \"\" never has it", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    Interaction last = default;
+    var text = BibuiStr.FromStrLit("x");
+    var edit = new TextEditState();
+    runtime.SetBuild(() => { var line = runtime.TextField("", text, edit); last = line.Interaction; return line.Node; },
+        TestBuild.Window(300, 60));
+    runtime.Step();
+    runtime.Step();
+    IsTrue(!last.Focused, "not focused, though no box is");
+});
+
 Run("BibuiPage.Fill types into a TextField as a person would", () =>
 {
     var text = BibuiStr.FromStrLit("old value");
