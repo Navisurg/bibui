@@ -306,18 +306,20 @@ public sealed partial class BibuiRuntime
         }
 
         // Focus, for what can take it (for now, what claims the keyboard): whether
-        // it has it, and whether it takes it (a press on it) or keeps it (it has
-        // it, nothing else has taken it, and no press landed this frame,
-        // wherever the box that took the press was built).
+        // it has it, and whether it takes it or keeps it for the next frame.
         if ((claims & InteractionKinds.Keyboard) != 0 && id.Length > 0)
         {
             interaction.Focused = id == _focused;
             interaction.FocusGained = interaction.Focused && id != _focusedLast;
-            bool pressedThisFrame = false;
-            for (var ev = _firstEvent; ev is not null && !pressedThisFrame; ev = ev.Next)
-                pressedThisFrame = ev.Kind == BibUiEventKind.MouseDown;
-            if (interaction.Pressed) _focusedNext = id;
-            else if (interaction.Focused && _focusedNext.Length == 0 && !pressedThisFrame) _focusedNext = id;
+            if (interaction.Pressed) _focusedNext = id;   // a press on it takes focus
+            else if (interaction.Focused && _focusedNext.Length == 0)
+            {
+                // It keeps focus unless a press landed this frame, on a box built before or after it.
+                bool pressed = false;
+                for (var ev = _firstEvent; ev is not null && !pressed; ev = ev.Next)
+                    pressed = ev.Kind == BibUiEventKind.MouseDown;
+                if (!pressed) _focusedNext = id;
+            }
         }
         return interaction;
     }
