@@ -45,7 +45,7 @@ public sealed partial class TestPort : IDisposable
         {
             _runtime = runtime,
             _sendTimeoutMs = (int)Math.Clamp(options.SendTimeout.TotalMilliseconds, 1, int.MaxValue),
-            _schema = SchemaBytes(options),
+            _ops = OpsBytes(options),
         };
 
         //- the folder, the user's alone; then the socket in it
@@ -162,20 +162,76 @@ public sealed partial class TestPort : IDisposable
         return chars.Length == 0 ? "app" : new string(chars);
     }
 
-    // test.schema's answer, made once from the records the requests are read into:
-    // a request is any of the test.* commands, or one of the app's.
-    private static byte[] SchemaBytes(TestPortOptions options)
+    // test.ops' answer, made once: an entry per command the app's JSON declares, its wire name
+    // and input from its own JSON type, the one the app reads it with, so a client that fills
+    // in what the input asks for sends what the app accepts; and from its entry in the table,
+    // when there is one, its label, description, contracts and its arguments' descriptions.
+    private static byte[] OpsBytes(TestPortOptions options)
     {
         var buffer = new System.Buffers.ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer, Relaxed))
         {
-            writer.WriteStartObject();
-            writer.WriteStartArray("anyOf");
-            TestRequestJson.Default.TestRequest.GetJsonSchemaAsNode().WriteTo(writer);
-            options.Commands?.GetJsonSchemaAsNode().WriteTo(writer);
+            writer.WriteStartArray();
+            Commands(writer, options.Commands, [.. options.Ops ?? [], .. Bibui.Commands.BuiltinCmd.Ops]);   // the library's commands described too, when the app's JSON names them (Bibui.Commands.CmdJson)
             writer.WriteEndArray();
-            writer.WriteEndObject();
         }
         return buffer.WrittenSpan.ToArray();
+    }
+
+    // An entry per command commands declares, described by its row in ops.
+    private static void Commands(Utf8JsonWriter writer, System.Text.Json.Serialization.Metadata.JsonTypeInfo? commands, IReadOnlyList<Bibui.Commands.OpInfo>? ops)
+    {
+        foreach (var command in commands?.PolymorphismOptions?.DerivedTypes ?? [])
+        {
+            var wire = command.TypeDiscriminator?.ToString() ?? command.DerivedType.Name;
+            Bibui.Commands.OpInfo? op = null;
+            foreach (var o in ops ?? []) if (o.Type == command.DerivedType) op = o;
+            writer.WriteStartObject();
+            writer.WriteString("kind", "command");
+            writer.WriteString("wire", wire);
+            writer.WriteString("label", op?.Label ?? wire);
+            writer.WriteString("description", op?.Description ?? "");
+            writer.WriteBoolean("readOnly", op is not null && (op.Flags & Bibui.Commands.OpFlags.ReadOnly) != 0);
+            writer.WritePropertyName("input");
+            Input(commands!.Options.GetTypeInfo(command.DerivedType), op).WriteTo(writer);
+            writer.WriteEndObject();
+        }
+    }
+
+    // A command's input: its arguments, as its JSON type has them (types, what is required,
+    // whether anything else is taken), each with its description from the table.
+    private static System.Text.Json.Nodes.JsonObject Input(System.Text.Json.Serialization.Metadata.JsonTypeInfo type, Bibui.Commands.OpInfo? op)
+    {
+        var input = type.GetJsonSchemaAsNode(new JsonSchemaExporterOptions
+        {
+            TransformSchemaNode = (context, node) =>
+            {
+                if (context.PropertyInfo is not { } argument) return node;
+                // A type that writes its own JSON has the schema true (anything): an object here,
+                // so it can carry a description. A handle is a string, "#7", and says which kind
+                // of node it names.
+                var schema = node as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+                var arg = op?.Arg(argument.Name);
+                bool handle = context.TypeInfo.Type == typeof(Bibui.Commands.NodeId) || arg?.Kind is not null;   // a typed handle says its kind
+                if (handle)
+                {
+                    schema["type"] = "string";
+                    schema["pattern"] = "^#?[0-9]+$";
+                }
+                bool expression = context.TypeInfo.Type == typeof(Bibui.Commands.Expr);   // its JSON is its text (ExprJson)
+                if (context.TypeInfo.Type == typeof(Bibui.Commands.ViewRuleType)) schema["type"] = "string";   // its JSON is its name (ViewRuleTypeJson)
+                if (expression) schema["type"] = "string";
+                if (arg is { Description.Length: > 0 }) schema["description"] = arg.Description;
+                else if (handle)
+                    schema["description"] = $"A handle to a {arg?.Kind ?? "node"}, as model.get answers it: '#' and its id. It names nothing once that node is gone.";
+                else if (expression)
+                    schema["description"] = "An expression, its text: 2, \"text\", $7.title, board(it.case).";
+                if (arg?.Kind is { } kind) schema["nodeKind"] = kind;
+                return schema;
+            },
+        }).AsObject();
+        input["type"] = "object";   // the exporter allows null; a command's arguments never are
+        input["properties"] ??= new System.Text.Json.Nodes.JsonObject();   // a command without arguments says so, not nothing
+        return input;
     }
 }

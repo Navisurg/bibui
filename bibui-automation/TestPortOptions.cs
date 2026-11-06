@@ -19,11 +19,20 @@ public sealed class TestPortOptions
     public string? Directory { get; init; }
 
     /// <summary>
-    /// The app's commands, as the type its <c>$cmd</c> names are declared on, for
-    /// <c>test.schema</c>: its JSON schema is given beside the <c>test.*</c> commands'.
-    /// Null gives the <c>test.*</c> commands only.
+    /// The app's commands, as the type its <c>$cmd</c> names are declared on (its
+    /// source-generated <c>JsonTypeInfo</c>): <c>test.ops</c> lists every command it
+    /// declares, with its wire name and its input, as the app reads it. Null lists none.
     /// </summary>
     public JsonTypeInfo? Commands { get; init; }
+
+    /// <summary>
+    /// What the app's commands are: their table, as Bibui.Commands' cmdgen writes it from
+    /// their records (<c>&lt;Set&gt;Ops.All</c>). It gives <c>test.ops</c>' entries their label,
+    /// description and whether they only read, and their arguments'
+    /// descriptions, so a client knows what a command does and not only what it takes.
+    /// Without it, a command's label is its wire name.
+    /// </summary>
+    public IReadOnlyList<Bibui.Commands.OpInfo>? Ops { get; init; }
 
     /// <summary>The request buffer: the longest line a client may send.</summary>
     public int RequestBytes { get; init; } = 1 << 20;

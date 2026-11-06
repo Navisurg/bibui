@@ -120,8 +120,15 @@ public sealed class Port : IDisposable
     {
         var answer = JsonNode.Parse(Send(line))!;
         if (answer["ok"]?.GetValue<bool>() != true) throw new PortException(answer["error"]?.GetValue<string>() ?? "Refused.");
+        if (answer["result"] is JsonObject { } result && result["diff"] is not null) Made.Add(result);
         return answer["result"];
     }
+
+    /// <summary>
+    /// What the requests asked since it was last cleared did to the app's model: each answer that
+    /// said (a command's, or a frame of input's), <c>{"from":40,"gen":41,"diff":[...]}</c>, in order.
+    /// </summary>
+    public readonly List<JsonObject> Made = [];
 
     public JsonNode? Ask(JsonObject request) => Ask(request.ToJsonString(Relaxed));
 
@@ -148,7 +155,8 @@ public sealed class Port : IDisposable
     /// <summary>The node with this id, in tree order, or null.</summary>
     public static PortNode? Find(PortNode node, string id)
     {
-        if (node.Id == id) return node;
+        // As the outline prints it too: #23#7/panel.close is the box 23#7/panel.close.
+        if (node.Id == id || (id.StartsWith('#') && node.Id == id[1..])) return node;
         foreach (var child in node.Children)
             if (Find(child, id) is { } found) return found;
         return null;

@@ -2,7 +2,6 @@ using System.Buffers;
 using System.Net.Sockets;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 using Bibui.Core;
 using Bibui.Core.Runtime;
 
@@ -14,7 +13,7 @@ public sealed partial class TestPort
 {
     // Set by Open.
     private int _sendTimeoutMs = 1000;
-    private byte[] _schema = [];
+    private byte[] _ops = [];
 
     // The loop's: a reply is written through these, allocated once.
     private SocketWriter? _out;
@@ -37,20 +36,27 @@ public sealed partial class TestPort
     }
 
     /// <summary>
+    /// What the app command or the events in hand answer with: <paramref name="json"/>, one JSON
+    /// value, written as the answer's <c>result</c> (<c>{"ok":true,"result":...}</c>). For an app
+    /// command that reads rather than changes (its model, at a generation), or for a command or
+    /// input that says what it did. Copied: the span may be reused once this returns. Ignored for
+    /// any other request.
+    /// </summary>
+    public void ResultCmd(ReadOnlySpan<byte> json)
+    {
+        if (!_pulled || _heldKind is not (TestCmdKind.App or TestCmdKind.Events)) return;
+        if (json.Length > _result.Length) _result = new byte[Math.Max(json.Length, _result.Length * 2)];
+        json.CopyTo(_result);
+        _resultLength = json.Length;
+    }
+
+    /// <summary>
     /// Answers the request in hand, at the end of the frame, after the build. Events
     /// and app commands are answered once <paramref name="settled"/>: when nothing
     /// they set off is still pending in the app; until then the port asks for another
-    /// frame and answers in a later one. <c>test.state</c> answers that the app
-    /// reports no state; an app that has one passes it to the other overload.
+    /// frame and answers in a later one.
     /// </summary>
-    public void AnswerCmds(bool settled = true) => AnswerCmds<object?>(settled, null, null);
-
-    /// <summary>
-    /// Answers the request in hand, as <see cref="AnswerCmds(bool)"/>; <c>test.state</c>
-    /// answers <paramref name="state"/>, written with <paramref name="stateType"/> (the
-    /// app's source-generated JSON, so nothing is reflected).
-    /// </summary>
-    public void AnswerCmds<TState>(bool settled, TState state, JsonTypeInfo<TState>? stateType)
+    public void AnswerCmds(bool settled = true)
     {
         if (!_pulled) return;
         if (_heldKind is TestCmdKind.Events or TestCmdKind.App && !settled)
@@ -60,13 +66,13 @@ public sealed partial class TestPort
         }
 
         var client = Volatile.Read(ref _client);
-        if (client is not null) Write(client, state, stateType);
+        if (client is not null) Write(client);
         Release();
     }
 
     // ── Writing an answer ──────────────────────────────────────────────────
 
-    private void Write<TState>(Socket client, TState state, JsonTypeInfo<TState>? stateType)
+    private void Write(Socket client)
     {
         _out ??= new SocketWriter();
         _out.Start(client);
@@ -82,26 +88,27 @@ public sealed partial class TestPort
                 case TestCmdKind.None:
                     Error(json, _heldError ?? "Refused.");
                     break;
-                case TestCmdKind.Events:
-                case TestCmdKind.App:
                 case TestCmdKind.Screenshot:          // written by the app, or refused by it
                     json.WriteBoolean("ok", true);
+                    break;
+                case TestCmdKind.Events:
+                case TestCmdKind.App:
+                    json.WriteBoolean("ok", true);
+                    if (_resultLength > 0)
+                    {
+                        json.WritePropertyName("result");
+                        json.WriteRawValue(_result.AsSpan(0, _resultLength), skipInputValidation: true);
+                    }
                     break;
                 case TestCmdKind.Tree:
                     json.WriteBoolean("ok", true);
                     json.WritePropertyName("result");
                     WriteTree(json, _runtime?.LastTree);
                     break;
-                case TestCmdKind.State:
-                    if (stateType is null) { Error(json, "This app reports no state."); break; }
+                case TestCmdKind.Ops:
                     json.WriteBoolean("ok", true);
                     json.WritePropertyName("result");
-                    JsonSerializer.Serialize(json, state, stateType);
-                    break;
-                case TestCmdKind.Schema:
-                    json.WriteBoolean("ok", true);
-                    json.WritePropertyName("result");
-                    json.WriteRawValue(_schema, skipInputValidation: true);
+                    json.WriteRawValue(_ops, skipInputValidation: true);
                     break;
             }
             json.WriteEndObject();

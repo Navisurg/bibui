@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Bibui.Automation;
+using Bibui.Commands;
 using Bibui.Core;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
@@ -51,15 +52,13 @@ static class TestPortSocketTests
             var add = Find(tree["result"]!, "add");
             IsTrue(add is not null && Claims(add) == "LeftPress", "the tree holds the button, claiming a press");
 
-            var schema = client.Ask("{\"$cmd\":\"test.schema\"}").ToJsonString();
-            IsTrue(schema.Contains("\"test.events\"") && schema.Contains("\"counter.set\""), "the schema names the test commands and the app's");
+            var ops = client.Ask("{\"$cmd\":\"test.ops\"}")["result"]!.AsArray();
+            IsTrue(ops.Any(o => o!["wire"]!.GetValue<string>() == "counter.set") && ops.Any(o => o!["wire"]!.GetValue<string>() == "counter.increment"),
+                "the app's commands, listed from its JSON alone");
 
-            var state = client.Ask("{\"$cmd\":\"test.state\"}");
-            Eq(0, state["result"]!["Count"]!.GetValue<int>(), "the state");
-            IsTrue(state["result"]!["Blob"] is null, "a [JsonIgnore] field is left out");
-
-            IsTrue(Ok(client.Ask("{\"$cmd\":\"counter.set\",\"Value\":5}")), "an app command");
-            Eq(5, client.Ask("{\"$cmd\":\"test.state\"}")["result"]!["Count"]!.GetValue<int>(), "and its effect");
+            var set = client.Ask("{\"$cmd\":\"counter.set\",\"Value\":5}");
+            IsTrue(Ok(set), "an app command");
+            Eq(5, Count(set), "answered with its effect, by the app");
 
             var unknown = client.Ask("{\"$cmd\":\"test.nope\"}");
             IsTrue(!Ok(unknown) && unknown["error"]!.GetValue<string>().Contains("test.nope"), $"a refusal naming the command: {unknown.ToJsonString()}");
@@ -69,6 +68,47 @@ static class TestPortSocketTests
             var png = Path.Combine(app.Folder, "frame.png");
             IsTrue(Ok(client.Ask("{\"$cmd\":\"test.screenshot\",\"path\":" + JsonSerializer.Serialize(png) + "}")), "a screenshot");
             IsTrue(File.ReadAllBytes(png).AsSpan().StartsWith((ReadOnlySpan<byte>)[0x89, (byte)'P', (byte)'N', (byte)'G']), "written as a PNG");
+        });
+
+        run("TestPort: test.ops lists what each command is, and its input from its JSON type", () =>
+        {
+            using var app = new CounterApp(ops:
+            [
+                new("counter.set", "Set count", "Sets the count to a value.", OpKind.Command, OpFlags.None,
+                    typeof(CounterCmd.Set), [new("Value", "int", "The new count.")]),
+                new("counter.increment", "Add one", "", OpKind.Command, OpFlags.None, typeof(CounterCmd.Increment), []),
+            ]);
+            using var client = app.Connect();
+            var ops = client.Ask("{\"$cmd\":\"test.ops\"}")["result"]!.AsArray();
+            Eq(2, ops.Count, "an entry per command");
+            JsonNode Op(string wire) => ops.Single(o => o!["wire"]!.GetValue<string>() == wire)!;
+            var set = Op("counter.set");
+            Eq("command", set["kind"]?.GetValue<string>(), "its kind");
+            Eq("counter.set", set["wire"]?.GetValue<string>(), "its wire name");
+            Eq("Set count", set["label"]?.GetValue<string>(), "its label");
+            Eq("Sets the count to a value.", set["description"]?.GetValue<string>(), "its description");
+            Eq(false, set["readOnly"]?.GetValue<bool>(), "its contract: not read-only");
+            var input = set["input"]!;
+            Eq("object", input["type"]?.GetValue<string>(), "its input, an object");
+            Eq("integer", input["properties"]!["Value"]!["type"]?.GetValue<string>(), "its argument's type, from its JSON type");
+            Eq("The new count.", input["properties"]!["Value"]!["description"]?.GetValue<string>(), "its argument's description, from the table");
+            Eq("Value", input["required"]![0]!.GetValue<string>(), "what is required");
+            // The counter's JSON takes unknown members, so its input does not refuse them either:
+            // the input says what the app's deserializer accepts, no more.
+            IsTrue(input["additionalProperties"] is null, "what the app's JSON accepts, no stricter");
+            IsTrue(Op("counter.increment")["input"]!["properties"]!.AsObject().Count == 0, "a command without arguments takes none");
+        });
+
+        run("TestPort: without a table, test.ops lists the commands from the app's JSON: wire names and inputs", () =>
+        {
+            using var app = new CounterApp();
+            using var client = app.Connect();
+            var set = client.Ask("{\"$cmd\":\"test.ops\"}")["result"]!.AsArray()
+                .Single(o => o!["wire"]!.GetValue<string>() == "counter.set")!;
+            Eq("counter.set", set["label"]?.GetValue<string>(), "its wire name for a label");
+            Eq("", set["description"]?.GetValue<string>(), "no description");
+            Eq(false, set["readOnly"]?.GetValue<bool>(), "no contracts");
+            Eq("integer", set["input"]!["properties"]!["Value"]!["type"]?.GetValue<string>(), "its input, all the same");
         });
 
         run("TestPort: a box's claims are written one name per bit, and answers write ' and é as themselves", () =>
@@ -81,14 +121,12 @@ static class TestPortSocketTests
             IsTrue(refusal.Contains("test.nope'é"), $"unescaped: {refusal}");
         });
 
-        run("TestPort: an app with no renderer or no state says so", () =>
+        run("TestPort: an app with no renderer says so", () =>
         {
-            using var app = new CounterApp(draw: false, state: false);
+            using var app = new CounterApp(draw: false);
             using var client = app.Connect();
             var shot = client.Ask("{\"$cmd\":\"test.screenshot\",\"path\":\"x.png\"}");
             IsTrue(!Ok(shot) && shot["error"]!.GetValue<string>().Contains("no screenshots"), "no screenshot");
-            var state = client.Ask("{\"$cmd\":\"test.state\"}");
-            IsTrue(!Ok(state) && state["error"]!.GetValue<string>().Contains("no state"), "no state");
         });
 
         run("TestPort: a click is answered once the command it set off has run", () =>
@@ -102,18 +140,17 @@ static class TestPortSocketTests
 
             IsTrue(Ok(client.Ask(Events("mouse_move"))), "move");
             IsTrue(Ok(client.Ask(Events("mouse_down"))), "press");
-            IsTrue(Ok(client.Ask(Events("mouse_up"))), "release");
-            Eq(1, client.Ask("{\"$cmd\":\"test.state\"}")["result"]!["Count"]!.GetValue<int>(), "the release's answer came after the increment ran");
+            Eq(1, Count(client.Ask(Events("mouse_up"))), "the release's answer came after the increment ran");
         });
 
         run("TestPort: lines sent without waiting are answered in order", () =>
         {
             using var app = new CounterApp();
             using var client = app.Connect();
-            client.Send("{\"$cmd\":\"counter.set\",\"Value\":1}\n{\"$cmd\":\"counter.increment\"}\r\n\n{\"$cmd\":\"test.state\"}\n");
-            IsTrue(Ok(client.Read()), "the first");
-            IsTrue(Ok(client.Read()), "the second (an empty line between asks nothing)");
-            Eq(2, client.Read()["result"]!["Count"]!.GetValue<int>(), "the third saw both");
+            client.Send("{\"$cmd\":\"counter.set\",\"Value\":1}\n{\"$cmd\":\"counter.increment\"}\r\n\n{\"$cmd\":\"counter.increment\"}\n");
+            Eq(1, Count(client.Read()), "the first");
+            Eq(2, Count(client.Read()), "the second (an empty line between asks nothing)");
+            Eq(3, Count(client.Read()), "the third saw both");
         });
 
         run("TestPort: a line longer than the request buffer is refused, and the next one works", () =>
@@ -122,7 +159,7 @@ static class TestPortSocketTests
             using var client = app.Connect();
             var refused = client.Ask("{\"$cmd\":\"counter.set\",\"Value\":1,\"pad\":\"" + new string('x', 200) + "\"}");
             IsTrue(!Ok(refused) && refused["error"]!.GetValue<string>().Contains("longer than the request buffer"), "refused");
-            IsTrue(Ok(client.Ask("{\"$cmd\":\"test.state\"}")), "the next request");
+            IsTrue(Ok(client.Ask("{\"$cmd\":\"test.ops\"}")), "the next request");
         });
 
         run("TestPort: a client that stops reading is dropped after the send timeout, and the loop goes on", () =>
@@ -132,7 +169,7 @@ static class TestPortSocketTests
             stalled.Send("{\"$cmd\":\"test.tree\"}\n");          // megabytes, never read
             var watch = Stopwatch.StartNew();
             using var next = app.Connect();                     // waits for the port to drop the first
-            Eq(0, next.Ask("{\"$cmd\":\"test.state\"}")["result"]!["Count"]!.GetValue<int>(), "the next client is served");
+            Eq(1, Count(next.Ask("{\"$cmd\":\"counter.increment\"}")), "the next client is served");
             IsTrue(watch.Elapsed < TimeSpan.FromSeconds(5), $"soon after the timeout: {watch.Elapsed.TotalMilliseconds:F0} ms");
             stalled.Dispose();
         });
@@ -142,9 +179,9 @@ static class TestPortSocketTests
             using var app = new CounterApp();
             using (var leaving = app.Connect()) leaving.Send("{\"$cmd\":\"test.tree\"}\n");
             var first = app.Connect();
-            IsTrue(Ok(first.Ask("{\"$cmd\":\"test.state\"}")), "the first is served");
+            IsTrue(Ok(first.Ask("{\"$cmd\":\"test.ops\"}")), "the first is served");
             using var second = app.Connect();
-            second.Send("{\"$cmd\":\"test.state\"}\n");
+            second.Send("{\"$cmd\":\"test.ops\"}\n");
             IsTrue(!second.TryRead(TimeSpan.FromMilliseconds(300), out _), "the second waits");
             first.Dispose();
             IsTrue(second.TryRead(TimeSpan.FromSeconds(5), out var answer) && Ok(answer!), "then is served");
@@ -166,8 +203,8 @@ static class TestPortSocketTests
         {
             using var app = new CounterApp(rows: 8000);
             using var client = app.Connect();
-            for (int i = 0; i < 3; i++) { app.Time(client, "{\"$cmd\":\"test.state\"}", out _); app.Time(client, "{\"$cmd\":\"test.tree\"}", out _); }   // warm
-            var small = app.Time(client, "{\"$cmd\":\"test.state\"}", out _);
+            for (int i = 0; i < 3; i++) { app.Time(client, "{\"$cmd\":\"counter.increment\"}", out _); app.Time(client, "{\"$cmd\":\"test.tree\"}", out _); }   // warm
+            var small = app.Time(client, "{\"$cmd\":\"counter.increment\"}", out _);
             var big = app.Time(client, "{\"$cmd\":\"test.tree\"}", out var answer);
             var tree = answer.ToJsonString().Length;
             IsTrue(tree > 4 * 64 * 1024 && Ok(answer), $"one well-formed answer, larger than four pieces: {tree} bytes");
@@ -178,6 +215,9 @@ static class TestPortSocketTests
     }
 
     static bool Ok(JsonNode answer) => answer["ok"]?.GetValue<bool>() == true;
+
+    // The count a command or input answered with: the counter's, after it ran.
+    static int Count(JsonNode answer) => answer["result"]!["count"]!.GetValue<int>();
 
     // A tree node's claims, space-separated, or "" for none.
     static string Claims(JsonNode node) =>
@@ -226,21 +266,23 @@ static class TestPortSocketTests
         private readonly SkiaCpuRenderer? _cpu;    // what screenshots are drawn with; none, and they are refused
         private readonly int _rows;
         private readonly bool _list;
-        private readonly bool _reportsState;
         private readonly Thread _loop;
         private volatile bool _stopping;
 
         // list: a scrolling list of buttons below the counter, 100 px tall and far
         // taller inside: row-i sets the count to 100 + i.
-        public CounterApp(bool draw = true, bool state = true, int requestBytes = 1 << 16, int rows = 0, TimeSpan? sendTimeout = null, bool list = false)
+        // ops: the counter's commands' table, for test.ops.
+        public CounterApp(bool draw = true, int requestBytes = 1 << 16, int rows = 0, TimeSpan? sendTimeout = null, bool list = false,
+            IReadOnlyList<OpInfo>? ops = null)
         {
-            (_rows, _list, _reportsState, _cpu) = (rows, list, state, draw ? new SkiaCpuRenderer() : null);
+            (_rows, _list, _cpu) = (rows, list, draw ? new SkiaCpuRenderer() : null);
             _runtime.SetTheme(ThemeRegistry.Load("bibui-dark"));
             Port = TestPort.Open(_runtime, new TestPortOptions
             {
                 Name = "counter",
                 Directory = Folder,
                 Commands = CounterJson.Default.CounterCmd,
+                Ops = ops,
                 RequestBytes = requestBytes,
                 SendTimeout = sendTimeout ?? TimeSpan.FromSeconds(1),
             });
@@ -304,8 +346,9 @@ static class TestPortSocketTests
 
                 //- end of frame: answer, once settled
                 watch.Restart();
-                if (_reportsState) Port.AnswerCmds(_pending.Count == 0, _state, CounterJson.Default.CounterState);
-                else Port.AnswerCmds(_pending.Count == 0);
+                // A command or input says what it did: the count after it.
+                Port.ResultCmd(Encoding.UTF8.GetBytes($"{{\"count\":{_state.Count}}}"));
+                Port.AnswerCmds(_pending.Count == 0);
                 if (pulled && _pending.Count == 0)
                 {
                     LastAnswer = watch.Elapsed;
@@ -353,11 +396,10 @@ static class TestPortSocketTests
     }
 }
 
-// The counter app's state and commands, as the app's own source-generated JSON.
+// The counter app's state, and its commands as the app's own source-generated JSON.
 sealed class CounterState
 {
     public int Count;
-    [JsonIgnore] public byte[] Blob = new byte[1024];
 }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$cmd")]
@@ -370,6 +412,5 @@ abstract record CounterCmd
 }
 
 [JsonSourceGenerationOptions(IncludeFields = true, AllowOutOfOrderMetadataProperties = true)]
-[JsonSerializable(typeof(CounterState))]
 [JsonSerializable(typeof(CounterCmd))]
 partial class CounterJson : JsonSerializerContext;

@@ -14,15 +14,17 @@ public enum TestCmdKind
     Events,
     /// <summary><c>test.tree</c>: the UI tree after this frame.</summary>
     Tree,
-    /// <summary><c>test.state</c>: the app's state after this frame.</summary>
-    State,
-    /// <summary><c>test.schema</c>: the <c>test.*</c> commands and the app's.</summary>
-    Schema,
     /// <summary>
-    /// <c>test.screenshot</c>: the app writes the frame on screen as a PNG at
-    /// <see cref="TestCmd.Path"/>, drawn with a renderer of its choosing, or refuses
-    /// it (<see cref="TestPort.RefuseCmd"/>). At the top of the frame the last frame's
-    /// draw list is still the runtime's, so it is the frame on screen that is drawn.
+    /// <c>test.ops</c>: what the app can be asked to do, answered by the port: an entry per
+    /// operation (its commands, from <see cref="TestPortOptions.Commands"/>), with its kind,
+    /// wire name and input, and from <see cref="TestPortOptions.Ops"/> its label, description
+    /// and contracts.
+    /// </summary>
+    Ops,
+    /// <summary>
+    /// <c>test.screenshot</c>: the app writes the frame the window shows as a PNG at
+    /// <see cref="TestCmd.Path"/>, read between <c>app.Draw</c> and <c>app.Present</c>, or
+    /// refuses it (<see cref="TestPort.RefuseCmd"/>).
     /// </summary>
     Screenshot,
     /// <summary>Any other name: one of the app's commands, as sent, in <see cref="TestCmd.Json"/>.</summary>
@@ -108,6 +110,8 @@ public sealed partial class TestPort
     private TestCmdKind _heldKind;
     private string? _heldError;                              // None: why it was refused
     private string? _heldPath;                               // Screenshot: where to write
+    private byte[] _result = new byte[4096];                 // App: what it answers with, set by ResultCmd; kept and grown, never shrunk
+    private int _resultLength;                               // 0: it answers with nothing
 
     // A port with no socket: the request buffer and what reads it, for Open, and for
     // tests that publish lines themselves.
@@ -179,7 +183,7 @@ public sealed partial class TestPort
     internal void Release()
     {
         _pulled = false;
-        (_heldKind, _heldError, _heldPath) = (TestCmdKind.None, null, null);
+        (_heldKind, _heldError, _heldPath, _resultLength) = (TestCmdKind.None, null, null, 0);
         Volatile.Write(ref _requestLength, 0);
         _bufferFree.Set();
     }
@@ -205,8 +209,7 @@ public sealed partial class TestPort
         {
             EventsRequest e => Events(e.Events),
             TreeRequest => new TestCmd(TestCmdKind.Tree),
-            StateRequest => new TestCmd(TestCmdKind.State),
-            SchemaRequest => new TestCmd(TestCmdKind.Schema),
+            OpsRequest => new TestCmd(TestCmdKind.Ops),
             ScreenshotRequest { Path.Length: > 0, Id: null } s => new TestCmd(TestCmdKind.Screenshot, path: s.Path),
             ScreenshotRequest { Path.Length: > 0, Id: { } id } s => NodeRect(_runtime?.LastTree, id) is { } rect
                 ? new TestCmd(TestCmdKind.Screenshot, path: s.Path, region: rect)

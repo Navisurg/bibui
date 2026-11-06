@@ -3,15 +3,13 @@ using System.Text.Json.Serialization;
 namespace Bibui.Automation;
 
 // The test.* requests as they are written on the wire: one record per command, read
-// by the JSON source generator and exported as test.schema's half, so the names and
-// arguments are said once. An app's own commands are not in here: the port hands
-// those over as bytes, for the app to read.
+// by the JSON source generator. An app's own commands are not in here: the port hands
+// those over as bytes, for the app to read, and lists them in test.ops.
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$cmd")]
 [JsonDerivedType(typeof(EventsRequest), "test.events")]
 [JsonDerivedType(typeof(TreeRequest), "test.tree")]
-[JsonDerivedType(typeof(StateRequest), "test.state")]
-[JsonDerivedType(typeof(SchemaRequest), "test.schema")]
+[JsonDerivedType(typeof(OpsRequest), "test.ops")]
 [JsonDerivedType(typeof(ScreenshotRequest), "test.screenshot")]
 internal abstract record TestRequest;
 
@@ -21,11 +19,8 @@ internal sealed record EventsRequest(EventJson[] Events) : TestRequest;
 /// <summary>The UI tree the frame laid out.</summary>
 internal sealed record TreeRequest : TestRequest;
 
-/// <summary>The app's state after the frame.</summary>
-internal sealed record StateRequest : TestRequest;
-
-/// <summary>The commands a client may send: these, and the app's.</summary>
-internal sealed record SchemaRequest : TestRequest;
+/// <summary>What the app can be asked to do: an entry per operation.</summary>
+internal sealed record OpsRequest : TestRequest;
 
 /// <summary>
 /// The frame as a PNG, written by the app at <see cref="Path"/>: the whole frame, or

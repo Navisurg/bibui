@@ -14,7 +14,7 @@ Open a `TestPort`, and call two things a frame: `TryPullCmd` at the top, and
 using Bibui.Automation;
 
 using var port = TestPort.Open(runtime, new TestPortOptions { Name = "counter" });
-using var cpu = new SkiaCpuRenderer();   // what screenshots are drawn with: any renderer into memory
+string? shot = null; RectF? region = null;   // a screenshot asked for, taken from this frame
 
 app.Frame = Frame;
 while (app.WaitForFrame()) Frame();
@@ -25,15 +25,25 @@ void Frame()
         switch (cmd.Kind)
         {
             case TestCmdKind.Events: app.Events.AddRange(cmd.Events); break;
-            case TestCmdKind.Screenshot: File.WriteAllBytes(cmd.Path!, FramePixels.Png(runtime, cpu.Draw, cmd.Region)); break;
+            case TestCmdKind.Screenshot: (shot, region) = (cmd.Path, cmd.Region); break;
             case TestCmdKind.App: /* the app's own command: cmd.Json */ break;
         }
 
     runtime.BeginBuild(app.Window.Frame, app.Events);
     Build();
     runtime.EndBuild();
-    port.AnswerCmds();
+    app.Draw();
+    if (shot is not null)   // the frame drawn, read before it is shown
+    {
+        var (w, h) = (runtime.Window.Width, runtime.Window.Height);
+        var bgra = GC.AllocateArray<byte>(w * h * 4, pinned: true);
+        var into = new RasterPixels(Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), w, h, w * 4);
+        if (app.ReadPixels(into)) File.WriteAllBytes(shot, FramePixels.Png(bgra, w, h, runtime.ScaleFactor, region));
+        else port.RefuseCmd("The window changed size: ask again.");
+        shot = null;
+    }
     app.Present();
+    port.AnswerCmds();
 }
 ```
 
@@ -41,21 +51,38 @@ void Frame()
   the user can enter, readable only by the user. `port.SocketPath` says where.
 - **Events** are what a window would report; adding them to the frame's events
   is all it takes.
-- **Screenshots are the app's**: at the top of the frame the last frame's draw
-  list is still the runtime's, so the frame on screen is drawn, with any renderer
-  that draws into memory (`SkiaCpuRenderer`, `ManagedRenderer`). An app that takes
-  none refuses them: `port.RefuseCmd("…")`.
+- **Screenshots are the app's**: the frame the window shows, read between
+  `app.Draw()` and `app.Present()` (`app.ReadPixels`), so it holds what the
+  window's renderer drew, textures too. An app that takes none refuses them:
+  `port.RefuseCmd("…")`.
 - **The app's own commands** come as bytes (`cmd.Json`), for the app's own
   deserializer; one it cannot read is refused with `port.RefuseCmd`. With
-  `TestPortOptions.Commands` (its source-generated `JsonTypeInfo`), `test.schema`
-  describes them.
-- **Answers wait for the app to settle**: `port.AnswerCmds(settled, state, stateType)`
-  answers events and app commands only once `settled`, when nothing they set off
-  is still pending, and `test.state` with the app's state.
+  `TestPortOptions.Commands` (its source-generated `JsonTypeInfo`), `test.ops`
+  lists them: an entry per command with its `kind`, `wire` name and `input` (its
+  arguments, as the app's JSON reads them). With `TestPortOptions.Ops` (their
+  table, from Bibui.Commands) each entry also says what the command is: its
+  `label`, `description`, its arguments' descriptions, and whether it only
+  reads (`readOnly`), the shape a CLI or an MCP tool needs.
+  `bibui-port ops` prints it, and `bibui-port cmd` checks a command against it
+  before sending it.
+- **Answers wait for the app to settle**: `port.AnswerCmds(settled)` answers
+  events and app commands only once `settled`, when nothing they set off is
+  still pending. What a command or input did, the app says in its answer:
+  `port.ResultCmd(json)` before `AnswerCmds` makes it `{"ok":true,"result":…}`.
+  There is no request for the app's whole state: a client reads what the app
+  chooses to answer, not its runtime.
+- **An app with a Bibui.Commands model** can open a `TestSession` instead of a
+  bare port. It does the per-frame work for the app (events into the frame,
+  screenshots, the agent cursor) and answers four requests from the model
+  itself: `model.get` (a node and what is under it, at the current generation
+  or a logged one), `model.log` (the commands that made the generations),
+  `model.schema` (each kind of node, its fields and its row of commands) and
+  `model.text` (the app drawn as text through its lenses). A command's answer
+  says what it changed in the model.
 
 The port has one thread of its own, which only reads the socket and hands each
 line to the loop. Everything else happens on the loop: only it writes to the
-socket, the tree and the state are read between frames, and nothing is shared.
+socket, the tree is read between frames, and nothing is shared.
 
 ## From a client
 
@@ -64,11 +91,14 @@ One JSON line per request, one answer line back:
 | Request | Answer |
 |---|---|
 | `{"$cmd":"test.tree"}` | the UI tree the last frame laid out: each node's kind, id, rect, text, and claims |
-| `{"$cmd":"test.state"}` | the app's state |
-| `{"$cmd":"test.schema"}` | a JSON schema of every request: the `test.*` ones and the app's |
-| `{"$cmd":"test.events","events":[…]}` | `{"ok":true}`, once the events and what they set off have run |
+| `{"$cmd":"test.ops"}` | what the app can be asked to do, an entry per operation: `kind`, `wire`, `label`, `description`, `readOnly`, `input` |
+| `{"$cmd":"test.events","events":[…]}` | `{"ok":true}`, once the events and what they set off have run; with the app's `result`, if it gives one |
 | `{"$cmd":"test.screenshot","path":"/tmp/frame.png"}` | `{"ok":true}`, the PNG written by the app; with `"id"`, only that node's rect (`cmd.Region`) |
-| an app command, e.g. `{"$cmd":"counter.set","Value":10}` | `{"ok":true}`, once it has run |
+| an app command, e.g. `{"$cmd":"counter.set","Value":10}` | `{"ok":true}`, once it has run; with the app's `result`, if it gives one |
+| `{"$cmd":"model.get","path":"panels/7","depth":2}` | with a `TestSession` and a model: the node at the path and what is under it |
+| `{"$cmd":"model.log","since":12}` | with a model: the commands that made each generation after `since` |
+| `{"$cmd":"model.schema"}` | with a schema: each kind of node, its fields and its row |
+| `{"$cmd":"model.text"}` | with a text view: the app drawn as text, through its lenses |
 
 An event is `{"kind":…}` with what its kind needs: `mouse_move` (`x`, `y`),
 `mouse_down` and `mouse_up` (`x`, `y`, `button`: `left`, `right` or `middle`),
@@ -86,7 +116,6 @@ read x y < <(echo '{"$cmd":"test.tree"}' | socat - UNIX-CONNECT:$S \
 for kind in mouse_move mouse_down mouse_up; do
   echo "{\"\$cmd\":\"test.events\",\"events\":[{\"kind\":\"$kind\",\"x\":$x,\"y\":$y,\"button\":\"left\"}]}"
 done | socat - UNIX-CONNECT:$S
-echo '{"$cmd":"test.state"}' | socat - UNIX-CONNECT:$S
 ```
 
 Several lines may be sent without waiting; they are answered in order.
@@ -109,7 +138,12 @@ bibui-port drag slider 320 140         # from a node, or: drag x y x y
 bibui-port scroll list -3
 bibui-port type "Hello"                # into what has the keyboard
 bibui-port key Left --shift --repeat 5
-bibui-port cmd counter.set Value=10
+bibui-port ops                         # the app's commands: what each does, and what it takes
+bibui-port cmd counter.set value=10    # checked against ops first; text and expressions sent as written
+bibui-port get panels/7 --outline      # the model, a line per node, with its row of commands
+bibui-port log 12                      # the commands since generation 12
+bibui-port schema                      # each kind of node: its fields and its row
+bibui-port text                        # the app drawn as text
 bibui-port screenshot field.png --id email
 ```
 
@@ -123,8 +157,8 @@ runtime knows: boxes and texts, where they were laid out, and their claims. So:
   it: `find "Save"` then leads to the id.
 - **Keyboard focus, a text field's caret and selection, and what kind of control
   a box is are the app's**, not the runtime's: a text field is edited when its
-  caller says so. An app whose client should check them puts them in its state
-  (`test.state`), or takes its own commands for them.
+  caller says so. An app whose client should check them answers them from
+  its own commands (`ResultCmd`).
 
 ## Showing the agent
 

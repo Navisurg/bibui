@@ -43,7 +43,7 @@ static class TestPortTests
     {
         run("TestPort: each test.* command is its kind, and an app command is handed over as sent", () =>
         {
-            foreach (var (name, kind) in new[] { ("test.tree", TestCmdKind.Tree), ("test.state", TestCmdKind.State), ("test.schema", TestCmdKind.Schema) })
+            foreach (var (name, kind) in new[] { ("test.tree", TestCmdKind.Tree), ("test.ops", TestCmdKind.Ops) })
             {
                 IsTrue(Port($"{{\"$cmd\":\"{name}\"}}").TryPullCmd(out var cmd), $"{name}: pulled");
                 Eq(kind, cmd.Kind, name);
@@ -123,7 +123,7 @@ static class TestPortTests
         {
             var port = new TestPort();
             IsTrue(!port.TryPullCmd(out _), "nothing published, nothing to pull");
-            port.Publish("{\"$cmd\":\"test.state\"}"u8);
+            port.Publish("{\"$cmd\":\"test.ops\"}"u8);
             IsTrue(port.TryPullCmd(out _), "the request");
             IsTrue(!port.TryPullCmd(out _), "pulled once, until it is answered");
 

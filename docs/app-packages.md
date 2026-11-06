@@ -103,9 +103,8 @@ compiled by three projects that differ only in their package:
 ## Driving an app from outside
 
 `TestPort` (package `Bibui.Automation`) lets a test, a script or an agent drive
-a running app over a Unix socket only the user can reach: read the UI tree and
-the app's state, send input events and the app's own commands, ask for
-screenshots. The app opens it, and calls `TryPullCmd` at the top of each frame
+a running app over a Unix socket only the user can reach: read the UI tree,
+send input events and the app's own commands, ask for screenshots. The app opens it, and calls `TryPullCmd` at the top of each frame
 and `AnswerCmds` at its end; a client sends one JSON line per request:
 
 ```sh

@@ -22,6 +22,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../bibui-core/bibui-core.csproj" />
+    <!-- The commands' table (OpInfo), for test.schema to say what each command is. -->
+    <ProjectReference Include="../bibui-commands/bibui-commands.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- The port thread's and AnswerCmds' steps (Publish, Release) are
