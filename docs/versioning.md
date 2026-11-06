@@ -6,7 +6,7 @@ a part of that API is retired.
 ## Semantic versioning
 
 bibui follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
-Every public package (`Bibui`, `Bibui.Core`, `Bibui.Gl`, `Bibui.Testing`,
+Every public package (`Bibui`, `Bibui.Core`, `Bibui.Gl`, `Bibui.Testing`, `Bibui.Automation`,
 `Bibui.Raster.Skia`, `Bibui.Raster.Managed`, `Bibui.Raster.Managed.Backend`,
 `Bibui.Platform.Silk`, `Bibui.Platform.Wayland`, `Bibui.Platform.Browser` and
 the five `Bibui.App` packages) is released together, at the same version, from one tag. Depend on one version of all of them.
@@ -66,7 +66,7 @@ Not part of it:
   minor or patch release may change what a component looks like (a fixed
   anti-aliasing edge, a theme colour, a new default). The changelog says when
   it does;
-- environment variables for diagnostics (`BIBUI_GPU`, `BIBUI_PROFILE`,
+- environment variables for diagnostics (`BIBUI_GPU`,
   `BIBUI_DAMAGE_TRACE`, ...), performance characteristics, and the text of
   exception messages;
 - samples, tests and tools in this repository.

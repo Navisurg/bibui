@@ -256,11 +256,29 @@ example `runtime.SetTheme(ThemeLoader.DefaultLight())` from a click; the next
 frame is painted in it. Theme files, your own themes and the token list are in the
 [theming guide](theming.md).
 
-## 6. A headless test with BibuiPage
+## 6. A headless test
 
-`Bibui.Testing` drives a runtime without a window. Clicks go through the same
-input path a real pointer takes, so a control covered by something else is not
-clicked, just as it would not be for a person.
+A test runs the app's loop itself, a frame at a time and with no window:
+`BeginBuild` with what the mouse and keyboard did, the app's build, `EndBuild`.
+A click is a press and a release where a person would click, so a control
+covered by something else is not clicked, just as it would not be for a person.
+`Bibui.Testing` finds what to aim at: `Nodes.FindById(root, id)` in the tree
+the app built, and `Nodes.Centre(node)`. The root is the app's own, so `App`
+keeps the column it builds into:
+
+```csharp
+    /// <summary>The column the app builds into: between frames, the tree the last one laid out.</summary>
+    public Box? Root;
+
+    /// <summary>One frame, built between the runtime's BeginBuild and EndBuild.</summary>
+    public void Build(BibuiRuntime runtime)
+    {
+        Root = runtime.BeginParent(runtime.Column().Sized(Size.Fill, Size.Fill));
+        Root.Style.Padding = EdgeInsets.All(24f);
+        // … as before …
+        runtime.EndParent(Root);
+    }
+```
 
 Create a test project next to the app. Any test framework works; this uses
 xUnit v3, whose test projects are programs you run:
@@ -271,35 +289,71 @@ cd Stepper.Tests
 rm Program.cs                      # xUnit v3 supplies the entry point
 dotnet add package xunit.v3
 dotnet add package Bibui.Testing
+dotnet add package Bibui.Raster.Skia
 dotnet add reference ../Stepper/Stepper.csproj
 ```
 
 ```csharp
-using Bibui.Testing;
+using Bibui.Core;
+using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 using Bibui.Core.Theming;
+using Bibui.Raster.Skia;
+using Bibui.Testing;
 using Xunit;
 
 public class StepperTests
 {
+    // 480 × 320 at 1× and 60 Hz: every frame steps animations by 1/60 s, so a run is the same each time.
+    static readonly WindowFrame Window = new(480, 320, 1f, 60f);
+
+    // One frame, as the app's loop builds it, with what the mouse and keyboard did.
+    static void Frame(BibuiRuntime runtime, App app, List<WindowEvent> events)
+    {
+        runtime.BeginBuild(Window, events);
+        app.Build(runtime);
+        runtime.EndBuild();
+    }
+
+    // A press and a release at the middle of the node named id, as last laid out.
+    static void Click(BibuiRuntime runtime, App app, string id)
+    {
+        var at = Nodes.Centre(Nodes.FindById(app.Root!, id)!);
+        Frame(runtime, app, [
+            WindowEvent.Mouse(WindowEventKind.MouseDown, at.X, at.Y, MouseButton.Left),
+            WindowEvent.Mouse(WindowEventKind.MouseUp, at.X, at.Y, MouseButton.Left),
+        ]);
+    }
+
+    static string TextOf(App app, string id) => new(((Text)Nodes.FindById(app.Root!, id)!).Content);
+
     [Fact]
     public void Plus_adds_one_and_reset_returns_to_zero()
     {
-        using var page = BibuiPage.Launch(new App().Build);
+        var runtime = BibuiRuntime.Create();
+        var app = new App();
+        Frame(runtime, app, []);   // the first frame: what a click is aimed at
 
-        page.Click("count-up");
-        page.Click("count-up");
-        Assert.Equal("2", page.GetText("count-value"));
+        Click(runtime, app, "count-up");
+        Click(runtime, app, "count-up");
+        Assert.Equal(2, app.Count);
+        Frame(runtime, app, []);
+        Assert.Equal("2", TextOf(app, "count-value"));
 
-        page.Click("reset");
-        Assert.Equal("0", page.GetText("count-value"));
+        Click(runtime, app, "reset");
+        Assert.Equal(0, app.Count);
     }
 
     [Fact]
     public void The_first_frame_renders()
     {
-        using var page = BibuiPage.Launch(new App().Build, theme: ThemeLoader.DefaultLight());
+        var runtime = BibuiRuntime.Create();
+        runtime.SetTheme(ThemeLoader.DefaultLight());
+        var app = new App();
+        Frame(runtime, app, []);
 
-        byte[] png = page.Screenshot();
+        using var skia = new SkiaCpuRenderer();
+        byte[] png = FramePixels.Png(runtime, skia.Draw);
         Assert.Equal(0x89, png[0]);   // a PNG
     }
 }
@@ -309,15 +363,14 @@ public class StepperTests
 dotnet run
 ```
 
-`BibuiPage.Launch` makes a runtime with no window and builds a frame with the
-build you hand it, as the app's loop does, on the page's `Window` (a
-`WindowFrame`, 800 × 600 at 60 Hz unless you pass one), so every frame steps
-animations by 1/60 s and the test runs the same each time. `page.Click(id)` presses the middle
-of the box with that id and builds the frame the press causes. `GetText`,
-`GetBounds`, `FindById`, `Fill`, `Press` and `Screenshot` cover reading and
-typing. The page draws its screenshots with Skia on the CPU, so the test needs
-no renderer of its own. Ids come from `BoxFromId`, `TextFromId` and the `id`
-you pass to a component.
+A click lands in the frame it is sent with, which is the frame its app reads
+it in: `app.Count` changes there. The value's text is built before the `+`
+button asks about its press, so it shows the new count from the next frame on.
+Assert on the app's state where you can, and read the tree for what the app
+shows. Read a node between frames, after `EndBuild`: the next `BeginBuild`
+reuses it. Ids come from `BoxFromId`, `TextFromId` and the `id` you pass to a
+component. To drive the running app from outside instead, over a socket, see
+`Bibui.Automation`'s `TestPort`.
 
 ## 7. Publishing with Native AOT
 

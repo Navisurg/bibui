@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Bibui.Commands as an app uses it: a command set of its own, cmdgen run on it before
+       it compiles (Bibui.Commands.targets), the Store it runs on, and the table and wire
+       names cmdgen wrote. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <!-- The command set here has a command nothing handles (CMDGEN4) and one with no
+         description (CMDGEN5), on purpose: what the table makes of them is tested. The tree's
+         own tests spell keys by hand (CMDGEN6), beside a node set that declares others. -->
+    <MSBuildWarningsAsMessages>CMDGEN4;CMDGEN5;CMDGEN6</MSBuildWarningsAsMessages>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui-commands/bibui-commands.csproj" />
+    <ProjectReference Include="../../tools/cmdgen/cmdgen.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <PropertyGroup>
+    <BibuiCmdGenDll>$(MSBuildThisFileDirectory)../../tools/cmdgen/bin/$(Configuration)/net10.0/cmdgen.dll</BibuiCmdGenDll>
+  </PropertyGroup>
+  <Import Project="../../bibui-commands/buildTransitive/Bibui.Commands.targets" />
+</Project>

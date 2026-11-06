@@ -20,6 +20,9 @@ its dependencies are:
 | `Bibui.Raster.Managed.Backend` | drawing with a managed rasterizer and FreeType text, no SkiaSharp |
 | `Bibui.Testing` | headless pages for testing an app |
 
+`Bibui.Automation`, a test port for driving a running app from outside, is not
+in it: an app opts into automation by referencing it.
+
 ## Hello
 
 ```csharp

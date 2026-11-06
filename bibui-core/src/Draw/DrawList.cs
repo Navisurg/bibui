@@ -287,6 +287,6 @@ public sealed class DrawList
 /// <summary>
 /// Draws a frame's list into CPU memory: a renderer's <c>Draw(DrawList, RasterPixels)</c>,
 /// handed to code that has pixels to fill and no business choosing how (a
-/// window's shared-memory buffers, the test server's screenshots).
+/// window's shared-memory buffers, an app's screenshots through <c>FramePixels</c>).
 /// </summary>
 public delegate void DrawToPixels(DrawList list, RasterPixels target);

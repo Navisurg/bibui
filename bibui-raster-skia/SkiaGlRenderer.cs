@@ -99,8 +99,8 @@ public sealed class SkiaGlRenderer : IDisposable
 
     // ── Textures ─────────────────────────────────────────────────────────────
     // GL textures on the target's context, made by usage code, which owns them:
-    // a draw list only names a handle. Static and Stream are made alike, as rad's
-    // GL backend makes them; the kind decides whether an update is taken.
+    // a draw list only names a handle. Static and Stream are the same GL texture;
+    // the kind only decides whether an update is taken.
 
     /// <summary>
     /// A <paramref name="width"/> × <paramref name="height"/> GL texture of

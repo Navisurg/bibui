@@ -5,9 +5,9 @@ namespace Bibui.Gl;
 
 /// <summary>
 /// GL textures, made, filled and deleted: what a renderer on a GL context makes
-/// its textures with. rad's GL backend calls (<c>r_tex2d_alloc</c>,
-/// <c>r_fill_tex2d_region</c>, <c>r_tex2d_release</c>). The renderer keeps the
-/// ids in its own table and hands out handles; this knows nothing of handles.
+/// its textures with: allocate one, fill a region of it, release it. The
+/// renderer keeps the ids in its own table and hands out handles; this knows
+/// nothing of handles.
 ///
 /// <para>On the thread where the context is current. Each call moves the
 /// texture binding and the pixel store: a renderer that caches GL state (Skia)

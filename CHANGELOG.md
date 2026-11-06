@@ -8,6 +8,78 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
+- **`Bibui.Commands`: an app's model and the commands that change it.** A `[NodeSet]`
+  declares the app's kinds of node as records; each kind gets a typed id whose zero value is
+  no node, and a table of rows, read with `RowFromId` and written whole with `Modify`. A
+  command is a record in a `[CommandSet]`; a `Model` applies them in the order pushed, as the
+  only writer of the tree, and logs a generation per change. The built-ins `node.set` (a field
+  set to the value of an expression) and `view_rule.set` go through the same model and wire.
+  Values are read through a small expression language (`Expr`) over the model and any
+  `[Place]` the app registers, and seen through lenses and view rules. cmdgen, a build step
+  the package brings, writes the typed ids, tables, wire names, push methods and an `OpInfo`
+  per command, which can build its command from a `Context`. `ModelJson` and `TextView` read
+  the model as JSON and as text. See `packaging/readme/Bibui.Commands.md`.
+
+- **`Bibui.Views`: a model's values drawn as widgets through their lenses.** `UIView` draws a
+  value through the app's drawer for its lens, or by its shape (fields, a table, rows, a pick),
+  and a node's row of commands as buttons built from the context it is drawn in
+  (`ContextStack`). It never writes the model directly: a pick is a `node.set`, a button pushes
+  its command. See `packaging/readme/Bibui.Views.md`.
+
+- **`samples/board`: an app built on Bibui.Commands and Bibui.Views.** Cases shown as cards on
+  a board, and panels that show any node through a lens: a case opened as its vessel tree, a
+  query typed into a panel. Its own lenses (the board, the tree), an app data layer (a
+  segmentation cache as a `[Place]`), and a `TestSession`, so `bibui-port` reads and drives
+  its model.
+
+- **`Bibui.Automation`: a test port for a running app.** `TestPort.Open(runtime, options)`
+  makes a Unix socket only the user can reach (`$XDG_RUNTIME_DIR/bibui/<name>-<pid>.sock`)
+  and one thread that reads it; the app calls `port.TryPullCmd` at the top of each
+  frame and `port.AnswerCmds` at its end, so everything else happens on its loop.
+  A client sends one JSON line per request: `test.tree` (the UI tree the last frame
+  laid out, each box with its claims by name), `test.ops`, `test.events` (input, as a window reports
+  it), `test.screenshot` (written by the app, with a renderer of its choosing) and
+  the app's own commands; events and commands are answered once the app has
+  settled. An app that does not reference the package ships none of it. See
+  `packaging/readme/Bibui.Automation.md`.
+
+- **`test.ops`: what an app can be asked to do,** an entry per command with its wire name,
+  label, description, arguments and whether it only reads: the shape of an MCP tool. It
+  replaces `test.state` and `test.schema`; a client reads what the app answers, not its
+  runtime. A command can answer with a result (`TestPort.ResultCmd`).
+
+- **`TestSession`: a test port with the per-frame work done, and the model answered.** For an
+  app with a Bibui.Commands model: events into the frame, screenshots, the agent cursor, and
+  `model.get`, `model.log`, `model.schema` and `model.text` answered from the model. A
+  command's answer says what it changed. `bibui-port` gains `get` (`--outline`), `log`,
+  `schema` and `text`, and `cmd` sends an argument the command takes as text or an
+  expression as written.
+
+- **`bibui-port`: the test port from a shell.** `tools/bibui-port`, a
+  command-line client published with Native AOT: one native file that starts in
+  milliseconds, for scripts and agents. It finds the app's socket, prints the
+  tree as an outline (`tree`, `find`), clicks a node by id once it holds still
+  and is scrolled into view (`click add`), and sends the app's commands
+  (`cmd counter.set Value=10`), `ops` and `screenshot`. The
+  gallery's page walk, `samples/component-gallery/test_all_pages.sh`, is a
+  shell script on it.
+- **`AgentCursor`: what an agent driving the app does, drawn for a person
+  watching.** `AgentCursor.FromWindowEvents` folds the agent's pointer from the
+  events it sends; `AgentCursorUi.Build(runtime, cursor, size)` draws an arrow
+  there with a tag naming the agent and a ring on each click, gliding, fading in
+  while `TestPort.HasClient` and out a while after, and says when it has shown
+  what the agent did. `bibui-port move` moves the pointer without a click. The
+  gallery draws it when started with its test port.
+- **`runtime.IsAnimating`**: whether the frame just built left anything moving
+  (an eased value, a hover fade, an `Animate`, a transition, a drawing's own
+  animation). The runtime asked itself this every frame to request the next;
+  now it keeps the answer.
+- **Driving an app, further.** `test.screenshot` takes an `id` for one node's
+  rect, which the app passes on as `cmd.Region` to
+  `FramePixels.Png(runtime, draw, region)`. `bibui-port` gets `type`, `key`
+  (modifiers, `--repeat`), `drag`, `hover`, `scroll`, `click --right/--middle`,
+  and `screenshot --id`. While a button is held the agent
+  cursor follows the pointer at once, so a drag reads as one.
 - **RowScrollList** (`runtime.BeginRowScrollList`, `EndRowScrollList`): the
   list of rows of one pitch, building only those in sight, by rows or by
   pixels (`ScrollBy`). It eases.
@@ -95,6 +167,23 @@ All notable changes to bibui are recorded here. The format is based on
   `TextWrap`, `TextMetrics`; and `Bibui.Core.FreeType` is `Bibui.Text.FreeType`.
   Code that names one adds `using Bibui.Text;`. `runtime.Text(...)`, the
   components and `runtime.Fonts` are where they were.
+- **Breaking:** `Bibui.Testing` is `Nodes`: `Nodes.FindById(root, id)` finds a
+  node under a root you hand it, and `Nodes.Centre(node)` is where a person
+  would click it. `BibuiPage` is gone: a test runs the app's loop itself —
+  `BeginBuild` with the window events a mouse and keyboard would send, the
+  build, `EndBuild` — and reads the tree the app built into. The package no
+  longer depends on `Bibui.Raster.Skia`.
+- **Breaking:** `BibuiRuntime.FindById` and `DispatchClick` are gone. Find a
+  node with `Nodes.FindById` under the app's own root; click it with a press
+  and a release at its centre, as a window would send them.
+- **Breaking:** `BIBUI_PROFILE` prints nothing: time the build, the renderer's
+  `Draw` and the window's `EndDraw` in the app's own loop.
+- `test.tree` has the runtime's root at the top, a box the window's size with
+  no id, also when the app built one node.
+- `runtime.FontOf(text)`: the font a text is set in, in the frame's theme,
+  so measuring its content in it is the width layout gave it.
+- The gallery's layout check measures a text in its own weight: a bold label
+  was measured as regular, and could be cut without being reported.
 
 - The gallery's ScrollList page shows both lists; the showcase's target queue
   is a RowScrollList.
@@ -170,6 +259,17 @@ All notable changes to bibui are recorded here. The format is based on
 - **Breaking:** `Fonts.Face(family, weight)`, and `DrawContext.LineBox` and
   `BlockHeight`, which took a family's name. Use `Fonts.LineHeight(font)` with
   a font from `runtime.FontInScope()`.
+- **Breaking: the test server is gone; `TestPort` replaces it.** `BibuiTestServer`,
+  `BIBUI_TEST_SERVER` and `BIBUI_TEST_SERVER_OUT`, `WorkflowClient`,
+  `BibuiAppOptions.TestServer` and `TestServerPort`, and `BibuiApp.TestServer`.
+  A `BibuiApp` opens no port: an app that wants one references `Bibui.Automation`
+  and opens a `TestPort`. The samples open one with `BIBUI_TEST_PORT=1`, and the
+  gallery's page walk is `samples/component-gallery/test_all_pages.sh`.
+- **Breaking: the test server no longer records video.** `start_recording` and
+  `stop_recording` are gone from `BibuiTestServer`, and `StartRecording` and
+  `StopRecording` from `WorkflowClient`. Encoding video is not the test
+  server's job: an app that wants a recording takes screenshots, or captures
+  its window with a tool of its own.
 - **Breaking:** `SurfaceOptions`, `runtime.Surface`, `runtime.ResizeSurface`
   and `runtime.BeginBuild(events)`: a frame is built on a `WindowFrame`
   (`runtime.BeginBuild(window, events)`). The rounding rule is
@@ -476,7 +576,7 @@ and `samples/counter` is the whole of a loop.
   `CreateTexture(rgba, width, height)`, and `UpdateTexture(texture, pixels,
   rowBytes = 0)` takes the whole texture at the size and format it was made
   with.
-  - Formats, rad's names: `RGBA8` and `BGRA8` (straight alpha), `R8`, `RG8`
+  - Formats: `RGBA8` and `BGRA8` (straight alpha), `R8`, `RG8`
     and `A8`. Each draws with a default look: R8 grey, A8 white coverage, RG8
     as red and green.
   - Kinds: a `Static` texture is made once; an update to it is ignored. A

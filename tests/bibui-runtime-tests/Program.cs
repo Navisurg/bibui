@@ -118,7 +118,7 @@ static List<string> Texts(BibuiRuntime runtime)
 {
     runtime.Step();
     var texts = new List<string>();
-    Walk(runtime.LastTree);
+    Walk(runtime.Root);
     return texts;
 
     void Walk(UiNode? node)
@@ -160,7 +160,7 @@ Console.WriteLine("===================");
 
 // ── Bibui.Core.Key / Bibui.Core.MouseButton ────────────────────────────────────
 
-// The Silk host converts with a cast, and the test server parses key names,
+// The Silk host converts with a cast, and a test port parses key names,
 // so both enums must keep Silk.NET.Input's names and values exactly.
 Run("Key and MouseButton: Silk.NET.Input's names, with Silk's values", () =>
 {
@@ -199,7 +199,7 @@ Run("Create: runtime.Button built while a column is pushed is inserted into it",
         return column;
     }, TestBuild.Window(400, 200));
     runtime.Step();
-    var button = runtime.FindById("add");
+    var button = Nodes.FindById(runtime.Root, "add");
     IsTrue(button is not null && ReferenceEquals(button.Parent, column), "the button's parent is the column");
     IsTrue(ReferenceEquals(column!.LastChild, button), "after the text, in the order built");
 });
@@ -230,11 +230,11 @@ Run("runtime.Column: a box linked where it is made, and built into once begun", 
     Eq(LayoutAxis.Y, column!.ChildLayoutAxis, "a column lays out along Y");
     Eq(LayoutAxis.X, row!.ChildLayoutAxis, "a row lays out along X");
     IsTrue(ReferenceEquals(row.Parent, column), "the row is linked under the column it was made in");
-    IsTrue(ReferenceEquals(runtime.FindById("a")?.Parent, row) && ReferenceEquals(runtime.FindById("b")?.Parent, row),
+    IsTrue(ReferenceEquals(Nodes.FindById(runtime.Root, "a")?.Parent, row) && ReferenceEquals(Nodes.FindById(runtime.Root, "b")?.Parent, row),
         "the row's buttons are in the row");
     IsTrue(ReferenceEquals(unpushed!.Parent, column) && unpushed.FirstChild is null,
         "a row that is never pushed is in the column, and empty");
-    IsTrue(ReferenceEquals(column.LastChild, runtime.FindById("add")), "after the row's scope, building goes back into the column");
+    IsTrue(ReferenceEquals(column.LastChild, Nodes.FindById(runtime.Root, "add")), "after the row's scope, building goes back into the column");
     Eq(SemanticSize.ChildrenSum(), column.SizeX, "Column(): as wide as its children");
     Eq(SemanticSize.ChildrenSum(), column.SizeY, "Column(): as tall as its children");
     IsTrue(column.Extent.Y > row.Extent.Y, "laid out: the column holds the text, the row and a button");
@@ -370,12 +370,12 @@ Run("runtime.Center / Spacer(Fill): the contents land in the middle, between two
     runtime.Step();
 
     Eq(400f, across!.Extent.X, "the row is as wide as its parent");
-    Eq(150f, runtime.FindById("mid-x")!.Rect.X, "a 100 px box centred in 400 px");
+    Eq(150f, Nodes.FindById(runtime.Root, "mid-x")!.Rect.X, "a 100 px box centred in 400 px");
     Eq(3, CountChildren(across), "spring, contents, spring");
-    float midRow = runtime.FindById("mid-row")!.Rect.X;
+    float midRow = Nodes.FindById(runtime.Root, "mid-row")!.Rect.X;
     IsTrue(MathF.Abs(midRow - 200f) < 0.01f, $"Center centres in the room the row's other children leave (got {midRow})");
-    IsTrue(ReferenceEquals(runtime.FindById("mid-row")!.Parent, row), "the contents stay the row's children, in no box of their own");
-    Eq(370f, runtime.FindById("far-end")!.Rect.X, "a spring pushes what follows it to the far end");
+    IsTrue(ReferenceEquals(Nodes.FindById(runtime.Root, "mid-row")!.Parent, row), "the contents stay the row's children, in no box of their own");
+    Eq(370f, Nodes.FindById(runtime.Root, "far-end")!.Rect.X, "a spring pushes what follows it to the far end");
 });
 
 Run("runtime.CenterAcross: centred across a row of known height, in a cell as wide as its content", () =>
@@ -396,9 +396,9 @@ Run("runtime.CenterAcross: centred across a row of known height, in a cell as wi
         return page;
     }, TestBuild.Window(400, 200));
     runtime.Step();
-    var dot = runtime.FindById("dot")!;
+    var dot = Nodes.FindById(runtime.Root, "dot")!;
     Eq((40f, 12f), (dot.Rect.X, dot.Rect.Y), "beside the tall box, 12 px down a 40 px row");
-    Eq(56f, runtime.FindById("after")!.Rect.X, "the cell is as wide as the dot, so what follows comes right after it");
+    Eq(56f, Nodes.FindById(runtime.Root, "after")!.Rect.X, "the cell is as wide as the dot, so what follows comes right after it");
     Eq(3, CountChildren(row!), "the tall box, the cell, and what follows");
     IsTrue(ReferenceEquals(dot.Parent, cell), "the cell it hands back holds what is centred");
     Eq((16f, 40f), (cell!.Extent.X, cell.Extent.Y), "as wide as its content, as tall as the row");
@@ -428,9 +428,9 @@ Run("runtime.CenterX / CenterY: along or across, by the parent's axis", () =>
     }, TestBuild.Window(400, 200));
     runtime.Step();
     static bool Near(System.Numerics.Vector2 at, float x, float y) => MathF.Abs(at.X - x) < 0.01f && MathF.Abs(at.Y - y) < 0.01f;
-    var both = runtime.FindById("both")!.Rect;
+    var both = Nodes.FindById(runtime.Root, "both")!.Rect;
     IsTrue(Near(both, 40f, 25f), $"centred both ways in a row (got {both})");
-    var inColumn = runtime.FindById("both-in-column")!.Rect;
+    var inColumn = Nodes.FindById(runtime.Root, "both-in-column")!.Rect;
     IsTrue(Near(inColumn, 40f, 85f), $"and in a column under it (got {inColumn})");
 });
 
@@ -521,7 +521,7 @@ Run("Create: runtime.Button is a button the caller asks about", () =>
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Left, X = 20f, Y = 20f });
     runtime.Step();
     Eq(1, clicks, "pressed and released on it");
-    Eq("add", runtime.FindById("add")?.Id, "the button keeps the id it was given");
+    Eq("add", Nodes.FindById(runtime.Root, "add")?.Id, "the button keeps the id it was given");
 });
 
 // ── Counter: stateful rebuild ─────────────────────────────────────────────────
@@ -537,9 +537,9 @@ Run("Counter: initial render shows 0", () =>
             Btn(runtime, "inc", "+1", () => count++);
         }),
         window: TestBuild.Window(200, 100));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    Eq("0", page.GetText("label"));
+    Eq("0", runtime.GetText("label"));
 });
 
 Run("Counter: click increments", () =>
@@ -553,12 +553,17 @@ Run("Counter: click increments", () =>
             Btn(runtime, "inc", "+1", () => count++);
         }),
         window: TestBuild.Window(200, 100));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    page.Click("inc");
-    Eq("1", page.GetText("label"));
-    page.Click("inc");
-    Eq("2", page.GetText("label"));
+    // The label is built before the button that takes the click, so the click's
+    // frame counts it and the frame after shows it.
+    runtime.Click("inc");
+    Eq(1, count, "the click's frame counts it");
+    runtime.Step();
+    Eq("1", runtime.GetText("label"), "and the next frame shows it");
+    runtime.Click("inc");
+    runtime.Step();
+    Eq("2", runtime.GetText("label"));
 });
 
 Run("Counter: disabled button does not increment", () =>
@@ -572,10 +577,10 @@ Run("Counter: disabled button does not increment", () =>
             Btn(runtime, "inc", "+1", () => count++, disabled: true);
         }),
         window: TestBuild.Window(200, 100));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    page.Click("inc");
-    Eq("0", page.GetText("label"), "disabled button should not report a click");
+    runtime.Click("inc");
+    Eq("0", runtime.GetText("label"), "disabled button should not report a click");
 });
 
 // ── Input: a Style fill and border replace the theme's ────────────────────────
@@ -591,10 +596,10 @@ Run("IsVisible: present node is visible", () =>
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() => Btn(runtime, "btn", "Go"), TestBuild.Window(200, 60));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    IsTrue(page.IsVisible("btn"));
-    IsFalse(page.IsVisible("nonexistent"));
+    IsTrue(runtime.IsVisible("btn"));
+    IsFalse(runtime.IsVisible("nonexistent"));
 });
 
 // ── Screenshot ───────────────────────────────────────────────────────────────
@@ -603,9 +608,9 @@ Run("Screenshot returns non-empty PNG bytes", () =>
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() => Btn(runtime, "btn", "Hello"), TestBuild.Window(200, 60));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    var png = page.Screenshot();
+    var png = runtime.Screenshot();
     IsTrue(png.Length > 100, $"PNG should be non-trivial, got {png.Length} bytes");
     // PNG magic bytes: 0x89 0x50 0x4E 0x47
     IsTrue(png[0] == 0x89 && png[1] == 0x50 && png[2] == 0x4E && png[3] == 0x47,
@@ -618,9 +623,9 @@ Run("GetBounds returns non-zero bounds for a rendered button", () =>
 {
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() => Btn(runtime, "btn", "Test").Sized(Size.Px(120f), Size.Px(40f)), TestBuild.Window(200, 80));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    var bounds = page.GetBounds("btn");
+    var bounds = runtime.GetBounds("btn");
     IsTrue(bounds.Width > 0, $"Width should be > 0, got {bounds.Width}");
     IsTrue(bounds.Height > 0, $"Height should be > 0, got {bounds.Height}");
 });
@@ -729,7 +734,7 @@ Run("A settled UI asks for no further frames", () =>
 
 Run("Shares split a row's free space proportionally (4:1 → 80/20)", () =>
 {
-    using var page = BibuiPage.Launch(
+    var page = TestBuild.Launch(
         runtime =>
         {
             var row = runtime.Row().Sized(Size.Fill, Size.Fill);
@@ -746,7 +751,7 @@ Run("Shares split a row's free space proportionally (4:1 → 80/20)", () =>
 
 Run("Shares split the space remaining after fixed-size siblings (3:1)", () =>
 {
-    using var page = BibuiPage.Launch(
+    var page = TestBuild.Launch(
         runtime =>
         {
             var row = runtime.Row().Sized(Size.Fill, Size.Fill);
@@ -768,21 +773,23 @@ Run("Shares split the space remaining after fixed-size siblings (3:1)", () =>
 // ── Full app integration (samples/bibui-app's own build) ─────────────────────
 //
 // These tests drive the sample's real build, BibuiApp.Demo — counter, input and
-// checkbox — entirely through the BibuiPage semantic API. No window opens; this
-// is the "headless mode" equivalent of the running app.
+// checkbox — through the events a person would send. No window opens; this is
+// the "headless mode" equivalent of the running app.
 
-static BibuiPage LaunchApp()
+static BibuiRuntime LaunchApp()
 {
     var runtime = BibuiRuntime.Create();
     var state = new BibuiApp.DemoState();
-    return BibuiPage.From(runtime, () => BibuiApp.Demo.Build(runtime, state), window: TestBuild.Window(720, 1200));
+    runtime.SetBuild(() => BibuiApp.Demo.Build(runtime, state), TestBuild.Window(720, 1200));
+    runtime.Step();
+    return runtime;
 }
 
 // Whether the checkbox's card holds a text reading exactly `text` in the last
 // frame: the badge beside the checkbox says its state, under a box with no id.
-static bool ShowsText(BibuiPage page, string text)
+static bool ShowsText(BibuiRuntime page, string text)
 {
-    var card = page.FindById("subscribe-checkbox")?.Parent ?? throw new InvalidOperationException("No checkbox card");
+    var card = Nodes.FindById(page.Root, "subscribe-checkbox")?.Parent ?? throw new InvalidOperationException("No checkbox card");
     return Find(card);
 
     bool Find(UiNode n)
@@ -798,25 +805,29 @@ static bool ShowsText(BibuiPage page, string text)
 
 Run("App: counter starts at 0", () =>
 {
-    using var page = LaunchApp();
+    var page = LaunchApp();
     Eq("0", page.GetText("counter-label"));
 });
 
 Run("App: increment and decrement", () =>
 {
-    using var page = LaunchApp();
+    var page = LaunchApp();
 
+    // The label is built before the buttons, so a click shows from the frame after it.
     page.Click("increment-btn");
     page.Click("increment-btn");
     page.Click("increment-btn");
+    page.Step();
     Eq("3", page.GetText("counter-label"));
 
     page.Click("decrement-btn");
+    page.Step();
     Eq("2", page.GetText("counter-label"));
 
     page.Click("decrement-btn");
     page.Click("decrement-btn");
     page.Click("decrement-btn");
+    page.Step();
     Eq("-1", page.GetText("counter-label"), "The counter goes below zero");
 });
 
@@ -824,7 +835,7 @@ Run("App: increment and decrement", () =>
 
 Run("App: name input updates greeting", () =>
 {
-    using var page = LaunchApp();
+    var page = LaunchApp();
 
     Eq("…", page.GetText("greeting"), "Before typing, greeting should be ellipsis");
 
@@ -839,7 +850,7 @@ Run("App: name input updates greeting", () =>
 
 Run("App: subscribe checkbox toggles", () =>
 {
-    using var page = LaunchApp();
+    var page = LaunchApp();
 
     IsTrue(ShowsText(page, "Unsubscribed") && !ShowsText(page, "Subscribed"), "Starts unchecked");
 
@@ -885,9 +896,9 @@ Run("HitTest A: input bounds fill column width", () =>
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() => FormPage(runtime),
         window: TestBuild.Window((int)FormWidth, (int)FormHeight));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    var bounds = page.GetBounds("name");
+    var bounds = runtime.GetBounds("name");
     IsTrue(MathF.Abs(bounds.Width - ExpectedInputWidth) <= 4f,
         $"Input width should be ≈{ExpectedInputWidth} but got {bounds.Width}");
     IsTrue(bounds.X >= 0f, $"Input X should be >= 0, got {bounds.X}");
@@ -902,7 +913,7 @@ Run("HitTest C: layout is in logical pixels, not physical", () =>
         window: TestBuild.Window((int)FormWidth, (int)FormHeight, 2f));
     runtime.Step();
 
-    var root = runtime.LastTree!;
+    var root = runtime.Root;
     IsTrue(MathF.Abs(root.Extent.X - FormWidth) <= 1f,
         $"Root width should be logical {FormWidth}, got {root.Extent.X} (physical would be {FormWidth * 2f})");
 });
@@ -912,9 +923,9 @@ Run("HitTest D: Next button fills column width", () =>
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() => FormPage(runtime),
         window: TestBuild.Window((int)FormWidth, (int)FormHeight));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    var bounds = page.GetBounds("next");
+    var bounds = runtime.GetBounds("next");
     IsTrue(MathF.Abs(bounds.Width - ExpectedInputWidth) <= 4f,
         $"Next button width should be ≈{ExpectedInputWidth} but got {bounds.Width}");
 });
@@ -931,16 +942,18 @@ Run("HitTest D: Next button fills column width", () =>
 
 // ── Text editing: what the operations actually do ─────────────────────────────
 //
-// A mutation run showed these were unreachable before BibuiPage drove input the
+// A mutation run showed these were unreachable before the tests drove input the
 // way a user does: emptying Delete, Home, End, SelectAll, Copy, Cut or Paste
 // left the suite green.
 
-// A TextField with known text, given focus: the page, and the buffer and
-// edit state it edits, which the tests read and set directly.
-(BibuiPage Page, BibuiStr Text, TextEditState Edit) TextFieldPage(string initial = "hello world")
+// A TextField with known text, given focus, its first frame built: the
+// runtime, and the buffer and edit state it edits, which the tests read and set
+// directly.
+(BibuiRuntime Page, BibuiStr Text, TextEditState Edit) TextFieldPage(string initial = "hello world")
 {
     var (runtime, text, edit) = TextFieldRuntime(initial);
-    return (runtime.Page(), text, edit);
+    runtime.Step();
+    return (runtime, text, edit);
 }
 
 // The same field, for a test that hands the runtime its input itself.
@@ -990,7 +1003,7 @@ Run("Delete and Backspace remove a selection rather than one character", () =>
 
     var (page2, text2, edit2) = TextFieldPage();
     page2.DoubleClick("txt");
-    page2.PressBackspace();
+    page2.Press(Key.Backspace);
     Eq("hello ", Value(text2), "Backspace with a selection should remove the selection too");
 });
 
@@ -1046,11 +1059,11 @@ Run("Copy, cut and paste move text through the clipboard", () =>
     page.DoubleClick("txt");                     // selects "world"
 
     page.Press(Key.C, ctrl: true);
-    Eq("world", page.Clipboard, "copy should put the selection on the clipboard");
+    Eq("world", page.GetClipboard(), "copy should put the selection on the clipboard");
     Eq("hello world", Value(text), "and leave the text alone");
 
     page.Press(Key.X, ctrl: true);
-    Eq("world", page.Clipboard, "cut should put the selection on the clipboard");
+    Eq("world", page.GetClipboard(), "cut should put the selection on the clipboard");
     Eq("hello ", Value(text), "and remove it from the text");
 
     page.Press(Key.V, ctrl: true);
@@ -1060,7 +1073,7 @@ Run("Copy, cut and paste move text through the clipboard", () =>
 Run("Pasting a newline into a single-line field does not break the line", () =>
 {
     var (page, text, edit) = TextFieldPage("");
-    page.Clipboard = "one\ntwo";
+    page.SetClipboard("one\ntwo");
     page.Press(Key.V, ctrl: true);
     Eq("one two", Value(text), "a newline should arrive as a space in a single-line input");
 });
@@ -1084,14 +1097,14 @@ Console.WriteLine("Interactive Box");
 
 Run("InteractiveBox: Box that claims nothing stays as Box kind", () =>
 {
-    using var page = BibuiPage.Launch(
+    var runtime = TestBuild.Launch(
         build: () => new Box
         {
             Id = "plain-box",
         }.Sized(Size.Px(80f), Size.Px(40f)),
         window: TestBuild.Window(200, 100));
 
-    var node = page.FindById("plain-box");
+    var node = Nodes.FindById(runtime.Root, "plain-box");
     IsTrue(node is Box { Claims: InteractionKinds.None }, "a box that claims nothing is just a box");
 });
 
@@ -1108,7 +1121,7 @@ Run("Text: keeps single-line metrics when natural width fits the parent", () =>
     runtime.SetBuild(
         build: () => runtime.Into(runtime.Row(), () => runtime.TextFromId("inline", "Inline label".ToArray())),
         window: TestBuild.Window(800, 200));
-    using var page = runtime.Page();
+    runtime.Step();
 
     var texts = Texts(runtime);
     IsTrue(texts.SequenceEqual(new[] { "Inline label" }),
@@ -1185,9 +1198,9 @@ Run("Row: a weighted child is measured at its share, not at the whole row", () =
             }
         }),
         window: TestBuild.Window(700, 400));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    var column = page.FindById("left-column") ?? throw new Exception("left-column missing");
+    var column = Nodes.FindById(runtime.Root, "left-column") ?? throw new Exception("left-column missing");
 
     // The column is as tall as the two paragraphs in it, or it is not describing them.
     float wrapped = 0f;
@@ -1204,7 +1217,7 @@ Run("Row: a spring in a row sized by its content is an unsolvable ring", () =>
 {
     // The spring takes a share of the row, and the row is the sum of what it
     // holds: each waits for the other. Said rather than guessed at.
-    Throws<LayoutException>(() => BibuiPage.Launch(
+    Throws<LayoutException>(() => TestBuild.Launch(
         runtime =>
         {
             using (runtime.Parent(runtime.Column()))
@@ -1215,7 +1228,7 @@ Run("Row: a spring in a row sized by its content is an unsolvable ring", () =>
                 runtime.Spacer(Size.Fill);
             }
         },
-        window: TestBuild.Window(900, 80)).Dispose());
+        window: TestBuild.Window(900, 80)));
 });
 
 Run("Row: a built component goes into the argument list as it is, without .Node", () =>
@@ -1233,7 +1246,7 @@ Run("Row: a built component goes into the argument list as it is, without .Node"
     }, TestBuild.Window(400, 80));
     runtime.Step();
 
-    var row = runtime.FindById("row") ?? throw new Exception("row missing");
+    var row = Nodes.FindById(runtime.Root, "row") ?? throw new Exception("row missing");
     IsTrue(ReferenceEquals(row.FirstChild, button), "the button's node is the row's first child");
     IsTrue(ReferenceEquals(row.LastChild, slider), "the slider's node is the row's last child");
 });
@@ -1296,10 +1309,10 @@ Run("Clip: a clipping box paints nothing outside itself", () =>
                 }.Sized(Size.Px(160f), Size.Px(30f)));
         }),
         window: TestBuild.Window(240, 80));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    var png = page.Screenshot();
-    var neighbour = page.GetBounds("neighbour");
+    var png = runtime.Screenshot();
+    var neighbour = runtime.GetBounds("neighbour");
 
     // Nothing the clipped box drew may show up over the neighbour, which is
     // painted the same black as the background and so should stay empty.
@@ -1331,10 +1344,10 @@ Run("Text: a label that fits measures its own width", () =>
             runtime.TextFromId("hash", "194450e3".ToArray(), ComponentSize.Sm);
         }),
         window: TestBuild.Window(420, 60));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    var hash = page.GetBounds("hash");
-    var flexible = page.GetBounds("flexible");
+    var hash = runtime.GetBounds("hash");
+    var flexible = runtime.GetBounds("flexible");
 
     IsTrue(hash.Width < 120f,
         $"an eight-character label measured {hash.Width}px — it should be about its own glyphs");
@@ -1346,7 +1359,7 @@ Run("Clip: a floating child is cut to the box that clips, like any other", () =>
 {
     // A floating child is not part of the box's content size, so it could
     // not be what decides the clip: the claim decides it alone.
-    using var page = BibuiPage.Launch(() =>
+    var runtime = TestBuild.Launch(() =>
     {
         var clipper = new Box { Style = new Style { BackgroundColor = "#000000" } }.Clipped().Sized(Size.Px(100), Size.Px(100));
         UiNode.PushIntoParent(clipper, new Box { Style = new Style { BackgroundColor = "#FF0000" } }.Sized(Size.Px(60), Size.Px(60)).At(80, 80));
@@ -1354,14 +1367,14 @@ Run("Clip: a floating child is cut to the box that clips, like any other", () =>
         UiNode.PushIntoParent(root, clipper);
         return root;
     }, TestBuild.Window(200, 200, 1f));
-    using var shot = SkiaSharp.SKBitmap.Decode(page.Screenshot());
+    using var shot = SkiaSharp.SKBitmap.Decode(runtime.Screenshot());
     Eq(new SkiaSharp.SKColor(255, 0, 0), shot.GetPixel(90, 90), "inside the box it paints");
     Eq(new SkiaSharp.SKColor(255, 255, 255), shot.GetPixel(130, 130), "past its edge it does not");
 });
 
 Run("Clip: a box that does not claim it lets its children run past", () =>
 {
-    using var page = BibuiPage.Launch(() =>
+    var runtime = TestBuild.Launch(() =>
     {
         var open = new Box { Style = new Style { BackgroundColor = "#000000" } }.Sized(Size.Px(100), Size.Px(100));
         UiNode.PushIntoParent(open, new Box { Style = new Style { BackgroundColor = "#FF0000" } }.Sized(Size.Px(60), Size.Px(60)).At(80, 80));
@@ -1369,7 +1382,7 @@ Run("Clip: a box that does not claim it lets its children run past", () =>
         UiNode.PushIntoParent(root, open);
         return root;
     }, TestBuild.Window(200, 200, 1f));
-    using var shot = SkiaSharp.SKBitmap.Decode(page.Screenshot());
+    using var shot = SkiaSharp.SKBitmap.Decode(runtime.Screenshot());
     Eq(new SkiaSharp.SKColor(255, 0, 0), shot.GetPixel(130, 130), "clipping is asked for, not assumed");
 });
 
@@ -1407,7 +1420,7 @@ Run("ThemeRegistry: every listed name loads and mounts by name", () =>
         runtime.Step();
         Eq(ThemeLoader.Load(name).Name, runtime.Theme.Name, $"a runtime set to \"{name}\" uses that theme");
 
-        using var page = BibuiPage.Launch(() => new Box().Sized(Size.Fill, Size.Fill), surface, name);
+        var page = TestBuild.Launch(() => new Box().Sized(Size.Fill, Size.Fill), surface, name);
     }
 });
 
@@ -1430,7 +1443,7 @@ Run("ThemeRegistry: a theme registered outside bibui mounts by name", () =>
     Eq("#123456", runtime.Theme.Colors.Accent);
 
     Eq(name, ThemeLoader.Load(name).Name, "ThemeLoader.Load resolves it too");
-    using var page = BibuiPage.Launch(() => new Box().Sized(Size.Fill, Size.Fill), TestBuild.Window(120, 40), name);
+    var page = TestBuild.Launch(() => new Box().Sized(Size.Fill, Size.Fill), TestBuild.Window(120, 40), name);
     IsTrue(made >= 3, "the factory runs on every load");
     IsFalse(ReferenceEquals(ThemeLoader.Load(name), ThemeLoader.Load(name)), "each load is a fresh theme");
 });
@@ -1987,7 +2000,7 @@ static void BuildSelect(BibuiRuntime runtime, SelectState state, string id)
 
 static void ClickCentre(BibuiRuntime runtime, string id)
 {
-    var b = runtime.Page().GetBounds(id);
+    var b = runtime.GetBounds(id);
     ClickAt(runtime, b.X + b.Width / 2f, b.Y + b.Height / 2f);
 }
 
@@ -2073,7 +2086,7 @@ Run("Select: in a dialog, a row is picked by a press and a release in frames of 
     IsTrue(runtime.IsDropDownOpen("sel-list"), "the trigger opens it");
     runtime.Step();
 
-    var b = runtime.Page().GetBounds("sel-option-b");
+    var b = runtime.GetBounds("sel-option-b");
     float x = b.X + b.Width / 2f, y = b.Y + b.Height / 2f;
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x, Y = y });
     runtime.Step();
@@ -2108,7 +2121,7 @@ Run("runtime.RadioGroup: a click on an option's label picks it", () =>
         },
         TestBuild.Window(300, 200));
     runtime.Step();
-    var beta = runtime.Page().GetBounds("rg-b");
+    var beta = runtime.GetBounds("rg-b");
     Eq(32f, beta.Height, "a row is 32 px tall");
     ClickAt(runtime, beta.X + beta.Width - 5f, beta.Y + beta.Height / 2f);
     Eq("b", value, "the click picks Beta");
@@ -2129,7 +2142,7 @@ Run("runtime.RadioGroup: a disabled option swallows the click", () =>
         },
         TestBuild.Window(300, 200));
     runtime.Step();
-    var gamma = runtime.Page().GetBounds("rg-c");
+    var gamma = runtime.GetBounds("rg-c");
     ClickAt(runtime, gamma.X + 8f, gamma.Y + gamma.Height / 2f);
     Eq("a", value, "nothing picked");
 });
@@ -2148,7 +2161,7 @@ Run("runtime.Toggle: a click is reported and the caller flips its state", () =>
         },
         TestBuild.Window(300, 100));
     runtime.Step();
-    var toggle = runtime.Page().GetBounds("tog");
+    var toggle = runtime.GetBounds("tog");
     Eq(36f, toggle.Height, "36 px tall");
     ClickAt(runtime, toggle.X + toggle.Width / 2f, toggle.Y + toggle.Height / 2f);
     IsTrue(on, "the click turns it on");
@@ -2170,7 +2183,7 @@ Run("runtime.Toggle: disabled, a click is not reported", () =>
         },
         TestBuild.Window(300, 100));
     runtime.Step();
-    var toggle = runtime.Page().GetBounds("tog");
+    var toggle = runtime.GetBounds("tog");
     ClickAt(runtime, toggle.X + toggle.Width / 2f, toggle.Y + toggle.Height / 2f);
     IsTrue(!clicked, "no click");
 });
@@ -2201,8 +2214,8 @@ Run("Style.BackgroundGradient: gradient fill renders and child still lays out", 
         TestBuild.Window(300, 200, 1f));
     var frame = runtime.Frame();
     IsTrue(Pixel(frame, 5, 190) != Pixel(frame, 295, 190), "the fill should run from one colour to the other");
-    using var page = runtime.Page();
-    IsTrue(page.IsVisible("grad-child"), "gradient surface should still lay out its child");
+    runtime.Step();
+    IsTrue(runtime.IsVisible("grad-child"), "gradient surface should still lay out its child");
 });
 
 Run("Gradient.Radial: brightest at its centre, where a linear one runs corner to corner", () =>
@@ -2227,14 +2240,14 @@ Run("Style.Opacity: fades the subtree over what is behind it", () =>
         () => runtime.TextFromId("fade-child", "x".ToArray()));
     var opaqueRuntime = BibuiRuntime.Create();
     opaqueRuntime.SetBuild(() => Tree(opaqueRuntime, 1.0f), TestBuild.Window(300, 200, 1f));
-    using var opaque = opaqueRuntime.Page();
+    opaqueRuntime.Step();
     var fadedRuntime = BibuiRuntime.Create();
     fadedRuntime.SetBuild(() => Tree(fadedRuntime, 0.4f), TestBuild.Window(300, 200, 1f));
-    using var faded = fadedRuntime.Page();
+    fadedRuntime.Step();
     var solid = Pixel(opaqueRuntime.Frame(), 150, 150);
     var dim = Pixel(fadedRuntime.Frame(), 150, 150);
     IsTrue(dim.R < solid.R - 50, $"faded fill should let the background through (opaque={solid}, faded={dim})");
-    IsTrue(faded.IsVisible("fade-child"), "faded subtree should still render its child");
+    IsTrue(fadedRuntime.IsVisible("fade-child"), "faded subtree should still render its child");
 });
 
 Run("Style.BorderLeft: a left-only nav active-indicator bar draws one edge, not a uniform border", () =>
@@ -2263,7 +2276,7 @@ Run("Style.BorderBottom: a dashed edge is broken into dashes", () =>
 
 Run("Style.BackdropBlur: a glass chip still paints its own fill on top of the blurred region", () =>
 {
-    using var page = BibuiPage.Launch(
+    var runtime = TestBuild.Launch(
         () => Layer(null, new Box { Style = new Style { BackgroundGradient = Gradient.Diagonal(new ColorStop(0f, "#2A1B2E"), new ColorStop(1f, "#E8836B")) } }.Sized(Size.Px(300), Size.Px(200)), new Box
                 {
                     Id = "chip",
@@ -2275,8 +2288,8 @@ Run("Style.BackdropBlur: a glass chip still paints its own fill on top of the bl
                     },
                 }.Sized(Size.Px(80), Size.Px(24)).At(12, 12)).Sized(Size.Px(300), Size.Px(200)),
         TestBuild.Window(300, 200, 1f));
-    IsTrue(page.IsVisible("chip"), "the glass chip itself should still render");
-    using var shot = SkiaSharp.SKBitmap.Decode(page.Screenshot());
+    IsTrue(runtime.IsVisible("chip"), "the glass chip itself should still render");
+    using var shot = SkiaSharp.SKBitmap.Decode(runtime.Screenshot());
     var inside = shot.GetPixel(50, 24);
     var outside = shot.GetPixel(50, 50);
     IsTrue(inside.Red + inside.Green + inside.Blue < outside.Red + outside.Green + outside.Blue - 60,
@@ -2286,18 +2299,18 @@ Run("Style.BackdropBlur: a glass chip still paints its own fill on top of the bl
 Run("Launch(ThemeTokens): custom accent reaches an accent fill (no reflection)", () =>
 {
     var theme = new ThemeTokens { Name = "warm", Colors = new ColorTokens { Accent = "#E8836B", AccentForeground = "#1A1110" } };
-    using var page = BibuiPage.Launch(
+    var runtime = TestBuild.Launch(
         () => new Box { Id = "primary", Style = new Style { BackgroundColor = UiColor.Accent } }.Sized(Size.Px(80f), Size.Px(36f)),
         theme,
         TestBuild.Window(300, 120, 1f));
-    using var shot = SkiaSharp.SKBitmap.Decode(page.Screenshot());
+    using var shot = SkiaSharp.SKBitmap.Decode(runtime.Screenshot());
     var p = shot.GetPixel(40, 18);
     Eq(((byte)0xE8, (byte)0x83, (byte)0x6B), (p.Red, p.Green, p.Blue), "an accent fill should use the custom theme accent");
 });
 
 Run("Icon: standalone leaf node sizes itself to Size and resolves Color", () =>
 {
-    using var page = BibuiPage.Launch(
+    var page = TestBuild.Launch(
         runtime => UiNode.PushIntoParent(runtime.Row(),
             new Icon { Id = "glyph", Name = "search", Size = FontSize.Px(24f), Color = "#FF9345" }.Sized(Size.Px(24f), Size.Px(24f))),
         TestBuild.Window(300, 200, 1f));
@@ -2311,12 +2324,12 @@ Run("Icon: standalone leaf node sizes itself to Size and resolves Color", () =>
 Run("Icon: null Color falls back to the theme's TextPrimary", () =>
 {
     var theme = new ThemeTokens { Name = "t", Colors = new ColorTokens { TextPrimary = "#ABCDEF" } };
-    using var page = BibuiPage.Launch(
+    var runtime = TestBuild.Launch(
         () => new Icon { Id = "glyph", Name = "play" }.Sized(Size.Px(24f), Size.Px(24f)),
         theme,
         TestBuild.Window(300, 200, 1f));
-    using var shot = SkiaSharp.SKBitmap.Decode(page.Screenshot());
-    IsTrue(GlyphHas(shot, page.GetBounds("glyph"), 0xAB, 0xCD, 0xEF), "the glyph is stroked in the theme's TextPrimary");
+    using var shot = SkiaSharp.SKBitmap.Decode(runtime.Screenshot());
+    IsTrue(GlyphHas(shot, runtime.GetBounds("glyph"), 0xAB, 0xCD, 0xEF), "the glyph is stroked in the theme's TextPrimary");
 });
 
 // A title left to size itself: the Column hands it exactly the width it measured. The line
@@ -2335,7 +2348,7 @@ Run("Text: a text drawn at its measured width stays on one line", () =>
             runtime.TextFromId("below", "under it".ToArray());
         }),
         TestBuild.Window(400, 120, 1f));
-    using var page = runtime.Page();
+    runtime.Step();
     var texts = Texts(runtime);
     IsTrue(texts.SequenceEqual(new[] { "UTC anchored", "under it" }),
         $"expected the title drawn whole on one line, got [{string.Join(" | ", texts)}]");
@@ -2367,7 +2380,7 @@ Run("Text: a label handed back its own measured width, less a padding, is drawn 
                     .Padded(EdgeInsets.Symmetric(horizontal: pad, vertical: 0f))))
                     runtime.Text(label, ComponentSize.Sm);
         }), TestBuild.Window(400, 1300, scale));
-        using var page = runtime.Page();
+        runtime.Step();
         var drawn = Texts(runtime).ToHashSet();
         foreach (var label in labels.Where(l => !drawn.Contains(l)))
             broken.Add($"'{label}' at scale {scale}, padding {pad}");
@@ -2400,9 +2413,9 @@ Run("Box: a fixed Width box holds a multi-line field wrapped at that width, not 
         }),
         TestBuild.Window(1000, 300, 1f));
     runtime.Step();   // a field wraps at the width it was laid out at last frame
-    using var page = runtime.Page();
-    var bubble = Bounds(page.FindById("bubble")!);
-    var text = Bounds(page.FindById("words")!);
+    runtime.Step();
+    var bubble = Bounds(Nodes.FindById(runtime.Root, "bubble")!);
+    var text = Bounds(Nodes.FindById(runtime.Root, "words")!);
     IsTrue(text.Height > 30f, $"the words should wrap inside 212px: text {text.Height} tall");
     IsTrue(text.Y + text.Height <= bubble.Y + bubble.Height - 10f + 0.5f,
         $"the bubble ({bubble.Height} tall) should hold its {text.Height}px of text and its padding");
@@ -2431,8 +2444,8 @@ Run("runtime.MultilineTextField: wrapped by characters, a token longer than the 
     {
         runtime.Step();
         runtime.Step();   // wrapped at last frame's width
-        using var page = runtime.Page();
-        return Below(page.FindById("log")!).Where(t => TextOf(t)?.Length > 0).Select(Bounds).ToList();
+        runtime.Step();
+        return Below(Nodes.FindById(runtime.Root, "log")!).Where(t => TextOf(t)?.Length > 0).Select(Bounds).ToList();
     }
     var byWords = Lines();
     Eq(1, byWords.Count, "by words the path is one line");
@@ -2464,9 +2477,9 @@ Run("runtime.MultilineTextField: a hard line break is laid out as a line, not on
         }),
         TestBuild.Window(800, 300, 1.25f));
     runtime.Step();
-    using var page = runtime.Page();
-    var box = Bounds(page.FindById("draft")!);
-    var wordsNode = page.FindById("words")!;
+    runtime.Step();
+    var box = Bounds(Nodes.FindById(runtime.Root, "draft")!);
+    var wordsNode = Nodes.FindById(runtime.Root, "words")!;
     var words = Bounds(wordsNode);
     var lines = Below(wordsNode).Where(t => TextOf(t)?.Length > 0).Select(Bounds).ToList();
     IsTrue(lines.Count == 3, $"three lines painted, got {lines.Count}");
@@ -2496,14 +2509,14 @@ Run("Text: a mono text is set and laid out in the theme's mono family", () =>
         }),
         new ThemeTokens { Name = "mono-family", Typography = new TypographyTokens { FontFamilyMono = "IBM Plex Mono" } },
         TestBuild.Window(300, 80, 1f));
-    using var page = runtime.Page();
+    runtime.Step();
 
     var mono = runtime.FontInScope(family: FontSlot.Mono);
     Eq("", mono.Face.Family, "the theme's mono family is not registered here: the built-in Inter");
     // Laid out at what the mono family measures. Not compared with the body
     // family's width: where neither family is installed both fall back to the
     // same face, and the two widths agree.
-    Eq(TextLayer.WidthFromChars(runtime.Fonts, "194450e3", TextLayer.StyleFromFont(runtime.Fonts, mono, mono.Scale), mono.Scale), page.GetBounds("mono").Width, "laid out at its mono font's width");
+    Eq(TextLayer.WidthFromChars(runtime.Fonts, "194450e3", TextLayer.StyleFromFont(runtime.Fonts, mono, mono.Scale), mono.Scale), runtime.GetBounds("mono").Width, "laid out at its mono font's width");
 });
 
 Run("FontSize: a text in pixels is measured and laid out at that size, between the steps", () =>
@@ -2516,13 +2529,13 @@ Run("FontSize: a text in pixels is measured and laid out at that size, between t
             runtime.TextFromId("px", "Zoomed".ToArray(), FontSize.Px(21f));
         }),
         TestBuild.Window(300, 120, 1f));
-    using var page = runtime.Page();
+    runtime.Step();
 
     var font = runtime.FontInScope(FontSize.Px(21f));
     Eq(21f, font.Size, "the font is the size asked for");
-    Eq(TextLayer.WidthFromChars(runtime.Fonts, "Zoomed", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale), page.GetBounds("px").Width, "laid out at that font's width");
-    Eq(runtime.Fonts.LineHeight(font), page.GetBounds("px").Height, "and a line of it tall");
-    IsTrue(page.GetBounds("px").Width > page.GetBounds("sm").Width, "larger than the small step");
+    Eq(TextLayer.WidthFromChars(runtime.Fonts, "Zoomed", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale), runtime.GetBounds("px").Width, "laid out at that font's width");
+    Eq(runtime.Fonts.LineHeight(font), runtime.GetBounds("px").Height, "and a line of it tall");
+    IsTrue(runtime.GetBounds("px").Width > runtime.GetBounds("sm").Width, "larger than the small step");
 });
 
 Run("FontSize: a text's size is always said, and can be changed on the text that came back", () =>
@@ -2542,10 +2555,10 @@ Run("FontSize: a text's size is always said, and can be changed on the text that
         }
         return root;
     }, TestBuild.Window(300, 120, 1f));
-    using var page = runtime.Page();
+    runtime.Step();
 
     Eq((FontSize)ComponentSize.Md, plain.Size, "nothing passed and nothing pushed is Md");
-    Eq(page.GetBounds("reference").Width, page.GetBounds("changed").Width,
+    Eq(runtime.GetBounds("reference").Width, runtime.GetBounds("changed").Width,
         "a size set afterwards is the one laid out: as wide as the text made at that size");
 });
 
@@ -2579,9 +2592,9 @@ Run("FontSize: what is built in scope takes the innermost size begun, unless it 
         }
         return root;
     }, TestBuild.Window(400, 200, 1f));
-    using var page = runtime.Page();
+    runtime.Step();
 
-    float Wide(string id) => page.GetBounds(id).Width;
+    float Wide(string id) => runtime.GetBounds(id).Width;
     Eq(Wide("at30"), Wide("outer"), "the pushed size");
     Eq(Wide("at18"), Wide("inner"), "the innermost push");
     Eq(18f, icon.Extent.X, "an icon takes it too");
@@ -3407,502 +3420,6 @@ Run("A box hears the right button", () =>
     Eq(20f, seen.DragDeltaY, "anchored where the button went down");
 });
 
-// ── BibuiTestServer: synthesised keyboard input ───────────────────────────────
-//
-// The point of `press` and `type` is that a test can reach the host app's own
-// keyboard handling, which is only true if the events actually land on the
-// frame queue where a build callback reads them. So these drive a real socket
-// and assert on what the build callback saw — not on the command's "ok".
-
-Console.WriteLine();
-Console.WriteLine("BibuiTestServer keyboard");
-
-// Each test gets its own port; a stale listener from a previous run would
-// otherwise make the failure look like a protocol bug.
-int nextTestPort = 45411;
-
-// Every request carries the server's token; the tests give it one, and write
-// no token file, so a test never touches the user's.
-const string TestServerToken = "runtime-tests-0123456789abcdef";
-static string Authorised(string json) => "{\"token\":\"" + TestServerToken + "\"," + json[1..];
-static string TestServerOut() =>
-    Path.Combine(Path.GetTempPath(), "bibui-runtime-tests", "test-server-" + Guid.NewGuid().ToString("N"));
-// A server on runtime, and the app's loop it waits on.
-BibuiTestServer NewTestServer(BibuiRuntime runtime, int port, string? output = null)
-{
-    var server = new BibuiTestServer(runtime, output ?? TestServerOut(), port, TestServerToken, writeTokenFile: false, draw: new SkiaCpuRenderer().Draw);
-    runtime.Serve(server);
-    runtime.RunLoop();
-    return server;
-}
-static void StopTestServer(BibuiTestServer server)
-{
-    server.Stop();
-    try { Directory.Delete(server.OutputDirectory, recursive: true); }
-    catch (IOException) { }
-}
-
-// Mount a runtime whose build records every event of the frame, start a test
-// server on it, and hand both to the body.
-void WithKeyboardServer(Action<Func<object, string>, List<BibUiEvent>> body)
-{
-    var runtime = BibuiRuntime.Create();
-    var seen = new List<BibUiEvent>();
-    runtime.SetBuild(() =>
-    {
-        // Copies: an event lives until the frame ends, and the pool hands it out again.
-        foreach (var ev in runtime.UnconsumedEvents) { var copy = new BibUiEvent(); copy.CopyFrom(ev); seen.Add(copy); }
-        return new Box { Id = "canvas" }.Sized(Size.Px(100f), Size.Px(100f));
-    }, TestBuild.Window(120, 120, 1f));
-    runtime.Step();
-    seen.Clear();
-
-    var port = nextTestPort++;
-    var server = NewTestServer(runtime, port);
-    server.Start();
-    try
-    {
-        using var client = new System.Net.Sockets.TcpClient("127.0.0.1", port);
-        using var stream = client.GetStream();
-        using var reader = new StreamReader(stream);
-        using var writer = new StreamWriter(stream) { AutoFlush = true };
-
-        body(cmd =>
-        {
-            writer.WriteLine(Authorised(System.Text.Json.JsonSerializer.Serialize(cmd)));
-            return reader.ReadLine() ?? "";
-        }, seen);
-    }
-    finally
-    {
-        StopTestServer(server);
-    }
-}
-
-Run("TestServer press: a control key reaches the frame queue as the window would build it", () =>
-    WithKeyboardServer((send, seen) =>
-    {
-        var reply = send(new { cmd = "press", key = "Delete" });
-        IsTrue(reply.Contains("\"ok\":true"), $"press must succeed, got {reply}");
-
-        var ev = seen.FirstOrDefault(e => e.Key == Key.Delete);
-        IsTrue(ev is not null, "the Delete event must reach the build callback");
-        IsTrue(ev!.Kind == BibUiEventKind.Edit, "Delete must arrive as an Edit, as the window builds it");
-    }));
-
-Run("TestServer press: the key is let go of, in a later frame, as a keyboard does", () =>
-    WithKeyboardServer((send, seen) =>
-    {
-        send(new { cmd = "press", key = "Tab" });
-        var kinds = seen.Where(e => e.Key == Key.Tab).Select(e => e.Kind).ToList();
-        Eq(2, kinds.Count, "a press is a key going down and coming up");
-        IsTrue(kinds[0] != BibUiEventKind.Release && kinds[1] == BibUiEventKind.Release,
-               $"down first, then the release; got {string.Join(", ", kinds)}");
-    }));
-
-Run("TestServer press: modifiers ride along", () =>
-    WithKeyboardServer((send, seen) =>
-    {
-        send(new { cmd = "press", key = "A", ctrl = true });
-
-        var ev = seen.FirstOrDefault(e => e.Key == Key.A);
-        IsTrue(ev is not null, "the A press must reach the build callback");
-        IsTrue(ev!.Ctrl, "ctrl must be set on the synthesised event");
-    }));
-
-Run("TestServer press: Arrow spellings alias the bare direction names", () =>
-    WithKeyboardServer((send, seen) =>
-    {
-        send(new { cmd = "press", key = "ArrowLeft" });
-
-        IsTrue(seen.Any(e => e.Key == Key.Left), "ArrowLeft must arrive as Key.Left");
-    }));
-
-Run("TestServer press: an unknown key name is an error, not a silent no-op", () =>
-    WithKeyboardServer((send, seen) =>
-    {
-        var reply = send(new { cmd = "press", key = "NotAKey" });
-        IsTrue(!reply.Contains("\"ok\":true"), $"an unknown key must report an error, got {reply}");
-        IsTrue(seen.Count == 0, "and must enqueue nothing");
-    }));
-
-// `press` cannot do this: a keyboard reports printable characters on a channel
-// of their own, so a digit is not reachable through a key name.
-Run("TestServer type: text arrives one Text event per character, in order", () =>
-    WithKeyboardServer((send, seen) =>
-    {
-        var reply = send(new { cmd = "type", text = "150" });
-        IsTrue(reply.Contains("\"ok\":true"), $"type must succeed, got {reply}");
-
-        var typed = string.Concat(seen.Where(e => e.Kind == BibUiEventKind.Text).Select(e => e.Char));
-        Eq("150", typed, "every character must arrive, in the order given");
-    }));
-
-Run("TestServer type: control characters carry no printable event", () =>
-    WithKeyboardServer((send, seen) =>
-    {
-        send(new { cmd = "type", text = "a\tb\nc" });
-
-        var typed = string.Concat(seen.Where(e => e.Kind == BibUiEventKind.Text).Select(e => e.Char));
-        Eq("abc", typed, "tabs and newlines are key presses, not text");
-    }));
-
-Run("TestServer type: empty text is accepted and enqueues nothing", () =>
-    WithKeyboardServer((send, seen) =>
-    {
-        var reply = send(new { cmd = "type", text = "" });
-        IsTrue(reply.Contains("\"ok\":true"), $"empty text must succeed, got {reply}");
-        IsTrue(seen.Count == 0, "and must enqueue nothing");
-    }));
-
-// ── BibuiTestServer: the wire format ──────────────────────────────────────────
-//
-// The server's replies come from a source-generated JSON context so a Native AOT
-// app carries no reflection JSON. Scripts read these lines (nc, port
-// 44334), so each must be byte for byte what the anonymous types used to give:
-// the expected line is serialised here the old way, with reflection.
-
-Console.WriteLine();
-Console.WriteLine("BibuiTestServer wire format");
-
-void WithLabelServer(Action<int> body)
-{
-    var runtime = BibuiRuntime.Create();
-    runtime.SetBuild(() =>
-    {
-        var canvas = runtime.BoxFromId("canvas", InteractionKinds.Disabled).Sized(Size.Px(100f), Size.Px(40f));
-        UiNode.PushIntoParent(canvas, runtime.Text("Tæst <&> \"q\"".ToArray()).Sized(Size.Px(90f), Size.Px(20f)));
-        return canvas;
-    }, TestBuild.Window(120, 60, 1f));
-    runtime.Step();
-
-    var port = nextTestPort++;
-    var server = NewTestServer(runtime, port);
-    server.Start();
-    try { body(port); }
-    finally { StopTestServer(server); }
-}
-
-Run("TestServer replies are byte-identical to the reflection-serialised format", () =>
-    WithLabelServer(port =>
-    {
-        using var client = new System.Net.Sockets.TcpClient("127.0.0.1", port);
-        using var stream = client.GetStream();
-        using var reader = new StreamReader(stream);
-        using var writer = new StreamWriter(stream) { AutoFlush = true };
-        string Send(string line) { writer.WriteLine(Authorised(line)); return reader.ReadLine() ?? ""; }
-        static string Old(object o) => System.Text.Json.JsonSerializer.Serialize(o);
-
-        Eq("{\"ok\":true}", Send("{\"cmd\":\"ping\"}"), "ping");
-        Eq(Old(new { ok = true, result = true }), Send("{\"cmd\":\"is_visible\",\"id\":\"canvas\"}"), "is_visible, found");
-        Eq(Old(new { ok = true, result = false }), Send("{\"cmd\":\"is_visible\",\"id\":\"nope\"}"), "is_visible, missing");
-        Eq(Old(new { ok = true, result = true }), Send("{\"cmd\":\"is_disabled\",\"id\":\"canvas\"}"), "is_disabled");
-        Eq(Old(new { ok = true, result = (string?)"Tæst <&> \"q\"" }), Send("{\"cmd\":\"get_text\",\"id\":\"canvas\"}"), "get_text, escaped as before");
-        Eq(Old(new { ok = false, error = "No node with id 'n<é>'" }), Send("{\"cmd\":\"get_text\",\"id\":\"n<é>\"}"), "an error, escaped as before");
-        Eq(Old(new { ok = false, error = "Unknown command: bogus" }), Send("{\"cmd\":\"bogus\"}"), "unknown command");
-    }));
-
-Run("WorkflowClient round-trips against BibuiTestServer", () =>
-    WithLabelServer(port =>
-    {
-        using var client = new WorkflowClient(port: port, token: TestServerToken);
-        client.Connect();
-        client.Ping();
-        IsTrue(client.IsVisible("canvas"), "canvas is visible");
-        IsTrue(!client.IsVisible("nope"), "an unknown id is not visible");
-        IsTrue(client.IsDisabled("canvas"), "canvas claims Disabled");
-        Eq("Tæst <&> \"q\"", client.GetText("canvas"), "get_text returns the label's words");
-        client.Hover(10f, 10.5f);
-        client.Scroll(10f, 10f, -3f);
-        client.ClickAt(5f, 5f);
-        var threw = false;
-        try { client.GetText("nope"); } catch (Exception ex) { threw = ex.Message.Contains("No node with id 'nope'"); }
-        IsTrue(threw, "a server error surfaces as an exception carrying its message");
-    }));
-
-// The client's requests too: a fake server records each line and answers ok.
-Run("WorkflowClient requests are byte-identical to the reflection-serialised format", () =>
-{
-    var port = nextTestPort++;
-    var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port);
-    listener.Start();
-    var lines = new List<string>();
-    var serverThread = new Thread(() =>
-    {
-        using var conn = listener.AcceptTcpClient();
-        using var stream = conn.GetStream();
-        using var reader = new StreamReader(stream);
-        using var writer = new StreamWriter(stream) { AutoFlush = true };
-        string? line;
-        while ((line = reader.ReadLine()) is not null)
-        {
-            lock (lines) lines.Add(line);
-            writer.WriteLine(line.Contains("get_text") ? "{\"ok\":true,\"result\":null}" : "{\"ok\":true,\"result\":true}");
-        }
-    }) { IsBackground = true };
-    serverThread.Start();
-    try
-    {
-        using (var client = new WorkflowClient(port: port, token: TestServerToken))
-        {
-            client.Connect();
-            client.Ping();
-            client.Click("a\"b");
-            client.ClickAt(1.5f, 2f);
-            client.Hover(3f, 4.25f);
-            client.Scroll(5f, 6f, -0.1f);
-            client.Screenshot("shots/x é.png");
-            client.Fill("f", "<v>");
-            client.IsVisible("v");
-            client.IsDisabled("d");
-            Eq<string?>(null, client.GetText("t"), "a null result reads back as null");
-            client.StartRecording("out.mp4");
-            client.StopRecording();
-        }
-        serverThread.Join(2000);
-
-        static string Old(object o) => Authorised(System.Text.Json.JsonSerializer.Serialize(o));
-        string[] expected =
-        [
-            Old(new { cmd = "ping" }),
-            Old(new { cmd = "click", id = "a\"b" }),
-            Old(new { cmd = "click_at", x = 1.5f, y = 2f }),
-            Old(new { cmd = "hover", x = 3f, y = 4.25f }),
-            Old(new { cmd = "scroll", x = 5f, y = 6f, dy = -0.1f }),
-            Old(new { cmd = "screenshot", path = "shots/x é.png" }),
-            Old(new { cmd = "fill", id = "f", value = "<v>" }),
-            Old(new { cmd = "is_visible", id = "v" }),
-            Old(new { cmd = "is_disabled", id = "d" }),
-            Old(new { cmd = "get_text", id = "t" }),
-            Old(new { cmd = "start_recording", output = "out.mp4" }),
-            Old(new { cmd = "stop_recording" }),
-        ];
-        lock (lines)
-        {
-            Eq(expected.Length, lines.Count, "one line per command");
-            for (int i = 0; i < expected.Length; i++) Eq(expected[i], lines[i], $"request {i}");
-        }
-    }
-    finally { listener.Stop(); }
-});
-
-// ── BibuiTestServer: who may use it, and where it may write ───────────────────
-//
-// A loopback port is reachable from any local process and, through a
-// cross-protocol POST, from any web page the user has open. So the server is
-// off unless asked for, every request carries a token, anything HTTP-shaped
-// ends the connection before a later line can run, files land only in the
-// output directory, and ffmpeg gets its arguments one by one.
-
-Console.WriteLine();
-Console.WriteLine("BibuiTestServer security");
-
-// A runtime with something on it, for a server to drive. Its loop is started
-// once its server is known: one loop per runtime, as an app has.
-BibuiRuntime SecurityRuntime()
-{
-    var runtime = BibuiRuntime.Create();
-    runtime.SetBuild(() => new Box { Id = "canvas" }.Sized(Size.Px(40f), Size.Px(40f)),
-        TestBuild.Window(60, 60, 1f));
-    runtime.Step();
-    return runtime;
-}
-
-// Writes every line on one connection, then reads every reply until the server
-// closes it (or two seconds pass).
-static List<string> Exchange(int port, params string[] lines)
-{
-    using var client = new System.Net.Sockets.TcpClient("127.0.0.1", port);
-    client.ReceiveTimeout = 2000;
-    using var stream = client.GetStream();
-    using var reader = new StreamReader(stream);
-    using var writer = new StreamWriter(stream) { AutoFlush = true };
-    foreach (var line in lines) writer.WriteLine(line);
-    var replies = new List<string>();
-    try
-    {
-        string? reply;
-        while ((reply = reader.ReadLine()) is not null) replies.Add(reply);
-    }
-    catch (IOException) { } // the timeout: the server is still waiting for more
-    return replies;
-}
-
-void WithSecurityServer(Action<int, BibuiTestServer> body)
-{
-    var port = nextTestPort++;
-    var server = NewTestServer(SecurityRuntime(), port);
-    server.Start();
-    try { body(port, server); }
-    finally { StopTestServer(server); }
-}
-
-Run("TestServer is off without BIBUI_TEST_SERVER=1", () =>
-{
-    var saved = Environment.GetEnvironmentVariable(BibuiTestServer.EnableVariable);
-    try
-    {
-        foreach (var value in new string?[] { null, "", "0", "true", "yes" })
-        {
-            Environment.SetEnvironmentVariable(BibuiTestServer.EnableVariable, value);
-            var port = nextTestPort++;
-            IsTrue(!BibuiTestServer.IsEnabled, $"'{value}' does not turn it on");
-            using var server = BibuiTestServer.StartIfEnabled(SecurityRuntime(), port, new SkiaCpuRenderer().Draw);
-            IsTrue(server is null, $"with BIBUI_TEST_SERVER='{value}' no server starts");
-            var refused = false;
-            try { using var c = new System.Net.Sockets.TcpClient("127.0.0.1", port); }
-            catch (System.Net.Sockets.SocketException) { refused = true; }
-            IsTrue(refused, $"and nothing listens on {port}");
-        }
-    }
-    finally { Environment.SetEnvironmentVariable(BibuiTestServer.EnableVariable, saved); }
-});
-
-Run("TestServer with BIBUI_TEST_SERVER=1 starts, and writes its token for the user alone", () =>
-{
-    var saved = new[] { BibuiTestServer.EnableVariable, BibuiTestServer.OutputVariable, "XDG_RUNTIME_DIR" }
-        .ToDictionary(n => n, Environment.GetEnvironmentVariable);
-    var runtimeDir = TestServerOut();
-    var output = TestServerOut();
-    Directory.CreateDirectory(runtimeDir);
-    try
-    {
-        Environment.SetEnvironmentVariable(BibuiTestServer.EnableVariable, "1");
-        Environment.SetEnvironmentVariable(BibuiTestServer.OutputVariable, output);
-        Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", runtimeDir);
-        var port = nextTestPort++;
-        string tokenFile;
-        var securityRuntime = SecurityRuntime();
-        using (var server = BibuiTestServer.StartIfEnabled(securityRuntime, port, new SkiaCpuRenderer().Draw))
-        {
-            IsTrue(server is not null, "the opt-in starts a server");
-            securityRuntime.Serve(server!);
-            securityRuntime.RunLoop();
-            tokenFile = server!.TokenFile;
-            Eq(Path.Combine(runtimeDir, $"bibui-test-server-{port}.token"), tokenFile, "the token file is under XDG_RUNTIME_DIR");
-            Eq(server.Token, File.ReadAllText(tokenFile), "it holds the token");
-            Eq(64, server.Token.Length, "a random 256-bit token, as hex");
-            if (!OperatingSystem.IsWindows())
-                Eq(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(tokenFile), "readable by the user only");
-            Eq(Path.GetFullPath(output), server.OutputDirectory, "the output directory is BIBUI_TEST_SERVER_OUT");
-
-            using var client = new WorkflowClient(port: port);   // reads the token file
-            client.Connect();
-            client.Ping();
-            client.Screenshot("shot.png");
-            IsTrue(File.Exists(Path.Combine(output, "shot.png")), "a screenshot lands in the output directory");
-        }
-        IsTrue(!File.Exists(tokenFile), "the token file goes with the server");
-    }
-    finally
-    {
-        foreach (var (name, value) in saved) Environment.SetEnvironmentVariable(name, value);
-        Directory.Delete(runtimeDir, recursive: true);
-        if (Directory.Exists(output)) Directory.Delete(output, recursive: true);
-    }
-});
-
-Run("TestServer refuses a request without the token, and closes the connection", () =>
-    WithSecurityServer((port, server) =>
-    {
-        var replies = Exchange(port, "{\"cmd\":\"screenshot\",\"path\":\"no-token.png\"}", Authorised("{\"cmd\":\"ping\"}"));
-        Eq(1, replies.Count, $"one refusal, then the connection is closed; got {string.Join(" | ", replies)}");
-        IsTrue(replies[0].Contains("\"ok\":false") && replies[0].Contains("token"), $"refused for its token, got {replies[0]}");
-        IsTrue(!File.Exists(Path.Combine(server.OutputDirectory, "no-token.png")), "and the command did not run");
-
-        replies = Exchange(port, "{\"token\":\"runtime-tests-0123456789abcdeX\",\"cmd\":\"ping\"}");
-        IsTrue(replies.Count == 1 && replies[0].Contains("\"ok\":false"), "a wrong token is refused too");
-        replies = Exchange(port, "{\"token\":42,\"cmd\":\"ping\"}");
-        IsTrue(replies.Count == 1 && replies[0].Contains("\"ok\":false"), "so is a token that is not a string");
-
-        replies = Exchange(port, Authorised("{\"cmd\":\"ping\"}"), Authorised("{\"cmd\":\"ping\"}"));
-        Eq(2, replies.Count, "with the token, a connection carries many requests");
-        IsTrue(replies.All(r => r == "{\"ok\":true}"), $"and each is answered; got {string.Join(" | ", replies)}");
-    }));
-
-Run("TestServer refuses anything that looks like HTTP, before a later line can run", () =>
-    WithSecurityServer((port, server) =>
-    {
-        // What fetch('http://127.0.0.1:PORT', {method:'POST', mode:'no-cors', body}) sends,
-        // with the worst body there is: a line that carries the token.
-        var shot = Authorised("{\"cmd\":\"screenshot\",\"path\":\"from-the-web.png\"}");
-        var replies = Exchange(port,
-            "POST / HTTP/1.1", "Host: 127.0.0.1", "Content-Type: text/plain", "", shot);
-        Eq(1, replies.Count, $"the request line is refused and the connection closed; got {string.Join(" | ", replies)}");
-        IsTrue(replies[0].Contains("\"ok\":false"), "refused");
-        IsTrue(!File.Exists(Path.Combine(server.OutputDirectory, "from-the-web.png")), "the body never ran");
-
-        foreach (var line in new[] { "GET / HTTP/1.1", "OPTIONS * HTTP/1.1", "get /x", "PUT /",
-                                     Authorised("{\"cmd\":\"get_text\",\"id\":\"HTTP/1.1\"}"), "ping", "[1,2]" })
-        {
-            replies = Exchange(port, line, Authorised("{\"cmd\":\"ping\"}"));
-            Eq(1, replies.Count, $"'{line}' ends the connection");
-            IsTrue(replies[0].Contains("\"ok\":false"), $"'{line}' is refused");
-        }
-    }));
-
-Run("TestServer writes only inside its output directory", () =>
-    WithSecurityServer((port, server) =>
-    {
-        var outside = Path.GetDirectoryName(server.OutputDirectory)!;
-        var escapes = new[]
-        {
-            "../escape.png", "sub/../../escape.png", "..\\escape.png", "/tmp/bibui-absolute.png",
-            Path.Combine(outside, "escape.png"), "~/escape.png", "", ".", "sub/..",
-        };
-        foreach (var path in escapes)
-        {
-            var json = Authorised("{\"cmd\":\"screenshot\",\"path\":" + System.Text.Json.JsonSerializer.Serialize(path) + "}");
-            var reply = Exchange(port, json).Single();
-            IsTrue(reply.Contains("\"ok\":false") && reply.Contains("Refused"), $"'{path}' is refused, got {reply}");
-        }
-        IsTrue(!File.Exists(Path.Combine(outside, "escape.png")), "nothing was written beside the output directory");
-        IsTrue(!File.Exists("/tmp/bibui-absolute.png"), "nor at an absolute path");
-
-        var recording = Exchange(port, Authorised("{\"cmd\":\"start_recording\",\"output\":\"../escape.mp4\"}")).Single();
-        IsTrue(recording.Contains("Refused"), $"a recording is held to it too, got {recording}");
-
-        // A link inside the directory to a directory outside it.
-        var target = TestServerOut();
-        Directory.CreateDirectory(target);
-        try
-        {
-            Directory.CreateSymbolicLink(Path.Combine(server.OutputDirectory, "link"), target);
-            File.CreateSymbolicLink(Path.Combine(server.OutputDirectory, "file-link.png"), Path.Combine(target, "victim.png"));
-            foreach (var path in new[] { "link/escape.png", "file-link.png" })
-            {
-                var reply = Exchange(port, Authorised("{\"cmd\":\"screenshot\",\"path\":\"" + path + "\"}")).Single();
-                IsTrue(reply.Contains("symbolic link"), $"'{path}' goes through a link and is refused, got {reply}");
-            }
-            IsTrue(Directory.GetFiles(target).Length == 0, "nothing reached the link's target");
-        }
-        finally { Directory.Delete(target, recursive: true); }
-
-        var ok = Exchange(port, Authorised("{\"cmd\":\"screenshot\",\"path\":\"sub/dir/ok.png\"}")).Single();
-        Eq("{\"ok\":true}", ok, "a relative path inside it is written");
-        IsTrue(File.Exists(Path.Combine(server.OutputDirectory, "sub", "dir", "ok.png")), "where it says");
-    }));
-
-Run("TestServer gives ffmpeg one argument per element, so a quote in a name adds none", () =>
-    WithSecurityServer((port, server) =>
-    {
-        var name = "clip\" -i /etc/passwd -f data \"stolen.mp4";
-        var path = server.ResolveOutputPath(name);
-        Eq(Path.Combine(server.OutputDirectory, name), path, "the name stays one file in the output directory");
-
-        var psi = BibuiTestServer.FfmpegStartInfo(64, 48, path);
-        Eq("", psi.Arguments, "no argument string to be split");
-        Eq(path, psi.ArgumentList[^1], "the whole name, quote and all, is the last argument");
-        Eq(1, psi.ArgumentList.Count(a => a == "-i"), "the only input is the frame pipe");
-        Eq("pipe:0", psi.ArgumentList[psi.ArgumentList.IndexOf("-i") + 1], "which is stdin");
-        Eq(20, psi.ArgumentList.Count, "and the count is fixed");
-        IsTrue(!psi.UseShellExecute, "and no shell");
-
-        var threw = false;
-        try { BibuiTestServer.FfmpegStartInfo(64, 48, "-i"); } catch (ArgumentException) { threw = true; }
-        IsTrue(threw, "an output that is not a full path cannot reach ffmpeg, where it could pass for an option");
-    }));
-
 // ── InteractionsFor ───────────────────────────────────────────────────────────
 //
 // What a build function can ask about a node it described. The point of these
@@ -4518,7 +4035,7 @@ Run("runtime.Checkbox: the row takes the press and reports it", () =>
         },
         TestBuild.Window(300, 100));
     runtime.Step();
-    var row = runtime.Page().GetBounds("cb");
+    var row = runtime.GetBounds("cb");
     Eq(18f, row.Height, "as tall as its square");
     IsTrue(row.Width > 18f + 12f + 40f, $"square, gap and label: {row.Width}");
     // Pressing the label, not the square, counts.
@@ -4545,7 +4062,7 @@ Run("runtime.ToggleGroup: an item's press is reported as the value picked", () =
         },
         TestBuild.Window(300, 100));
     runtime.Step();
-    var beta = runtime.Page().GetBounds("tg-b");
+    var beta = runtime.GetBounds("tg-b");
     Eq(34f, beta.Height, "the item fills the group inside its outline");
     float x = beta.X + beta.Width / 2f, y = beta.Y + beta.Height / 2f;
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x, Y = y });
@@ -5368,8 +4885,8 @@ Run("Claims: a drag pressed and released in one frame still says where it began"
     //
     // That pairing is the normal case, not a corner: pointer events arrive far faster
     // than frames are drawn, so a real mouse delivers press and release together
-    // whenever the gesture is quicker than a repaint, and the test server's `gesture`
-    // command does it by construction.
+    // whenever the gesture is quicker than a repaint, and a client sending a whole
+    // drag as one frame of events does it by construction.
     var runtime = BibuiRuntime.Create();
     Box card = null!;
     runtime.SetBuild(
@@ -5440,109 +4957,10 @@ Run("Claims: a drag let go over nothing in particular still reaches its owner", 
     IsTrue(!runtime.InteractionsFor(card).Dragging, "the card is not still holding the button");
 });
 
-Run("Claims: a box that asks rather than calls back is still clickable by name", () =>
-{
-    // Regression: DispatchClick(id) once reached only components and boxes with
-    // a callback, so a box that claims a press could not be clicked by name.
-    // That is the whole of how a test rig and a host's own "click this control"
-    // both reach a box.
-    var runtime = BibuiRuntime.Create();
-    Box card = null!;
-    int clicks = 0;
-    runtime.SetBuild(
-        () =>
-        {
-            card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            if (runtime.InteractionsFor(card).Clicked) clicks++;
-            card.Sized(Size.Px(100f), Size.Px(60f)).At(40f, 20f);
-            return Layer(null, card).Sized(Size.Px(400f), Size.Px(400f));
-        },
-        TestBuild.Window(400, 400));
-    runtime.Step();   // the frame that gives the box a rect to aim at
-
-    runtime.DispatchClick("card");
-    runtime.Step();   // the frame that asks
-
-    Eq(1, clicks, "the box was clicked by its name");
-});
-
-Run("Claims: a click by name goes to the box named, not to a child under the point", () =>
-{
-    // A by-name dispatch has already said which box it means. Delivering it at the
-    // box's centre and letting ask order decide hands it to whatever is drawn
-    // there — which for a card with its own title, button or grip inside it is one
-    // of those, not the card. The name is the answer to "which box", so the point
-    // is only how the event is carried.
-    var runtime = BibuiRuntime.Create();
-    Box card = null!, inner = null!;
-    int cardClicks = 0, innerClicks = 0;
-    runtime.SetBuild(
-        () =>
-        {
-            card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            inner = runtime.BoxFromId("inner", InteractionKinds.LeftPress);
-
-            // Innermost asks first, as z-order demands — so on an ordinary click
-            // at this point the inner box would take it, and does below.
-            if (runtime.InteractionsFor(inner).Clicked) innerClicks++;
-            if (runtime.InteractionsFor(card).Clicked) cardClicks++;
-
-            inner.Sized(Size.Px(100f), Size.Px(100f)).At(0f, 0f);
-            card.Sized(Size.Px(100f), Size.Px(100f)).At(0f, 0f);
-            UiNode.PushIntoParent(card, Layer(null, inner).Sized(Size.Fill, Size.Fill));
-            return Layer(null, card).Sized(Size.Px(300f), Size.Px(300f));
-        },
-        TestBuild.Window(300, 300));
-    runtime.Step();
-
-    runtime.DispatchClick("card");
-    runtime.Step();
-    Eq(1, cardClicks, "the card was named, so the card was clicked");
-    Eq(0, innerClicks, "and the box covering it took nothing");
-
-    runtime.DispatchClick("inner");
-    runtime.Step();
-    Eq(1, innerClicks, "naming the inner one reaches it too");
-    Eq(1, cardClicks, "without the card taking a second");
-
-    // An ordinary click at the same point still goes by ask order, which is what
-    // makes the two different questions.
-    runtime.ProcessEvents(new[]
-    {
-        new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = 50f, Y = 50f },
-        new BibUiEvent { Kind = BibUiEventKind.MouseUp,   Button = MouseButton.Left, X = 50f, Y = 50f },
-    });
-    runtime.Step();
-    Eq(2, innerClicks, "a click by coordinate goes to whoever asks first");
-    Eq(1, cardClicks, "not to the container beneath it");
-});
-
-Run("Claims: clicking an unknown name, or a box with no rect yet, does nothing", () =>
-{
-    var runtime = BibuiRuntime.Create();
-    Box card = null!;
-    int clicks = 0;
-    runtime.SetBuild(
-        () =>
-        {
-            card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-            if (runtime.InteractionsFor(card).Clicked) clicks++;
-            card.Sized(Size.Px(100f), Size.Px(60f));
-            return Layer(null, card).Sized(Size.Px(400f), Size.Px(400f));
-        },
-        TestBuild.Window(400, 400));
-
-    // Never painted: there is no centre to aim at, and no exception either.
-    runtime.DispatchClick("card");
-    runtime.DispatchClick("nothing-by-that-name");
-    runtime.Step();
-    Eq(0, clicks, "nothing was clicked");
-});
-
 Run("Pointer: the runtime keeps its own current, without being told", () =>
 {
     // It used to be filled only by the window, so anything driving the runtime
-    // directly — a test server, a headless harness — ran an entire synthesised
+    // directly — a test port, a headless harness — ran an entire synthesised
     // drag with Pointer reporting no buttons at all.
     var (runtime, under, over) = Overlapping();
     IsTrue(!runtime.InteractionsFor(under).Dragging, "nothing held to begin with");
@@ -5580,7 +4998,7 @@ Run("runtime.Tabs: clicking a tab reports its value", () =>
         },
         TestBuild.Window(300, 100));
     runtime.Step();
-    var beta = runtime.Page().GetBounds("tabs-b");
+    var beta = runtime.GetBounds("tabs-b");
     Eq(Bibui.Core.Runtime.Tabs.Height - 4f, beta.Height, "the tab fills the strip inside its inset");
     float x = beta.X + beta.Width / 2f, y = beta.Y + beta.Height / 2f;
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x, Y = y });
@@ -5616,7 +5034,7 @@ Run("A transparent theme background clears the frame to transparent; the active 
 
     Eq(default(Rgba), runtime.DrawList.Ops[0].Color, "the frame opens with a transparent clear");
     Eq((byte)0, Alpha(290f, 190f), "where nothing is drawn, the frame is transparent");
-    var alpha = runtime.Page().GetBounds("tabs-a");
+    var alpha = runtime.GetBounds("tabs-a");
     float tabY = alpha.Y + alpha.Height / 2f;
     IsTrue(Bgra(alpha.X + 2f, tabY) != Bgra(strip!.Rect.X + 1f, tabY), "the active tab has a fill of its own, not the strip showing through");
 
@@ -5657,7 +5075,7 @@ Run("runtime.Expander: a click on the header reports a toggle, and the body is t
         TestBuild.Window(300, 200));
     runtime.Step();
     IsTrue(!hadBody, "closed, there is no body to build into");
-    var header = runtime.Page().GetBounds("coll");
+    var header = runtime.GetBounds("coll");
     Eq(Bibui.Core.Runtime.Expander.HeaderHeight, header.Height, "the header is its own height");
     float x = header.X + header.Width / 2f, y = header.Y + header.Height / 2f;
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x, Y = y });
@@ -6196,8 +5614,8 @@ Run("Switch: every size scales with the height it is given", () =>
         for (int f = 0; f < 60; f++) runtime.Step();   // the knob has crossed
 
         float k = twice ? 2f : 1f;
-        var track = runtime.FindById("sw")!;
-        var knob = runtime.FindById("knobsw")!;
+        var track = Nodes.FindById(runtime.Root, "sw")!;
+        var knob = Nodes.FindById(runtime.Root, "knobsw")!;
         Eq(new System.Numerics.Vector2(44f * k, 24f * k), track.Extent, $"the track at {k}x");
         Eq(new System.Numerics.Vector2(20f * k, 20f * k), knob.Extent, $"the knob at {k}x");
         IsTrue(MathF.Abs(track.Rect.X + track.Extent.X - 2f * k - (knob.Rect.X + knob.Extent.X)) < 0.05f,
@@ -6260,7 +5678,7 @@ Run("Claims: saying nothing takes nothing, and Disabled says it out loud", () =>
 
 // ── Clicks ────────────────────────────────────────────────────────────────────
 //
-// One event per frame, which is how a window delivers them. BibuiPage's helpers
+// One event per frame, which is how a window delivers them. The click helpers
 // batch the down and the up into a single ProcessEvents call, and that is the
 // one arrangement in which a press and its release share an Interaction —
 // everywhere else it is fresh on each ask, so nothing carries between them.
@@ -6521,7 +5939,7 @@ Run("Text.Color: a role, a token and a literal all reach the painter", () =>
 
     // As the painter resolves it.
     string ColorOf(BibuiRuntime rt, string id) =>
-        (((Text)rt.FindById(id)!).Color ?? UiColor.TextPrimary).Resolve(theme.Colors);
+        (((Text)Nodes.FindById(rt.Root, id)!).Color ?? UiColor.TextPrimary).Resolve(theme.Colors);
 
     var rt = BibuiRuntime.Create();
     rt.SetBuild(() => rt.Into(rt.Column(), () =>
@@ -6721,7 +6139,7 @@ static void PressAndRelease(BibuiRuntime runtime, float x, float y, MouseButton 
 
 static (float X, float Y) Centre(BibuiRuntime runtime, string id)
 {
-    var b = runtime.Page().GetBounds(id);
+    var b = runtime.GetBounds(id);
     return (b.X + b.Width / 2f, b.Y + b.Height / 2f);
 }
 
@@ -6750,7 +6168,7 @@ Run("Dismiss: a right press on another row moves an open context menu there", ()
     PressAndRelease(runtime, 300f, y2, MouseButton.Right);
     Eq("row-2", menuFor(), "a right press on the other row");
     IsTrue(runtime.IsDropDownOpen("ctx"), "closes the menu and opens it there, which stands");
-    var ctx = runtime.Page().GetBounds("ctx");
+    var ctx = runtime.GetBounds("ctx");
     IsTrue(ctx.X == 300f && ctx.Y == y2, "and it is drawn where that press went down");
 });
 
@@ -6786,7 +6204,7 @@ Run("Dismiss: a press inside, on an item or on the padding, does not", () =>
     var (ix, iy) = Centre(runtime, "menu-copy");
     PressAndRelease(runtime, ix, iy);
     IsTrue(runtime.IsDropDownOpen("menu"), "an item's press leaves it open");
-    var list = runtime.Page().GetBounds("menu");
+    var list = runtime.GetBounds("menu");
     PressAndRelease(runtime, list.X + 1f, list.Y + 1f);
     IsTrue(runtime.IsDropDownOpen("menu"), "so does a press on its padding");
     Eq(0, beneath(), "and neither reaches the button beneath");
@@ -6986,8 +6404,8 @@ Run("Fonts.LineHeight and LineAdvance: what layout gives one line, and the next"
     float height = runtime.Fonts.LineHeight(font), advance = runtime.Fonts.LineAdvance(font);
     IsTrue(advance >= height, $"the advance {advance} includes the line {height}");
     Eq(height, one.Extent.Y, "one line");
-    using var page = runtime.Page();
-    float three = page.FindById("three")!.Extent.Y;
+    runtime.Step();
+    float three = Nodes.FindById(runtime.Root, "three")!.Extent.Y;
     IsTrue(MathF.Abs(height + 2f * advance - three) < 0.01f,
         $"three lines: {height} + 2 x {advance}, laid out {three}");
 });
@@ -7168,7 +6586,7 @@ Run("runtime.EllipsisTextField: a press is the field's, and being edited it scro
     bool Dots() => Texts(runtime).Contains("\u2026");
     IsTrue(Dots(), "not being edited, it ends in \"…\"");
 
-    runtime.DispatchClick("label");
+    ClickCentre(runtime, "label");
     runtime.Step();
     IsTrue(runtime.IsFocused("label"), "the press is the field's, by its id, and gives it focus");
     runtime.Step();
@@ -7214,7 +6632,7 @@ Run("runtime.EllipsisTextField: \"…\" only when the line is wider than its box
         }), TestBuild.Window(400, 100));
         runtime.Step();
         runtime.Step();   // whether it fits is told by last frame's width
-        using var page = runtime.Page();
+        runtime.Step();
         bool dots = Texts(runtime).Contains("\u2026");
         Eq(cut, dots, $"\"{words}\" ends in \"…\"");
         var line = box.FirstChild!;   // the line's own box, inside the label
@@ -7487,16 +6905,16 @@ Run("Focus: a field named \"\" never has it", () =>
     IsTrue(!last.Focused, "not focused, though no box is");
 });
 
-Run("BibuiPage.Fill types into a TextField as a person would", () =>
+Run("Fill types into a TextField as a person would", () =>
 {
     var text = BibuiStr.FromStrLit("old value");
     var edit = new TextEditState();
     var (runtime, focused, _) = MountField(text, edit);
-    var page = runtime.Page();
-    page.Fill("field", "grüße");
+    runtime.Step();
+    runtime.Fill("field", "grüße");
     IsTrue(focused(), "the press focused it");
     Eq("grüße", text.ToString(), "the old text replaced");
-    page.Fill("field", "");
+    runtime.Fill("field", "");
     Eq("", text.ToString(), "an empty value clears it");
 });
 
@@ -8049,7 +7467,7 @@ Run("Tokens: density scales a control's height", () =>
         var theme = new ThemeTokens { Density = new DensityTokens { Mode = mode } };
         var runtime = Themed(theme, rt => rt.Toggle("tg", on: false, label: "Bold"));
         runtime.Step();
-        Eq(36f * scale, runtime.FindById("tg")!.Extent.Y, $"a toggle at {mode}");
+        Eq(36f * scale, Nodes.FindById(runtime.Root, "tg")!.Extent.Y, $"a toggle at {mode}");
     }
 });
 
@@ -8070,7 +7488,7 @@ Run("Tokens: a theme's toggle speed is how fast a switch's knob crosses", () =>
         runtime.Step();
         on = true;
         for (int f = 0; f < 4; f++) runtime.Step();
-        return runtime.FindById("knobsw")!.Rect.X;
+        return Nodes.FindById(runtime.Root, "knobsw")!.Rect.X;
     }
     float slow = KnobAfter(2f), standard = KnobAfter(22f);
     IsTrue(standard > slow + 1f, $"the faster theme's knob is further across ({standard} vs {slow})");
@@ -8114,7 +7532,7 @@ Run("Tokens: MotionEasing.None closes every gap in one step", () =>
     runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = 10f, Y = 10f });
     runtime.Step();
     Eq(1f, runtime.Animate("thing", "x", 1f, Ease.Rate(1f, runtime.Dt)), "even a slow ease arrives at once");
-    Eq(1f, ((Box)runtime.FindById("b")!).HotT, "and hover is all the way on after one frame");
+    Eq(1f, ((Box)Nodes.FindById(runtime.Root, "b")!).HotT, "and hover is all the way on after one frame");
 });
 Console.WriteLine();
 Console.WriteLine("Markdown");
@@ -8134,6 +7552,7 @@ MotionTests.Register(Run);
 Console.WriteLine();
 Console.WriteLine("Scroll list");
 ScrollListTests.Register(Run);
+AgentCursorTests.Register(Run);
 
 // ── Key repeat ──────────────────────────────────────────────────────────────
 

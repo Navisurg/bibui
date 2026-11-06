@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Bibui.Commands' build step (buildTransitive/Bibui.Commands.targets): run before an app
+       compiles, it reads the records nested in its [CommandSet]s and writes the code they
+       imply, as an ordinary file the compiler and System.Text.Json's generator see like
+       any other. Packed into Bibui.Commands' tools/cmdgen. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <!-- Run with dotnet cmdgen.dll, as the build step does: no apphost. -->
+    <UseAppHost>false</UseAppHost>
+    <!-- Roslyn's messages in English only: nothing else is shown, and the package stays small. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Syntax trees only: enough to find the records, their attributes and their arguments. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+  </ItemGroup>
+</Project>

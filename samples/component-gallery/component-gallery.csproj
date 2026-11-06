@@ -11,6 +11,8 @@
   <!-- The window and renderer: a Bibui.App package, SilkSkiaGl unless -p:App=... -->
   <Import Project="../BibuiApp.props" />
   <ItemGroup>
+    <!-- The test port, opened when BIBUI_TEST_PORT=1 (test_all_pages.sh). -->
+    <ProjectReference Include="../../bibui-automation/bibui-automation.csproj" />
     <!-- Skia on the CPU draws the headless pages (reference, check, first frame);
          the texture page names each renderer it may run on. -->
     <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />

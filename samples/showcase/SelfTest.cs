@@ -2,6 +2,7 @@ using Bibui.Core;
 using Bibui.Core.Draw;
 using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
+using Bibui.Testing;
 
 namespace Showcase;
 
@@ -126,13 +127,15 @@ internal static class SelfTest
 
     private static void Click(App app, BibuiRuntime rt, string id)
     {
-        rt.DispatchClick(id);
+        var at = Nodes.Centre(Nodes.FindById(app.Root!, id)!);
+        rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = at.X, Y = at.Y });
+        rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Left, X = at.X, Y = at.Y });
         Frames(app, rt, 2);
     }
 
     private static void RightClick(App app, BibuiRuntime rt, string id, float across = 0.5f)
     {
-        var box = (Box)rt.FindById(id)!;
+        var box = Nodes.FindById(app.Root!, id)!;
         float x = box.Rect.X + box.Extent.X * across, y = box.Rect.Y + box.Extent.Y / 2f;
         rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Right, X = x, Y = y });
         rt.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Right, X = x, Y = y });

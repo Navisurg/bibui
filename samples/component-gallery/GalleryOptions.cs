@@ -7,7 +7,6 @@ namespace ComponentGallery;
 /// and renderer are chosen at build time (<c>-p:App=...</c>, samples/BibuiApp.props).
 /// </summary>
 public sealed record GalleryOptions(
-    int Port,
     bool Reference,
     bool Check,
     IReadOnlyList<(int Width, int Height)> Sizes,
@@ -21,7 +20,7 @@ public sealed record GalleryOptions(
         """
         Usage: component-gallery [reference|check] [--size WxH]... [--out DIR]
                                  [--accent #RRGGBB [--mode dark|light]]
-                                 [--port N] [--first-frame] [--help]
+                                 [--first-frame] [--help]
 
           (no arguments)      opens the gallery on the Bibui.App package it was built
                               with: SilkSkiaGl unless -p:App=... chose another
@@ -39,8 +38,6 @@ public sealed record GalleryOptions(
                               instead of neutral-dark; with reference, written to
                               reference-seed/ rather than over reference/
           --mode dark|light   the generated theme's mode (default dark); needs --accent
-          --port N            the BibuiTestServer port (default 44334); the server
-                              runs only with BIBUI_TEST_SERVER=1 in the environment
           --first-frame       render the first frame headless, and exit
           --help              print this and exit
         """;
@@ -53,7 +50,6 @@ public sealed record GalleryOptions(
     public static GalleryOptions? Parse(IReadOnlyList<string> args, out string? error)
     {
         error = null;
-        int port = 44334;
         bool reference = false, check = false, help = false, firstFrame = false;
         string? accent = null;
         ThemeMode? mode = null;
@@ -94,9 +90,6 @@ public sealed record GalleryOptions(
                         default: error = $"Unknown --mode '{args[i]}': expected dark or light."; return null;
                     }
                     break;
-                case "--port":
-                    if (i + 1 < args.Count && int.TryParse(args[i + 1], out int p)) { port = p; i++; }
-                    break;
             }
         }
 
@@ -106,7 +99,7 @@ public sealed record GalleryOptions(
             return null;
         }
 
-        return new GalleryOptions(port, reference, check, sizes, outDir, help,
+        return new GalleryOptions(reference, check, sizes, outDir, help,
             accent, mode ?? ThemeMode.Dark, firstFrame);
     }
 

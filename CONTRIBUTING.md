@@ -54,6 +54,7 @@ console app; it prints what failed and exits non-zero:
 
 ```bash
 dotnet run --project tests/bibui-runtime-tests -c Release       # runtime, components, layout, themes
+dotnet run --project tests/automation-tests -c Release          # Bibui.Automation's test port, and bibui-port
 dotnet run --project tests/text-tests -c Release
 dotnet run --project tests/png-tests -c Release
 dotnet run --project tests/wayland-tests -c Release             # headless; skips what needs a compositor
@@ -74,8 +75,8 @@ node tests/browser-smoke/smoke.mjs out/counter-browser/wwwroot
 ```
 
 Layout is asserted over the laid-out nodes, not over pixels: build the tree,
-then check bounds with `runtime.FindById(...)` or `BibuiPage.GetBounds(...)`
-(`Bibui.Testing`). Add a test beside the change it covers.
+then check bounds with `Nodes.FindById(root, id)` (`Bibui.Testing`), from the
+root the test built. Add a test beside the change it covers.
 
 ### Pixel verification
 

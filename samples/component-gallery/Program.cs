@@ -1,4 +1,5 @@
 using Bibui.App;
+using Bibui.Automation;
 using Bibui.Core;
 using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
@@ -79,27 +80,90 @@ if (options.FirstFrame)
 }
 
 // The window and renderer of the Bibui.App package the gallery was built with.
-// Its test server runs only with BIBUI_TEST_SERVER=1 in the environment.
 using var app = BibuiApp.Open(runtime, new("Component Gallery", StartWidth, StartHeight), new BibuiAppOptions
 {
     AppId = "bibui-component-gallery",
     MinWidth = ShellLayout.MinWidth,
     MinHeight = ShellLayout.MinHeight,
-    TestServerPort = options.Port,
 });
 // The texture page's textures, on the renderer that draws them.
 object renderer = app.Renderer;
 (DemoTexture.SkiaGl, DemoTexture.SkiaCpu, DemoTexture.Managed) =
     (renderer as SkiaGlRenderer, renderer as SkiaCpuRenderer, renderer as ManagedRenderer);
+
+// A test port, off unless asked for: BIBUI_TEST_PORT=1 (test_all_pages.sh says how).
+// A screenshot is the frame the window shows, copied out as it is presented, so it
+// holds what the window's renderer drew, textures too: what was asked for waits here.
+using var testPort = Environment.GetEnvironmentVariable("BIBUI_TEST_PORT") == "1"
+    ? TestPort.Open(runtime, new TestPortOptions { Name = "component-gallery" }) : null;
+if (testPort is not null) Console.Error.WriteLine($"Test port: {testPort.SocketPath}");
+string? shotPath = null;
+RectF? shotRegion = null;
+// The agent driving the gallery through its port, drawn over it while one is connected:
+// folded from the events it sends. BIBUI_AGENT_CURSOR says how: paced (the default)
+// draws it and holds each answer until it has shown the step, so a person watching
+// can follow; shown draws it without holding; off draws nothing, for scripts.
+var agent = AgentCursor.Start("Agent", UiColor.Hex("#3B82F6"));
+var agentMode = Environment.GetEnvironmentVariable("BIBUI_AGENT_CURSOR") switch
+{
+    null or "" or "paced" => AgentMode.Paced,
+    "shown" => AgentMode.Shown,
+    "off" => AgentMode.Off,
+    var other => Unknown(other),
+};
+static AgentMode Unknown(string value)
+{
+    Console.Error.WriteLine($"BIBUI_AGENT_CURSOR is paced, shown or off, not '{value}': paced.");
+    return AgentMode.Paced;
+}
+
 app.Frame = Frame;
-while (app.WaitForFrame()) Frame();
+while (app.WaitForFrame())
+{
+    // A test port's requests, at the top of the frame: its events join the window's;
+    // a screenshot is taken from the frame presented next.
+    if (testPort is not null)
+        while (testPort.TryPullCmd(out var cmd))
+            switch (cmd.Kind)
+            {
+                case TestCmdKind.Events:
+                    app.Events.AddRange(cmd.Events);
+                    agent = AgentCursor.FromWindowEvents(agent, cmd.Events);
+                    break;
+                case TestCmdKind.Screenshot: (shotPath, shotRegion) = (cmd.Path, cmd.Region); break;
+                case TestCmdKind.App: testPort.RefuseCmd("The gallery has no commands of its own."); break;
+            }
+    Frame();
+}
 
 void Frame()
 {
     runtime.BeginBuild(app.Window.Frame, app.Events);
     BuildGallery(runtime, gallery);
+    // The agent's cursor, last in the frame so it is over everything; whether it has
+    // shown what the agent did, so the port's answer waits for a person watching.
+    bool agentSettled = true;
+    if (testPort is not null && agentMode != AgentMode.Off)
+    {
+        agent.Connected = testPort.HasClient;
+        bool shown = AgentCursorUi.Build(runtime, agent, size: 1.5f);
+        if (agentMode == AgentMode.Paced) agentSettled = shown;
+    }
     runtime.EndBuild();
+
+    // Drawn, then read for a screenshot asked for this frame, then shown and answered.
+    app.Draw();
+    if (shotPath is not null)
+    {
+        var (w, h) = (runtime.Window.Width, runtime.Window.Height);
+        var shot = GC.AllocateArray<byte>(Math.Max(1, w * h * 4), pinned: true);
+        var into = new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(shot, 0), w, h, w * 4);
+        if (app.ReadPixels(into)) File.WriteAllBytes(shotPath, FramePixels.Png(shot, w, h, runtime.ScaleFactor, shotRegion));
+        else testPort!.RefuseCmd("The window changed size as the screenshot was taken: ask again.");
+        shotPath = null;
+    }
     app.Present();
+    testPort?.AnswerCmds(agentSettled);
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -319,8 +383,9 @@ static void BuildDemo(BibuiRuntime runtime, GalleryState state, Gallery gallery)
 
 
 // Wide, the sidebar sits beside the page; narrow, it folds behind a menu bar and
-// takes the page's place while it is open.
-static void BuildGallery(BibuiRuntime runtime, Gallery gallery)
+// takes the page's place while it is open. Returns the gallery's box: the
+// frame's tree once the build returns, and the root a layout check walks.
+static Box BuildGallery(BibuiRuntime runtime, Gallery gallery)
 {
     var state = gallery.State;
     var shell = ShellLayout.For(runtime.SurfaceWidth);
@@ -343,6 +408,7 @@ static void BuildGallery(BibuiRuntime runtime, Gallery gallery)
         else BuildContentPanel(runtime, state, gallery, shell);
     }
     runtime.EndParent(page);
+    return page;
 }
 
 static GalleryState InitialState() => new(Route: "Button", OpenSidebarGroup: "Inputs & Forms");
@@ -396,7 +462,7 @@ static void WriteReference(string outDir, string name, GalleryState state, strin
     if (dropDown is not null) runtime.OpenDropDown(dropDown);
     try
     {
-        File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime, new Gallery { State = state }, skia, window));
+        File.WriteAllBytes(Path.Combine(outDir, $"{name}.png"), RenderSettled(runtime, new Gallery { State = state }, skia, window, out _));
         Console.WriteLine($"  wrote {name}.png");
     }
     catch (Exception e)
@@ -406,13 +472,15 @@ static void WriteReference(string outDir, string name, GalleryState state, strin
     }
 }
 
-// Three frames on the window: laid out, and wrapped at that width; the last drawn with Skia.
-static byte[] RenderSettled(BibuiRuntime runtime, Gallery gallery, SkiaCpuRenderer skia, WindowFrame window)
+// Three frames on the window: laid out, and wrapped at that width; the last drawn
+// with Skia. Its root is the gallery's box, as the last frame laid it out.
+static byte[] RenderSettled(BibuiRuntime runtime, Gallery gallery, SkiaCpuRenderer skia, WindowFrame window, out Box root)
 {
+    root = null!;
     for (int i = 0; i < 3; i++)
     {
         runtime.BeginBuild(window);
-        BuildGallery(runtime, gallery);
+        root = BuildGallery(runtime, gallery);
         runtime.EndBuild();
     }
     return FramePixels.Png(runtime, skia.Draw);
@@ -446,9 +514,9 @@ static int CheckLayouts(GalleryOptions options)
             List<LayoutCheck.Fault> faults;
             try
             {
-                byte[] png = RenderSettled(runtime, new Gallery { State = state }, skia, new WindowFrame(width, height, 1f, 60f));
+                byte[] png = RenderSettled(runtime, new Gallery { State = state }, skia, new WindowFrame(width, height, 1f, 60f), out var root);
                 if (dir is not null) File.WriteAllBytes(Path.Combine(dir, $"{name}.png"), png);
-                faults = LayoutCheck.Check(runtime, runtime.FindById("gallery")!, width, height);
+                faults = LayoutCheck.Check(runtime, root, width, height);
             }
             catch (Exception e)
             {
@@ -491,3 +559,6 @@ sealed class Gallery
 {
     public GalleryState State = null!;
 }
+
+// How the agent driving the gallery is shown (BIBUI_AGENT_CURSOR).
+enum AgentMode { Paced, Shown, Off }
