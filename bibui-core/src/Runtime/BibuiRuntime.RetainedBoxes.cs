@@ -56,26 +56,6 @@ public sealed partial class BibuiRuntime
     }
 
     /// <summary>
-    /// The box named <paramref name="id"/> as of the last frame, without
-    /// creating one and without clearing it.
-    ///
-    /// <see cref="BoxFromId"/> is the build function's door and resets the box
-    /// on the way through. An ask is not a describe: <c>InteractionsFor</c>
-    /// wants to read the claims the build just set, so going through that door
-    /// a second time would wipe them.
-    ///
-    /// Retained first, then whatever the render collected. A box built fresh
-    /// each frame is answerable too — the renderer stamped its Rect and Size
-    /// like any other, and a press is a fact about one frame. What it cannot
-    /// have is <see cref="Box.HotT"/>: nothing of it survives to ease.
-    /// </summary>
-    private Box? PeekBox(string id)
-    {
-        if (_retainedBoxes.Entries.TryGetValue(id, out var entry)) return entry.Value;
-        return _interactiveBoxes.TryGetValue(id, out var box) ? box : null;
-    }
-
-    /// <summary>
     /// Clears everything a build function sets, keeping only what has to outlive
     /// the frame: <see cref="UiNode.Id"/> (it is the cache key), and
     /// <see cref="Box.HotT"/>/<see cref="Box.ActiveT"/> (the state a build
@@ -170,15 +150,14 @@ public sealed partial class BibuiRuntime
         // the hover guard below fails for every box and nothing can go hot
         // again — so the button has to be taken off it here.
         //
-        // Against _interactiveBoxes, which the render rebuilds whole, so a
-        // box that stopped being built is gone from it at once. Not against
-        // _retainedBoxes: that keeps entries for 60 frames, and a box that
-        // stopped being built keeps its last Claims the whole time, because
-        // only BoxFromId clears them.
+        // Built this frame is touched this frame: a retained entry outlives
+        // its box by 60 frames, keeping the last Claims it was given, so
+        // being in the cache says nothing.
         for (int b = 0; b < 3; b++)
             if (_activeId[b] is string activeId
-                && (!_interactiveBoxes.TryGetValue(activeId, out var activeBox)
-                    || activeBox.Claims == InteractionKinds.Disabled))
+                && (!_retainedBoxes.Entries.TryGetValue(activeId, out var active)
+                    || active.Touched != _retainedBoxes.Frame
+                    || active.Value.Claims == InteractionKinds.Disabled))
                 _activeId[b] = null;
 
         // Cleared once a frame so the asks that come next decide it
@@ -201,12 +180,11 @@ public sealed partial class BibuiRuntime
     /// Keeps <see cref="Box.TargetViewOffset"/> inside the content along each
     /// axis <paramref name="box"/> claims <see cref="InteractionKinds.ClampX"/>
     /// or <see cref="InteractionKinds.ClampY"/> for: from 0 to how far the
-    /// content runs past the box. Measured off <paramref name="geometry"/>,
-    /// the box as it was last laid out.
+    /// content runs past the box, as it was last laid out.
     /// </summary>
-    private static void ClampViewOffset(Box box, Box geometry)
+    private static void ClampViewOffset(Box box)
     {
-        Vector2 max = Vector2.Max(Vector2.Zero, geometry.ContentSize - geometry.Extent);
+        Vector2 max = Vector2.Max(Vector2.Zero, box.ContentSize - box.Extent);
         Vector2 target = box.TargetViewOffset;
         if ((box.Claims & InteractionKinds.ClampX) != 0) target.X = Math.Clamp(target.X, 0f, max.X);
         if ((box.Claims & InteractionKinds.ClampY) != 0) target.Y = Math.Clamp(target.Y, 0f, max.Y);
@@ -259,7 +237,7 @@ public sealed partial class BibuiRuntime
 
             // NOTE(K): Update view offsets for the boxes: ViewOffset->TargetViewOffset
             // using our exponential decay
-            ClampViewOffset(box, box);
+            ClampViewOffset(box);
             Vector2 view = Ease.Exponential(box.ViewOffset, box.TargetViewOffset, follow);
             if (Vector2.Distance(view, box.TargetViewOffset) <= ViewOffsetEpsilon) view = box.TargetViewOffset;
             else animating = true;

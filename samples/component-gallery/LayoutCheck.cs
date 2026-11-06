@@ -36,7 +36,9 @@ internal static class LayoutCheck
     {
         if (node is Text text && text.SizeX.Kind != SizeKind.Text && text.Content.Length > 0)
         {
-            var font = runtime.FontInScope(text.Size, text.Family);
+            // In the text's own font, weight included: what layout would have given
+            // it, had it been sized by what it says.
+            var font = runtime.FontOf(text);
             float wants = TextLayer.WidthFromChars(runtime.Fonts, text.Content, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
             if (wants > node.Extent.X + Tolerance)
                 faults.Add(new("cut", node.Id is null ? path + " > " + Describe(node) : path, $"says {wants:0} px of text in {node.Extent.X:0} px"));

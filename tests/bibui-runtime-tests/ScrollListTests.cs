@@ -2,6 +2,7 @@ using Bibui.Core;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
 using Bibui.Core.Theming;
+using Bibui.Testing;
 
 /// <summary>RowScrollList and ScrollList, and the bar beside either: where a list rests, checked to the pixel.</summary>
 static class ScrollListTests
@@ -91,7 +92,7 @@ static class ScrollListTests
             list.Pt = new ScrollPt { Idx = 50, Px = 10f };
             list.Frame();
             Eq((50, 50 + 14), (list.First, list.Last), "row 50, part of it above, to the spare row below");
-            Near(10f, ((Box)list.Runtime.FindById("list")!).ViewOffset.Y, 0.01f, "offset by the pixels into row 50");
+            Near(10f, ((Box)Nodes.FindById(list.Runtime.Root, "list")!).ViewOffset.Y, 0.01f, "offset by the pixels into row 50");
         });
 
         run("RowScrollList: the wheel moves whole rows by rows and pixels by pixels, from the first row to the last", () =>
@@ -124,7 +125,7 @@ static class ScrollListTests
             list.Wheel(-6000f);
             list.Settle();
             Near(1280, list.Target, 0.01, "and 6,000 px back up, out of it");
-            Near(list.Pt.Px, ((Box)list.Runtime.FindById("list")!).ViewOffset.Y, 0.01, "at rest, shown where the target is");
+            Near(list.Pt.Px, ((Box)Nodes.FindById(list.Runtime.Root, "list")!).ViewOffset.Y, 0.01, "at rest, shown where the target is");
         });
 
         run("ScrollList: the end, reached by the wheel or by a target on the last row, is the last row on the bottom", () =>
@@ -159,12 +160,12 @@ static class ScrollListTests
         run("Scrollbar: a press on the lane shows the row under it; a press on the thumb moves nothing until it drags", () =>
         {
             var list = new Lab(ScrollBy.Pixels, Uneven);
-            var lane = (Box)list.Runtime.FindById("list-bar")!;
+            var lane = (Box)Nodes.FindById(list.Runtime.Root, "list-bar")!;
             float x = lane.Rect.X + lane.Extent.X / 2f;
             list.Frame(WindowEvent.Mouse(WindowEventKind.MouseDown, x, lane.Rect.Y + 150f, MouseButton.Left));
             list.Frame(WindowEvent.Mouse(WindowEventKind.MouseUp, x, lane.Rect.Y + 150f, MouseButton.Left));
             list.Frame();
-            var thumb = (Box)list.Runtime.FindById("list-bar-thumb")!;
+            var thumb = (Box)Nodes.FindById(list.Runtime.Root, "list-bar-thumb")!;
             Near(150f, thumb.Rect.Y - lane.Rect.Y + thumb.Extent.Y / 2f, 1f, "the thumb's centre at the press");
             int idx = list.Pt.Idx;
             float y = thumb.Rect.Y + 3f;   // near its top edge, not its centre

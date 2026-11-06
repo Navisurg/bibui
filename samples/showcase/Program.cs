@@ -107,7 +107,7 @@ if (Arg("--png") is { } png)
     var (w, h) = ParseSize(Arg("--size") ?? "1440x900");
     var app = NewApp();
     app.Live = false;
-    File.WriteAllBytes(png, Screenshots.Render(NewDraw(), app, w, h, (_, _) => { }));
+    File.WriteAllBytes(png, Screenshots.Render(NewDraw(), app, w, h, (_, _, _) => { }));
     Console.WriteLine($"wrote {png}");
     return 0;
 }

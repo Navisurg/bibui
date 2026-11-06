@@ -1,25 +1,25 @@
 # Bibui.Testing
 
-Headless testing for bibui apps. A `BibuiPage` holds a runtime with no window
-and draws it with Skia on the CPU, unless `BibuiPage.From(runtime, build, draw)`
-is given another `DrawToPixels`; a test finds nodes by id, reads their laid-out
-bounds and text, clicks, types and presses keys, and takes screenshots. To
-drive a running app instead, over a socket, see `Bibui.Automation`'s `TestPort`.
+Reading a laid-out bibui tree from a test. A test runs the app's loop itself, a
+frame at a time and with no window — `BeginBuild` with the events a mouse and
+keyboard would send, the app's build, `EndBuild` — and reads the tree between
+frames, from the root the app built into:
 
 ```csharp
-var runtime = BibuiRuntime.Create();
-using var page = BibuiPage.From(runtime, () => MyScreen.Build(runtime));
-page.Click("save");
-var bounds = page.GetBounds("save");
+var at = Nodes.Centre(Nodes.FindById(app.Root, "save")!);
+runtime.BeginBuild(window, [
+    WindowEvent.Mouse(WindowEventKind.MouseDown, at.X, at.Y, MouseButton.Left),
+    WindowEvent.Mouse(WindowEventKind.MouseUp, at.X, at.Y, MouseButton.Left),
+]);
+app.Build(runtime);
+runtime.EndBuild();
 ```
 
-The build is what the app's loop runs between `BeginBuild` and `EndBuild`;
-each action builds the frame it causes, and `page.Frame()` builds one nothing
-caused. `BibuiPage.Launch(runtime => MyScreen.Build(runtime))` does the same on
-a runtime of its own. Every frame is built on the page's `Window`, a
-`WindowFrame` (800 × 600 at 1× and 60 Hz unless given), so a frame's `Dt` is
-1/60 and a run is deterministic; set `page.Window` to resize the page or
-change its scale.
+`Nodes.FindById(root, id)` is the node named `id` under `root`, or null;
+`Nodes.Centre(node)` is where a person would click it. Nothing here builds a
+frame or keeps a node: the next `BeginBuild` reuses the tree. To draw a frame,
+hand `FramePixels` a renderer's `Draw`. To drive a running app instead, over a
+socket, see `Bibui.Automation`'s `TestPort`.
 
 Part of bibui, a code-first native UI library for .NET:
 <https://github.com/Navisurg/bibui>. Licensed under Apache-2.0.

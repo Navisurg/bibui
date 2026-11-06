@@ -103,7 +103,7 @@ public sealed partial class TestPort
                 case TestCmdKind.Tree:
                     json.WriteBoolean("ok", true);
                     json.WritePropertyName("result");
-                    WriteTree(json, _runtime?.LastTree);
+                    WriteTree(json, _runtime?.Root);
                     break;
                 case TestCmdKind.Ops:
                     json.WriteBoolean("ok", true);

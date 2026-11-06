@@ -75,8 +75,8 @@ node tests/browser-smoke/smoke.mjs out/counter-browser/wwwroot
 ```
 
 Layout is asserted over the laid-out nodes, not over pixels: build the tree,
-then check bounds with `runtime.FindById(...)` or `BibuiPage.GetBounds(...)`
-(`Bibui.Testing`). Add a test beside the change it covers.
+then check bounds with `Nodes.FindById(root, id)` (`Bibui.Testing`), from the
+root the test built. Add a test beside the change it covers.
 
 ### Pixel verification
 

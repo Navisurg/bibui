@@ -12,14 +12,12 @@
     <IsAotCompatible>true</IsAotCompatible>
     <UseAppHost>false</UseAppHost>
     <PackageId>Bibui.Testing</PackageId>
-    <Description>Playwright-style semantic testing API for Bibui apps. Provides BibuiPage and IBibuiPage for headless component testing.</Description>
+    <Description>Reading a laid-out Bibui tree from a test: a node by its id under the app's root, and where it is, to aim the events a person would send.</Description>
     <PackageTags>$(PackageTags);testing;headless;ui-testing</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Skia: what BibuiPage.Launch renders with, named rather than defaulted. -->
-    <ProjectReference Include="../bibui-raster-skia/bibui-raster-skia.csproj" />
     <ProjectReference Include="../bibui-core/bibui-core.csproj" />
   </ItemGroup>
 

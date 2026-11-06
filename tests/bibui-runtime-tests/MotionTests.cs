@@ -656,29 +656,6 @@ static class MotionTests
             IsTrue(pressed, "the part inside does");
         });
 
-        run("Transform: a click by name lands on the box as drawn", () =>
-        {
-            bool pressed = false;
-            var runtime = BibuiRuntime.Create();
-            runtime.SetBuild(() =>
-            {
-                var root = Root();
-                var card = runtime.BoxFromId("card", InteractionKinds.LeftPress);
-                pressed |= runtime.InteractionsFor(card).Pressed;
-                card.Sized(Size.Px(40f), Size.Px(40f)).At(10f, 10f);
-                card.Style.Translate = new Vector2(100f, 0f);
-                card.Style.Scale = new Vector2(0.5f, 0.5f);
-                UiNode.PushIntoParent(root, card);
-                return root;
-            }, TestBuild.Window(200, 100));
-            Frames(runtime, 2);
-            runtime.DispatchClick("card");
-            runtime.Step();
-            IsTrue(pressed, "pressed");
-        });
-
-        // ── Theme crossfade ─────────────────────────────────────────────────
-
         run("SetTheme with a crossfade: the page fades from one theme's colours to the other's", () =>
         {
             var dark = new ThemeTokens { Colors = new ColorTokens { Background = "#000000" } };

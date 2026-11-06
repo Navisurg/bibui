@@ -4,6 +4,9 @@ using Bibui.Core.Draw;
 using Bibui.Raster.Skia;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
+using Bibui.Core.TextEdit;
+using Bibui.Core.Theming;
+using Bibui.Testing;
 
 /// <summary>A frame's pixels, as a test reads them: BGRA8888 premultiplied, top row first.</summary>
 public sealed record Pixels(byte[] RawBgraBytes, int Width, int Height)
@@ -68,10 +71,15 @@ public static class TestBuild
     public static WindowFrame Window(int logicalWidth, int logicalHeight, float scale = 1f) =>
         new(WindowFrame.PhysicalSize(logicalWidth, scale), WindowFrame.PhysicalSize(logicalHeight, scale), scale, 60f);
 
-    private sealed class App(Func<UiNode> build, WindowFrame window)
+    private sealed class App(Func<UiNode?> build, WindowFrame window)
     {
-        public readonly Func<UiNode> Build = build;
+        // A tree to link under the frame's root, or null for a build that linked its own.
+        public readonly Func<UiNode?> Build = build;
         public WindowFrame Window = window;
+        // What the keyboard did since the last frame: handed to the next BeginBuild, which empties it.
+        public readonly List<WindowEvent> Keys = [];
+        // The runtime's clipboard, so a test never reaches the real one.
+        public string Clipboard = "";
     }
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<BibuiRuntime, App> s_apps = new();
@@ -82,9 +90,41 @@ public static class TestBuild
 
     /// <inheritdoc cref="SetBuild(BibuiRuntime, Func{UiNode}, WindowFrame?, string)"/>
     public static void SetBuild(this BibuiRuntime runtime, Func<UiNode> build, Bibui.Core.Theming.ThemeTokens theme, WindowFrame? window = null)
+        => Keep(runtime, build, window, theme);
+
+    /// <summary>Keeps <paramref name="build"/>, which builds into the runtime itself, as the test's, on <paramref name="window"/>.</summary>
+    public static void SetBuild(this BibuiRuntime runtime, Action build, WindowFrame? window = null, ThemeTokens? theme = null)
+        => Keep(runtime, () => { build(); return null; }, window, theme);
+
+    private static void Keep(BibuiRuntime runtime, Func<UiNode?> build, WindowFrame? window, ThemeTokens? theme)
     {
-        s_apps.AddOrUpdate(runtime, new App(build, window ?? DefaultWindow));
-        runtime.SetTheme(theme);
+        var app = new App(build, window ?? DefaultWindow);
+        s_apps.AddOrUpdate(runtime, app);
+        runtime.ClipboardGet = () => app.Clipboard;
+        runtime.ClipboardSet = text => app.Clipboard = text;
+        if (theme is not null) runtime.SetTheme(theme);
+    }
+
+    /// <summary>A runtime of its own on <paramref name="build"/>, its first frame built, as a window opens on one.</summary>
+    public static BibuiRuntime Launch(Func<UiNode> build, WindowFrame? window = null, string theme = "bibui-dark")
+        => Launch(build, ThemeRegistry.Load(theme), window);
+
+    /// <summary>A runtime of its own on <paramref name="build"/>, which builds into the runtime it is handed; its first frame built.</summary>
+    public static BibuiRuntime Launch(Action<BibuiRuntime> build, WindowFrame? window = null, ThemeTokens? theme = null)
+    {
+        var runtime = BibuiRuntime.Create();
+        runtime.SetBuild(() => build(runtime), window, theme);
+        runtime.Step();
+        return runtime;
+    }
+
+    /// <inheritdoc cref="Launch(Func{UiNode}, WindowFrame?, string)"/>
+    public static BibuiRuntime Launch(Func<UiNode> build, ThemeTokens theme, WindowFrame? window = null)
+    {
+        var runtime = BibuiRuntime.Create();
+        runtime.SetBuild(build, theme, window);
+        runtime.Step();
+        return runtime;
     }
 
     /// <summary>Moves the test's app to <paramref name="window"/>: a resize, a new scale or rate, from the next frame on.</summary>
@@ -96,10 +136,6 @@ public static class TestBuild
     private static App AppOf(BibuiRuntime runtime) => s_apps.TryGetValue(runtime, out var app) ? app
         : throw new InvalidOperationException("This runtime has no test build: SetBuild first.");
 
-    /// <summary>A page driving the test's app: its build, on its window.</summary>
-    public static Bibui.Testing.BibuiPage Page(this BibuiRuntime runtime) =>
-        Bibui.Testing.BibuiPage.From(runtime, runtime.BuildTree, window: AppOf(runtime).Window);
-
     /// <summary>
     /// The test's build, between a BeginBuild and an EndBuild: what it returns
     /// is linked under the frame's root, unless the build linked it there already.
@@ -107,16 +143,112 @@ public static class TestBuild
     public static void BuildTree(this BibuiRuntime runtime)
     {
         var tree = AppOf(runtime).Build();
-        if (tree.Parent is null) UiNode.PushIntoParent(runtime.ParentInScope, tree);
+        if (tree is { Parent: null }) UiNode.PushIntoParent(runtime.ParentInScope, tree);
     }
 
-    /// <summary>One frame: BeginBuild on the test's window with the frame's input (none by default), the test's build, EndBuild.</summary>
+    /// <summary>One frame: BeginBuild on the test's window with the frame's input (the keys pressed since the last, by default), the test's build, EndBuild.</summary>
     public static void Step(this BibuiRuntime runtime, List<WindowEvent>? events = null)
     {
-        runtime.BeginBuild(AppOf(runtime).Window, events);
+        var app = AppOf(runtime);
+        runtime.BeginBuild(app.Window, events ?? app.Keys);
         runtime.BuildTree();
         runtime.EndBuild();
     }
+
+    // ── Driving the app as a person would ────────────────────────────────────
+    // An action sends what a mouse or keyboard would and builds the frame it
+    // causes, as a window's loop does. A query builds nothing: it reads the
+    // tree the last frame laid out, which is what is on screen.
+
+    /// <summary>The logical-px rect of the node named <paramref name="id"/> as the last frame laid it out; throws when there is none.</summary>
+    public static System.Drawing.RectangleF GetBounds(this BibuiRuntime runtime, string id)
+    {
+        var node = Nodes.FindById(runtime.Root, id) ?? throw new InvalidOperationException($"No node with Id '{id}' in the last frame's tree.");
+        return new(node.Rect.X, node.Rect.Y, node.Extent.X, node.Extent.Y);
+    }
+
+    /// <summary>Whether a node named <paramref name="id"/> is in the last frame's tree.</summary>
+    public static bool IsVisible(this BibuiRuntime runtime, string id) => Nodes.FindById(runtime.Root, id) is not null;
+
+    /// <summary>The words, in the last frame, of the text named <paramref name="id"/>, or of the first text under it — a button's label; null for none.</summary>
+    public static string? GetText(this BibuiRuntime runtime, string id)
+    {
+        return Nodes.FindById(runtime.Root, id) is { } node && FirstText(node) is { } text ? new string(text.Content) : null;
+
+        static Text? FirstText(UiNode n)
+        {
+            if (n is Text t) return t;
+            for (var c = n.FirstChild; c is not null; c = c.Next == c ? null : c.Next)
+                if (FirstText(c) is { } found) return found;
+            return null;
+        }
+    }
+
+    // A press and a release at the centre of the node named id, the streak stated
+    // rather than raced: two clicks in a row would depend on how fast the test ran.
+    private static void PressAt(BibuiRuntime runtime, string id, int clickCount)
+    {
+        var b = runtime.GetBounds(id);
+        float x = b.X + b.Width / 2f, y = b.Y + b.Height / 2f;
+        runtime.ProcessEvents(new[]
+        {
+            new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = x, Y = y, ClickCount = clickCount },
+            new BibUiEvent { Kind = BibUiEventKind.MouseUp,   Button = MouseButton.Left, X = x, Y = y },
+        });
+    }
+
+    /// <summary>A click at the centre of the node named <paramref name="id"/>, and the frame it causes. Covered or scrolled away, it misses, as it would for a person.</summary>
+    public static void Click(this BibuiRuntime runtime, string id) { PressAt(runtime, id, 1); runtime.Step(); }
+
+    /// <summary>Two clicks, which on text selects a word.</summary>
+    public static void DoubleClick(this BibuiRuntime runtime, string id) { PressAt(runtime, id, 2); runtime.Step(); }
+
+    // One key as the window reports it: the modifiers down around it, all of them up after.
+    private static void PressKey(BibuiRuntime runtime, Key key, bool ctrl, bool shift)
+    {
+        var keys = AppOf(runtime).Keys;
+        var held = (ctrl ? KeyModifiers.Ctrl : 0) | (shift ? KeyModifiers.Shift : 0);
+        if (ctrl) keys.Add(WindowEvent.KeyPress(Key.ControlLeft, KeyModifiers.Ctrl));
+        if (shift) keys.Add(WindowEvent.KeyPress(Key.ShiftLeft, held));
+        keys.Add(WindowEvent.KeyPress(key, held));
+        keys.Add(WindowEvent.KeyRelease(key, held));
+        if (shift) keys.Add(WindowEvent.KeyRelease(Key.ShiftLeft, held & ~KeyModifiers.Shift));
+        if (ctrl) keys.Add(WindowEvent.KeyRelease(Key.ControlLeft));
+    }
+
+    /// <summary>One key, with modifiers, and the frame it causes.</summary>
+    public static void Press(this BibuiRuntime runtime, Key key, bool ctrl = false, bool shift = false) { PressKey(runtime, key, ctrl, shift); runtime.Step(); }
+
+    /// <summary>One character typed, and the frame it causes: the focused field reads it.</summary>
+    public static void TypeChar(this BibuiRuntime runtime, char ch)
+    {
+        AppOf(runtime).Keys.Add(WindowEvent.Text(new System.Text.Rune(ch)));
+        runtime.Step();
+    }
+
+    /// <summary>
+    /// Replaces the text of the field named <paramref name="id"/> as a person
+    /// would: presses it, which its app focuses; a frame later selects all and
+    /// types <paramref name="value"/>, or deletes for an empty one.
+    /// </summary>
+    public static void Fill(this BibuiRuntime runtime, string id, string value)
+    {
+        PressAt(runtime, id, 1);
+        runtime.Step();
+        PressKey(runtime, Key.A, ctrl: true, shift: false);
+        if (value.Length == 0) PressKey(runtime, Key.Backspace, ctrl: false, shift: false);
+        foreach (var rune in value.EnumerateRunes()) AppOf(runtime).Keys.Add(WindowEvent.Text(rune));
+        runtime.Step();
+    }
+
+    /// <summary>What the test's clipboard holds.</summary>
+    public static string GetClipboard(this BibuiRuntime runtime) => AppOf(runtime).Clipboard;
+
+    /// <summary>Puts <paramref name="text"/> on the test's clipboard.</summary>
+    public static void SetClipboard(this BibuiRuntime runtime, string text) => AppOf(runtime).Clipboard = text;
+
+    /// <summary>The last frame, drawn with Skia, as a PNG.</summary>
+    public static byte[] Screenshot(this BibuiRuntime runtime) => FramePixels.Png(runtime, Frames.Skia.Draw);
 }
 
 // A renderer's texture calls, as the texture contract drives them.

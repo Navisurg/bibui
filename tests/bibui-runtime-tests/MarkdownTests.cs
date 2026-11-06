@@ -4,6 +4,7 @@ using Bibui.Text;
 using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
 using Bibui.Raster.Skia;
+using Bibui.Testing;
 
 /// <summary>
 /// The Markdown parser and viewer: what a source parses to, written as a short
@@ -303,8 +304,8 @@ static class MarkdownTests
             runtime.Step();
             runtime.Step();
             IsTrue(last.ClickedLink is null, "nothing was clicked yet");
-            using var page = runtime.Page();
-            page.Click("md/0");
+            runtime.Step();
+            runtime.Click("md/0");
             Equal("https://example.com/docs", last.ClickedLink, "clicked link");
             Equal("Go to [the docs](https://example.com/docs) now.", source.ToString(), "source");
         });
@@ -318,8 +319,8 @@ static class MarkdownTests
                 TestBuild.Window(400, 200, 1f));
             runtime.Step();
             runtime.Step();
-            using var page = runtime.Page();
-            page.Click("tasks/0");
+            runtime.Step();
+            runtime.Click("tasks/0");
             IsTrue(last.TaskClicked, "the first task box should report its click");
             Markdown.ToggleTask(source, last.ToggledTask);
             Equal("- [x] write it\n- [x] test it", source.ToString(), "source after toggling");
@@ -344,7 +345,7 @@ static class MarkdownTests
                 return page;
             }, surface);
             long frame = SteadyFrame(runtime);
-            var texts = Descendants(runtime.FindById("same")!).OfType<Text>().Select(t => t.Content.ToArray()).ToArray();
+            var texts = Descendants(Nodes.FindById(runtime.Root, "same")!).OfType<Text>().Select(t => t.Content.ToArray()).ToArray();
 
             var plain = BibuiRuntime.Create();
             plain.SetBuild(() =>
@@ -385,7 +386,7 @@ static class MarkdownTests
             TestBuild.Window((int)width + 40, 1200, 1f));
         runtime.Step();
         runtime.Step();
-        return (runtime, runtime.FindById("md") ?? throw new Exception("the viewer was not built"));
+        return (runtime, Nodes.FindById(runtime.Root, "md") ?? throw new Exception("the viewer was not built"));
     }
 
     // A paragraph's lines: the children of the viewer that hold something (the rest are gaps).
