@@ -6,6 +6,17 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-06
+
+The window separated from the runtime, text on a layer of its own, and focus
+kept by the runtime. A window opens, frames and presents without knowing the
+runtime, and the app's loop is `while (app.WaitForFrame()) Frame();`. Text is
+walked into runs once and wrapped from them, emoji included, in a package of
+its own (`Bibui.Text`). A text field takes focus on a press and gives it up on
+Enter or Escape, with no focus state in the app. Lists of rows build only
+those in sight (`RowScrollList`, `ScrollList`). This release changes and
+removes public API; each change below says what to use instead.
+
 ### Added
 
 - **RowScrollList** (`runtime.BeginRowScrollList`, `EndRowScrollList`): the
@@ -877,7 +888,8 @@ before it was published.
   pipeline.
 - The `Bibui.Contracts` and `Bibui.Runtime` packages (merged into `Bibui`).
 
-[Unreleased]: https://github.com/Navisurg/bibui/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Navisurg/bibui/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Navisurg/bibui/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Navisurg/bibui/compare/v0.10.1...v1.0.0
 [0.10.1]: https://github.com/Navisurg/bibui/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/Navisurg/bibui/compare/v0.9.3...v0.10.0
