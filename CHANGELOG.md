@@ -26,6 +26,12 @@ All notable changes to bibui are recorded here. The format is based on
   (`ContextStack`). It never writes the model directly: a pick is a `node.set`, a button pushes
   its command. See `packaging/readme/Bibui.Views.md`.
 
+- **`samples/board`: an app built on Bibui.Commands and Bibui.Views.** Cases shown as cards on
+  a board, and panels that show any node through a lens: a case opened as its vessel tree, a
+  query typed into a panel. Its own lenses (the board, the tree), an app data layer (a
+  segmentation cache as a `[Place]`), and a `TestSession`, so `bibui-port` reads and drives
+  its model.
+
 - **`Bibui.Automation`: a test port for a running app.** `TestPort.Open(runtime, options)`
   makes a Unix socket only the user can reach (`$XDG_RUNTIME_DIR/bibui/<name>-<pid>.sock`)
   and one thread that reads it; the app calls `port.TryPullCmd` at the top of each

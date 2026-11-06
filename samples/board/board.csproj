@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Board: a case's data, and panels and cards that show it, all of it evaluations shown
+       through lenses (Bibui.Commands' Eval, Lenses). Panels tile as DWM tiles windows; each shows a
+       query through its lens with its settings. Cards sit on a board and feed one another: a card's
+       query reads its inputs' results. Right click a value or a card to open it in a panel. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>board</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Declared, not filled yet: fields nothing assigns (CS0649). Remove once the board is built. -->
+    <NoWarn>$(NoWarn);CS0649</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui-commands/bibui-commands.csproj" />
+    <ProjectReference Include="../../bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj" />
+    <ProjectReference Include="../../bibui-automation/bibui-automation.csproj" />
+    <ProjectReference Include="../../bibui-views/bibui-views.csproj" />
+    <!-- cmdgen runs before this compiles (Bibui.Commands.targets, imported below), so it is built first. -->
+    <ProjectReference Include="../../tools/cmdgen/cmdgen.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <PropertyGroup>
+    <BibuiCmdGenDll>$(MSBuildThisFileDirectory)../../tools/cmdgen/bin/$(Configuration)/net10.0/cmdgen.dll</BibuiCmdGenDll>
+  </PropertyGroup>
+  <Import Project="../../bibui-commands/buildTransitive/Bibui.Commands.targets" />
+</Project>
