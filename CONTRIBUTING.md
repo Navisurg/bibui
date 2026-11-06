@@ -54,7 +54,7 @@ console app; it prints what failed and exits non-zero:
 
 ```bash
 dotnet run --project tests/bibui-runtime-tests -c Release       # runtime, components, layout, themes
-dotnet run --project tests/automation-tests -c Release          # Bibui.Automation: the test port
+dotnet run --project tests/automation-tests -c Release          # Bibui.Automation's test port, and bibui-port
 dotnet run --project tests/text-tests -c Release
 dotnet run --project tests/png-tests -c Release
 dotnet run --project tests/wayland-tests -c Release             # headless; skips what needs a compositor
