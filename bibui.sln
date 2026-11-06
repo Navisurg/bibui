@@ -103,6 +103,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "cmdgen", "tools\cmdgen\cmdg
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "commands-tests", "tests\commands-tests\commands-tests.csproj", "{E1AE1AB7-B9EE-46F5-A569-7FF116D1627E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "bibui-views", "bibui-views\bibui-views.csproj", "{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -545,6 +547,18 @@ Global
 		{E1AE1AB7-B9EE-46F5-A569-7FF116D1627E}.Release|x64.Build.0 = Release|Any CPU
 		{E1AE1AB7-B9EE-46F5-A569-7FF116D1627E}.Release|x86.ActiveCfg = Release|Any CPU
 		{E1AE1AB7-B9EE-46F5-A569-7FF116D1627E}.Release|x86.Build.0 = Release|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Debug|x64.Build.0 = Debug|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Debug|x86.Build.0 = Debug|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Release|x64.ActiveCfg = Release|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Release|x64.Build.0 = Release|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Release|x86.ActiveCfg = Release|Any CPU
+		{31126C02-FA2A-4704-B88B-1A1FE9CCEF92}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -36,6 +36,8 @@ PROJECTS=(
   "bibui-testing/bibui-testing.csproj"
   # An app's model and its commands as records, with cmdgen as a build step.
   "bibui-commands/bibui-commands.csproj"
+  # A model's values drawn as widgets through their lenses.
+  "bibui-views/bibui-views.csproj"
   "bibui-automation/bibui-automation.csproj"
   # The raw Wayland host and the managed raster backend
   # with its FreeType/HarfBuzz text — an app on these ships no Skia or Silk.

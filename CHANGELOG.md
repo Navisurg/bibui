@@ -20,6 +20,12 @@ All notable changes to bibui are recorded here. The format is based on
   per command, which can build its command from a `Context`. `ModelJson` and `TextView` read
   the model as JSON and as text. See `packaging/readme/Bibui.Commands.md`.
 
+- **`Bibui.Views`: a model's values drawn as widgets through their lenses.** `UIView` draws a
+  value through the app's drawer for its lens, or by its shape (fields, a table, rows, a pick),
+  and a node's row of commands as buttons built from the context it is drawn in
+  (`ContextStack`). It never writes the model directly: a pick is a `node.set`, a button pushes
+  its command. See `packaging/readme/Bibui.Views.md`.
+
 - **`Bibui.Automation`: a test port for a running app.** `TestPort.Open(runtime, options)`
   makes a Unix socket only the user can reach (`$XDG_RUNTIME_DIR/bibui/<name>-<pid>.sock`)
   and one thread that reads it; the app calls `port.TryPullCmd` at the top of each
