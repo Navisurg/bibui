@@ -145,8 +145,8 @@ public sealed unsafe class FontStrike
         return a;
     }
 
-    // For chars below 256, the glyph and its advance side by side, filled on
-    // first use (rad's utf8_class1_direct_map): a walk reads one entry per char.
+    // For chars below 256, the glyph and its advance side by side in a table
+    // indexed by the char, filled on first use: a walk reads one entry per char.
     // Anything else goes through the font's cmap and the strike's advances.
     // TextLayer.GlyphDirect reads it: the fast path's measuring block.
     internal readonly DirectGlyph[] Direct = new DirectGlyph[256];

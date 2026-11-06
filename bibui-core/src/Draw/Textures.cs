@@ -19,7 +19,7 @@ public readonly record struct TextureHandle(ulong Id, ulong Generation)
 }
 
 /// <summary>
-/// What a texture's pixels are, rad's names. Each draws with a default look the
+/// What a texture's pixels are. Each draws with a default look the
 /// renderer gives it, so any texture drawn plainly shows: R8 grey (r, r, r, 1),
 /// A8 white coverage (1, 1, 1, a), RG8 (r, g, 0, 1), RGBA8 and BGRA8 as they are. What reads
 /// a texture's own channels (a lookup) reads them raw, before that look.
@@ -38,7 +38,7 @@ public enum TextureFormat : byte
     BGRA8,
 }
 
-/// <summary>How often a texture's pixels change, which says how a renderer keeps it (rad's resource kinds).</summary>
+/// <summary>How often a texture's pixels change, which says how a renderer keeps it and whether it takes an update.</summary>
 public enum TextureKind : byte
 {
     /// <summary>Made once and never changed: logos, thumbnails, lookup tables. An update is ignored.</summary>

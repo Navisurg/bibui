@@ -523,7 +523,7 @@ and `samples/counter` is the whole of a loop.
   `CreateTexture(rgba, width, height)`, and `UpdateTexture(texture, pixels,
   rowBytes = 0)` takes the whole texture at the size and format it was made
   with.
-  - Formats, rad's names: `RGBA8` and `BGRA8` (straight alpha), `R8`, `RG8`
+  - Formats: `RGBA8` and `BGRA8` (straight alpha), `R8`, `RG8`
     and `A8`. Each draws with a default look: R8 grey, A8 white coverage, RG8
     as red and green.
   - Kinds: a `Static` texture is made once; an update to it is ignored. A

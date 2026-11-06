@@ -45,7 +45,7 @@ public sealed class Fonts : IDisposable
 
     // ── This frame's runs ────────────────────────────────────────────────────
 
-    // rad's per-frame run cache, keyed by the Text instead of a hash of its
+    // A per-frame run cache, keyed by the Text itself rather than a hash of its
     // chars: layout walks a text's glyphs and positions into the next free slice
     // of RunGlyphs and RunPoints; the painter copies them out instead of walking
     // again. Each text pushes its runs into Runs, one after another. Emptied when layout
