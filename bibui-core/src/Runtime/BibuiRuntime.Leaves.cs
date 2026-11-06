@@ -60,6 +60,13 @@ public sealed partial class BibuiRuntime
     }
 
     /// <summary>
+    /// The font <paramref name="text"/> is set in: its size, slot and weight in
+    /// the theme, at the surface's scale. The font layout measured it in, so the
+    /// width of its content in it is the width it asked for.
+    /// </summary>
+    public Font FontOf(Text text) => FontResolution.FontFromText(_slotFaces, text, _frameTheme, Window.Scale);
+
+    /// <summary>
     /// The same as <see cref="Text"/>, retained under <paramref name="id"/>
     /// like <see cref="BoxFromId"/>, for a text that needs identity: something
     /// to find it by, or to animate.

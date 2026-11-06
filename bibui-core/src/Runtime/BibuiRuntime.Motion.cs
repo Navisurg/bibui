@@ -389,7 +389,6 @@ public sealed partial class BibuiRuntime
         _themeFade.Elapsed = 0f;
         _themeFade.Transition = crossfade;
         _theme = theme;
-        _lastTree = null;
         RequestFrame();
     }
 

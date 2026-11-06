@@ -32,7 +32,7 @@
          path that is pure enough to test directly. -->
     <InternalsVisibleTo Include="bibui-runtime-tests" />
     <!-- Bibui.Automation's test port writes the tree the last frame laid out
-         (LastTree), as the test server in core reads it. -->
+         (Root). -->
     <InternalsVisibleTo Include="Bibui.Automation" />
   </ItemGroup>
 

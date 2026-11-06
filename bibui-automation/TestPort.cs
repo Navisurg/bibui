@@ -208,7 +208,7 @@ public sealed partial class TestPort
             StateRequest => new TestCmd(TestCmdKind.State),
             SchemaRequest => new TestCmd(TestCmdKind.Schema),
             ScreenshotRequest { Path.Length: > 0, Id: null } s => new TestCmd(TestCmdKind.Screenshot, path: s.Path),
-            ScreenshotRequest { Path.Length: > 0, Id: { } id } s => NodeRect(_runtime?.LastTree, id) is { } rect
+            ScreenshotRequest { Path.Length: > 0, Id: { } id } s => NodeRect(_runtime?.Root, id) is { } rect
                 ? new TestCmd(TestCmdKind.Screenshot, path: s.Path, region: rect)
                 : Refused($"No node '{id}' in the tree."),
             ScreenshotRequest => Refused("test.screenshot carries the path to write."),
