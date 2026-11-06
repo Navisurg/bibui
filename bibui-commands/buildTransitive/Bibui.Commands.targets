@@ -1,0 +1,36 @@
+<Project>
+  <!--
+    cmdgen, before an app that references Bibui.Commands compiles: it reads the app's
+    sources for records marked [CommandSet] and writes obj/cmdgen/Cmd.g.cs (their wire
+    names, push methods and table), which is compiled with them. Written before the
+    compiler runs, not by a source generator, so System.Text.Json's generator sees the
+    wire names it writes ([JsonDerivedType]) like any hand-written ones: generators do
+    not see each other's output.
+
+    It runs when a source or cmdgen changed (run.stamp), and rewrites Cmd.g.cs only when
+    its text changes, so an unchanged command set does not make the app recompile.
+
+    A project that references bibui-commands by path imports this file itself, with
+    BibuiCmdGenDll pointing at tools/cmdgen's build output.
+  -->
+  <PropertyGroup>
+    <BibuiCmdGenDll Condition="'$(BibuiCmdGenDll)' == ''">$(MSBuildThisFileDirectory)../tools/cmdgen/cmdgen.dll</BibuiCmdGenDll>
+    <BibuiCmdGenOutput>$(BaseIntermediateOutputPath)cmdgen/Cmd.g.cs</BibuiCmdGenOutput>
+    <BibuiCmdGenSources>$(BaseIntermediateOutputPath)cmdgen/sources.txt</BibuiCmdGenSources>
+    <BibuiCmdGenStamp>$(BaseIntermediateOutputPath)cmdgen/run.stamp</BibuiCmdGenStamp>
+  </PropertyGroup>
+
+  <Target Name="BibuiCmdGenRun" BeforeTargets="CoreCompile" DependsOnTargets="ResolveProjectReferences"
+          Inputs="@(Compile);$(BibuiCmdGenDll)" Outputs="$(BibuiCmdGenStamp)">
+    <WriteLinesToFile File="$(BibuiCmdGenSources)" Lines="@(Compile->'%(FullPath)')" Overwrite="true" />
+    <Exec Command="dotnet &quot;$(BibuiCmdGenDll)&quot; &quot;$(BibuiCmdGenOutput)&quot; @&quot;$(BibuiCmdGenSources)&quot;" />
+    <Touch Files="$(BibuiCmdGenStamp)" AlwaysCreate="true" />
+  </Target>
+
+  <Target Name="BibuiCmdGenCompile" BeforeTargets="CoreCompile" AfterTargets="BibuiCmdGenRun">
+    <ItemGroup>
+      <Compile Include="$(BibuiCmdGenOutput)" />
+      <FileWrites Include="$(BibuiCmdGenOutput);$(BibuiCmdGenSources);$(BibuiCmdGenStamp)" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+  <!-- Bibui.Commands: an app's model (a tree of facts, ModelTree) and its commands as records,
+       applied in one place (Model), with
+       what cmdgen writes from them before the app compiles: wire names, push methods,
+       and a table of what each command is. Needs nothing of the rest of bibui. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Commands</AssemblyName>
+    <RootNamespace>Bibui.Commands</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>Bibui.Commands</PackageId>
+    <Description>An app's model and its commands as records, applied in one place: a Model holds the app's tree of facts and runs the commands that change it in the order they were pushed, and cmdgen writes, before the app compiles, each command's wire name, a push method, and a table of its label, description and contracts (destructive, read-only), for a command palette, a test port's schema or an MCP server.</Description>
+    <PackageTags>$(PackageTags);commands;state</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Built first, so its output can go into the package; not a reference. -->
+    <ProjectReference Include="../tools/cmdgen/cmdgen.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The build step an app gets with the package: cmdgen before it compiles. -->
+    <None Include="buildTransitive/Bibui.Commands.targets" Pack="true" PackagePath="buildTransitive/" />
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Hashing" Version="10.0.14" />
+  </ItemGroup>
+
+  <!-- cmdgen and what it runs on (Roslyn's syntax trees), in the package's tools/cmdgen. -->
+  <Target Name="PackCmdGen" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <None Include="../tools/cmdgen/bin/$(Configuration)/net10.0/**" Pack="true" PackagePath="tools/cmdgen/" Visible="false" />
+    </ItemGroup>
+  </Target>
+</Project>

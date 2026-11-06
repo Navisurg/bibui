@@ -8,6 +8,18 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
+- **`Bibui.Commands`: an app's model and the commands that change it.** A `[NodeSet]`
+  declares the app's kinds of node as records; each kind gets a typed id whose zero value is
+  no node, and a table of rows, read with `RowFromId` and written whole with `Modify`. A
+  command is a record in a `[CommandSet]`; a `Model` applies them in the order pushed, as the
+  only writer of the tree, and logs a generation per change. The built-ins `node.set` (a field
+  set to the value of an expression) and `view_rule.set` go through the same model and wire.
+  Values are read through a small expression language (`Expr`) over the model and any
+  `[Place]` the app registers, and seen through lenses and view rules. cmdgen, a build step
+  the package brings, writes the typed ids, tables, wire names, push methods and an `OpInfo`
+  per command, which can build its command from a `Context`. `ModelJson` and `TextView` read
+  the model as JSON and as text. See `packaging/readme/Bibui.Commands.md`.
+
 - **`Bibui.Automation`: a test port for a running app.** `TestPort.Open(runtime, options)`
   makes a Unix socket only the user can reach (`$XDG_RUNTIME_DIR/bibui/<name>-<pid>.sock`)
   and one thread that reads it; the app calls `port.TryPullCmd` at the top of each

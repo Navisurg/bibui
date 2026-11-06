@@ -78,10 +78,13 @@ jobs:
             bibui-all/bibui-all.csproj \
             tools/wayland-scanner/wayland-scanner.csproj \
             tools/bibui-port/bibui-port.csproj \
+            tools/cmdgen/cmdgen.csproj \
+            bibui-commands/bibui-commands.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
             bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
             tests/bibui-runtime-tests/bibui-runtime-tests.csproj \
             tests/automation-tests/automation-tests.csproj \
+            tests/commands-tests/commands-tests.csproj \
             tests/text-tests/text-tests.csproj \
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
@@ -108,6 +111,7 @@ jobs:
           for proj in \
             tests/bibui-runtime-tests/bibui-runtime-tests.csproj \
             tests/automation-tests/automation-tests.csproj \
+            tests/commands-tests/commands-tests.csproj \
             tests/text-tests/text-tests.csproj \
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
