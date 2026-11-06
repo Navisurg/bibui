@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Bibui.Core;
+using Bibui.Text;
 using Bibui.Core.Theming;
 using Bibui.Platform.Wayland;
 using Bibui.Raster.Managed.Backend;
@@ -934,7 +935,7 @@ Run("HitTest D: Next button fills column width", () =>
 // way a user does: emptying Delete, Home, End, SelectAll, Copy, Cut or Paste
 // left the suite green.
 
-// A TextField with known text, always focused: the page, and the buffer and
+// A TextField with known text, given focus: the page, and the buffer and
 // edit state it edits, which the tests read and set directly.
 (BibuiPage Page, BibuiStr Text, TextEditState Edit) TextFieldPage(string initial = "hello world")
 {
@@ -956,10 +957,11 @@ Run("HitTest D: Next button fills column width", () =>
         using (runtime.Parent(frame))
         {
             var field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
-            using (runtime.Parent(field)) runtime.TextField("txt", text, edit, focused: true);
+            using (runtime.Parent(field)) runtime.TextField("txt", text, edit);
         }
         return frame;
     }, TestBuild.Window(300, 60));
+    runtime.Focus("txt");
     runtime.Step();
     return (runtime, text, edit);
 }
@@ -2394,7 +2396,7 @@ Run("Box: a fixed Width box holds a multi-line field wrapped at that width, not 
             using (runtime.Parent(bubble))
             using (runtime.Parent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
             using (runtime.SizeY(SemanticSize.ChildrenSum()))
-                runtime.MultilineTextField("words", Str(words), new TextEditState(), focused: false, events: 0);
+                runtime.MultilineTextField("words", Str(words), new TextEditState(), events: 0);
         }),
         TestBuild.Window(1000, 300, 1f));
     runtime.Step();   // a field wraps at the width it was laid out at last frame
@@ -2421,7 +2423,7 @@ Run("runtime.MultilineTextField: wrapped by characters, a token longer than the 
             using (runtime.Parent(runtime.Column().Sized(Size.Px(160f))))
             using (runtime.SizeY(SemanticSize.ChildrenSum()))
                 runtime.MultilineTextField("log", BibuiStr.FromStrLit(path), new TextEditState(),
-                    focused: false, events: 0, wrap: wrap);
+                    events: 0, wrap: wrap);
         }),
         TestBuild.Window(400, 400));
 
@@ -2458,7 +2460,7 @@ Run("runtime.MultilineTextField: a hard line break is laid out as a line, not on
             using (runtime.SizeY(SemanticSize.ChildrenSum()))
                 runtime.MultilineTextField("words",
                 BibuiStr.FromStrLit("Yes, I'll take it.\nI will send it before Friday.\r\nThanks."), new TextEditState(),
-                focused: false, events: 0);
+                events: 0);
         }),
         TestBuild.Window(800, 300, 1.25f));
     runtime.Step();
@@ -2501,7 +2503,7 @@ Run("Text: a mono text is set and laid out in the theme's mono family", () =>
     // Laid out at what the mono family measures. Not compared with the body
     // family's width: where neither family is installed both fall back to the
     // same face, and the two widths agree.
-    Eq(runtime.Fonts.Measure("194450e3", mono), page.GetBounds("mono").Width, "laid out at its mono width");
+    Eq(TextLayer.WidthFromChars(runtime.Fonts, "194450e3", TextLayer.StyleFromFont(runtime.Fonts, mono, mono.Scale), mono.Scale), page.GetBounds("mono").Width, "laid out at its mono font's width");
 });
 
 Run("FontSize: a text in pixels is measured and laid out at that size, between the steps", () =>
@@ -2518,7 +2520,7 @@ Run("FontSize: a text in pixels is measured and laid out at that size, between t
 
     var font = runtime.FontInScope(FontSize.Px(21f));
     Eq(21f, font.Size, "the font is the size asked for");
-    Eq(runtime.Fonts.Measure("Zoomed", font), page.GetBounds("px").Width, "laid out at what it measures");
+    Eq(TextLayer.WidthFromChars(runtime.Fonts, "Zoomed", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale), page.GetBounds("px").Width, "laid out at that font's width");
     Eq(runtime.Fonts.LineHeight(font), page.GetBounds("px").Height, "and a line of it tall");
     IsTrue(page.GetBounds("px").Width > page.GetBounds("sm").Width, "larger than the small step");
 });
@@ -2536,14 +2538,15 @@ Run("FontSize: a text's size is always said, and can be changed on the text that
         {
             plain = runtime.TextFromId("plain", "Zoomed".ToArray());
             runtime.TextFromId("changed", "Zoomed".ToArray()).Size = FontSize.Px(26f);
+            runtime.TextFromId("reference", "Zoomed".ToArray(), FontSize.Px(26f));
         }
         return root;
     }, TestBuild.Window(300, 120, 1f));
     using var page = runtime.Page();
 
     Eq((FontSize)ComponentSize.Md, plain.Size, "nothing passed and nothing pushed is Md");
-    Eq(runtime.Fonts.Measure("Zoomed", runtime.FontInScope(FontSize.Px(26f))), page.GetBounds("changed").Width,
-        "a size set afterwards is the one laid out");
+    Eq(page.GetBounds("reference").Width, page.GetBounds("changed").Width,
+        "a size set afterwards is the one laid out: as wide as the text made at that size");
 });
 
 Run("FontSize: what is built in scope takes the innermost size begun, unless it says its own", () =>
@@ -2568,17 +2571,22 @@ Run("FontSize: what is built in scope takes the innermost size begun, unless it 
                 runtime.TextFromId("own", "Zoomed".ToArray(), ComponentSize.Sm);
             }
             runtime.TextFromId("after", "Zoomed".ToArray());
+            // The same text at each size asked for itself, out of every scope: what each above should match.
+            runtime.TextFromId("at30", "Zoomed".ToArray(), FontSize.Px(30f));
+            runtime.TextFromId("at18", "Zoomed".ToArray(), FontSize.Px(18f));
+            runtime.TextFromId("atSm", "Zoomed".ToArray(), ComponentSize.Sm);
+            runtime.TextFromId("atMd", "Zoomed".ToArray(), ComponentSize.Md);
         }
         return root;
     }, TestBuild.Window(400, 200, 1f));
     using var page = runtime.Page();
 
-    float Wide(FontSize size) => runtime.Fonts.Measure("Zoomed", runtime.FontInScope(size));
-    Eq(Wide(FontSize.Px(30f)), page.GetBounds("outer").Width, "the pushed size");
-    Eq(Wide(FontSize.Px(18f)), page.GetBounds("inner").Width, "the innermost push");
+    float Wide(string id) => page.GetBounds(id).Width;
+    Eq(Wide("at30"), Wide("outer"), "the pushed size");
+    Eq(Wide("at18"), Wide("inner"), "the innermost push");
     Eq(18f, icon.Extent.X, "an icon takes it too");
-    Eq(Wide(ComponentSize.Sm), page.GetBounds("own").Width, "a text's own size wins");
-    Eq(Wide(ComponentSize.Md), page.GetBounds("after").Width, "and past the scope the default is back");
+    Eq(Wide("atSm"), Wide("own"), "a text's own size wins");
+    Eq(Wide("atMd"), Wide("after"), "and past the scope the default is back");
 });
 
 Run("BeginFontSize: a scope left open is an error at the end of the build", () =>
@@ -2695,20 +2703,26 @@ Run("Renderers: the managed rasterizer draws into memory with its own stride wha
 
 Run("Raster: glyphs bibui shapes draw the same pixels as Skia drawing the string", () =>
 {
-    // The canvas is handed glyphs FreeType shaped, never a string. On Skia they
+    // The canvas is handed glyphs layout's walk set, never a string. On Skia they
     // must land exactly where Skia's own string drawing puts them, with the
     // paint bibui draws text with, so the move to glyphs moved no pixel.
     using var fonts = new Fonts();
-    var face = fonts.BuiltIn(400);
+    var face = TextLayer.FaceBuiltIn(fonts, 400);
     IsTrue(face.HasGlyph('A') && !face.HasGlyph(0x10FFFD), "glyph coverage is the face's own");
 
     const float size = 17.5f;
     const string text = "Shaped runs, glyph by glyph — 0.5 ffi";
-    var glyphIds = new ushort[text.Length];
-    var positions = new System.Numerics.Vector2[text.Length];
-    int count = face.Strike(size).Glyphs(text, glyphIds, positions, out float width);
+    TextLayer.RunsBegin(fonts);
+    var style = TextLayer.StyleFromFaceSize(fonts, face, size);
+    var walked = TextLayer.RunsFromChars(fonts, text, style);
+    var run = TextLayer.RunsOf(fonts, walked)[0];
+    Eq(1, TextLayer.RunsOf(fonts, walked).Length, "one run, in the face");
+    int count = run.GlyphCount;
+    var glyphIds = fonts.RunGlyphs.AsSpan(run.GlyphStart, count).ToArray();
+    var positions = fonts.RunPoints.AsSpan(run.GlyphStart, count).ToArray();
+    float width = TextLayer.WidthOfRuns(fonts, walked, 1f);
     Eq(text.Length, count, "one glyph per char for this text (no ligatures)");
-    Eq(face.Strike(size).Measure(text), width, "the walked run is as wide as measuring says");
+    Eq(TextLayer.WidthFromChars(fonts, text, style, 1f), width, "the walked run is as wide as WidthFromChars says");
 
     var info = new SkiaSharp.SKImageInfo(360, 48, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
     static byte[] Read(SkiaSharp.SKSurface surface)
@@ -2865,15 +2879,17 @@ Run("DrawList: recording a frame after the first allocates nothing", () =>
 
     var caches = new Bibui.Core.Draw.RenderCaches();
     using var fonts = new Fonts();
-    var painter = new Bibui.Core.Draw.Painter(caches, fonts);
+    var theme = runtime.Theme;
+    var slotFaces = new FontFace[FontResolution.SlotFaceCount];
+    FontResolution.SlotFacesFill(slotFaces, fonts, theme);
+    var painter = new Bibui.Core.Draw.Painter(caches, fonts, slotFaces);
     var list = new Bibui.Core.Draw.DrawList();
     var surface = TestBuild.Window(400, 300);
-    var theme = runtime.Theme;
     for (int i = 0; i < 3; i++)
     {
         painter.Record(list, tree!, surface, theme, FrameInput.None);
         caches.EndFrame();
-        fonts.EndFrame();
+        TextLayer.FontsEndFrame(fonts);
     }
 
     long before = GC.GetAllocatedBytesForCurrentThread();
@@ -6444,32 +6460,6 @@ Run("Tooltip: claims nothing, so a press on it reaches what is beneath", () =>
     Eq(1, clicks, "the button beneath the tooltip has the click");
 });
 
-Run("Fonts.OffsetAt: the boundary nearer x, either side of every glyph", () =>
-{
-    var runtime = BibuiRuntime.Create();
-    var font = runtime.FontInScope();
-    const string text = "Hello";
-    for (int k = 1; k <= text.Length; k++)
-    {
-        float before = runtime.Fonts.Measure(text.AsSpan(0, k - 1), font);
-        float after = runtime.Fonts.Measure(text.AsSpan(0, k), font);
-        Eq(k, runtime.Fonts.OffsetAt(text, font, after - 0.5f), $"just left of glyph {k}'s right edge");
-        Eq(k - 1, runtime.Fonts.OffsetAt(text, font, before + 0.5f), $"just right of glyph {k}'s left edge");
-    }
-    Eq(0, runtime.Fonts.OffsetAt(text, font, -10f), "before the start");
-    Eq(text.Length, runtime.Fonts.OffsetAt(text, font, 1000f), "past the end");
-});
-
-Run("Fonts.OffsetAt: only ever a text element boundary", () =>
-{
-    var runtime = BibuiRuntime.Create();
-    var font = runtime.FontInScope();
-    const string text = "a👍🏽b";   // a | 👍🏽 (two code points, four chars) | b — boundaries 0, 1, 5, 6
-    float a = runtime.Fonts.Measure("a", font), at = runtime.Fonts.Measure("a👍🏽", font);
-    Eq(5, runtime.Fonts.OffsetAt(text, font, at - 0.5f), "after the 👍🏽, not inside it");
-    Eq(1, runtime.Fonts.OffsetAt(text, font, a + 0.5f), "before the 👍🏽");
-});
-
 Run("Fonts.LineHeight and LineAdvance: what layout gives one line, and the next", () =>
 {
     // One line is LineHeight tall, and a multi-line field as tall as its lines
@@ -6489,7 +6479,7 @@ Run("Fonts.LineHeight and LineAdvance: what layout gives one line, and the next"
             using (runtime.Parent(field))
             using (runtime.SizeY(SemanticSize.ChildrenSum()))
                 runtime.MultilineTextField("three", BibuiStr.FromStrLit("A line\nanother\nand a third"),
-                new TextEditState(), focused: false, events: 0);
+                new TextEditState(), events: 0);
         }
         return column;
     }, TestBuild.Window(400, 300));
@@ -6506,77 +6496,70 @@ Run("Fonts.LineHeight and LineAdvance: what layout gives one line, and the next"
         $"three lines: {height} + 2 x {advance}, laid out {three}");
 });
 
-Run("Fonts.Wrap: lines at a width, the space between them in neither", () =>
+// The lines a text breaks into at a width in the font in scope: TextLayer.LinesFromText.
+TextLine[] LinesAt(BibuiRuntime runtime, string text, Font font, float width, TextWrap wrap = TextWrap.Words)
+    => TextLayer.LinesFromText(runtime.Fonts, text, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale, width, wrap).ToArray();
+
+Run("LinesFromText: lines at a width, the space between them in neither", () =>
 {
     var runtime = BibuiRuntime.Create();
     var font = runtime.FontInScope();
     var text = "one two three";
     // Room for "one two" but not "one two three".
-    float width = runtime.Fonts.Measure("one two", font) + 1f;
-    var lines = new List<string>();
-    for (var line = runtime.Fonts.Wrap(text, font, width); line is not null; line = line.Next)
-        lines.Add($"{line.Start}..{line.End}");
-    Eq("0..7,8..13", string.Join(",", lines), "one two | three, the space at 7 in neither");
-    IsTrue(runtime.Fonts.Wrap("", font, width) is null, "nothing is no lines");
+    float width = TextLayer.WidthFromChars(runtime.Fonts, "one two", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) + 1f;
+    var lines = LinesAt(runtime, text, font, width);
+    Eq("0..7,8..13", string.Join(",", lines.Select(l => $"{l.Start}..{l.End}")), "one two | three, the space at 7 in neither");
+    Eq(8, lines[0].Next, "the second line starts past the space");
+    var nothing = LinesAt(runtime, "", font, width);
+    IsTrue(nothing.Length == 1 && nothing[0] == new TextLine(0, 0, 0), "nothing is one empty line");
 });
 
-Run("Fonts.Wrap: offsets are chars, and a line break starts a line", () =>
+Run("LinesFromText: offsets are chars, and a line break starts a line", () =>
 {
     var runtime = BibuiRuntime.Create();
     var font = runtime.FontInScope();
     var text = "grüße\nw👍🏽rld";   // ü and ß are a char each; 👍🏽 is four
-    var first = runtime.Fonts.Wrap(text, font, 1000f)!;
-    var second = first.Next!;
-    Eq(0, first.Start); Eq(5, first.End, "grüße is 5 chars");
-    Eq(6, second.Start, "after the \\n"); Eq(14, second.End, "w👍🏽rld is 8 chars");
-    IsTrue(second.Next is null && second.Prev == first, "two lines, linked both ways");
+    var lines = LinesAt(runtime, text, font, 1000f);
+    Eq(2, lines.Length, "two lines");
+    Eq(0, lines[0].Start); Eq(5, lines[0].End, "grüße is 5 chars");
+    Eq(6, lines[0].Next, "the next starts after the \\n");
+    Eq(6, lines[1].Start, "after the \\n"); Eq(14, lines[1].End, "w👍🏽rld is 8 chars");
+    Eq(lines[1].End, lines[1].Next, "the last line's Next is its End");
 });
 
-Run("Fonts.Wrap: by characters, a line holds what fits and the next starts where it ends", () =>
+Run("LinesFromText: by characters, a line holds what fits and the next starts where it ends", () =>
 {
     var runtime = BibuiRuntime.Create();
     var font = runtime.FontInScope();
     const string text = "/home/ada/grüße/a-path-longer-than-the-line.txt\nok";
-    float width = runtime.Fonts.Measure("/home/ada/", font) + 0.5f;
+    float width = TextLayer.WidthFromChars(runtime.Fonts, "/home/ada/", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) + 0.5f;
 
-    var lines = new List<TextLine>();
-    for (var line = runtime.Fonts.Wrap(text, font, width, TextWrap.Characters); line is not null; line = line.Next)
-        lines.Add(line);
-    IsTrue(lines.Count > 3, $"the path is cut into several lines, got {lines.Count}");
+    var lines = LinesAt(runtime, text, font, width, TextWrap.Characters);
+    IsTrue(lines.Length > 3, $"the path is cut into several lines, got {lines.Length}");
     Eq(0, lines[0].Start);
     Eq(10, lines[0].End, "as many characters as fit: /home/ada/");
-    for (int i = 1; i < lines.Count - 1; i++)
+    for (int i = 1; i < lines.Length - 1; i++)
         Eq(lines[i - 1].End, lines[i].Start, "nothing between one line and the next");
-    IsTrue(lines.All(l => runtime.Fonts.Measure(text.AsSpan(l.Start..l.End), font) <= width), "every line fits");
+    IsTrue(lines.All(l => TextLayer.WidthFromChars(runtime.Fonts, text.AsSpan(l.Start..l.End), TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) <= width), "every line fits");
     IsTrue(lines.All(l => l.Start == l.End || !char.IsLowSurrogate(text[l.Start])), "a line starts on a character, not inside one");
     Eq("ok", text[lines[^1].Start..lines[^1].End], "a line break still starts a line");
 
-    var byWords = runtime.Fonts.Wrap(text, font, width)!;
-    Eq(text.IndexOf('\n'), byWords.End, "by words the path is one line, wider than the width");
+    var byWords = LinesAt(runtime, text, font, width);
+    Eq(text.IndexOf('\n'), byWords[0].End, "by words the path is one line, wider than the width");
 
-    var narrow = runtime.Fonts.Wrap("ab", font, 0.5f, TextWrap.Characters)!;
-    IsTrue(narrow.End == 1 && narrow.Next!.Start == 1, "a line too narrow for anything still holds one character");
-});
-
-Run("Fonts.Measure: a longer text is wider, and nothing has no width", () =>
-{
-    var runtime = BibuiRuntime.Create();
-    using var bold = runtime.FontFace(weight: FontWeight.Bold);
-    var font = runtime.FontInScope(ComponentSize.Lg);
-    float word = runtime.Fonts.Measure("Grüße", font);
-    IsTrue(word > 0f && runtime.Fonts.Measure("Grüße, wörld", font) > word, "measured over its code points");
-    Eq(0f, runtime.Fonts.Measure("", font), "nothing is no width");
+    var narrow = LinesAt(runtime, "ab", font, 0.5f, TextWrap.Characters);
+    IsTrue(narrow[0].End == 1 && narrow[0].Next == 1 && narrow[1].Start == 1, "a line too narrow for anything still holds one character");
 });
 
 // ── TextField ────────────────────────────────────────────────────────────────
 
-// A field in a 300 px parent with no padding, which a press focuses, as an app
-// would; it also notes whether a Submit was left for the caller after the field.
-(BibuiRuntime Runtime, Func<bool> Focused, Func<bool> SubmitLeft) MountField(BibuiStr text, TextEditState edit, bool multiline = false,
+// A field in a 300 px parent with no padding, which a press focuses; with
+// whether it has focus, and what it reported in the last frame.
+(BibuiRuntime Runtime, Func<bool> Focused, Func<Interaction> Last) MountField(BibuiStr text, TextEditState edit, bool multiline = false,
     uint events = uint.MaxValue)
 {
     var runtime = BibuiRuntime.Create();
-    bool focused = false, submitLeft = false;
+    Interaction last = default;
     runtime.SetBuild(() =>
     {
         var parent = runtime.BoxFromId("parent");
@@ -6591,23 +6574,22 @@ Run("Fonts.Measure: a longer text is wider, and nothing has no width", () =>
                 var field = FieldFrame(runtime, SemanticSize.ChildrenSum());
                 using (runtime.Parent(field))
                 using (runtime.SizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
-                    line = runtime.MultilineTextField("field", text, edit, focused,
+                    line = runtime.MultilineTextField("field", text, edit,
                         events == uint.MaxValue ? Bibui.Core.Runtime.TextField.MultiLineEvents : events);
             }
             else
             {
                 var field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
-                using (runtime.Parent(field)) line = runtime.TextField("field", text, edit, focused,
+                using (runtime.Parent(field)) line = runtime.TextField("field", text, edit,
                     events == uint.MaxValue ? Bibui.Core.Runtime.TextField.SingleLineEvents : events);
             }
-            if (line.Pressed) focused = true;
-            submitLeft |= runtime.UnconsumedEvents.Any(h => h.Kind == BibUiEventKind.Submit);
+            last = line.Interaction;
         }
         return parent;
     }, TestBuild.Window(400, 300));
     runtime.Step();
     runtime.Step();   // a second frame: the multi-line field wraps at its width from the first
-    return (runtime, () => focused, () => submitLeft);
+    return (runtime, () => runtime.IsFocused("field"), () => last);
 }
 
 void TypeInto(BibuiRuntime runtime, string chars)
@@ -6629,10 +6611,10 @@ Run("runtime.TextField: a press puts the caret at the byte under it, and focuses
     var edit = new TextEditState();
     var (runtime, focused, _) = MountField(text, edit);
     var font = runtime.FontInScope();
-    float afterHe = runtime.Fonts.Measure("He", font);
+    float afterHe = TextLayer.WidthFromChars(runtime.Fonts, "He", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
     ClickAt(runtime, afterHe + 0.5f, 5f);
     runtime.Step();
-    IsTrue(focused(), "the press is reported, and the caller focuses");
+    IsTrue(focused(), "the press gives it focus");
     Eq(2, edit.Cursor, "after He"); Eq(2, edit.Mark);
 });
 
@@ -6653,13 +6635,14 @@ Run("runtime.TextField: in a padded box, a press is measured from where the text
         {
             field = FieldFrame(runtime, SemanticSize.Pixels(40f));
             field.Style.Padding = new EdgeInsets(10f, 20f, 10f, 20f);
-            using (runtime.Parent(field)) runtime.TextField("field", text, edit, focused: true);
+            using (runtime.Parent(field)) runtime.TextField("field", text, edit);
         }
         return parent;
     }, TestBuild.Window(400, 300));
+    runtime.Focus("field");
     runtime.Step();
     var font = runtime.FontInScope();
-    float afterHe = runtime.Fonts.Measure("He", font);
+    float afterHe = TextLayer.WidthFromChars(runtime.Fonts, "He", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
     ClickAt(runtime, 20f + afterHe + 0.5f, 15f);
     runtime.Step();
     Eq(2, edit.Cursor, "after He, counted from inside the padding");
@@ -6675,17 +6658,14 @@ Run("runtime.EllipsisTextField: a press is the field's, and being edited it scro
 {
     var text = BibuiStr.FromStrLit("A label far too long for a box this narrow");
     var edit = new TextEditState();
-    bool focused = false;
     var runtime = BibuiRuntime.Create();
     runtime.SetBuild(() => runtime.Into(runtime.Column(), () =>
     {
         var box = runtime.Box();
         box.SizeX = SemanticSize.Pixels(120f);
         box.SizeY = SemanticSize.ChildrenSum();
-        BibuiWidget line;
         using (runtime.Parent(box))
-            line = runtime.EllipsisTextField("label", text, edit, focused, events: Bibui.Core.Runtime.TextField.SingleLineEvents);
-        if (line.Pressed) focused = true;
+            runtime.EllipsisTextField("label", text, edit, events: Bibui.Core.Runtime.TextField.SingleLineEvents);
     }), TestBuild.Window(400, 100));
     runtime.Step();
     runtime.Step();
@@ -6694,7 +6674,7 @@ Run("runtime.EllipsisTextField: a press is the field's, and being edited it scro
 
     runtime.DispatchClick("label");
     runtime.Step();
-    IsTrue(focused, "the press is the field's, by its id");
+    IsTrue(runtime.IsFocused("label"), "the press is the field's, by its id, and gives it focus");
     runtime.Step();
     IsTrue(!Dots(), "being edited, it has no \"…\"");
 });
@@ -6734,7 +6714,7 @@ Run("runtime.EllipsisTextField: \"…\" only when the line is wider than its box
             box = runtime.BoxFromId("label");
             box.SizeX = SemanticSize.Pixels(120f);
             box.SizeY = SemanticSize.ChildrenSum();
-            using (runtime.Parent(box)) runtime.EllipsisTextField("line", Str(words), new TextEditState(), focused: false);
+            using (runtime.Parent(box)) runtime.EllipsisTextField("line", Str(words), new TextEditState());
         }), TestBuild.Window(400, 100));
         runtime.Step();
         runtime.Step();   // whether it fits is told by last frame's width
@@ -6742,7 +6722,8 @@ Run("runtime.EllipsisTextField: \"…\" only when the line is wider than its box
         bool dots = Texts(runtime).Contains("\u2026");
         Eq(cut, dots, $"\"{words}\" ends in \"…\"");
         var line = box.FirstChild!;   // the line's own box, inside the label
-        float dotsWidth = runtime.Fonts.Measure("\u2026", runtime.FontInScope());
+        var font = runtime.FontInScope();
+        float dotsWidth = TextLayer.WidthFromChars(runtime.Fonts, "\u2026", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
         Eq(cut ? 120f - 2f - dotsWidth : 120f, line.Extent.X, "the line takes what the gap and the \"…\" leave");
     }
 });
@@ -6763,16 +6744,17 @@ Run("runtime.TextField: a line wider than its box scrolls to the caret, and back
             field = FieldFrame(runtime, Bibui.Core.Runtime.TextField.Rows(runtime, 1));
             field.SizeX = SemanticSize.Pixels(100f);
             using (runtime.Parent(field))
-                runtime.TextField("field", text, edit, focused: true);
+                runtime.TextField("field", text, edit);
         }
         return parent;
     }, TestBuild.Window(400, 300));
+    runtime.Focus("field");
     for (int i = 0; i < 3; i++) runtime.Step();   // laid out, then scrolled
     PressKey(runtime, Bibui.Core.Key.End);      // an edit-free move: the view eases rather than jumps
     for (int i = 0; i < 60; i++) runtime.Step();
 
     var font = runtime.FontInScope();
-    float width = runtime.Fonts.Measure(text.Str, font);
+    float width = TextLayer.WidthFromChars(runtime.Fonts, text.Str, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
     var view = field.FirstChild!;   // the line's own view, inside the field
     IsTrue(MathF.Abs(width - 100f - view.TargetViewOffset.X) < 0.01f,
         $"at the end, the view is the line's width less the box's: {view.TargetViewOffset.X} vs {width - 100f}");
@@ -6789,7 +6771,6 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
 {
     var text = BibuiStr.FromStrLit("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten");
     var edit = new TextEditState();
-    bool focused = false;
     var runtime = BibuiRuntime.Create();
     Box view = null!;
     runtime.SetBuild(() =>
@@ -6801,9 +6782,8 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
         using (runtime.Parent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
         using (runtime.SizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
         {
-            var field = runtime.MultilineTextField("field", text, edit, focused);
+            var field = runtime.MultilineTextField("field", text, edit);
             view = (Box)field.Node;
-            if (field.Pressed) focused = true;
         }
         return parent;
     }, TestBuild.Window(400, 300));
@@ -6811,7 +6791,7 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
     runtime.Step();
     ClickAt(runtime, 10f, 5f);
     runtime.Step();
-    IsTrue(focused, "a press focuses it");
+    IsTrue(runtime.IsFocused("field"), "a press focuses it");
     Eq(0f, view.TargetViewOffset.Y, "on the first line, nothing to scroll");
 
     for (int i = 0; i < 6; i++) { PressKey(runtime, Bibui.Core.Key.Down); runtime.Step(); }
@@ -6829,18 +6809,19 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
         $"the wheel moved it, and the caret did not pull it back: {view.TargetViewOffset.Y} after {scrolled}");
 });
 
-Run("runtime.TextField: typing edits the caller's buffer; Enter is left to the caller", () =>
+Run("runtime.TextField: typing edits the caller's buffer; Enter submits and gives focus up", () =>
 {
     var text = BibuiStr.FromStrLit("Hello");
     var edit = new TextEditState();
-    var (runtime, _, submitLeft) = MountField(text, edit);
+    var (runtime, focused, last) = MountField(text, edit);
     ClickAt(runtime, 200f, 5f);   // past the end
     runtime.Step();
     TypeInto(runtime, ", world");
     Eq("Hello, world", text.ToString());
     PressKey(runtime, Bibui.Core.Key.Enter);
     Eq("Hello, world", text.ToString(), "a single line takes no line break");
-    IsTrue(submitLeft(), "Submit is still the caller's");
+    IsTrue(last().Submitted, "Enter is reported as Submitted");
+    IsTrue(!focused(), "and the field no longer has focus");
 });
 
 Run("runtime.MultilineTextField: Enter ends the line, and Up goes back to it", () =>
@@ -6883,9 +6864,131 @@ Run("runtime.MultilineTextField: a press on the second row lands on the second l
     var (runtime, _, _) = MountField(text, edit, multiline: true);
     var font = runtime.FontInScope();
     float secondRowY = runtime.Fonts.LineAdvance(font) + 2f;
-    ClickAt(runtime, runtime.Fonts.Measure("sec", font) + 0.5f, secondRowY);
+    ClickAt(runtime, TextLayer.WidthFromChars(runtime.Fonts, "sec", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) + 0.5f, secondRowY);
     runtime.Step();
     Eq(11 + 3, edit.Cursor, "after \"sec\" on the second line");
+});
+
+// ── Focus ──────────────────────────────────────────────────────────────────
+
+// Two fields, a over b, and under them a box that takes presses but not focus;
+// what each reported in the last frame, by id. a is built while ShowA says.
+(BibuiRuntime Runtime, Dictionary<string, Interaction> Last, Action<bool> ShowA) MountFocus()
+{
+    var runtime = BibuiRuntime.Create();
+    var last = new Dictionary<string, Interaction>();
+    bool showA = true;
+    BibuiStr a = BibuiStr.FromStrLit("a"), b = BibuiStr.FromStrLit("b");
+    TextEditState aEdit = new(), bEdit = new();
+    runtime.SetBuild(() =>
+    {
+        var column = runtime.BoxFromId("column");
+        column.ChildLayoutAxis = LayoutAxis.Y;
+        column.Sized(Size.Px(300f), Size.Px(200f));
+        using (runtime.Parent(column))
+        {
+            using (runtime.Parent(runtime.Box().Sized(Size.Fill, Size.Px(30f))))
+                if (showA) last["a"] = runtime.TextField("a", a, aEdit).Interaction;
+            using (runtime.Parent(runtime.Box().Sized(Size.Fill, Size.Px(30f))))
+                last["b"] = runtime.TextField("b", b, bEdit).Interaction;
+            var plain = runtime.BoxFromId("plain", InteractionKinds.LeftPress);
+            plain.Sized(Size.Fill, Size.Px(30f));
+            last["plain"] = runtime.InteractionsFor(plain);
+        }
+        return column;
+    }, TestBuild.Window(400, 300));
+    runtime.Step();
+    runtime.Step();
+    return (runtime, last, v => showA = v);
+}
+
+Run("Focus: a press on a field gives it focus from the next frame, gained once", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    IsTrue(!last["a"].Focused, "not in the frame of the press");
+    runtime.Step();
+    IsTrue(last["a"].Focused && last["a"].FocusGained, "focused, and gained, the next frame");
+    runtime.Step();
+    IsTrue(last["a"].Focused && !last["a"].FocusGained, "still focused, not gained again");
+});
+
+Run("Focus: Enter submits a single line and gives focus up", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    PressKey(runtime, Bibui.Core.Key.Enter);
+    IsTrue(last["a"].Submitted, "submitted");
+    IsTrue(!runtime.IsFocused("a"), "no longer focused");
+});
+
+Run("Focus: Escape cancels and gives focus up", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    PressKey(runtime, Bibui.Core.Key.Escape);
+    IsTrue(last["a"].Cancelled, "cancelled");
+    IsTrue(!runtime.IsFocused("a"), "no longer focused");
+});
+
+Run("Focus: a press on another field moves focus, and is no cancel", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    ClickAt(runtime, 10f, 35f);
+    IsTrue(runtime.IsFocused("b") && !runtime.IsFocused("a"), "b has it, a does not");
+    runtime.Step();
+    IsTrue(!last["a"].Cancelled, "a was not cancelled");
+});
+
+Run("Focus: a press on nothing ends it", () =>
+{
+    var (runtime, _, _) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    ClickAt(runtime, 350f, 250f);
+    IsTrue(!runtime.IsFocused("a"), "no longer focused");
+});
+
+Run("Focus: a field not built for a frame loses it", () =>
+{
+    var (runtime, _, showA) = MountFocus();
+    ClickAt(runtime, 10f, 5f);
+    showA(false);
+    runtime.Step();
+    showA(true);
+    runtime.Step();
+    IsTrue(!runtime.IsFocused("a"), "not focused when built again");
+});
+
+Run("Focus: runtime.Focus gives it from the next frame", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    runtime.Focus("b");
+    runtime.Step();
+    runtime.Step();
+    IsTrue(last["b"].Focused && last["b"].FocusGained, "focused, and gained");
+});
+
+Run("Focus: a box that does not claim the keyboard never takes it", () =>
+{
+    var (runtime, last, _) = MountFocus();
+    ClickAt(runtime, 10f, 65f);
+    IsTrue(last["plain"].Clicked, "the press was its");
+    runtime.Step();
+    IsTrue(!last["plain"].Focused && !runtime.IsFocused("plain"), "but not focus");
+});
+
+Run("Focus: a field named \"\" never has it", () =>
+{
+    var runtime = BibuiRuntime.Create();
+    Interaction last = default;
+    var text = BibuiStr.FromStrLit("x");
+    var edit = new TextEditState();
+    runtime.SetBuild(() => { var line = runtime.TextField("", text, edit); last = line.Interaction; return line.Node; },
+        TestBuild.Window(300, 60));
+    runtime.Step();
+    runtime.Step();
+    IsTrue(!last.Focused, "not focused, though no box is");
 });
 
 Run("BibuiPage.Fill types into a TextField as a person would", () =>
@@ -7527,6 +7630,9 @@ Console.WriteLine();
 Console.WriteLine("App icons");
 AppIconTests.Register(Run);
 Console.WriteLine();
+Console.WriteLine("Cluster face");
+ClusterFaceTests.Register(Run);
+Console.WriteLine();
 Console.WriteLine("Motion");
 MotionTests.Register(Run);
 Console.WriteLine();
@@ -7560,7 +7666,8 @@ Run("A held Backspace keeps deleting in a text field", () =>
     var rt = BibuiRuntime.Create();
     var text = BibuiStr.FromStrLit("abcd");
     var edit = new TextEditState { Cursor = 4, Mark = 4 };
-    rt.SetBuild(() => rt.TextField("field", text, edit, focused: true).Node, TestBuild.Window(300, 60));
+    rt.SetBuild(() => rt.TextField("field", text, edit).Node, TestBuild.Window(300, 60));
+    rt.Focus("field");
     rt.Step();
     rt.Step([WindowEvent.KeyPress(Key.Backspace)]);
     rt.Step([WindowEvent.KeyRepeat(Key.Backspace)]);

@@ -1,5 +1,5 @@
 // Minimal standalone test runner for TextOp / BibuiStr.
-// No Skia, no runtime, no rendering — just the edit logic, in chars (UTF-16 code units).
+// No rendering — just the edit logic, in chars (UTF-16 code units), with clusters measured in the default theme's font and an emoji face.
 // Run with: dotnet run --project tests/text-tests
 //
 // Two layers under test:
@@ -9,10 +9,19 @@
 //      against the buffer and checks the resulting text.
 
 using Bibui.Core;
+using Bibui.Core.Runtime;
 using Bibui.Core.TextEdit;
+using Bibui.Text;
 
 int passed = 0, failed = 0;
 char[] charBuf = new char[TextOp.MaxCharsPerCodePoint];
+// The fonts and font a move by one character measures clusters in: the default
+// theme's, with the runtime tests' subset of Noto Color Emoji as the cluster face,
+// as a platform sets up the system's.
+var runtime = BibuiRuntime.Create();
+Fonts fonts = runtime.Fonts;
+fonts.UseClusterFont(Bibui.Text.FreeType.FontData.FromFile(Path.Combine(AppContext.BaseDirectory, "Fixtures", "NotoColorEmoji-subset.ttf")));
+Font font = runtime.FontInScope();
 
 void Run(string name, Action test)
 {
@@ -42,7 +51,7 @@ void Eq<T>(T expected, T actual, string? message = null)
 void ApplyAndCheck(BibuiStr str, TextEditState state, BibUiEvent ev,
                    string expectedText, int expectedCursor, int expectedMark)
 {
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
     str.ReplaceRange(op.Range, op.ReplaceString);
     state.Cursor = op.NewCursor;
     state.Mark   = op.NewMark;
@@ -64,7 +73,7 @@ Run("ArrowLeft over ASCII moves cursor back 1 char", () =>
     var state  = new TextEditState { Cursor = 5, Mark = 5 };
     var ev = new BibUiEvent { Delta = -1 };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
     Eq(4, op.NewCursor, "cursor should move back 1 char");
     Eq(4, op.NewMark,   "mark should collapse to cursor");
@@ -76,7 +85,7 @@ Run("ArrowRight over ASCII moves cursor forward 1 char", () =>
     var state  = new TextEditState { Cursor = 0, Mark = 0 };
     var ev = new BibUiEvent { Delta = +1 };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
     Eq(1, op.NewCursor, "cursor should move forward 1 char");
     Eq(1, op.NewMark,   "mark should collapse to cursor");
@@ -88,7 +97,7 @@ Run("ArrowLeft over a surrogate-pair emoji moves cursor back 2 chars", () =>
     var state  = new TextEditState { Cursor = 3, Mark = 3 };
     var ev = new BibUiEvent { Delta = -1 };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
     Eq(1, op.NewCursor, "cursor should move back 2 chars (past the whole emoji)");
     Eq(1, op.NewMark,   "mark should collapse to cursor");
@@ -100,7 +109,7 @@ Run("ArrowRight over a surrogate-pair emoji moves cursor forward 2 chars", () =>
     var state  = new TextEditState { Cursor = 0, Mark = 0 };
     var ev = new BibUiEvent { Delta = +1 };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
     Eq(2, op.NewCursor, "cursor should move forward 2 chars (past the whole emoji)");
     Eq(2, op.NewMark,   "mark should collapse to cursor");
@@ -112,7 +121,7 @@ Run("ArrowLeft with KeepMark (shift+left) extends selection", () =>
     var state  = new TextEditState { Cursor = 5, Mark = 5 };
     var ev = new BibUiEvent { Delta = -1, Flags = TextActionFlags.KeepMark };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
     Eq(4, op.NewCursor, "cursor should move back 1 char");
     Eq(5, op.NewMark,   "mark should stay at original position");
@@ -126,7 +135,7 @@ Run("ArrowRight at end of string keeps cursor at end", () =>
     var state  = new TextEditState { Cursor = 5, Mark = 5 }; // already at end
     var ev = new BibUiEvent { Delta = +1 };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
     Eq(5, op.NewCursor, "cursor should not move past end of buffer");
     Eq(5, op.NewMark,   "mark should stay at end");
@@ -138,7 +147,7 @@ Run("ArrowLeft at start of string keeps cursor at 0", () =>
     var state  = new TextEditState { Cursor = 0, Mark = 0 }; // already at start
     var ev = new BibUiEvent { Delta = -1 };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
     Eq(0, op.NewCursor, "cursor should not move below 0");
     Eq(0, op.NewMark,   "mark should stay at 0");
@@ -153,25 +162,25 @@ Run("Navigate around the middle of 'a🎉b' with chained arrow keys", () =>
     var state = new TextEditState { Cursor = 1, Mark = 1 }; // between 'a' and emoji
 
     // ArrowRight: skip the emoji (2 chars) → cursor 3
-    var op1 = TextOp.FromStateAndEvent(str, state, new BibUiEvent { Delta = +1 }, charBuf);
+    var op1 = TextOp.FromStateAndEvent(fonts, font, str, state, new BibUiEvent { Delta = +1 }, charBuf);
     Eq(3, op1.NewCursor, "after first ArrowRight, cursor should be past emoji");
     state.Cursor = op1.NewCursor;
     state.Mark   = op1.NewMark;
 
     // ArrowRight: step over 'b' → cursor 4 (end of string)
-    var op2 = TextOp.FromStateAndEvent(str, state, new BibUiEvent { Delta = +1 }, charBuf);
+    var op2 = TextOp.FromStateAndEvent(fonts, font, str, state, new BibUiEvent { Delta = +1 }, charBuf);
     Eq(4, op2.NewCursor, "after second ArrowRight, cursor should be at end");
     state.Cursor = op2.NewCursor;
     state.Mark   = op2.NewMark;
 
     // ArrowLeft: step back over 'b' → cursor 3
-    var op3 = TextOp.FromStateAndEvent(str, state, new BibUiEvent { Delta = -1 }, charBuf);
+    var op3 = TextOp.FromStateAndEvent(fonts, font, str, state, new BibUiEvent { Delta = -1 }, charBuf);
     Eq(3, op3.NewCursor, "after ArrowLeft, cursor should be back at 3");
     state.Cursor = op3.NewCursor;
     state.Mark   = op3.NewMark;
 
     // ArrowLeft: step back over the emoji (2 chars) → cursor 1
-    var op4 = TextOp.FromStateAndEvent(str, state, new BibUiEvent { Delta = -1 }, charBuf);
+    var op4 = TextOp.FromStateAndEvent(fonts, font, str, state, new BibUiEvent { Delta = -1 }, charBuf);
     Eq(1, op4.NewCursor, "after second ArrowLeft, cursor should be back between 'a' and emoji");
 });
 
@@ -185,7 +194,7 @@ Run("Multiple ArrowRight events at end of string leave cursor at end", () =>
     for (int i = 0; i < 5; i++)
     {
         var ev = new BibUiEvent { Delta = +1 };
-        var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+        var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
         state.Cursor = op.NewCursor;
         state.Mark   = op.NewMark;
     }
@@ -203,7 +212,7 @@ Run("WordScan forward jumps past the current word", () =>
     var state = new TextEditState { Cursor = 0, Mark = 0 };
     var ev = new BibUiEvent { Delta = +1, Flags = TextActionFlags.WordScan };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
     Eq(5, op.NewCursor, "cursor should land at end of 'hello'");
     Eq(5, op.NewMark,   "mark should collapse to cursor");
@@ -216,7 +225,7 @@ Run("WordScan backward jumps to the start of the current word", () =>
     var state = new TextEditState { Cursor = 11, Mark = 11 };
     var ev = new BibUiEvent { Delta = -1, Flags = TextActionFlags.WordScan };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
     Eq(6, op.NewCursor, "cursor should land at start of 'world'");
     Eq(6, op.NewMark,   "mark should collapse to cursor");
@@ -224,90 +233,90 @@ Run("WordScan backward jumps to the start of the current word", () =>
 
 // ── An emoji of several code points ───────────────────────────────────────────
 //
-// 👨‍👩‍👧 is five code points — man, ZWJ, woman, ZWJ, girl — and 8 UTF-16 chars,
-// drawn as one character. An arrow key or Backspace crosses it whole, and
-// Ctrl+Arrow treats it as a word like any other run of non-whitespace.
-// Offsets are in chars, not code points: in "go 👨‍👩‍👧 now" the family is
-// chars [3..11), though only code points [3..8).
+// 🧑‍🚀 is three code points — person, ZWJ, rocket — and 5 UTF-16 chars, drawn
+// as one character: the emoji face's ligature. An arrow key or Backspace
+// crosses it whole, and Ctrl+Arrow treats it as a word like any other run of
+// non-whitespace. Offsets are in chars, not code points: in "go 🧑‍🚀 now" the
+// astronaut is chars [3..8), though only code points [3..6).
 
-const string Family = "👨‍👩‍👧";   // [0..8)
+const string Astronaut = "🧑‍🚀";   // [0..5)
 
-Run("ArrowRight over a multi-code-point emoji crosses all 8 chars of it", () =>
+Run("ArrowRight over a multi-code-point emoji crosses all 5 chars of it", () =>
 {
-    // "go 👨‍👩‍👧 now" — the family is [3..11)
-    var str   = BibuiStr.FromStrLit($"go {Family} now");
+    // "go 🧑‍🚀 now" — the astronaut is [3..8)
+    var str   = BibuiStr.FromStrLit($"go {Astronaut} now");
     var state = new TextEditState { Cursor = 3, Mark = 3 };
     var ev = new BibUiEvent { Delta = +1 };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
-    Eq(11, op.NewCursor, "cursor should land just past the family");
-    Eq(11, op.NewMark,   "mark should collapse to cursor");
+    Eq(8, op.NewCursor, "cursor should land just past the astronaut");
+    Eq(8, op.NewMark,   "mark should collapse to cursor");
 });
 
-Run("ArrowLeft over a multi-code-point emoji crosses all 8 chars of it", () =>
+Run("ArrowLeft over a multi-code-point emoji crosses all 5 chars of it", () =>
 {
-    var str   = BibuiStr.FromStrLit($"go {Family} now");
-    var state = new TextEditState { Cursor = 11, Mark = 11 };
+    var str   = BibuiStr.FromStrLit($"go {Astronaut} now");
+    var state = new TextEditState { Cursor = 8, Mark = 8 };
     var ev = new BibUiEvent { Delta = -1 };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
-    Eq(3, op.NewCursor, "cursor should land just before the family");
+    Eq(3, op.NewCursor, "cursor should land just before the astronaut");
     Eq(3, op.NewMark,   "mark should collapse to cursor");
 });
 
-Run("Backspace after a multi-code-point emoji deletes all 8 chars of it", () =>
+Run("Backspace after a multi-code-point emoji deletes all 5 chars of it", () =>
 {
-    var str   = BibuiStr.FromStrLit($"go {Family} now");
-    var state = new TextEditState { Cursor = 11, Mark = 11 };
+    var str   = BibuiStr.FromStrLit($"go {Astronaut} now");
+    var state = new TextEditState { Cursor = 8, Mark = 8 };
     var ev = new BibUiEvent { Delta = -1, Flags = TextActionFlags.Delete | TextActionFlags.NoNavigationWithSelection };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
     str.ReplaceRange(op.Range, op.ReplaceString);
 
-    Eq((3, 11), op.Range,   "the op should cover the whole family");
-    Eq("go  now", str.ToString(), "the family should be gone, and nothing else");
-    Eq(3, op.NewCursor,     "cursor should land where the family began");
+    Eq((3, 8), op.Range,   "the op should cover the whole astronaut");
+    Eq("go  now", str.ToString(), "the astronaut should be gone, and nothing else");
+    Eq(3, op.NewCursor,     "cursor should land where the astronaut began");
     Eq(3, op.NewMark,       "mark should collapse to cursor");
 });
 
 Run("WordScan forward over a multi-code-point emoji lands past it", () =>
 {
-    // From the end of "go": skip the space, then the family as one word
-    var str   = BibuiStr.FromStrLit($"go {Family} now");
+    // From the end of "go": skip the space, then the astronaut as one word
+    var str   = BibuiStr.FromStrLit($"go {Astronaut} now");
     var state = new TextEditState { Cursor = 2, Mark = 2 };
     var ev = new BibUiEvent { Delta = +1, Flags = TextActionFlags.WordScan };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
-    Eq(11, op.NewCursor, "cursor should land just past the family");
-    Eq(11, op.NewMark,   "mark should collapse to cursor");
+    Eq(8, op.NewCursor, "cursor should land just past the astronaut");
+    Eq(8, op.NewMark,   "mark should collapse to cursor");
 });
 
 Run("WordScan backward over a multi-code-point emoji lands before it", () =>
 {
-    // From the start of "now": skip the space, then the family as one word
-    var str   = BibuiStr.FromStrLit($"go {Family} now");
-    var state = new TextEditState { Cursor = 12, Mark = 12 };
+    // From the start of "now": skip the space, then the astronaut as one word
+    var str   = BibuiStr.FromStrLit($"go {Astronaut} now");
+    var state = new TextEditState { Cursor = 9, Mark = 9 };
     var ev = new BibUiEvent { Delta = -1, Flags = TextActionFlags.WordScan };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
-    Eq(3, op.NewCursor, "cursor should land just before the family");
+    Eq(3, op.NewCursor, "cursor should land just before the astronaut");
     Eq(3, op.NewMark,   "mark should collapse to cursor");
 });
 
 Run("WordScan treats letters and a multi-code-point emoji with no space between as one word", () =>
 {
-    // "hi👨‍👩‍👧 there" — "hi" and the family are the word [0..10)
-    var str   = BibuiStr.FromStrLit($"hi{Family} there");
+    // "hi🧑‍🚀 there" — "hi" and the astronaut are the word [0..7)
+    var str   = BibuiStr.FromStrLit($"hi{Astronaut} there");
     var state = new TextEditState { Cursor = 0, Mark = 0 };
     var ev = new BibUiEvent { Delta = +1, Flags = TextActionFlags.WordScan };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
-    Eq(10, op.NewCursor, "cursor should land just past the family");
+    Eq(7, op.NewCursor, "cursor should land just past the astronaut");
 });
 
 // ── Copy / Cut / Paste ────────────────────────────────────────────────────────
@@ -320,7 +329,7 @@ Run("Copy on a selection fills CopyString and preserves the selection", () =>
     var state = new TextEditState { Cursor = 11, Mark = 6 };
     var ev = new BibUiEvent { Flags = TextActionFlags.Copy | TextActionFlags.KeepMark };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
 
     Eq("world", new string(op.CopyString), "CopyString should contain the selection");
     Eq(11, op.NewCursor, "cursor should be preserved by Copy (KeepMark)");
@@ -334,7 +343,7 @@ Run("Submit puts a line break at the cursor and lets go of the selection", () =>
     var str   = BibuiStr.FromStrLit("hello world");
     var state = new TextEditState { Cursor = 7, Mark = 4 };
     var ev = new BibUiEvent { Kind = BibUiEventKind.Submit, Key = Bibui.Core.Key.Enter };
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
     str.ReplaceRange(op.Range, op.ReplaceString);
     Eq("hello w\norld", str.ToString(), "the selected text stays");
     Eq(8, op.NewCursor, "after the line break"); Eq(8, op.NewMark, "no selection");
@@ -344,7 +353,7 @@ Run("A move between lines changes nothing, not even the selection", () =>
 {
     var str   = BibuiStr.FromStrLit("hello world");
     var state = new TextEditState { Cursor = 7, Mark = 4 };
-    var op = TextOp.FromStateAndEvent(str, state, new BibUiEvent { Kind = BibUiEventKind.Navigate, DeltaY = -1 }, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, new BibUiEvent { Kind = BibUiEventKind.Navigate, DeltaY = -1 }, charBuf);
     Eq(op.Range.Item1, op.Range.Item2, "nothing replaced");
     Eq(7, op.NewCursor); Eq(4, op.NewMark);
 });
@@ -381,7 +390,7 @@ Run("Ctrl+C is a Copy, which leaves the text alone; Ctrl+X is an Edit", () =>
     var copy = Bibui.Core.TextEdit.BibUiEvent.FromKey(Bibui.Core.Key.C, ctrl: true, shift: false);
     Eq(BibUiEventKind.Copy, copy.Kind);
     var str   = BibuiStr.FromStrLit("hello world");
-    var op = TextOp.FromStateAndEvent(str, new TextEditState { Cursor = 11, Mark = 6 }, copy, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, new TextEditState { Cursor = 11, Mark = 6 }, copy, charBuf);
     Eq("world", new string(op.CopyString));
     Eq(op.Range.Item1, op.Range.Item2, "nothing replaced");
     Eq(11, op.NewCursor); Eq(6, op.NewMark);
@@ -428,7 +437,7 @@ Run("Cut (Copy | Delete) fills CopyString AND removes the selection", () =>
     var state = new TextEditState { Cursor = 11, Mark = 6 };
     var ev = new BibUiEvent { Flags = TextActionFlags.Copy | TextActionFlags.Delete };
 
-    var op = TextOp.FromStateAndEvent(str, state, ev, charBuf);
+    var op = TextOp.FromStateAndEvent(fonts, font, str, state, ev, charBuf);
     str.ReplaceRange(op.Range, op.ReplaceString);
     state.Cursor = op.NewCursor;
     state.Mark   = op.NewMark;

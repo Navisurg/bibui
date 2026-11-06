@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Text</AssemblyName>
+    <RootNamespace>Bibui.Text</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- FreeType and HarfBuzz read and write native memory: faces, glyph slots, font bytes. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NuGetAudit>false</NuGetAudit>
+    <UseAppHost>false</UseAppHost>
+    <PackageId>Bibui.Text</PackageId>
+    <Description>Bibui.Text, bibui's text layer: fonts and faces on FreeType and HarfBuzz, measuring, a text's runs and glyphs, line breaking, and the built-in Inter. Knows nothing of nodes, themes or platforms; Bibui.Core lays text out and draws it with it, and a platform sets up what is the system's (the colour emoji face).</Description>
+    <PackageTags>$(PackageTags);text;fonts;freetype;harfbuzz;aot</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WrapKey hashes a wrap's text and settings. -->
+    <PackageReference Include="System.IO.Hashing" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The core lays text out and paints it from the layer's data (Fonts'
+         run table, FontStyle, TextLayer's functions), and the runtime tests
+         check that data directly. The layer's API for apps is its public types. -->
+    <InternalsVisibleTo Include="Bibui.Core" />
+    <InternalsVisibleTo Include="bibui-runtime-tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Text is part of the render, so the face it is drawn with cannot be
+         whatever the machine happens to have installed. Embedded here, in the
+         assembly FontData reads them from. -->
+    <EmbeddedResource Include="Assets/Fonts/Inter-Regular.ttf" LogicalName="Bibui.Text.Assets.Fonts.Inter-Regular.ttf" />
+    <EmbeddedResource Include="Assets/Fonts/Inter-SemiBold.ttf" LogicalName="Bibui.Text.Assets.Fonts.Inter-SemiBold.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence, the third-party notices and the embedded fonts' licence travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="Assets/Fonts/Inter-LICENSE.txt" Pack="true" PackagePath="licenses/" Visible="false" />
+  </ItemGroup>
+
+</Project>

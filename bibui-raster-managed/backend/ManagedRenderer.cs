@@ -1,8 +1,9 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using Bibui.Core;
+using Bibui.Text;
 using Bibui.Core.Draw;
-using Bibui.Core.FreeType;
+using Bibui.Text.FreeType;
 using Bibui.Raster.Managed.Backend.Damage;
 using BPaintStyle = Bibui.Core.PaintStyle;
 using BStrokeCap = Bibui.Core.StrokeCap;
@@ -13,7 +14,7 @@ using MPath = Bibui.Raster.Managed.Path;
 namespace Bibui.Raster.Managed.Backend;
 
 // Bibui.Core.TextColor (a theme role) is nearer than the using above; here a text colour is the engine's.
-using FtTextColor = Bibui.Core.FreeType.TextColor;
+using FtTextColor = Bibui.Text.FreeType.TextColor;
 
 /// <summary>
 /// Draws a <see cref="DrawList"/> with the managed rasterizer and the

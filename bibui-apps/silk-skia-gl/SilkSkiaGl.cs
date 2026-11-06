@@ -3,12 +3,19 @@ using Bibui.Gl;
 using Bibui.Raster.Skia;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
+using Bibui.Text;
 
 namespace Bibui.App;
 
 // A Silk window, drawn by Skia on its GL context: everything on the GPU.
 public sealed partial class BibuiApp
 {
+    // Silk runs on Linux, Windows and macOS; only Linux has the emoji font set up yet (fontconfig's).
+    private static partial void SetUpText(Fonts fonts)
+    {
+        if (OperatingSystem.IsLinux()) Fontconfig.UseColorEmoji(fonts);
+    }
+
     // The window's GL framebuffer, which Renderer draws into, and what reads a frame back
     // out of it: made the first time a frame is read.
     private GlTarget _gl = null!;

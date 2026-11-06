@@ -19,6 +19,7 @@ that puts them together:
 | `Bibui.Raster.Skia`, `Bibui.Raster.Managed.Backend` | A renderer on its own |
 | `Bibui.Testing` | Headless pages for testing an app |
 | `Bibui.Automation` | A test port: drive a running app over a socket |
+| `Bibui.Text` | The text layer this package lays text out with (a dependency of it): fonts, measuring, line breaking |
 
 ## Hello
 

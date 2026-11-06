@@ -1,7 +1,7 @@
 using System.Numerics;
-using Bibui.Core.FreeType.Native;
+using Bibui.Text.FreeType.Native;
 
-namespace Bibui.Core.FreeType;
+namespace Bibui.Text.FreeType;
 
 /// <summary>
 /// One <see cref="Font"/> at one physical pixel size: advances, metrics, shaping
@@ -51,8 +51,11 @@ public sealed unsafe class FontStrike
 
     public FontMetrics Metrics { get; }
 
-    /// <summary>Masks rendered so far (all four phases count separately).</summary>
-    public int CachedMaskCount => _masks.Count;
+    /// <summary>
+    /// How much a bitmap-only face's glyphs are scaled to reach <see cref="Size"/>:
+    /// the size over the bitmap size the strike picked. 1 for an outline face.
+    /// </summary>
+    internal float BitmapScale { get; } = 1f;
 
     internal FontStrike(Font font, float sizePx)
     {
@@ -67,18 +70,50 @@ public sealed unsafe class FontStrike
         // size off the 1/64 grid (14 px at scale 1.1) one step up, and every advance
         // with it (1.8 px over a paragraph). Metrics below still use the exact size.
         nint size26 = (nint)(sizePx * 64f);
-        FT.Check(FT.FT_Set_Char_Size(_ftFace, size26, size26, 72, 72), "FT_Set_Char_Size");
+        if (font.IsScalable)
+            FT.Check(FT.FT_Set_Char_Size(_ftFace, size26, size26, 72, 72), "FT_Set_Char_Size");
+        else
+        {
+            // A face with no outlines (CBDT colour emoji) has only the sizes its
+            // bitmaps were drawn at, and FreeType refuses any other. The strike
+            // takes the smallest at least this size (shrinking keeps it sharp),
+            // else the largest, and its glyphs are scaled from it.
+            var fixedSizes = font.FixedSizes;
+            if (fixedSizes.Length == 0) throw new InvalidOperationException($"{font}: no outlines and no bitmap sizes.");
+            int pick = 0;
+            for (int i = 1; i < fixedSizes.Length; i++)
+            {
+                float best = fixedSizes[pick], ppem = fixedSizes[i];
+                if (best < sizePx ? ppem > best : ppem >= sizePx && ppem < best) pick = i;
+            }
+            FT.Check(FT.FT_Select_Size(_ftFace, pick), "FT_Select_Size");
+            BitmapScale = sizePx / fixedSizes[pick];
+        }
 
         _advances = new float[font.GlyphCount];
         Array.Fill(_advances, float.NaN);
 
-        // SkScalerContext_FreeType::generateFontMetrics, scalable branch: design
-        // units over the em, then times the size, in that order.
-        float upem = font.UnitsPerEm;
-        float ascent = -(float)font.Ascender / upem;
-        float descent = -(float)font.Descender / upem;
-        float leading = (float)(font.LineHeight + (font.Descender - font.Ascender)) / upem;
-        Metrics = new FontMetrics(ascent * sizePx, descent * sizePx, leading * sizePx);
+        if (font.IsScalable)
+        {
+            // SkScalerContext_FreeType::generateFontMetrics, scalable branch: design
+            // units over the em, then times the size, in that order.
+            float upem = font.UnitsPerEm;
+            float ascent = -(float)font.Ascender / upem;
+            float descent = -(float)font.Descender / upem;
+            float leading = (float)(font.LineHeight + (font.Descender - font.Ascender)) / upem;
+            Metrics = new FontMetrics(ascent * sizePx, descent * sizePx, leading * sizePx);
+        }
+        else
+        {
+            // A bitmap-only face has no units per em (FreeType leaves it, and the
+            // face's ascender and descender, 0): its metrics are the picked
+            // size's, 26.6 px, scaled to this size, as Skia's bitmap branch takes them.
+            float k = BitmapScale / 64f;
+            float ascender = FT.Read<nint>(_ftSize, FT.Size_Ascender) * k;
+            float descender = FT.Read<nint>(_ftSize, FT.Size_Descender) * k;
+            float height = FT.Read<nint>(_ftSize, FT.Size_Height) * k;
+            Metrics = new FontMetrics(-ascender, -descender, height - (ascender - descender));
+        }
 
         _hbFont = HB.hb_font_create(font.HbFace);
         // The same truncated 26.6 size FreeType has, in 16.16, so shaped advances agree with linear ones.
@@ -113,126 +148,30 @@ public sealed unsafe class FontStrike
     // For chars below 256, the glyph and its advance side by side, filled on
     // first use (rad's utf8_class1_direct_map): a walk reads one entry per char.
     // Anything else goes through the font's cmap and the strike's advances.
-    private readonly DirectGlyph[] _direct = new DirectGlyph[256];
+    // TextLayer.GlyphDirect reads it: the fast path's measuring block.
+    internal readonly DirectGlyph[] Direct = new DirectGlyph[256];
 
-    private struct DirectGlyph
+    // A char's entry: its glyph and advance in physical px, side by side, once Filled.
+    internal struct DirectGlyph
     {
         public ushort Glyph;
         public bool Filled;
         public float Advance;
     }
 
-    // The walks below keep their index, count and pen in registers, which is
-    // most of their speed: nothing of theirs is passed by ref (a char is
-    // decoded by value, Next returning where the next starts), and the hot loop
-    // of Glyphs is a method of its own with no call in it. With either, the JIT
-    // sends them through the stack every char, about three times slower.
-
-    /// <summary>
-    /// Width of <paramref name="text"/> in physical px, exactly as <c>SKPaint.MeasureText</c>
-    /// computes it: one glyph per code point, linear advances summed in order. No
-    /// shaping, so no kerning and no ligatures. Allocates nothing.
-    /// </summary>
-    public float Measure(ReadOnlySpan<char> text)
-    {
-        var direct = _direct;
-        float total = 0f;
-        int i = 0;
-        while (i < text.Length)
-        {
-            for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++)
-                total += direct[c].Advance;
-            if (i == text.Length) break;
-            var (_, advance, next) = Next(text, i);
-            total += advance;
-            i = next;
-        }
-        return total;
-    }
-
-    /// <summary>
-    /// The advance of each char of <paramref name="text"/> into
-    /// <paramref name="advances"/> (at least one entry per char): a code point's
-    /// at its first char, 0 at the second of a surrogate pair. Added up in order
-    /// from any char start, they give what <see cref="Measure(ReadOnlySpan{char})"/>
-    /// gives for that slice, to the bit: a line breaker walks the text once and
-    /// never measures a slice again.
-    /// </summary>
-    internal void CharAdvances(ReadOnlySpan<char> text, Span<float> advances)
-    {
-        int i = 0;
-        while (i < text.Length)
-        {
-            i = CharAdvancesDirect(text, i, _direct, advances);
-            if (i == text.Length) break;
-            var (_, advance, next) = Next(text, i);
-            advances[i] = advance;
-            for (int k = i + 1; k < next; k++) advances[k] = 0f;
-            i = next;
-        }
-    }
-
-    // CharAdvances' hot loop, call-free as GlyphsDirect is.
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static int CharAdvancesDirect(ReadOnlySpan<char> text, int i, DirectGlyph[] direct, Span<float> advances)
-    {
-        for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++)
-            advances[i] = direct[c].Advance;
-        return i;
-    }
-
-    /// <summary>
-    /// <paramref name="text"/>'s glyphs into <paramref name="glyphs"/> and their
-    /// pen positions from its start into <paramref name="points"/>: what
-    /// <see cref="FontStrike.Shape"/> makes in its nominal mode. Both spans hold
-    /// at least one entry per char. Returns how many glyphs; <paramref name="width"/>
-    /// is the last pen position, as <see cref="Measure"/> answers.
-    /// </summary>
-    internal int Glyphs(ReadOnlySpan<char> text, Span<ushort> glyphs, Span<System.Numerics.Vector2> points, out float width)
-    {
-        int n = 0, i = 0;
-        float pen = 0f;
-        while (i < text.Length)
-        {
-            (i, n, pen) = GlyphsDirect(text, i, _direct, glyphs, points, n, pen);
-            if (i == text.Length) break;
-            var (glyph, advance, next) = Next(text, i);
-            glyphs[n] = glyph;
-            points[n] = new(pen, 0f);
-            pen += advance;
-            n++;
-            i = next;
-        }
-        width = pen;
-        return n;
-    }
-
-    // Glyphs' hot loop: while the chars have filled direct entries.
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static (int I, int N, float Pen) GlyphsDirect(ReadOnlySpan<char> text, int i, DirectGlyph[] direct,
-        Span<ushort> glyphs, Span<System.Numerics.Vector2> points, int n, float pen)
-    {
-        for (char c; i < text.Length && (c = text[i]) < 256 && direct[c].Filled; i++, n++)
-        {
-            glyphs[n] = direct[c].Glyph;
-            points[n] = new(pen, 0f);
-            pen += direct[c].Advance;
-        }
-        return (i, n, pen);
-    }
 
     // The char at i the hot loops did not take: below 256, its direct entry
     // filled; above, its code point (a surrogate pair is one) looked up the slow
     // way. An unpaired surrogate is taken as itself, which no font maps, so it
     // draws as .notdef. Its glyph, its advance, and where the next char starts.
-    private (ushort Glyph, float Advance, int Next) Next(ReadOnlySpan<char> text, int i)
+    internal (ushort Glyph, float Advance, int Next) Next(ReadOnlySpan<char> text, int i)
     {
         char c = text[i];
         if (c < 256)
         {
             uint g = Font.GlyphIndex(c);
-            _direct[c] = new DirectGlyph { Glyph = (ushort)g, Filled = true, Advance = Advance(g) };
-            return (_direct[c].Glyph, _direct[c].Advance, i + 1);
+            Direct[c] = new DirectGlyph { Glyph = (ushort)g, Filled = true, Advance = Advance(g) };
+            return (Direct[c].Glyph, Direct[c].Advance, i + 1);
         }
         int cp = c, next = i + 1;
         if (char.IsHighSurrogate(c) && next < text.Length && char.IsLowSurrogate(text[next]))
@@ -241,40 +180,17 @@ public sealed unsafe class FontStrike
         return ((ushort)glyph, Advance(glyph), next);
     }
 
-    /// <summary>Width of <paramref name="text"/> under <paramref name="options"/>.</summary>
-    public float Measure(ReadOnlySpan<char> text, ShapeOptions options)
-    {
-        if (options.Mode == ShapingMode.Nominal) return Measure(text);
-        var run = Font.Engine.ScratchRun;
-        Shape(text, run, options);
-        float w = run.Width;
-        run.Clear();
-        return w;
-    }
-
     /// <summary>
-    /// Shapes <paramref name="text"/> into <paramref name="into"/> (cleared first).
-    /// <see cref="ShapeOptions.Nominal"/> (the default) maps each character through
-    /// the cmap and takes its linear advance; HarfBuzz modes call hb_shape with the given features.
+    /// Shapes <paramref name="text"/> with HarfBuzz, the font's default features
+    /// on, into <paramref name="into"/> (cleared first): a grapheme cluster the
+    /// text layer sets in the cluster face, whose sequence the font's ligature
+    /// makes one glyph.
     /// </summary>
-    public void Shape(ReadOnlySpan<char> text, GlyphRun into, ShapeOptions? options = null)
+    public void Shape(ReadOnlySpan<char> text, GlyphRun into)
     {
-        options ??= ShapeOptions.Nominal;
         into.Clear();
         into.Strike = this;
         if (text.IsEmpty) return;
-
-        if (options.Mode == ShapingMode.Nominal)
-        {
-            into.Reserve(text.Length);
-            for (int i = 0; i < text.Length;)
-            {
-                var (glyph, advance, next) = Next(text, i);
-                into.Add(glyph, advance, 0f, 0f, i);
-                i = next;
-            }
-            return;
-        }
 
         IntPtr buffer = Font.Engine.HbBuffer;
         HB.hb_buffer_clear_contents(buffer);
@@ -282,14 +198,7 @@ public sealed unsafe class FontStrike
             HB.hb_buffer_add_utf16(buffer, p, text.Length, 0, text.Length);
         HB.hb_buffer_guess_segment_properties(buffer);
 
-        var features = options.Features;
-        Span<HB.Feature> hbFeatures = features.Count <= 16
-            ? stackalloc HB.Feature[features.Count]
-            : new HB.Feature[features.Count];
-        for (int i = 0; i < features.Count; i++)
-            hbFeatures[i] = new HB.Feature { Tag = features[i].TagValue, Value = features[i].Value, Start = 0, End = uint.MaxValue };
-        fixed (HB.Feature* f = hbFeatures)
-            HB.hb_shape(_hbFont, buffer, f, (uint)hbFeatures.Length);
+        HB.hb_shape(_hbFont, buffer, null, 0);
 
         HB.GlyphInfo* infos = HB.hb_buffer_get_glyph_infos(buffer, out uint n);
         HB.GlyphPosition* pos = HB.hb_buffer_get_glyph_positions(buffer, out _);
@@ -299,8 +208,7 @@ public sealed unsafe class FontStrike
             into.Add(infos[i].Codepoint,
                 pos[i].XAdvance / 65536f,
                 pos[i].XOffset / 65536f,
-                -pos[i].YOffset / 65536f,       // HarfBuzz y is up; ours is down
-                (int)infos[i].Cluster);
+                -pos[i].YOffset / 65536f);      // HarfBuzz y is up; ours is down
         }
     }
 
@@ -357,35 +265,10 @@ public sealed unsafe class FontStrike
     }
 
     /// <summary>
-    /// The coverage masks of <paramref name="run"/> drawn with its origin at
-    /// (<paramref name="originX"/>, <paramref name="baselineY"/>), written to
-    /// <paramref name="into"/> (which needs room for <c>run.Count</c>). Empty masks
-    /// (spaces) are skipped; the return is how many were written. This is the
-    /// hand-off to a rasterizer that composites masks itself.
-    /// </summary>
-    public int Place(GlyphRun run, float originX, float baselineY, Span<PlacedGlyph> into)
-    {
-        if (run.Strike is not null && run.Strike != this)
-            throw new ArgumentException("The run was shaped in a different strike.", nameof(run));
-        var glyphs = run.Glyphs;
-        var adv = run.Advances;
-        var xo = run.XOffsets;
-        var yo = run.YOffsets;
-        int n = 0;
-        float pen = originX;
-        for (int i = 0; i < glyphs.Length; i++)
-        {
-            var placed = PlaceGlyph(glyphs[i], pen + xo[i], baselineY + yo[i]);
-            if (!placed.Mask.IsEmpty) into[n++] = placed;
-            pen += adv[i];
-        }
-        return n;
-    }
-
-    /// <summary>
-    /// The masks of glyphs at explicit positions relative to an origin
-    /// (device x = <paramref name="originX"/> + position.X).
-    /// Empty masks are skipped; returns how many were written.
+    /// The masks of glyphs at explicit positions relative to an origin (device x =
+    /// <paramref name="originX"/> + position.X), written to <paramref name="into"/>:
+    /// the hand-off to a rasterizer that composites masks itself. Empty masks
+    /// (spaces) are skipped; returns how many were written.
     /// </summary>
     public int Place(ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions, float originX, float baselineY,
         Span<PlacedGlyph> into)
@@ -400,9 +283,6 @@ public sealed unsafe class FontStrike
         }
         return n;
     }
-
-    /// <summary>Drops every cached mask of this strike.</summary>
-    public void ClearMasks() => _masks.Clear();
 
     internal void Destroy()
     {

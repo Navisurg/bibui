@@ -56,7 +56,7 @@ public sealed partial class BibuiRuntime
     public Font FontInScope(FontSize? size = null, FontSlot? family = null)
     {
         var face = FaceInScope();
-        return _fonts.FontOf(size ?? SizeInScope(), family ?? face.Family, face.Weight, _theme, ScaleFactor);
+        return FontResolution.FontFromSize(_slotFaces, size ?? SizeInScope(), family ?? face.Family, face.Weight, _theme, ScaleFactor);
     }
 
     /// <summary>

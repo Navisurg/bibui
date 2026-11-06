@@ -133,13 +133,13 @@ public sealed partial class TestPort
     {
         if (node is null) { json.WriteNullValue(); return; }
         json.WriteStartObject();
-        json.WriteString("kind", node switch { Box => "box", Text => "text", _ => "node" });
+        json.WriteString("kind", node switch { Box => "box", Bibui.Core.Text => "text", _ => "node" });
         if (node.Id is { } id) json.WriteString("id", id);
         json.WriteNumber("x", node.Rect.X);
         json.WriteNumber("y", node.Rect.Y);
         json.WriteNumber("w", node.Extent.X);
         json.WriteNumber("h", node.Extent.Y);
-        if (node is Text text) json.WriteString("text", text.Content);
+        if (node is Bibui.Core.Text text) json.WriteString("text", text.Content);
         if (node is Box { Claims: not InteractionKinds.None } box)
         {
             json.WriteStartArray("claims");

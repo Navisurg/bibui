@@ -64,9 +64,6 @@ public readonly record struct RectF(float Left, float Top, float Right, float Bo
         => new(x, y, x + width, y + height);
 }
 
-/// <summary>Vertical extents of a font at a size, in physical px. Ascent is negative (above the baseline).</summary>
-public readonly record struct TextMetrics(float Ascent, float Descent, float Leading);
-
 /// <summary>Whether a paint fills the shape, strokes its outline, or both.</summary>
 public enum PaintStyle { Fill = 0, Stroke = 1, StrokeAndFill = 2 }
 

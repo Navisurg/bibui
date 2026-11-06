@@ -1,5 +1,6 @@
 using Bibui.Core;
 using Bibui.Core.Runtime;
+using Bibui.Text;
 using Bibui.Core.TextEdit;
 
 namespace ComponentGallery;
@@ -163,63 +164,44 @@ internal static class DemoInputs
         runtime.Gap(8f);
         runtime.Text(
             $"\"{LiveText.ToString()}\" — cursor {LiveEdit.Cursor}, mark {LiveEdit.Mark}, "
-            + $"{LiveText.Length} bytes, focus {Focused ?? "none"}", ComponentSize.Sm, TextColor.Secondary);
+            + $"{LiveText.Length} bytes", ComponentSize.Sm, TextColor.Secondary);
         runtime.Gap(8f);
         LiveField(runtime, "demo-textfield-2", SecondText, SecondEdit, "A second field");
         runtime.Gap(8f);
         LiveField(runtime, "demo-textfield-multi", MultiText, MultiEdit, "Several lines", lines: true, rows: 3);
         runtime.Gap(8f);
-        var readOnly = runtime.BeginParent(InputBox(runtime, "demo-textfield-readonly", Focused == "demo-textfield-readonly", lines: true));
+        var readOnly = runtime.BeginParent(InputBox(runtime, "demo-textfield-readonly", runtime.IsFocused("demo-textfield-readonly"), lines: true));
         runtime.BeginFontSize(ComponentSize.Sm);
         runtime.BeginSizeY(TextField.Rows(runtime, 2));
-        var field = runtime.MultilineTextField("demo-textfield-readonly", ReadOnlyText, ReadOnlyEdit,
-            focused: Focused == "demo-textfield-readonly", events: TextField.MultiLineReadOnlyEvents,
-            textColor: TextColor.Secondary);
-        if (field.Pressed) Focused = "demo-textfield-readonly";
+        runtime.MultilineTextField("demo-textfield-readonly", ReadOnlyText, ReadOnlyEdit,
+            events: TextField.MultiLineReadOnlyEvents, textColor: TextColor.Secondary);
         runtime.EndSizeY();
         runtime.EndFontSize();
         runtime.EndParent(readOnly);
-
-        EndEditing(runtime);
         runtime.Gap(24f);
 
+        // Not focused, a field shows no caret and no selection: those are the
+        // live fields' above, shown while one has focus (only one can).
         Heading(runtime, "Drawn states");
         Heading(runtime, "Not focused");
-        DrawnState(runtime, "demo-textfield-state-1", Sample(), At(0, 0), focused: false);
-        runtime.Gap(16f);
-        Heading(runtime, "Caret after \"quick\"");
-        DrawnState(runtime, "demo-textfield-state-2", Sample(), At(9, 9), focused: true);
-        runtime.Gap(16f);
-        Heading(runtime, "\"quick brown\" selected, caret at its end");
-        DrawnState(runtime, "demo-textfield-state-3", Sample(), At(15, 4), focused: true);
-        runtime.Gap(16f);
-        Heading(runtime, "Selected backwards, caret at its start");
-        DrawnState(runtime, "demo-textfield-state-4", Sample(), At(4, 15), focused: true);
-        runtime.Gap(16f);
-        Heading(runtime, "Caret at the start and at the end");
-        DrawnState(runtime, "demo-textfield-state-5", Sample(), At(0, 0), focused: true);
-        runtime.Gap(8f);
-        DrawnState(runtime, "demo-textfield-state-6", Sample(), At(SampleText.Length, SampleText.Length), focused: true);
+        DrawnState(runtime, "demo-textfield-state-1", Sample(), At(0, 0));
         runtime.Gap(16f);
         Heading(runtime, "Empty, with a placeholder");
-        DrawnState(runtime, "demo-textfield-state-7", new BibuiStr(16), At(0, 0), focused: false, placeholder: "Search cases");
-        runtime.Gap(8f);
-        DrawnState(runtime, "demo-textfield-state-8", new BibuiStr(16), At(0, 0), focused: true, placeholder: "Search cases");
+        DrawnState(runtime, "demo-textfield-state-7", new BibuiStr(16), At(0, 0), placeholder: "Search cases");
     }
 
-    // A field shown in one state: a single line in its frame, never focused by a press.
+    // A field shown in one state: a single line in its frame, taking no events, so never focused.
     private static void DrawnState(BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit,
-        bool focused, ReadOnlySpan<char> placeholder = default)
+        ReadOnlySpan<char> placeholder = default)
     {
-        var box = runtime.BeginParent(InputBox(runtime, id, focused));
-        runtime.TextField(id, text, edit, focused, placeholder: placeholder);
+        var box = runtime.BeginParent(InputBox(runtime, id, focused: false));
+        runtime.TextField(id, text, edit, events: 0, placeholder: placeholder);
         runtime.EndParent(box);
     }
 
     // The live fields' state: what an application would hold for them.
     private static readonly BibuiStr LiveText = BibuiStr.FromStrLit("Hello");
     private static readonly TextEditState LiveEdit = new();
-    private static string? Focused;      // which live field is being edited
     private static readonly BibuiStr SecondText = new(16);
     private static readonly BibuiStr MultiText = BibuiStr.FromStrLit(
         "A field that wraps by itself: type past the edge and the words move down a line. "
@@ -247,22 +229,19 @@ internal static class DemoInputs
         return box;
     }
 
-    // A framed field the page keeps focus for: a press focuses it.
+    // A framed field: a press focuses it, and Enter or Escape ends the edit.
     private static void LiveField(BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit,
         ReadOnlySpan<char> placeholder = default, bool lines = false, int rows = 3, float width = 320f)
     {
-        bool focused = Focused == id;
-        BibuiWidget field;
-        var box = runtime.BeginParent(InputBox(runtime, id, focused, width, lines));
+        var box = runtime.BeginParent(InputBox(runtime, id, runtime.IsFocused(id), width, lines));
         if (lines)
         {
             runtime.BeginSizeY(TextField.Rows(runtime, rows));
-            field = runtime.MultilineTextField(id, text, edit, focused, placeholder: placeholder);
+            runtime.MultilineTextField(id, text, edit, placeholder: placeholder);
             runtime.EndSizeY();
         }
-        else field = runtime.TextField(id, text, edit, focused, placeholder: placeholder);
+        else runtime.TextField(id, text, edit, placeholder: placeholder);
         runtime.EndParent(box);
-        if (field.Pressed) Focused = id;
     }
 
     // What names a field: a small semibold text.
@@ -274,21 +253,8 @@ internal static class DemoInputs
     internal static void StaticInput(BibuiRuntime runtime, string id, string placeholder, float width = 320f)
     {
         var box = runtime.BeginParent(InputBox(runtime, id, focused: false, width));
-        runtime.TextField(id, new BibuiStr(16), new TextEditState(), focused: false, placeholder: placeholder);
+        runtime.TextField(id, new BibuiStr(16), new TextEditState(), events: 0, placeholder: placeholder);
         runtime.EndParent(box);
-    }
-
-    // Escape and Submit (Enter) are the page's to read: they end editing. A
-    // multi-line field takes Submit itself, to end a line. After the fields.
-    private static void EndEditing(BibuiRuntime runtime)
-    {
-        if (Focused is null) return;
-        foreach (var ev in runtime.UnconsumedEvents)
-            if (ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape } or { Kind: BibUiEventKind.Submit })
-            {
-                Focused = null;
-                ev.Eat();
-            }
     }
 
 
@@ -315,19 +281,17 @@ internal static class DemoInputs
         Heading(runtime, "Disabled");
         // Disabled: it shows its placeholder and takes nothing, so a press is swallowed, not answered.
         var disabled = runtime.BeginParent(InputBox(runtime, "demo-input-disabled", focused: false, disabled: true));
-        runtime.TextField("demo-input-disabled", new BibuiStr(16), new TextEditState(), focused: false,
+        runtime.TextField("demo-input-disabled", new BibuiStr(16), new TextEditState(),
             events: 0, textColor: TextColor.Disabled, placeholder: "Disabled input");
         runtime.EndParent(disabled);
         runtime.Gap(24f);
 
         Heading(runtime, "Error");
         var error = runtime.BeginParent(InputBox(runtime, "demo-input-error", focused: false, error: true));
-        runtime.TextField("demo-input-error", BibuiStr.FromStrLit("not-an-email"), new TextEditState(), focused: false);
+        runtime.TextField("demo-input-error", BibuiStr.FromStrLit("not-an-email"), new TextEditState(), events: 0);
         runtime.EndParent(error);
         runtime.Gap(16f);
         runtime.Text("Destructive border signals validation failure.", ComponentSize.Sm, TextColor.Secondary);
-
-        EndEditing(runtime);
     }
 
     private static void TextareaPage(BibuiRuntime runtime)
@@ -341,7 +305,7 @@ internal static class DemoInputs
         Heading(runtime, "Error");
         var error = runtime.BeginParent(InputBox(runtime, "demo-textarea-error", focused: false, width: 400f, lines: true, error: true));
         runtime.BeginSizeY(TextField.Rows(runtime, 3));
-        runtime.MultilineTextField("demo-textarea-error", BibuiStr.FromStrLit("too short"), new TextEditState(), focused: false,
+        runtime.MultilineTextField("demo-textarea-error", BibuiStr.FromStrLit("too short"), new TextEditState(), events: 0,
             placeholder: "Describe the issue");
         runtime.EndSizeY();
         runtime.EndParent(error);
@@ -349,8 +313,6 @@ internal static class DemoInputs
 
         Heading(runtime, "Multi-line content (press and drag across rows to select)");
         LiveField(runtime, "demo-textarea-multiline", TextareaLog, TextareaLogEdit, lines: true, rows: 9, width: 400f);
-
-        EndEditing(runtime);
     }
 
     private const string SampleText = "The quick brown fox jumps";
@@ -511,7 +473,9 @@ internal static class DemoInputs
         if (loading)
         {
             // As wide as icon and label would be, the spinner centred across it.
-            float width = runtime.Fonts.Measure(text, runtime.FontInScope(ComponentSize.Md)) + 32f;
+            var font = runtime.FontInScope(ComponentSize.Md);
+            var textStyle = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+            float width = TextLayer.WidthFromChars(runtime.Fonts, text, textStyle, font.Scale) + 32f;
             if (icon is not null) width += 24f;
             box.SizeX = SemanticSize.Pixels(width);
             runtime.BeginParent(box);

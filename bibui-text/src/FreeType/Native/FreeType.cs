@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Bibui.Core.FreeType.Native;
+namespace Bibui.Text.FreeType.Native;
 
 /// <summary>
 /// The slice of libfreetype.so.6 the engine needs. Struct fields are read by
@@ -18,7 +18,11 @@ internal static unsafe partial class FT
     public const int LOAD_FORCE_AUTOHINT = 1 << 5;
     public const int LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH = 1 << 9;
     public const int LOAD_TARGET_NORMAL = 0;
-    public const int LOAD_TARGET_LIGHT = 1 << 16;
+
+    // FT_FaceRec.face_flags
+    public const long FACE_FLAG_SCALABLE = 1 << 0;
+    public const long FACE_FLAG_FIXED_SIZES = 1 << 1;
+    public const long FACE_FLAG_COLOR = 1 << 14;
 
     public const int RENDER_MODE_NORMAL = 0;
 
@@ -27,7 +31,10 @@ internal static unsafe partial class FT
     private static readonly bool P64 = IntPtr.Size == 8;
 
     // FT_FaceRec
+    public static readonly int Face_FaceFlags = P64 ? 16 : 8;
     public static readonly int Face_NumGlyphs = P64 ? 32 : 16;
+    public static readonly int Face_NumFixedSizes = P64 ? 56 : 28;
+    public static readonly int Face_AvailableSizes = P64 ? 64 : 32;
     public static readonly int Face_UnitsPerEm = P64 ? 136 : 68;
     public static readonly int Face_Ascender = P64 ? 138 : 70;
     public static readonly int Face_Descender = P64 ? 140 : 72;
@@ -35,7 +42,6 @@ internal static unsafe partial class FT
     public static readonly int Face_Glyph = P64 ? 152 : 84;
 
     // FT_GlyphSlotRec
-    public static readonly int Slot_LinearHoriAdvance = P64 ? 112 : 56;
     public static readonly int Slot_Bitmap = P64 ? 152 : 76;
     public static readonly int Slot_BitmapLeft = P64 ? 192 : 100;
     public static readonly int Slot_BitmapTop = P64 ? 196 : 104;
@@ -47,6 +53,15 @@ internal static unsafe partial class FT
     public const int Bitmap_Pitch = 8;
     public static readonly int Bitmap_Buffer = P64 ? 16 : 12;
 
+    // FT_Bitmap_Size: one entry of FT_FaceRec.available_sizes
+    public static readonly int BitmapSize_Size = P64 ? 32 : 16;
+    public static readonly int BitmapSize_YPpem = P64 ? 24 : 12;
+
+    // FT_SizeRec.metrics (FT_Size_Metrics): the active size's, in 26.6 px
+    public static readonly int Size_Ascender = P64 ? 48 : 24;
+    public static readonly int Size_Descender = P64 ? 56 : 28;
+    public static readonly int Size_Height = P64 ? 64 : 32;
+
     [LibraryImport(Lib)] public static partial int FT_Init_FreeType(out IntPtr library);
     [LibraryImport(Lib)] public static partial int FT_Done_FreeType(IntPtr library);
     [LibraryImport(Lib)] public static partial int FT_New_Memory_Face(IntPtr library, byte* data, nint size, nint faceIndex, out IntPtr face);
@@ -54,6 +69,7 @@ internal static unsafe partial class FT
     [LibraryImport(Lib)] public static partial int FT_New_Size(IntPtr face, out IntPtr size);
     [LibraryImport(Lib)] public static partial int FT_Activate_Size(IntPtr size);
     [LibraryImport(Lib)] public static partial int FT_Set_Char_Size(IntPtr face, nint charWidth, nint charHeight, uint hres, uint vres);
+    [LibraryImport(Lib)] public static partial int FT_Select_Size(IntPtr face, int strikeIndex);
     [LibraryImport(Lib)] public static partial uint FT_Get_Char_Index(IntPtr face, nuint charcode);
     [LibraryImport(Lib)] public static partial int FT_Load_Glyph(IntPtr face, uint glyphIndex, int loadFlags);
     [LibraryImport(Lib)] public static partial int FT_Get_Advance(IntPtr face, uint glyphIndex, int loadFlags, out nint advance);

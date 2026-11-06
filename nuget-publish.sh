@@ -27,6 +27,8 @@ if [[ -z "$VERSION" ]]; then
 fi
 
 PROJECTS=(
+  # The text layer the core lays text out with: fonts, runs, line breaking.
+  "bibui-text/bibui-text.csproj"
   "bibui-core/bibui-core.csproj"
   "bibui-gl/bibui-gl.csproj"
   "bibui-raster-skia/bibui-raster-skia.csproj"

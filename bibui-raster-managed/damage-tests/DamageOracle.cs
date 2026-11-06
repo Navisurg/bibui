@@ -269,16 +269,13 @@ internal static class DamageOracle
             var other = new BibuiStr(64);
             var nameEdit = new TextEditState();
             var otherEdit = new TextEditState();
-            int focus = -1;
-            UiNode Field(string id, BibuiStr text, TextEditState edit, int index, string placeholder)
+            UiNode Field(string id, BibuiStr text, TextEditState edit, string placeholder)
             {
                 Box field = rt.Box();
-                TextField.InputStyle(rt, field, focus == index);
+                TextField.InputStyle(rt, field, rt.IsFocused(id));
                 field.Sized(Size.Fill, Size.Px(36f));
-                BibuiWidget line;
                 using (rt.Parent(field))
-                    line = rt.TextField(id, text, edit, focus == index, placeholder: placeholder);
-                if (line.Pressed) focus = index;
+                    rt.TextField(id, text, edit, placeholder: placeholder);
                 return field;
             }
             UiNode Build()
@@ -287,9 +284,9 @@ internal static class DamageOracle
                 {
                     Bold(rt, "Account details");
                     rt.Gap(16f);
-                    Field("name", name, nameEdit, 0, "Full name");
+                    Field("name", name, nameEdit, "Full name");
                     rt.Gap(16f);
-                    Field("other", other, otherEdit, 1, "Account ID");
+                    Field("other", other, otherEdit, "Account ID");
                     rt.Gap(16f);
                     rt.Text($"{name.Length} chars typed", ComponentSize.Sm, TextColor.Secondary);
                 });

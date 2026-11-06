@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Bibui.Core.FreeType;
+namespace Bibui.Text.FreeType;
 
 /// <summary>
 /// The bytes of one font file, copied once into native memory that never moves.
@@ -34,6 +34,38 @@ public sealed unsafe class FontData
         GC.AddMemoryPressure(fontFile.Length);
     }
 
+    // Native memory of `length` bytes, for a caller to fill.
+    private FontData(int length, string name)
+    {
+        Length = length;
+        Name = name;
+        _bytes = (byte*)NativeMemory.Alloc((nuint)length);
+        GC.AddMemoryPressure(length);
+    }
+
+    /// <summary>
+    /// Reads the font file at <paramref name="path"/> straight into native memory,
+    /// with no managed copy: a system emoji font is about 10 MB. Throws
+    /// <see cref="IOException"/> (or <see cref="UnauthorizedAccessException"/>)
+    /// when the file cannot be read, and <see cref="ArgumentException"/> when it
+    /// is empty or larger than 2 GB.
+    /// </summary>
+    public static FontData FromFile(string path)
+    {
+        using var handle = File.OpenHandle(path);
+        long length = RandomAccess.GetLength(handle);
+        if (length <= 0 || length > int.MaxValue) throw new ArgumentException($"{path}: {length} bytes is no font file.", nameof(path));
+        var data = new FontData((int)length, Path.GetFileNameWithoutExtension(path));
+        var bytes = new Span<byte>(data._bytes, data.Length);
+        for (int read = 0; read < bytes.Length;)
+        {
+            int n = RandomAccess.Read(handle, bytes[read..], read);
+            if (n == 0) throw new IOException($"{path}: ended after {read} of {length} bytes.");
+            read += n;
+        }
+        return data;
+    }
+
     ~FontData()
     {
         NativeMemory.Free(_bytes);
@@ -54,11 +86,11 @@ public sealed unsafe class FontData
 
     /// <summary>The embedded Inter Regular, the same bytes bibui embeds. Loaded once per process.</summary>
     public static FontData InterRegular => s_interRegular ?? Interlocked.CompareExchange(ref s_interRegular,
-        FromEmbeddedResource(typeof(FontData).Assembly, "Bibui.Core.Assets.Fonts.Inter-Regular.ttf"), null) ?? s_interRegular!;
+        FromEmbeddedResource(typeof(FontData).Assembly, "Bibui.Text.Assets.Fonts.Inter-Regular.ttf"), null) ?? s_interRegular!;
 
     /// <summary>The embedded Inter SemiBold, which bibui draws every weight from 600 up with.</summary>
     public static FontData InterSemiBold => s_interSemiBold ?? Interlocked.CompareExchange(ref s_interSemiBold,
-        FromEmbeddedResource(typeof(FontData).Assembly, "Bibui.Core.Assets.Fonts.Inter-SemiBold.ttf"), null) ?? s_interSemiBold!;
+        FromEmbeddedResource(typeof(FontData).Assembly, "Bibui.Text.Assets.Fonts.Inter-SemiBold.ttf"), null) ?? s_interSemiBold!;
 
     public override string ToString() => Name.Length > 0 ? Name : $"FontData({Length} bytes)";
 }

@@ -73,6 +73,14 @@ public enum InteractionKinds
     /// </summary>
     Scroll = 1 << 9,
 
+    /// <summary>
+    /// The box can take focus: a left press on it gives it focus from the next
+    /// frame, and it keeps it while it is built and no press lands elsewhere
+    /// (<see cref="Interaction.Focused"/>). A text field that takes events
+    /// claims it. Only one box has focus at a time.
+    /// </summary>
+    Keyboard = 1 << 10,
+
     Press = LeftPress | RightPress | MiddlePress,
     ViewScroll = ViewScrollX | ViewScrollY,
     Clamp = ClampX | ClampY,

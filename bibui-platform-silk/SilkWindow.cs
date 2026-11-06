@@ -58,10 +58,11 @@ public sealed class SilkWindow : IDisposable
     }
 
     /// <summary>
-    /// The app's frame, called from GLFW's resize callback, so the window is drawn
-    /// at its new size, and keeps drawing while GLFW holds the thread in its own
-    /// pump (a drag on Windows or macOS). Without it a resize draws nothing until
-    /// the next input.
+    /// The app's frame, called from GLFW's refresh callback when the window must
+    /// be drawn: after a resize, so the window is drawn at its new size and keeps
+    /// drawing while GLFW holds the thread in its own pump (a drag on Windows or
+    /// macOS), and when the OS lost what it showed (an expose on X11). Without
+    /// it a resize draws nothing until the next input.
     /// </summary>
     public Action? OnRefresh { get; set; }
 
@@ -213,6 +214,7 @@ public sealed class SilkWindow : IDisposable
 
     // Held so the GC keeps it while GLFW holds its function pointer.
     private global::Silk.NET.GLFW.GlfwCallbacks.MonitorCallback? _onMonitor;
+    private global::Silk.NET.GLFW.GlfwCallbacks.WindowRefreshCallback? _onRefresh;
 
     /// <summary>
     /// Closes the window and destroys it with any graphics context it was opened
@@ -325,17 +327,25 @@ public sealed class SilkWindow : IDisposable
         };
         // Moved onto another monitor (X11; Wayland reports no moves).
         native.Move += _ => window.FindMonitor();
-        native.FramebufferResize += size =>
-        {
-            window.Resize(size);
-            // Draw at the new size from here: GLFW is in its own pump during a drag
-            // on Windows and macOS, and the app's loop is not running; and nothing
-            // else asks for a frame on a resize.
-            window.OnRefresh?.Invoke();
-        };
+        // Only the size: the frame for it is drawn from the refresh callback, below.
+        native.FramebufferResize += size => window.Resize(size);
         native.FocusChanged += focused => { if (!focused) window.Events.Add(WindowEvent.FocusLost()); };
         native.Initialize();
         window.WireInput();
+        // The frame is drawn from GLFW's refresh callback, which GLFW calls once it
+        // has taken a resize whole: GLFW is in its own pump during a drag on Windows
+        // and macOS, and the app's loop is not running; and nothing else asks for a
+        // frame on a resize. NOTE(k): not from the framebuffer-size callback. On
+        // Wayland GLFW calls that before it sets the surface's viewport to the new
+        // size, so a frame committed from there is shown squeezed into the old size
+        // until the next commit. Set after Initialize, which sets Silk.NET's; that
+        // one only runs IWindow.Run's frame, and Run is never called here.
+        unsafe
+        {
+            window._onRefresh = _ => window.OnRefresh?.Invoke();
+            global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetWindowRefreshCallback(
+                (global::Silk.NET.GLFW.WindowHandle*)native.Native!.Glfw!.Value, window._onRefresh);
+        }
         // A monitor connected or unplugged: look the monitor up again, as an
         // unplugged one is freed under the IMonitor that names it. GLFW has one
         // monitor callback for the process, so the one set before is called on.

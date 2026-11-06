@@ -1,5 +1,6 @@
 using Bibui.Core;
 using Bibui.Core.Runtime;
+using Bibui.Text;
 
 namespace ComponentGallery;
 
@@ -35,7 +36,8 @@ internal static class LayoutCheck
     {
         if (node is Text text && text.SizeX.Kind != SizeKind.Text && text.Content.Length > 0)
         {
-            float wants = runtime.Fonts.Measure(text.Content, runtime.FontInScope(text.Size, text.Family));
+            var font = runtime.FontInScope(text.Size, text.Family);
+            float wants = TextLayer.WidthFromChars(runtime.Fonts, text.Content, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
             if (wants > node.Extent.X + Tolerance)
                 faults.Add(new("cut", node.Id is null ? path + " > " + Describe(node) : path, $"says {wants:0} px of text in {node.Extent.X:0} px"));
         }

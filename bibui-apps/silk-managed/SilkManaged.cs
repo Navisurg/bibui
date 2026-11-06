@@ -3,6 +3,7 @@ using Bibui.Gl;
 using Bibui.Raster.Managed.Backend;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
+using Bibui.Text;
 
 namespace Bibui.App;
 
@@ -10,6 +11,12 @@ namespace Bibui.App;
 // shows on the window's GL framebuffer.
 public sealed partial class BibuiApp
 {
+    // Silk runs on Linux, Windows and macOS; only Linux has the emoji font set up yet (fontconfig's).
+    private static partial void SetUpText(Fonts fonts)
+    {
+        if (OperatingSystem.IsLinux()) Fontconfig.UseColorEmoji(fonts);
+    }
+
     // The window's GL framebuffer, which _shown draws to.
     private GlTarget _gl = null!;
     private GlCpuFramebuffer _shown = null!;

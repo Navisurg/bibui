@@ -17,7 +17,6 @@ public sealed class DemoState
     // The name field's text, caret and focus, edited in place by the field.
     public readonly BibuiStr NameText = new(32);
     public readonly TextEditState NameEdit = new();
-    public bool NameFocused;
 }
 
 /// <summary>
@@ -105,17 +104,9 @@ public static class Demo
         runtime.Gap(10f);
         // A press focuses the name field; Escape or Enter ends editing.
         Box nameField = runtime.BeginParent(runtime.Box().Sized(Size.Fill, Size.Px(44f)));
-        TextField.InputStyle(runtime, nameField, state.NameFocused);
-        BibuiWidget nameLine = runtime.TextField("name-input", state.NameText, state.NameEdit, state.NameFocused,
-            placeholder: Labels.NamePlaceholder);
+        TextField.InputStyle(runtime, nameField, runtime.IsFocused("name-input"));
+        runtime.TextField("name-input", state.NameText, state.NameEdit, placeholder: Labels.NamePlaceholder);
         runtime.EndParent(nameField);
-        if (nameLine.Pressed) state.NameFocused = true;
-        foreach (var ev in runtime.UnconsumedEvents)
-            if (state.NameFocused && ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape } or { Kind: BibUiEventKind.Submit })
-            {
-                state.NameFocused = false;
-                ev.Eat();
-            }
         runtime.Gap(10f);
         string name = state.NameText.ToString();
         // Typed text is not worth keeping once it changes, so the greeting is encoded each frame.

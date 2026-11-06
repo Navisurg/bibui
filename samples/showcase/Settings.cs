@@ -286,7 +286,6 @@ internal sealed partial class App
     public bool NightOpen = true;
     public readonly BibuiStr Note = BibuiStr.FromStrLit("Lantern's outer shell needs another 40 min of OIII. Kestrel is next; start it before 03:10.");
     public readonly TextEditState NoteEdit = new();
-    public bool NoteFocused;
 
     private void JournalPage(BibuiRuntime rt, float cw, float ch)
     {
@@ -326,15 +325,14 @@ internal sealed partial class App
         rt.Gap(10f);
         // A hand-over note: a multi-line field, four rows tall, that a press gives the keyboard.
         var noteBox = rt.Column().Sized(Size.Px(inner));
-        TextField.InputStyle(rt, noteBox, NoteFocused);
+        TextField.InputStyle(rt, noteBox, rt.IsFocused("note"));
         rt.BeginParent(noteBox);
         rt.BeginFontSize(ComponentSize.Sm);
         rt.BeginSizeY(TextField.Rows(rt, 4));
-        var note = rt.MultilineTextField("note", Note, NoteEdit, NoteFocused, placeholder: "Hand-over note for the morning crew");
+        rt.MultilineTextField("note", Note, NoteEdit, placeholder: "Hand-over note for the morning crew");
         rt.EndSizeY();
         rt.EndFontSize();
         rt.EndParent(noteBox);
-        if (note.Pressed) { NoteFocused = true; SearchFocused = false; }
         rt.Gap(18f);
         Separator.Build(rt);
         rt.Gap(6f);

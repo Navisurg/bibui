@@ -528,6 +528,17 @@ Keys are not claimed or asked for. They are the frame's events, read from
 it sees it. A focused text field eats the keys it takes; what is left is the
 app's.
 
+**Focus** is the runtime's: one box at a time, by id. A box that claims
+`InteractionKinds.Keyboard` (a text field that takes events) takes it with a
+left press, from the next frame; `Interaction.Focused` says so, the same for
+every ask in a frame, and `FocusGained` marks the first frame of it. The box
+keeps it while it is built and no press lands elsewhere: a press on another
+such box moves it, a press anywhere else ends it, and so does the box not being
+built. A component that ends an edit itself gives it up: a text field on
+Escape (`Cancelled`) and, on a single line, Enter (`Submitted`).
+`runtime.Focus(id)` gives it from code, `""` to none, and `runtime.IsFocused(id)`
+reads it before the box is built, for a look such as an input's outline.
+
 The window translates each key down into an intent for the text fields, so
 its `Kind` depends on the key: `Navigate` for the arrows, Home and End (and
 Ctrl+A), `Submit` for Enter, `Edit` for Backspace, Delete, Ctrl+X and Ctrl+V,
@@ -552,10 +563,10 @@ bool focusedNow = false;
 foreach (var ev in runtime.UnconsumedEvents)
 {
     if (ev is { Kind: BibUiEventKind.Text, Char: '/' } && focusedNow) { ev.Eat(); continue; }
-    if (!ev.IsKeyDown || searchFocused) continue;
+    if (!ev.IsKeyDown || runtime.IsFocused("search")) continue;
     switch (ev.Key)
     {
-        case Key.Slash: searchFocused = focusedNow = true; ev.Eat(); break;
+        case Key.Slash: runtime.Focus("search"); focusedNow = true; ev.Eat(); break;
         case Key.Down:  MoveSelection(+1); ev.Eat(); break;
         case Key.Enter: Open(); ev.Eat(); break;
     }

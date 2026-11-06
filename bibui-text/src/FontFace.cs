@@ -1,7 +1,7 @@
-using FtFont = Bibui.Core.FreeType.Font;
-using FtStrike = Bibui.Core.FreeType.FontStrike;
+using FtFont = Bibui.Text.FreeType.Font;
+using FtStrike = Bibui.Text.FreeType.FontStrike;
 
-namespace Bibui.Core;
+namespace Bibui.Text;
 
 /// <summary>
 /// One font file, as bibui measures and draws with it: <see cref="Fonts"/> hands

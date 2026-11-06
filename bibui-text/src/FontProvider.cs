@@ -1,7 +1,7 @@
-using Bibui.Core.FreeType;
-using FtFont = Bibui.Core.FreeType.Font;
+using Bibui.Text.FreeType;
+using FtFont = Bibui.Text.FreeType.Font;
 
-namespace Bibui.Core;
+namespace Bibui.Text;
 
 /// <summary>
 /// Which face draws which text: resolves (family, weight) to a <see cref="FontFace"/>.
@@ -46,7 +46,7 @@ internal sealed class FontProvider
         return _engine.Resolve(null, weight);
     }
 
-    private FontFace Face(FtFont font)
+    internal FontFace Face(FtFont font)
     {
         if (!_faces.TryGetValue(font, out var face)) _faces[font] = face = new FontFace(font);
         return face;
