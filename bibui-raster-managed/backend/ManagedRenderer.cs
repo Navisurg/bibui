@@ -282,7 +282,8 @@ public sealed class ManagedRenderer : IDisposable
 
     private readonly ImageShader _imageShader = new();
     private PlacedGlyph[] _placed = new PlacedGlyph[64];
-    private readonly GlyphCache _glyphs = new();   // the masks its text is drawn with
+    // The masks its text is drawn with, each strike's by glyph and phase (GlyphMasks).
+    private readonly Dictionary<FontStrike, Dictionary<uint, GlyphMask>> _glyphs = new();
 
     // Gradient shaders by content, so a gradient drawn every frame is built once.
     private readonly Dictionary<CacheKey, GradientShader> _gradients = [];

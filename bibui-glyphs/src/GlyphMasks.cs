@@ -41,24 +41,16 @@ public sealed class GlyphMask
 public readonly record struct PlacedGlyph(GlyphMask Mask, int X, int Y);
 
 /// <summary>
-/// The masks a renderer has drawn glyphs with: each strike's, by glyph and
-/// phase. Rendered on first use and kept for the cache's life, as strikes are
-/// kept for their engine's. The data; what is done with it is <see cref="GlyphMasks"/>.
-///
-/// <para>Confined to the thread of the engine its strikes come from: a miss
-/// loads through the strike's FreeType face. The masks it holds are immutable
-/// and may be read anywhere.</para>
-/// </summary>
-public sealed class GlyphCache
-{
-    // Each strike's masks, under glyph << 2 | phase. A strike is its own key: the
-    // engine makes one per font and size, and keeps it.
-    internal readonly Dictionary<FontStrike, Dictionary<uint, GlyphMask>> Masks = new(ReferenceEqualityComparer.Instance);
-}
-
-/// <summary>
 /// Glyphs as coverage masks, for a rasterizer that draws text itself: rendered
-/// with FreeType, kept in a <see cref="GlyphCache"/>, and placed in device pixels.
+/// with FreeType, kept in the caller's cache, and placed in device pixels.
+///
+/// <para><b>The cache.</b> The caller's dictionary, empty to start: each strike's
+/// masks, filled here under glyph and phase (glyph &lt;&lt; 2 | phase), rendered on
+/// first use and kept for the dictionary's life, as strikes are kept for their
+/// engine's. A strike is its own key: the engine makes one per font and size.
+/// Confined to the thread of the engine its strikes come from, since a miss loads
+/// through the strike's FreeType face; the masks are immutable and may be read
+/// anywhere.</para>
 ///
 /// <para><b>Settings.</b> Glyphs are loaded with
 /// <c>FT_LOAD_TARGET_NORMAL | FORCE_AUTOHINT | NO_BITMAP | IGNORE_GLOBAL_ADVANCE_WIDTH</c>:
@@ -85,7 +77,7 @@ public static unsafe class GlyphMasks
     /// <paramref name="into"/>: what a rasterizer composites. Empty masks (spaces)
     /// are skipped; returns how many were written.
     /// </summary>
-    public static int PlacedFromGlyphs(GlyphCache cache, FontStrike strike, ReadOnlySpan<ushort> glyphs,
+    public static int PlacedFromGlyphs(Dictionary<FontStrike, Dictionary<uint, GlyphMask>> cache, FontStrike strike, ReadOnlySpan<ushort> glyphs,
         ReadOnlySpan<Vector2> positions, float originX, float baselineY, Span<PlacedGlyph> into)
     {
         if (glyphs.Length != positions.Length)
@@ -101,9 +93,9 @@ public static unsafe class GlyphMasks
     }
 
     // A run's glyphs are all one strike's: it looks the strike up once.
-    private static Dictionary<uint, GlyphMask> MasksOfStrike(GlyphCache cache, FontStrike strike)
+    private static Dictionary<uint, GlyphMask> MasksOfStrike(Dictionary<FontStrike, Dictionary<uint, GlyphMask>> cache, FontStrike strike)
     {
-        if (!cache.Masks.TryGetValue(strike, out var masks)) cache.Masks[strike] = masks = new();
+        if (!cache.TryGetValue(strike, out var masks)) cache[strike] = masks = new();
         return masks;
     }
 
