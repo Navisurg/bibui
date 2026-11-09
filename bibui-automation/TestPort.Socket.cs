@@ -232,6 +232,26 @@ public sealed partial class TestPort : IDisposable
         }).AsObject();
         input["type"] = "object";   // the exporter allows null; a command's arguments never are
         input["properties"] ??= new System.Text.Json.Nodes.JsonObject();   // a command without arguments says so, not nothing
+        // What it reads from the context, sent beside its arguments: a handle each, required, as the
+        // port refuses the command without one.
+        if (op is { Context.Length: > 0 })
+        {
+            var properties = input["properties"]!.AsObject();
+            var required = input["required"] as System.Text.Json.Nodes.JsonArray ?? [];
+            foreach (var field in op.Context)
+            {
+                var schema = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["type"] = "string",
+                    ["pattern"] = "^#?[0-9]+$",
+                    ["description"] = $"In the context: the {field.Kind ?? "node"} it acts on ({field.Name}), '#' and its id.",
+                };
+                if (field.Kind is { } kind) schema["nodeKind"] = kind;
+                properties[field.Name] = schema;
+                required.Add((System.Text.Json.Nodes.JsonNode)System.Text.Json.Nodes.JsonValue.Create(field.Name));
+            }
+            input["required"] = required;
+        }
         return input;
     }
 }
