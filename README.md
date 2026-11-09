@@ -195,7 +195,7 @@ decides which other dependencies it needs. In every case the dependency tree is 
 | `Bibui.Platform.Silk` | `Silk.NET` windowing, input and OpenGL (GLFW), `Bibui.Gl`, `TextCopy` | an OpenGL driver; GLFW itself ships with Silk.NET |
 | `Bibui.Platform.Wayland` | none | `libwayland-client`, `libwayland-cursor`, `libxkbcommon` |
 | `Bibui.Platform.Browser` | none | none: FreeType and HarfBuzz ship inside it, built for the browser; building an app needs the `wasm-tools` workload |
-| `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`) | none beyond `Bibui.Core`'s |
+| `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`, `Bibui.Glyphs`) | none beyond `Bibui.Core`'s |
 
 The Wayland + managed route has no third-party NuGet dependencies at all, and
 it is the route that publishes with Native AOT; Silk.NET keeps the others on the

@@ -97,6 +97,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "wayland-scanner", "tools\wa
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "bibui-text", "bibui-text\bibui-text.csproj", "{2C70CE31-3114-4467-B2DF-EC1B33795142}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "bibui-glyphs", "bibui-glyphs\bibui-glyphs.csproj", "{68606C3A-86B8-4721-883E-6A23EF62F699}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -503,6 +505,18 @@ Global
 		{2C70CE31-3114-4467-B2DF-EC1B33795142}.Release|x64.Build.0 = Release|Any CPU
 		{2C70CE31-3114-4467-B2DF-EC1B33795142}.Release|x86.ActiveCfg = Release|Any CPU
 		{2C70CE31-3114-4467-B2DF-EC1B33795142}.Release|x86.Build.0 = Release|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Debug|x64.Build.0 = Debug|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Debug|x86.Build.0 = Debug|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Release|Any CPU.Build.0 = Release|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Release|x64.ActiveCfg = Release|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Release|x64.Build.0 = Release|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Release|x86.ActiveCfg = Release|Any CPU
+		{68606C3A-86B8-4721-883E-6A23EF62F699}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,4 +1,4 @@
-namespace Bibui.Text.FreeType;
+namespace Bibui.Glyphs;
 
 /// <summary>
 /// The text "preblend": before a coverage mask is blended, each coverage value is
@@ -27,13 +27,11 @@ public static class MaskGamma
     private static readonly byte[] s_tables = Build();
 
     /// <summary>
-    /// The 256-entry coverage table for text drawn in <paramref name="color"/>:
+    /// The 256-entry coverage table for text drawn in the colour
+    /// (<paramref name="r"/>, <paramref name="g"/>, <paramref name="b"/>), unpremultiplied:
     /// composite with <c>table[coverage]</c> in place of <c>coverage</c>. Alpha is
     /// not part of the choice; only the RGB is.
     /// </summary>
-    public static ReadOnlySpan<byte> Table(TextColor color) => Table(color.R, color.G, color.B);
-
-    /// <inheritdoc cref="Table(TextColor)"/>
     public static ReadOnlySpan<byte> Table(byte r, byte g, byte b)
     {
         int lum = (r * 54 + g * 183 + b * 19) >> 8;   // SkComputeLuminance

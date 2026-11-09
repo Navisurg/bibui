@@ -2,8 +2,8 @@
 
 bibui's renderer with no SkiaSharp: `ManagedRenderer` draws a frame's
 `DrawList` (shapes, clips, layers, textures) through the managed rasterizer
-(`Bibui.Raster.Managed`), and text from the glyph masks of bibui's own FreeType
-and HarfBuzz engine.
+(`Bibui.Raster.Managed`), and text from glyph masks FreeType renders
+(`Bibui.Glyphs`) for the strikes of bibui's own text engine (`Bibui.Text`).
 
 ```csharp
 using Bibui.Raster.Managed.Backend;

@@ -4,6 +4,7 @@ using Bibui.Core;
 using Bibui.Text;
 using Bibui.Core.Draw;
 using Bibui.Text.FreeType;
+using Bibui.Glyphs;
 using Bibui.Raster.Managed.Backend.Damage;
 using BPaintStyle = Bibui.Core.PaintStyle;
 using BStrokeCap = Bibui.Core.StrokeCap;
@@ -13,8 +14,6 @@ using MPath = Bibui.Raster.Managed.Path;
 
 namespace Bibui.Raster.Managed.Backend;
 
-// Bibui.Core.TextColor (a theme role) is nearer than the using above; here a text colour is the engine's.
-using FtTextColor = Bibui.Text.FreeType.TextColor;
 
 /// <summary>
 /// Draws a <see cref="DrawList"/> with the managed rasterizer and the
@@ -283,6 +282,8 @@ public sealed class ManagedRenderer : IDisposable
 
     private readonly ImageShader _imageShader = new();
     private PlacedGlyph[] _placed = new PlacedGlyph[64];
+    // The masks its text is drawn with, each strike's by glyph and phase (GlyphMasks).
+    private readonly Dictionary<FontStrike, Dictionary<uint, GlyphMask>> _glyphs = new();
 
     // Gradient shaders by content, so a gradient drawn every frame is built once.
     private readonly Dictionary<CacheKey, GradientShader> _gradients = [];
@@ -439,15 +440,15 @@ public sealed class ManagedRenderer : IDisposable
         var strike = Strike(face, sizePx, s);
         if (_placed.Length < glyphs.Length) _placed = new PlacedGlyph[Math.Max(glyphs.Length, _placed.Length * 2)];
         int n;
-        if (s == 1f) n = strike.Place(glyphs, positions, origin.X, origin.Y, _placed.AsSpan(0, glyphs.Length));
+        if (s == 1f) n = GlyphMasks.PlacedFromGlyphs(_glyphs, strike, glyphs, positions, origin.X, origin.Y, _placed.AsSpan(0, glyphs.Length));
         else
         {
             Span<Vector2> scaled = glyphs.Length <= 256 ? stackalloc Vector2[glyphs.Length] : new Vector2[glyphs.Length];
             for (int i = 0; i < scaled.Length; i++) scaled[i] = positions[i] * s;
-            n = strike.Place(glyphs, scaled, origin.X, origin.Y, _placed.AsSpan(0, glyphs.Length));
+            n = GlyphMasks.PlacedFromGlyphs(_glyphs, strike, glyphs, scaled, origin.X, origin.Y, _placed.AsSpan(0, glyphs.Length));
         }
 
-        var table = MaskGamma.Table(new FtTextColor(color.R, color.G, color.B, color.A));
+        var table = MaskGamma.Table(color.R, color.G, color.B);
         for (int i = 0; i < n; i++)
         {
             var g = _placed[i];

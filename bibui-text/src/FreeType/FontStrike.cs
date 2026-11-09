@@ -1,38 +1,23 @@
-using System.Numerics;
 using Bibui.Text.FreeType.Native;
 
 namespace Bibui.Text.FreeType;
 
 /// <summary>
-/// One <see cref="Font"/> at one physical pixel size: advances, metrics, shaping
-/// and the glyph coverage cache. Get one from <see cref="TextEngine.Strike(Font, float)"/>;
-/// the engine keeps it, so asking again for the same font and size is a lookup.
+/// One <see cref="Font"/> at one physical pixel size: advances, metrics and
+/// shaping. Get one from <see cref="TextEngine.Strike(Font, float)"/>; the engine
+/// keeps it, so asking again for the same font and size is a lookup.
 ///
-/// <para><b>Settings.</b> Glyphs are loaded with
-/// <c>FT_LOAD_TARGET_NORMAL | FORCE_AUTOHINT | NO_BITMAP | IGNORE_GLOBAL_ADVANCE_WIDTH</c>:
-/// autohinted, fully hinted outlines, no embedded bitmaps, no LCD. Advances are
-/// FreeType's <i>linear</i> (unhinted, 16.16) advances, so text measures and
-/// positions at subpixel precision (the hinted advance would move layouts by
-/// 1-6%). Masks are rendered at four x phases, a quarter pixel apart, and a glyph
-/// lands at x + 1/8 floored to a quarter pixel, y rounded.</para>
+/// <para><b>Advances.</b> FreeType's <i>linear</i> (unhinted, 16.16) advances, so
+/// text measures and positions at subpixel precision (the hinted advance would
+/// move layouts by 1-6%), as the Skia backend's text paint measures. Drawing a
+/// strike's glyphs is a rasterizer's: one that renders them itself loads them
+/// through the strike's face (<see cref="Activate"/>), as Bibui.Glyphs does.</para>
 ///
-/// <para>These are the settings the Skia backend's text paint (IsAutohinted,
-/// HintingLevel Full, SubpixelText) resolves to on FreeType, and the placement
-/// rule is its raster glyph painter's: the fixture baselines are drawn by Skia,
-/// so the strike reproduces its glyphs exactly.</para>
-///
-/// <para>Owned by its engine and confined to the engine's thread. The masks it
-/// returns are immutable and may be read anywhere.</para>
+/// <para>Owned by its engine and confined to the engine's thread.</para>
 /// </summary>
 public sealed unsafe class FontStrike
 {
-    private const int LoadFlags = FT.LOAD_TARGET_NORMAL | FT.LOAD_FORCE_AUTOHINT
-        | FT.LOAD_NO_BITMAP | FT.LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH;
-
     private const int AdvanceFlags = FT.LOAD_NO_HINTING | FT.LOAD_NO_BITMAP | FT.LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH;
-
-    /// <summary>The subpixel rounding bias on x: half of the 1/4 px sample spacing.</summary>
-    private const float SubpixelBias = 1f / 8f;
 
     // The font's FT_Face with this strike's own FT_Size: one face
     // per typeface, so the auto-hinter's per-face analysis (script coverage, blue
@@ -42,7 +27,6 @@ public sealed unsafe class FontStrike
     private readonly IntPtr _ftSize;
     private readonly IntPtr _hbFont;
     private readonly float[] _advances;   // per glyph, px; NaN = not loaded yet
-    private readonly Dictionary<uint, GlyphMask> _masks = new();
 
     public Font Font { get; }
 
@@ -121,7 +105,14 @@ public sealed unsafe class FontStrike
         HB.hb_font_set_scale(_hbFont, scale, scale);
     }
 
-    private void Activate()
+    /// <summary>
+    /// Makes this strike's size the active one on its font's FreeType face
+    /// (<see cref="Font.FtFace"/>), for a load at this size. Every strike of a
+    /// font shares the face, its active size and its one glyph slot: call it on
+    /// the engine's thread right before loading a glyph, and read the slot before
+    /// anything else of the font's engine is called.
+    /// </summary>
+    public void Activate()
     {
         if (Font.ActiveSize == _ftSize) return;
         FT.Check(FT.FT_Activate_Size(_ftSize), "FT_Activate_Size");
@@ -210,78 +201,6 @@ public sealed unsafe class FontStrike
                 pos[i].XOffset / 65536f,
                 -pos[i].YOffset / 65536f);      // HarfBuzz y is up; ours is down
         }
-    }
-
-    /// <summary>
-    /// The coverage mask for <paramref name="glyph"/> at quarter-pixel phase
-    /// <paramref name="subpixelX"/> (0..3), rendered on first use and cached for the
-    /// life of the strike. The hinted outline is translated right by
-    /// the phase, then rendered as 8-bit anti-aliased coverage.
-    /// </summary>
-    public GlyphMask GetMask(uint glyph, int subpixelX)
-    {
-        uint key = glyph << 2 | (uint)(subpixelX & 3);
-        if (_masks.TryGetValue(key, out var m)) return m;
-        m = RenderMask(glyph, subpixelX & 3);
-        _masks[key] = m;
-        return m;
-    }
-
-    private GlyphMask RenderMask(uint glyph, int sub)
-    {
-        Activate();
-        if (FT.FT_Load_Glyph(_ftFace, glyph, LoadFlags) != 0) return GlyphMask.Empty;
-        IntPtr slot = FT.Read<IntPtr>(_ftFace, FT.Face_Glyph);
-        if (sub != 0) FT.FT_Outline_Translate(slot + FT.Slot_Outline, sub * 16, 0);   // 26.6: 16 = 1/4 px
-        if (FT.FT_Render_Glyph(slot, FT.RENDER_MODE_NORMAL) != 0) return GlyphMask.Empty;
-
-        IntPtr bmp = slot + FT.Slot_Bitmap;
-        int rows = (int)FT.Read<uint>(bmp, FT.Bitmap_Rows);
-        int width = (int)FT.Read<uint>(bmp, FT.Bitmap_Width);
-        if (rows == 0 || width == 0) return GlyphMask.Empty;
-        int pitch = FT.Read<int>(bmp, FT.Bitmap_Pitch);
-        byte* buf = (byte*)FT.Read<IntPtr>(bmp, FT.Bitmap_Buffer);
-        var coverage = new byte[width * rows];
-        for (int y = 0; y < rows; y++)
-            new ReadOnlySpan<byte>(buf + y * pitch, width).CopyTo(coverage.AsSpan(y * width, width));
-        return new GlyphMask(
-            FT.Read<int>(slot, FT.Slot_BitmapLeft),
-            FT.Read<int>(slot, FT.Slot_BitmapTop),
-            width, rows, coverage);
-    }
-
-    /// <summary>
-    /// Where one glyph's mask lands for a glyph positioned at (<paramref name="x"/>,
-    /// <paramref name="y"/>): picks the phase and the integer origin by the
-    /// placement rule above.
-    /// </summary>
-    public PlacedGlyph PlaceGlyph(uint glyph, float x, float y)
-    {
-        float px = x + SubpixelBias;
-        float ix = MathF.Floor(px);
-        int sub = (int)((px - ix) * 4f) & 3;
-        var m = GetMask(glyph, sub);
-        return new PlacedGlyph(m, (int)ix + m.Left, (int)MathF.Floor(y + 0.5f) - m.Top);
-    }
-
-    /// <summary>
-    /// The masks of glyphs at explicit positions relative to an origin (device x =
-    /// <paramref name="originX"/> + position.X), written to <paramref name="into"/>:
-    /// the hand-off to a rasterizer that composites masks itself. Empty masks
-    /// (spaces) are skipped; returns how many were written.
-    /// </summary>
-    public int Place(ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions, float originX, float baselineY,
-        Span<PlacedGlyph> into)
-    {
-        if (glyphs.Length != positions.Length)
-            throw new ArgumentException("One position per glyph.", nameof(positions));
-        int n = 0;
-        for (int i = 0; i < glyphs.Length; i++)
-        {
-            var placed = PlaceGlyph(glyphs[i], originX + positions[i].X, baselineY + positions[i].Y);
-            if (!placed.Mask.IsEmpty) into[n++] = placed;
-        }
-        return n;
     }
 
     internal void Destroy()

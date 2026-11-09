@@ -15,7 +15,14 @@ public sealed unsafe class Font
     private readonly uint[] _bmpCmap;         // BMP code point -> glyph + 1; 0 = not looked up yet
 
     internal IntPtr HbFace { get; }
-    internal IntPtr FtFace => _ftFace;
+
+    /// <summary>
+    /// The FreeType face, for a rasterizer that renders the font's glyphs itself:
+    /// the engine's, and confined to its thread. Shared by every strike of the
+    /// font, each with its own size; load through it only after
+    /// <see cref="FontStrike.Activate"/>.
+    /// </summary>
+    public IntPtr FtFace => _ftFace;
 
     /// <summary>The FT_Size currently active on <see cref="FtFace"/>; strikes switch it before loading.</summary>
     internal IntPtr ActiveSize { get; set; }

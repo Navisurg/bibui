@@ -6,6 +6,27 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **`Bibui.Glyphs`**, a package of its own: glyphs as coverage masks, for a
+  rasterizer that draws text itself. `GlyphMasks.PlacedFromGlyphs` renders
+  glyphs with FreeType on first use, keeps them in the caller's cache (a
+  dictionary by strike, then by glyph and quarter-pixel phase), and places a
+  run's glyphs in device pixels by Skia's rule; `MaskGamma` is the table to blend them with. The managed
+  rasterizer draws its text with it, from a cache of its own.
+- `Font.FtFace`, `FontStrike.Activate()` and the FreeType binding (`FT`,
+  `Bibui.Text.FreeType.Native`) are public: what a rasterizer loads a strike's
+  glyphs through.
+
+### Changed
+
+- **Breaking:** rendering glyphs into masks is no longer the text layer's.
+  `FontStrike.GetMask`, `PlaceGlyph` and `Place` are gone, and `GlyphMask`,
+  `PlacedGlyph` and `MaskGamma` moved from `Bibui.Text.FreeType` to
+  `Bibui.Glyphs`: use `GlyphMasks.PlacedFromGlyphs(cache, strike, ...)` with
+  a cache of your own. `TextColor` is gone; `MaskGamma.Table(r, g, b)`
+  takes the colour. Pixels are unchanged.
+
 ## [1.1.0] - 2026-11-06
 
 The window separated from the runtime, text on a layer of its own, and focus

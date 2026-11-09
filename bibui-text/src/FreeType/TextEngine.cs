@@ -5,18 +5,19 @@ using Bibui.Text.FreeType.Native;
 namespace Bibui.Text.FreeType;
 
 /// <summary>
-/// bibui's text on the system FreeType and HarfBuzz: fonts, strikes (a font at a
-/// size) with their advances, metrics and shaping, and the glyph coverage masks
-/// a rasterizer draws. Measuring and drawing a text is the text layer's
-/// (<see cref="TextLayer"/>); this is what it measures with.
+/// bibui's text on the system FreeType and HarfBuzz: fonts, and strikes (a font
+/// at a size) with their advances, metrics and shaping. Measuring a text is the
+/// text layer's (<see cref="TextLayer"/>); this is what it measures with. Drawing
+/// it is a renderer's: Skia from the font's bytes, the managed rasterizer from
+/// Bibui.Glyphs' masks.
 ///
 /// <para><b>Parity.</b> The fixture baselines are drawn by the Skia backend, so
 /// this engine reproduces SkiaSharp 2.88.8's text exactly: measured widths are
 /// bit-identical to <c>SKPaint.MeasureText</c> with bibui's text paint, metrics
 /// equal <c>GetFontMetrics</c>, and drawn pixels match at SSIM 1.0000, as a
-/// parity suite against SkiaSharp checks. That rests on three things:
-/// the FreeType load flags (<see cref="FontStrike"/>), linear advances, and the
-/// mask gamma (<see cref="MaskGamma"/>).</para>
+/// parity suite against SkiaSharp checks. Measuring rests on linear advances
+/// (<see cref="FontStrike"/>); drawing, on Bibui.Glyphs' load flags and mask
+/// gamma.</para>
 ///
 /// <para><b>Threads.</b> An engine, and every <see cref="Font"/>, <see cref="FontStrike"/>
 /// and scratch buffer it owns, is confined to one thread at a time: FreeType faces
@@ -24,9 +25,6 @@ namespace Bibui.Text.FreeType;
 /// rendering thread. What may be shared:</para>
 /// <list type="bullet">
 /// <item><see cref="FontData"/>: immutable, across threads and engines.</item>
-/// <item><see cref="GlyphMask"/>: immutable once returned; a rasterizer worker may
-/// read masks while the engine's thread goes on rendering others.</item>
-/// <item><see cref="MaskGamma"/>: static and stateless.</item>
 /// <item><see cref="GlyphRun"/>: a mutable buffer the caller owns; one per thread.</item>
 /// </list>
 /// <para>Each engine has its own FT_Library, so several engines on several threads
