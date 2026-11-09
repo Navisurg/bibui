@@ -24,9 +24,9 @@ All notable changes to bibui are recorded here. The format is based on
 
 - **`Bibui.Views`: a model's values drawn as widgets through their lenses.** `UIView` draws a
   value through the app's drawer for its lens, or by its shape (fields, a table, rows, a pick),
-  and a node's row of commands as buttons, the one pressed pushed by the app in the context it
-  drew the row in. It never writes the model directly: a pick is a `node.set`, a button pushes
-  its command. See `packaging/readme/Bibui.Views.md`.
+  and a node's row of commands as buttons, each pushed in the context the row is drawn in. A view
+  is of a model (`UIView<Context>`), whose context its drawers read. It never writes the model
+  directly: a pick is a `node.set`, a button pushes its command. See `packaging/readme/Bibui.Views.md`.
 
 - **`samples/board`: an app built on Bibui.Commands and Bibui.Views.** Cases shown as cards on
   a board, and panels that show any node through a lens: a case opened as its vessel tree, a
