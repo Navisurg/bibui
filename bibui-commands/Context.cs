@@ -5,9 +5,9 @@ namespace Bibui.Commands;
 // The context: the environment a command runs in, which panel, which case, which node; its arguments are
 // what to do. It is the app's own type, cmdgen's Context, a field per thing some command depends on
 // ([Context.DependsOn<PanelId>(Role.From)] on a command), and View. The model keeps a stack of them
-// (Model.ContextScope: the code inside a scope is in it) and queues each command with a copy of the top,
-// as rad's rd_cmd copies its registers; the apply is given it. The library never reads a field of one:
-// it stores, copies and hands back, and asks the app's functions (ContextOps) for the rest.
+// (Model.ContextScope: the code inside a scope is in it) and queues each command with a copy of the top;
+// the apply is given it. The library never reads a field of one: it stores, copies and hands back, and
+// asks the app's functions (ContextOps) for the rest.
 
 /// <summary>
 /// The roles a node can play in a command, a fixed vocabulary: the field a command depends on is its

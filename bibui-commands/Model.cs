@@ -179,8 +179,7 @@ public readonly record struct LogEntry<TCtx>(long Gen, long CauseGen, Cmd Cmd, T
 /// <para>
 /// It also keeps the context stack: what the code running now is about (which panel, which case: the
 /// app's <typeparamref name="TCtx"/>, cmdgen's Context). Code says where it is in a scope
-/// (<see cref="ContextScope"/>), and a command is queued with a copy of the top, as rad's
-/// <c>rd_cmd</c> copies its registers. The model never reads a field of it: it stores, copies and hands
+/// (<see cref="ContextScope"/>), and a command is queued with a copy of the top. The model never reads a field of it: it stores, copies and hands
 /// it back, so it needs nothing of <typeparamref name="TCtx"/> but that it is a value.
 /// </para>
 /// <code>
@@ -312,7 +311,7 @@ public sealed class Model<TCtx> where TCtx : struct
 
     /// <summary>
     /// Runs what is pushed, one command at a time, in the order pushed, each in its context: on top of the
-    /// stack while it runs, as rad installs a command's registers, and given to the apply. Each command
+    /// stack while it runs, and given to the apply. Each command
     /// that changed the tree publishes a generation. Commands pushed while one runs (its follow-ups) run in
     /// the same Run, after the batch they were pushed in, and remember which generation pushed them;
     /// a follow-up of a command that changed nothing inherits that command's cause.

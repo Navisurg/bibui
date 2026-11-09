@@ -39,14 +39,13 @@ public sealed class TextView
     /// <summary>
     /// What <paramref name="e"/> evaluates to, drawn as text through its view rule and lenses, under
     /// its own text: what an eval command answers, as <c>bp text</c> draws a panel. It reads the model
-    /// as <paramref name="ctx"/>'s names do, with <c>it</c> the node <paramref name="it"/> (the one it is
-    /// asked in: a panel's), or nothing.
+    /// as <paramref name="ctx"/>'s names do, with no <c>it</c>.
     /// </summary>
-    public static string Answer(Expr e, EvalContext ctx, Dictionary<string, TextDrawer> drawers, NodeId it = default)
+    public static string Answer(Expr e, EvalContext ctx, Dictionary<string, TextDrawer> drawers)
     {
         var output = new StringWriter();
         var outer = ctx.DynamicVar;
-        ctx.DynamicVar = !it.IsNone && ctx.Model is { } model ? ModelEval.Node(model.Types, model.Tree(), it) : Value.None;
+        ctx.DynamicVar = Value.None;   // at the top of an evaluation, it names nothing
         Draw(Make(output, ctx, drawers), Eval.Run(e, ctx), Exprs.Text(e));
         ctx.DynamicVar = outer;
         return output.ToString();

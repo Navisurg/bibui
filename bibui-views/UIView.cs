@@ -14,35 +14,39 @@ namespace Bibui.Views;
 // reached by. What is drawn twice in a frame keeps its id the first time, and the second gets a suffix
 // (12#12~2), so a client clicks the first.
 //
-// The UI never writes the model directly: it pushes commands onto the model's queue (Push), and
+// The UI never writes the model directly: it pushes commands onto the model's queue (Model.Push), and
 // they are applied with the next frame's. So every change a person makes is a logged command an agent
-// could also send: a pick sets its field with node.set. A node's row is the commands its kind's [Row]
-// lists that are offered where it is drawn, as buttons (Commands): it says which was pressed, and the
-// app's code that drew it, in the context that holds the node, pushes it.
+// could also send: a pick sets its field with node.set (Model.SetField), and a node's row is the
+// commands its kind's [Row] lists that are offered where it is drawn, as buttons (Commands), each
+// pushed in the context on top.
 // What only the view keeps (a board's zoom, a tree's pan) is view state (ViewStates), never a command.
-// The context (which panel, which view) is the app's, on its model's stack: these drawers never read
-// or set it; an app's drawers read it there.
+// The context (which panel, which view) is the model's stack, of the app's Context: the app's code sets
+// it as it draws, and its drawers read it (view.Model.GetCtx()); these drawers never set it.
 //
 // NOTE(k): the ids are strings made per frame, a few per value drawn; the core's two-part box id
 // (open item) removes them.
 
-public delegate void UiLine(UIView view, in Value shown, string id);
-public delegate void UiBlock(UIView view, in Value shown, string id);
+public delegate void UiLine<TCtx>(UIView<TCtx> view, in Value shown, string id) where TCtx : struct;
+public delegate void UiBlock<TCtx>(UIView<TCtx> view, in Value shown, string id) where TCtx : struct;
 /// <summary>
 /// A lens's drawing as widgets: its line, and its block when it has more to show than a line. A block
 /// that fills (a board) takes the room it is given; any other is as tall as what it draws.
 /// </summary>
-public sealed record UiDrawer(UiLine Line, UiBlock? Block = null, bool Fills = false);
+public sealed record UiDrawer<TCtx>(UiLine<TCtx> Line, UiBlock<TCtx>? Block = null, bool Fills = false) where TCtx : struct;
 
-public sealed class UIView
+/// <summary>
+/// A view of a model: what drawing needs, and the model it draws, whose context stack says what the code
+/// drawing now is about (the panel, the view whose state a lens keeps) and where its writes go.
+/// </summary>
+public sealed class UIView<TCtx> where TCtx : struct
 {
     public required BibuiRuntime Ui;
     public required EvalContext EvalCtx;
     public required ModelTypes Types;
-    public required Action<Cmd> Push;                                    // where its writes go: the model's Push, in the context on top
+    public required Model<TCtx> Model;                                   // the facts it draws, and the context it draws in (GetCtx): its writes go here, in the context on top
     public required ViewStates Views;                                    // what a view keeps between frames (a board's layout and zoom, a tree's pan, zoom and drawing), by the node it is drawn for
     public long Frame;                                                   // this frame: what the view states it touches are kept for
-    public required Dictionary<string, UiDrawer> Drawers;                // lens name → its drawing in a window: the app's, given at Make
+    public required Dictionary<string, UiDrawer<TCtx>> Drawers;                // lens name → its drawing in a window: the app's, given at Make
 
     readonly HashSet<string> used = new();                               // the ids given this frame
     readonly List<RowItem> row = new();                                  // a node's row, read again for each node drawn (Commands)
@@ -54,11 +58,11 @@ public sealed class UIView
     // parts, a row each (fields); parts alike, a row each and a column per expression (table). What a
     // value without a lens is drawn as, by its shape (DrawnBy: Lenses.Generic), so any value can be shown
     // before an app writes a lens for it.
-    public static readonly UiDrawer PlainDrawer = new(PlainLine);
-    public static readonly UiDrawer FieldsDrawer = new(PlainLine, FieldsBlock, Fills: true);
-    public static readonly UiDrawer TableDrawer = new(TableLine, TableBlock, Fills: true);
-    public static readonly UiDrawer RowsDrawer = new(RowsLine, RowsBlock);
-    public static readonly UiDrawer PickDrawer = new(PickLine);
+    public static readonly UiDrawer<TCtx> PlainDrawer = new(PlainLine);
+    public static readonly UiDrawer<TCtx> FieldsDrawer = new(PlainLine, FieldsBlock, Fills: true);
+    public static readonly UiDrawer<TCtx> TableDrawer = new(TableLine, TableBlock, Fills: true);
+    public static readonly UiDrawer<TCtx> RowsDrawer = new(RowsLine, RowsBlock);
+    public static readonly UiDrawer<TCtx> PickDrawer = new(PickLine);
 
     const float Label = 140;   // a fields row's name, a table row's label: its width, in pixels
     const float Cell = 160;    // a table's column: its width, in pixels, given up in a narrower row
@@ -82,11 +86,11 @@ public sealed class UIView
     }
 
     /// <summary>A view drawing with <paramref name="drawers"/>, the app's table of how each lens is drawn in a window.</summary>
-    public static UIView Make(BibuiRuntime ui, EvalContext ctx, ModelTypes types, Dictionary<string, UiDrawer> drawers, Action<Cmd> push, ViewStates views) =>
-        new() { Ui = ui, EvalCtx = ctx, Types = types, Drawers = drawers, Push = push, Views = views };
+    public static UIView<TCtx> Make(BibuiRuntime ui, EvalContext ctx, ModelTypes types, Dictionary<string, UiDrawer<TCtx>> drawers, Model<TCtx> model, ViewStates views) =>
+        new() { Ui = ui, EvalCtx = ctx, Types = types, Drawers = drawers, Model = model, Views = views };
 
     /// <summary>The start of a frame's drawing: the ids given in the last are free again.</summary>
-    public static void BeginFrame(UIView view, long frame)
+    public static void BeginFrame(UIView<TCtx> view, long frame)
     {
         view.used.Clear();
         view.Frame = frame;
@@ -100,7 +104,7 @@ public sealed class UIView
     /// <paramref name="text"/> on one line in the box in scope, ending in "…" when the box is narrower
     /// (the box must not be sized by its text). <paramref name="id"/> names it, and keeps its buffer.
     /// </summary>
-    public static void Ellipsis(UIView view, string id, string text, TextColor color = TextColor.Primary)
+    public static void Ellipsis(UIView<TCtx> view, string id, string text, TextColor color = TextColor.Primary)
     {
         if (!view.texts.TryGetValue(id, out var kept)) kept = (new BibuiStr(Math.Max(16, text.Length)), 0);
         if (!kept.Text.Str.SequenceEqual(text)) kept.Text.ReplaceRange((0, (int)kept.Text.Length), text);
@@ -113,7 +117,7 @@ public sealed class UIView
     /// The id of <paramref name="value"/>'s place: its handle, a node's; its handle and key, a field's;
     /// else <paramref name="path"/>. Suffixed when already given this frame.
     /// </summary>
-    public static string Place(UIView view, in Value value, string path)
+    public static string Place(UIView<TCtx> view, in Value value, string path)
     {
         var bare = Bare(value);
         string id = ModelEval.IsNode(bare) ? ModelEval.IdOf(bare).ToString()
@@ -123,7 +127,7 @@ public sealed class UIView
     }
 
     /// <summary>The id, or, given already this frame, the id with the first suffix not given (12#12~2).</summary>
-    public static string Unique(UIView view, string id)
+    public static string Unique(UIView<TCtx> view, string id)
     {
         if (view.used.Add(id)) return id;
         for (int n = 2; ; n++) if (view.used.Add($"{id}~{n}")) return $"{id}~{n}";
@@ -134,7 +138,7 @@ public sealed class UIView
     /// else the core lens for its shape (Lenses.Generic: named parts as fields, parts alike as a table),
     /// when it has a drawer here; else text.
     /// </summary>
-    public static LensFunc DrawnBy(UIView view, in Value value)
+    public static LensFunc DrawnBy(UIView<TCtx> view, in Value value)
     {
         for (var t = value.Type; t?.Lens is { } lens; t = lens.Inner)
             if (view.Drawers.ContainsKey(lens.Func.Name)) return lens.Func;
@@ -150,7 +154,7 @@ public sealed class UIView
     /// <paramref name="fill"/>: the rest of a panel (Size.Fill); a fixed height where its box is sized by what
     /// it holds (a board's part, a row of rows). What every container draws a value with.
     /// </summary>
-    public static void Draw(UIView view, in Value value, string id, SemanticSize fill)
+    public static void Draw(UIView<TCtx> view, in Value value, string id, SemanticSize fill)
     {
         var drawer = view.Drawers[DrawnBy(view, value).Name];
         using (view.Ui.Parent(view.Ui.Box().Sized(Size.Fill, Size.Fit))) drawer.Line(view, value, id);
@@ -158,38 +162,37 @@ public sealed class UIView
     }
 
     // value's block, by its drawer, in a box of its own: fill high when it fills, else as high as it is; nothing without one.
-    static void DrawBlock(UIView view, UiDrawer drawer, in Value value, string id, SemanticSize fill)
+    static void DrawBlock(UIView<TCtx> view, UiDrawer<TCtx> drawer, in Value value, string id, SemanticSize fill)
     {
         if (drawer.Block is not { } block) return;
         using (view.Ui.Parent(view.Ui.Box().Sized(Size.Fill, drawer.Fills ? fill : Size.Fit))) block(view, value, id);
     }
 
     /// <summary>
-    /// A node's row: its kind's [Row], from the schema (Schemas.RowOf: each command it lists that is
-    /// <paramref name="offered"/>, the model's Offers), a button each, labelled by its [Short]. The one
-    /// pressed, or null: its command takes no arguments (<see cref="OpInfo.Cmd"/>), and the caller pushes it
-    /// in the context it drew the row in, the one holding the node (the case, the panel it is shown in).
-    /// Nothing for anything that is not a node.
+    /// A node's row: its kind's [Row], from the schema (Schemas.RowOf: each command it lists that the
+    /// model offers where it is drawn), a button each, labelled by its [Short]; pressed, pushed. A row's
+    /// command takes no arguments (<see cref="OpInfo.Cmd"/>): it is queued with the context on top, the one
+    /// the caller drew the row in, holding the node (the case, the panel it is shown in). Nothing for
+    /// anything that is not a node.
     /// </summary>
-    public static OpInfo? Commands(UIView view, in Value shown, Func<OpInfo, bool> offered)
+    public static void Commands(UIView<TCtx> view, in Value shown)
     {
         var bare = Bare(Eval.Load(shown));
-        if (!ModelEval.IsNode(bare)) return null;
+        if (!ModelEval.IsNode(bare)) return;
         var (t, slot) = ModelEval.NodeOf(bare);
-        if (Schemas.Of(view.Types.Schema, Nodes.At(t, slot).Kind) is not { } kind) return null;
+        if (Schemas.Of(view.Types.Schema, Nodes.At(t, slot).Kind) is not { } kind) return;
         view.row.Clear();
-        Schemas.RowOf(kind, offered, view.row);
-        OpInfo? pressed = null;
+        Schemas.RowOf(kind, view.Model.Offers, view.row);
         foreach (var item in view.row)
         {
-            if (item.Command is not { } op) continue;   // a field the row lists: not drawn here
-            if (view.Ui.Button(Unique(view, $"{ModelEval.IdOf(bare)}/{op.Wire}"), op.Short ?? op.Label, size: ComponentSize.Sm).Clicked) pressed = op;
+            if (item.Command is not { Cmd: { } cmd } op) continue;   // a field the row lists: not drawn here
+            if (view.Ui.Button(Unique(view, $"{ModelEval.IdOf(bare)}/{op.Wire}"), op.Short ?? op.Label, size: ComponentSize.Sm).Clicked)
+                view.Model.Push(cmd);
             view.Ui.Gap(6);
         }
-        return pressed;
     }
 
-    static void PlainLine(UIView view, in Value shown, string id)
+    static void PlainLine(UIView<TCtx> view, in Value shown, string id)
     {
         var bare = Bare(Eval.Load(shown));
         Ellipsis(view, id, bare.Kind == EvalKind.Text ? bare.AsText : Exprs.ValueText(bare));   // a text as itself, not quoted as an expression writes it
@@ -200,7 +203,7 @@ public sealed class UIView
     // A thing's parts, a row each: its name, then the part through its own lens's line (part i is
     // shown[i], Eval.At). A part that is a list is expanded under its row, as its table, filling what is
     // left: so a node whose member is a list (the cases' case) shows that list as rows. The first 64.
-    static void FieldsBlock(UIView view, in Value shown, string id)
+    static void FieldsBlock(UIView<TCtx> view, in Value shown, string id)
     {
         Parts(view, shown, id, EvalTypes.Bare(shown.Type)?.PartName ?? (i => $"[{i}]"), Size.Fill, Size.Fill);
     }
@@ -208,7 +211,7 @@ public sealed class UIView
     //- rows(it, a, b, …): its parts, one under another, each as it is seen
 
     // Its first part's line (a title), where any value's line goes.
-    static void RowsLine(UIView view, in Value shown, string id)
+    static void RowsLine(UIView<TCtx> view, in Value shown, string id)
     {
         var first = Eval.At(shown, 0, view.EvalCtx);
         view.Drawers[DrawnBy(view, first).Name].Line(view, first, $"{id}/0");
@@ -217,7 +220,7 @@ public sealed class UIView
     // Under it: its first part's block, then each other part, one under another; a part that fills is given
     // RowsFill, as its box is as high as what it holds. Which view its parts keep their state for is the
     // context's, set by the app's code that drew it (a card's case, by the board's lens).
-    static void RowsBlock(UIView view, in Value shown, string id)
+    static void RowsBlock(UIView<TCtx> view, in Value shown, string id)
     {
         Parts(view, shown, id, null, Size.Fit, Size.Px(RowsFill));
     }
@@ -226,7 +229,7 @@ public sealed class UIView
     // first, already its own line, not again), then its block. Each part evaluated as it is reached: they are
     // few (a thing's members, an expression's arguments); a long list is a part of its own, drawn as a table,
     // which draws the rows in view.
-    static void Parts(UIView view, in Value shown, string id, Func<long, string>? named, SemanticSize height, SemanticSize fill)
+    static void Parts(UIView<TCtx> view, in Value shown, string id, Func<long, string>? named, SemanticSize height, SemanticSize fill)
     {
         var ui = view.Ui;
         long n = Math.Min(Eval.Count(shown), 64);
@@ -258,7 +261,7 @@ public sealed class UIView
     // chosen, node.set at the field's address: an int field picked from things, the choice's place; a text, the
     // choice's text; a node's id, the chosen node's. Its choices are its lens's (pick's first argument), else
     // its type's (an enum's names, a handle's nodes); each shown by pick's label (it the choice), else as it is seen.
-    static void PickLine(UIView view, in Value shown, string id)
+    static void PickLine(UIView<TCtx> view, in Value shown, string id)
     {
         var ctx = view.EvalCtx;
         var value = Eval.Load(Bare(shown));
@@ -292,7 +295,7 @@ public sealed class UIView
                 var choice = Eval.At(choices, i, ctx);
                 if (!view.Ui.SelectItem($"{id}/{i}", Text(choice), selected: i == current).Clicked) continue;
                 if (ModelEval.AddressOf(view.Types, Bare(shown)) is var (node, key) && key is not null)
-                    view.Push(new BuiltinCmd.Node_Set { Node = node, Key = key, Value = byPlace ? Exprs.Lit(i) : ChoiceLit(choice) });
+                    view.Model.SetField(node, key, byPlace ? Exprs.Lit(i) : ChoiceLit(choice));
                 select.Close();
             }
         select.End();
@@ -327,7 +330,7 @@ public sealed class UIView
         };
     }
 
-    static void TableLine(UIView view, in Value shown, string id) =>
+    static void TableLine(UIView<TCtx> view, in Value shown, string id) =>
         Ellipsis(view, id, $"{Eval.Count(shown)} rows", TextColor.Secondary);
 
     // Its rows: a header of its columns (its table lens's, else its parts' fields), then a row per part
@@ -335,7 +338,7 @@ public sealed class UIView
     // case: its card's, its title), a cell per column, evaluated here with `it` the row and drawn through
     // its own lens's line; then the commands its row offers (a case: Open). A column is an expression, so
     // a table shows anything computed from its rows, not only what they hold.
-    static void TableBlock(UIView view, in Value shown, string id)
+    static void TableBlock(UIView<TCtx> view, in Value shown, string id)
     {
         var ui = view.Ui;
         var ctx = view.EvalCtx;
