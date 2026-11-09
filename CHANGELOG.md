@@ -6,6 +6,16 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Subpixel (LCD) text on the managed rasterizer, opt-in.** With
+  `BIBUI_LCD=rgb` (or `bgr`, for a panel whose stripes run blue to red) glyphs
+  are rendered at three samples a pixel, one per colour stripe, with
+  FreeType's default LCD filter, and `Canvas.DrawLcd` blends each channel by
+  its own coverage. Over a pixel that is not opaque (a layer, a translucent
+  window) a glyph is drawn greyscale. Unset, text is drawn exactly as before.
+  `GlyphMask.IsLcd` says which kind a mask is.
+
 ## [1.1.0] - 2026-11-06
 
 The window separated from the runtime, text on a layer of its own, and focus

@@ -58,6 +58,10 @@ public sealed class TextEngine : IDisposable
         FT.Check(FT.FT_Init_FreeType(out _ftLibrary), "FT_Init_FreeType");
         FT.FT_Library_Version(_ftLibrary, out int maj, out int min, out int pat);
         NativeVersions = $"freetype {maj}.{min}.{pat}, harfbuzz {Marshal.PtrToStringUTF8(HB.hb_version_string())}";
+        // The FIR filter that spreads each subpixel's coverage over its neighbours, so
+        // LCD text has no colour fringes. A FreeType built without ClearType-style
+        // rendering says it is unimplemented and filters with Harmony LCD anyway.
+        if (LcdText.Enabled) FT.FT_Library_SetLcdFilter(_ftLibrary, FT.LCD_FILTER_DEFAULT);
         HbBuffer = HB.hb_buffer_create();
         DefaultRegular = Open(FontData.InterRegular, "", 400);
         DefaultSemiBold = Open(FontData.InterSemiBold, "", 600);

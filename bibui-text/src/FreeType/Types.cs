@@ -36,14 +36,20 @@ public sealed class GlyphMask
 
     private readonly byte[] _coverage;
 
-    /// <summary>Row-major coverage, stride <see cref="Width"/>.</summary>
+    /// <summary>
+    /// Row-major coverage, stride <see cref="Width"/>; for an <see cref="IsLcd"/> mask,
+    /// three bytes a pixel (red, green, blue coverage), stride <c>3 * Width</c>.
+    /// </summary>
     public ReadOnlySpan<byte> Coverage => _coverage;
+
+    /// <summary>A subpixel mask: a coverage per colour channel (see <see cref="LcdText"/>).</summary>
+    public bool IsLcd { get; }
 
     public bool IsEmpty => Width == 0 || Height == 0;
 
-    internal GlyphMask(int left, int top, int width, int height, byte[] coverage)
+    internal GlyphMask(int left, int top, int width, int height, byte[] coverage, bool lcd = false)
     {
-        Left = left; Top = top; Width = width; Height = height; _coverage = coverage;
+        Left = left; Top = top; Width = width; Height = height; _coverage = coverage; IsLcd = lcd;
     }
 }
 

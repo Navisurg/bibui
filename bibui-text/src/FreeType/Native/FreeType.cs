@@ -18,6 +18,7 @@ internal static unsafe partial class FT
     public const int LOAD_FORCE_AUTOHINT = 1 << 5;
     public const int LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH = 1 << 9;
     public const int LOAD_TARGET_NORMAL = 0;
+    public const int LOAD_TARGET_LCD = 3 << 16;
 
     // FT_FaceRec.face_flags
     public const long FACE_FLAG_SCALABLE = 1 << 0;
@@ -25,6 +26,9 @@ internal static unsafe partial class FT
     public const long FACE_FLAG_COLOR = 1 << 14;
 
     public const int RENDER_MODE_NORMAL = 0;
+    public const int RENDER_MODE_LCD = 3;
+
+    public const int LCD_FILTER_DEFAULT = 1;
 
     // Offsets for LP64 (x86-64, arm64) and ILP32 (wasm32, where FT_Long and
     // pointers are 4 bytes; checked with offsetof under Emscripten 3.1.56).
@@ -75,6 +79,7 @@ internal static unsafe partial class FT
     [LibraryImport(Lib)] public static partial int FT_Get_Advance(IntPtr face, uint glyphIndex, int loadFlags, out nint advance);
     [LibraryImport(Lib)] public static partial int FT_Render_Glyph(IntPtr slot, int renderMode);
     [LibraryImport(Lib)] public static partial void FT_Outline_Translate(IntPtr outline, nint xOffset, nint yOffset);
+    [LibraryImport(Lib)] public static partial int FT_Library_SetLcdFilter(IntPtr library, int filter);
     [LibraryImport(Lib)] public static partial void FT_Library_Version(IntPtr library, out int major, out int minor, out int patch);
 
     public static T Read<T>(IntPtr p, int offset) where T : unmanaged => *(T*)((byte*)p + offset);

@@ -451,7 +451,8 @@ public sealed class ManagedRenderer : IDisposable
         for (int i = 0; i < n; i++)
         {
             var g = _placed[i];
-            c.DrawA8(g.Mask.Coverage, g.Mask.Width, g.Mask.Height, g.X, g.Y, color.Argb, table);
+            if (g.Mask.IsLcd) c.DrawLcd(g.Mask.Coverage, g.Mask.Width, g.Mask.Height, g.X, g.Y, color.Argb, table);
+            else c.DrawA8(g.Mask.Coverage, g.Mask.Width, g.Mask.Height, g.X, g.Y, color.Argb, table);
         }
     }
 

@@ -230,10 +230,13 @@ public sealed unsafe class FontStrike
     private GlyphMask RenderMask(uint glyph, int sub)
     {
         Activate();
-        if (FT.FT_Load_Glyph(_ftFace, glyph, LoadFlags) != 0) return GlyphMask.Empty;
+        bool lcd = LcdText.Enabled;
+        int load = lcd ? LoadFlags | FT.LOAD_TARGET_LCD : LoadFlags;
+        if (FT.FT_Load_Glyph(_ftFace, glyph, load) != 0) return GlyphMask.Empty;
         IntPtr slot = FT.Read<IntPtr>(_ftFace, FT.Face_Glyph);
         if (sub != 0) FT.FT_Outline_Translate(slot + FT.Slot_Outline, sub * 16, 0);   // 26.6: 16 = 1/4 px
-        if (FT.FT_Render_Glyph(slot, FT.RENDER_MODE_NORMAL) != 0) return GlyphMask.Empty;
+        if (FT.FT_Render_Glyph(slot, lcd ? FT.RENDER_MODE_LCD : FT.RENDER_MODE_NORMAL) != 0) return GlyphMask.Empty;
+        if (lcd) return LcdMask(slot);
 
         IntPtr bmp = slot + FT.Slot_Bitmap;
         int rows = (int)FT.Read<uint>(bmp, FT.Bitmap_Rows);
@@ -248,6 +251,35 @@ public sealed unsafe class FontStrike
             FT.Read<int>(slot, FT.Slot_BitmapLeft),
             FT.Read<int>(slot, FT.Slot_BitmapTop),
             width, rows, coverage);
+    }
+
+    // An LCD bitmap is three samples a pixel, left to right on the panel: stored as
+    // red, green, blue coverage, so a BGR panel's samples are swapped here.
+    private static GlyphMask LcdMask(IntPtr slot)
+    {
+        IntPtr bmp = slot + FT.Slot_Bitmap;
+        int rows = (int)FT.Read<uint>(bmp, FT.Bitmap_Rows);
+        int width = (int)FT.Read<uint>(bmp, FT.Bitmap_Width) / 3;
+        if (rows == 0 || width == 0) return GlyphMask.Empty;
+        int pitch = FT.Read<int>(bmp, FT.Bitmap_Pitch);
+        byte* buf = (byte*)FT.Read<IntPtr>(bmp, FT.Bitmap_Buffer);
+        var coverage = new byte[3 * width * rows];
+        bool bgr = LcdText.Bgr;
+        for (int y = 0; y < rows; y++)
+        {
+            byte* src = buf + y * pitch;
+            int o = y * width * 3;
+            for (int x = 0; x < width; x++, src += 3, o += 3)
+            {
+                coverage[o] = bgr ? src[2] : src[0];
+                coverage[o + 1] = src[1];
+                coverage[o + 2] = bgr ? src[0] : src[2];
+            }
+        }
+        return new GlyphMask(
+            FT.Read<int>(slot, FT.Slot_BitmapLeft),
+            FT.Read<int>(slot, FT.Slot_BitmapTop),
+            width, rows, coverage, lcd: true);
     }
 
     /// <summary>

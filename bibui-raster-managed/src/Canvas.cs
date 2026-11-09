@@ -565,6 +565,67 @@ public sealed unsafe partial class Canvas // strokes and dashes in Stroke/Canvas
         }
     }
 
+    /// <summary>
+    /// As <see cref="DrawA8"/> for a subpixel mask: three coverages a pixel (red,
+    /// green, blue), each mapped through <paramref name="coverageMap"/> and blended
+    /// into its own channel as DrawA8 blends, <c>l = s.c·(k.c+1)/256</c>,
+    /// <c>d.c = l + d.c·(256 − s.a·(k.c+1)/256)/256</c>; alpha takes the
+    /// largest of the three. Over a pixel that is not opaque (a layer, a translucent
+    /// window) the mask is drawn as greyscale, the mean of the three.
+    /// </summary>
+    public void DrawLcd(ReadOnlySpan<byte> coverage, int width, int height, int x, int y, uint argb, ReadOnlySpan<byte> coverageMap = default)
+    {
+        if (width <= 0 || height <= 0) return;
+        if (coverage.Length < 3 * width * height) throw new ArgumentException("Too few coverage bytes.", nameof(coverage));
+        if (!coverageMap.IsEmpty && coverageMap.Length < 256) throw new ArgumentException("A coverage map has 256 entries.", nameof(coverageMap));
+        var b = new IRect(x, y, x + width, y + height).Intersect(_s.Clip);
+        if (b.IsEmpty) return;
+        _s.Layer?.Touch(b);
+        uint pm = PixelMath.Premul(argb);
+        uint sa = pm >> 24, sr = pm >> 16 & 0xFF, sg = pm >> 8 & 0xFF, sb = pm & 0xFF;
+        if (sa == 0) return;
+        // Where red and blue sit in a pixel of this surface.
+        int rs = _surface.Order == PixelOrder.Rgba8888 ? 0 : 16, bs = 16 - rs;
+        var t = Target();
+        var mask = _s.Mask;
+        bool mapped = !coverageMap.IsEmpty;
+        for (int yy = b.Top; yy < b.Bottom; yy++)
+        {
+            var src = coverage.Slice((yy - y) * width * 3, width * 3);
+            uint* d = t.Origin + (long)yy * t.Stride;
+            byte* m = mask is null ? null : mask.Origin + (long)yy * mask.Stride;
+            for (int xx = b.Left; xx < b.Right; xx++)
+            {
+                int i = (xx - x) * 3;
+                uint kr = src[i], kg = src[i + 1], kb = src[i + 2];
+                if ((kr | kg | kb) == 0) continue;
+                if (mapped) { kr = coverageMap[(int)kr]; kg = coverageMap[(int)kg]; kb = coverageMap[(int)kb]; }
+                if (m != null)
+                {
+                    uint mc = m[xx];
+                    kr = PixelMath.MulDiv255Round(kr, mc); kg = PixelMath.MulDiv255Round(kg, mc); kb = PixelMath.MulDiv255Round(kb, mc);
+                }
+                if ((kr | kg | kb) == 0) continue;
+                uint px = d[xx];
+                uint dr = px >> rs & 0xFF, dg = px >> 8 & 0xFF, db = px >> bs & 0xFF, da = px >> 24;
+                // Fringes are only right over an opaque pixel: a translucent one is
+                // composited again later, so it gets the coverages' mean, greyscale.
+                if (da != 255) kr = kg = kb = (kr + kg + kb + 1) / 3;
+                uint ka = Math.Max(kr, Math.Max(kg, kb));
+                dr = Channel(sr, sa, kr, dr);
+                dg = Channel(sg, sa, kg, dg);
+                db = Channel(sb, sa, kb, db);
+                da = Channel(sa, sa, ka, da);
+                d[xx] = da << 24 | dr << rs | dg << 8 | db << bs;
+            }
+        }
+
+        // One channel's src-over at coverage k (premultiplied s, its alpha a), in
+        // DrawA8's arithmetic, so three equal coverages blend exactly as an A8 mask does.
+        static uint Channel(uint s, uint a, uint k, uint d)
+            => (s * (k + 1) >> 8) + (d * (256 - (a * (k + 1) >> 8)) >> 8);
+    }
+
     // ── Cores ──────────────────────────────────────────────────────────────
 
     private void FillPathCore(Path path, in Paint paint, bool exact)
