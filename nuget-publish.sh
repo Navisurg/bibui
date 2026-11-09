@@ -29,6 +29,8 @@ fi
 PROJECTS=(
   # The text layer the core lays text out with: fonts, runs, line breaking.
   "bibui-text/bibui-text.csproj"
+  # Glyph masks rendered with FreeType: the managed raster backend's text.
+  "bibui-glyphs/bibui-glyphs.csproj"
   "bibui-core/bibui-core.csproj"
   "bibui-gl/bibui-gl.csproj"
   "bibui-raster-skia/bibui-raster-skia.csproj"

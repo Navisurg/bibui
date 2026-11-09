@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Glyphs</AssemblyName>
+    <RootNamespace>Bibui.Glyphs</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- Glyphs are rendered in FreeType's glyph slot and copied out of native memory. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NuGetAudit>false</NuGetAudit>
+    <UseAppHost>false</UseAppHost>
+    <PackageId>Bibui.Glyphs</PackageId>
+    <Description>Bibui.Glyphs: glyphs as coverage masks, for a rasterizer that draws text itself. Renders a strike's glyphs with FreeType at quarter-pixel phases, keeps them, places them by Skia's rule, and gives the gamma table to blend them with. The managed rasterizer draws its text with it.</Description>
+    <PackageTags>$(PackageTags);text;glyphs;freetype;rasterizer;aot</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The strikes it renders, and the FreeType binding they are loaded through. -->
+    <ProjectReference Include="../bibui-text/bibui-text.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+</Project>

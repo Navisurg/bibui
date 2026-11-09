@@ -60,6 +60,7 @@ jobs:
           set -euo pipefail
           for proj in \
             bibui-text/bibui-text.csproj \
+            bibui-glyphs/bibui-glyphs.csproj \
             bibui-core/bibui-core.csproj \
             bibui-gl/bibui-gl.csproj \
             bibui-testing/bibui-testing.csproj \

@@ -3,13 +3,14 @@ using System.Runtime.InteropServices;
 namespace Bibui.Text.FreeType.Native;
 
 /// <summary>
-/// The slice of libfreetype.so.6 the engine needs. Struct fields are read by
+/// The slice of libfreetype.so.6 the engine needs, and a rasterizer that renders
+/// a strike's glyphs itself (Bibui.Glyphs). Struct fields are read by
 /// offset rather than mirrored as C# structs, because only a handful are touched.
 /// The offsets are LP64 (x86-64 and arm64 Linux), or ILP32 for wasm32, and were checked with offsetof
 /// against the freetype2 2.14.3 headers; FT_FaceRec, FT_GlyphSlotRec and
 /// FT_Bitmap are public structs whose layout FreeType 2.x keeps stable.
 /// </summary>
-internal static unsafe partial class FT
+public static unsafe partial class FT
 {
     private const string Lib = "libfreetype.so.6";
 

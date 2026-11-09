@@ -7,8 +7,8 @@
     text from the FreeType/HarfBuzz engine. It references bibui for the
     interface, which brings no SkiaSharp with it, and it calls
     no Skia: shapes, clips, layers, images and PNG go through
-    Bibui.Raster.Managed, and text is drawn from the glyph masks of bibui's
-    own FreeType/HarfBuzz engine.
+    Bibui.Raster.Managed, and text is drawn from Bibui.Glyphs' masks, which
+    FreeType renders for the strikes of bibui's own text engine.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -28,6 +28,8 @@
   <ItemGroup>
     <ProjectReference Include="../src/Bibui.Raster.Managed.csproj" />
     <ProjectReference Include="../../bibui-core/bibui-core.csproj" />
+    <!-- Its text: glyph masks rendered with FreeType, kept and placed. -->
+    <ProjectReference Include="../../bibui-glyphs/bibui-glyphs.csproj" />
   </ItemGroup>
 
   <ItemGroup>
