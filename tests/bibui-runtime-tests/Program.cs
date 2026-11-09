@@ -7499,6 +7499,54 @@ Run("runtime.MultilineTextField: Enter ends the line, and Up goes back to it", (
     Eq(3, edit.Cursor, "the end of line one, at about the same x");
 });
 
+// A field with "hello" selected, single-line or multi-line, focused or not:
+// the highlights drawn behind its text, and whether a caret is drawn.
+(List<UiColor> Highlights, bool Caret) SelectionDrawn(bool multiline, bool focus)
+{
+    var text = BibuiStr.FromStrLit("hello world");
+    var edit = new TextEditState { Cursor = 5, Mark = 0 };
+    var runtime = BibuiRuntime.Create();
+    runtime.SetBuild(() =>
+    {
+        var parent = runtime.BoxFromId("parent");
+        parent.ChildLayoutAxis = LayoutAxis.Y;
+        parent.Sized(Size.Px(300f), Size.Px(200f));
+        using (runtime.Parent(parent))
+        {
+            if (multiline)
+                using (runtime.SizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
+                    runtime.MultilineTextField("field", text, edit);
+            else
+                runtime.TextField("field", text, edit);
+        }
+        return parent;
+    }, TestBuild.Window(400, 300));
+    if (focus) runtime.Focus("field");
+    runtime.Step();
+    runtime.Step();
+    Eq(focus, runtime.IsFocused("field"), "focused as asked");
+    var colors = Below(runtime.FindById("field")!).OfType<Box>()
+        .Select(b => b.Style.BackgroundColor).OfType<UiColor>().ToList();
+    var highlight = Bibui.Core.Runtime.TextField.Highlight;
+    var dimmer = highlight.WithAlpha(55 / 255f);
+    return (colors.Where(c => c.Equals(highlight) || c.Equals(dimmer)).ToList(),
+        colors.Any(c => c.Equals(UiColor.TextPrimary)));
+}
+
+foreach (bool multiline in new[] { false, true })
+    Run($"runtime.{(multiline ? "MultilineTextField" : "TextField")}: without focus, the selection is drawn dimmer and no caret; with it, the usual highlight and a caret", () =>
+    {
+        var highlight = Bibui.Core.Runtime.TextField.Highlight;
+        var (unfocused, unfocusedCaret) = SelectionDrawn(multiline, focus: false);
+        Eq(1, unfocused.Count, "unfocused: the selection is drawn");
+        IsTrue(unfocused[0].Equals(highlight.WithAlpha(55 / 255f)), "in the dimmer blue");
+        IsTrue(!unfocusedCaret, "unfocused: no caret");
+        var (focused, focusedCaret) = SelectionDrawn(multiline, focus: true);
+        Eq(1, focused.Count, "focused: the selection is drawn");
+        IsTrue(focused[0].Equals(highlight), "in the usual blue");
+        IsTrue(focusedCaret, "focused: a caret");
+    });
+
 Run("TextField read-only: moves and copies, never edits", () =>
 {
     var text = BibuiStr.FromStrLit("hello world");

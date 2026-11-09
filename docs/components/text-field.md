@@ -115,7 +115,8 @@ should also acquire its frame with `InteractionKinds.Disabled`, as the
 
 The text (`BibuiStr`) and the caret and selection (`TextEditState`). Focus is the
 runtime's: read it from the result, or with `runtime.IsFocused(id)` before the
-field is built.
+field is built. A field without focus keeps its selection in sight, dimmer,
+and shows no caret.
 
 ## Theme tokens
 
@@ -125,7 +126,8 @@ field is built.
   vertical padding is scaled by `runtime.Theme.Density`.
 - Field: the text is `textColor`, the placeholder is `TextColor.Secondary`, and
   the caret is `TextPrimary`, gliding at `runtime.Rates.Follow`. The
-  selection highlight is a fixed translucent blue, not a token yet.
+  selection highlight is a fixed translucent blue, not a token yet; without
+  focus it is the same blue at half the alpha.
 
 ## Example
 

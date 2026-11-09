@@ -49,6 +49,11 @@ All notable changes to bibui are recorded here. The format is based on
   focused field or not; filter on `IsKeyDown`, as the docs ask. A focused
   multi-line field takes them; a single-line field leaves them to the app.
 
+- A text field without focus, single-line or multi-line, keeps its selection
+  in sight in a dimmer blue (half the alpha), with no caret; it hid it. A field
+  that keeps a selection after losing focus, to another field or on Enter or
+  Escape, now shows it.
+
 ### Fixed
 
 - `ScrollList`: the wheel up at the top, or past it, no longer moves what is

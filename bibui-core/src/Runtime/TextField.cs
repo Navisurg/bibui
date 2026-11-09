@@ -135,7 +135,7 @@ public static class TextField
     // [lo, hi) in the line's offsets — the selected one in a box with the
     // highlight behind it, so layout puts the highlight under its glyphs.
     internal static void DrawLine(BibuiRuntime runtime, ReadOnlySpan<char> line, int lo, int hi,
-        TextColor color)
+        TextColor color, UiColor highlight)
     {
         if (lo > 0) Part(runtime, line[..lo], color);
         if (hi > lo)
@@ -144,7 +144,7 @@ public static class TextField
             selection.ChildLayoutAxis = LayoutAxis.X;
             selection.SizeX = SemanticSize.ChildrenSum();
             selection.SizeY = SemanticSize.ParentPct(1f);
-            selection.Style.BackgroundColor = Highlight;
+            selection.Style.BackgroundColor = highlight;
             using (runtime.Parent(selection)) Part(runtime, line[lo..hi], color);
         }
         if (hi < line.Length) Part(runtime, line[hi..], color);
@@ -327,10 +327,10 @@ public static class TextFieldExtensions
         ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
         TextColor color = empty ? TextColor.Secondary : textColor;
 
-        // Not focused: no caret and nothing highlighted. Empty: the caret is
-        // before the placeholder, which is not text to select.
-        int caret = focused && !empty ? Math.Clamp(edit.Cursor, 0, shown.Length) : 0;
-        int mark = focused && !empty ? Math.Clamp(edit.Mark, 0, shown.Length) : 0;
+        // Not focused: no caret, and the selection drawn dimmer. Empty: the
+        // caret is before the placeholder, which is not text to select.
+        int caret = !empty ? Math.Clamp(edit.Cursor, 0, shown.Length) : 0;
+        int mark = !empty ? Math.Clamp(edit.Mark, 0, shown.Length) : 0;
         int lo = Math.Min(caret, mark), hi = Math.Max(caret, mark);
 
         // Edited, the caret is kept in sight; otherwise the line shows from its start.
@@ -345,7 +345,7 @@ public static class TextFieldExtensions
 
         using (runtime.Parent(view))
         {
-            DrawLine(runtime, shown, lo, hi, color);
+            DrawLine(runtime, shown, lo, hi, color, focused ? Highlight : Highlight.WithAlpha(55 / 255f));
             // Draw carret last so it appears over text
             if (focused) DrawCaret(runtime, view, font, shown, lo, hi, caret, top: 0f, SemanticSize.Pixels(lineHeight), edited);
         }
@@ -419,10 +419,10 @@ public static class TextFieldExtensions
         TextColor color = empty ? TextColor.Secondary : textColor;
         var lines = TextLayer.LinesFromText(runtime.Fonts, shown, style, font.Scale, room, wrap);
 
-        // Not focused: no caret and nothing highlighted. Empty: the caret is
-        // before the placeholder, which is not text to select.
-        int caret = focused && !empty ? Math.Clamp(edit.Cursor, 0, shown.Length) : 0;
-        int mark = focused && !empty ? Math.Clamp(edit.Mark, 0, shown.Length) : 0;
+        // Not focused: no caret, and the selection drawn dimmer. Empty: the
+        // caret is before the placeholder, which is not text to select.
+        int caret = !empty ? Math.Clamp(edit.Cursor, 0, shown.Length) : 0;
+        int mark = !empty ? Math.Clamp(edit.Mark, 0, shown.Length) : 0;
         int lo = Math.Min(caret, mark), hi = Math.Max(caret, mark);
 
         using var inView = runtime.Parent(view);
@@ -444,7 +444,8 @@ public static class TextFieldExtensions
             int selectionStart = Math.Clamp(lo, line.Start, line.End) - line.Start;
             int selectionEnd = Math.Clamp(hi, line.Start, line.End) - line.Start;
             using (runtime.Parent(row))
-                DrawLine(runtime, shown[line.Start..line.End], selectionStart, selectionEnd, color);
+                DrawLine(runtime, shown[line.Start..line.End], selectionStart, selectionEnd, color,
+                    focused ? Highlight : Highlight.WithAlpha(55 / 255f));
         }
 
         // Draw carret last so it appears over text: on its line as on a single line, at that line's place.
