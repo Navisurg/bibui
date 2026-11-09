@@ -53,7 +53,7 @@ public sealed class SkiaCpuRenderer : IDisposable
         {
             _wrapped?.Dispose();
             var info = new SKImageInfo(target.Width, target.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
-            _wrapped = SKSurface.Create(info, target.Address, target.RowBytes)
+            _wrapped = SKSurface.Create(info, target.Address, target.RowBytes, SkiaOps.SurfaceProps)
                 ?? throw new InvalidOperationException(
                     $"SKSurface.Create returned null over {target.Width}x{target.Height} (row {target.RowBytes} bytes).");
             _wrappedPixels = target;
@@ -61,7 +61,7 @@ public sealed class SkiaCpuRenderer : IDisposable
         Draw(list, _wrapped);
     }
 
-    /// <summary>Draws <paramref name="list"/> onto <paramref name="surface"/>, then ages what is cached: once per frame.</summary>
+    /// <summary>Draws <paramref name="list"/> onto <paramref name="surface"/>, then ages what is cached: once per frame. Subpixel text needs a surface with an RGB pixel geometry.</summary>
     public void Draw(DrawList list, SKSurface surface) => _ops.Draw(list, surface);
 
     // ── Textures ─────────────────────────────────────────────────────────────

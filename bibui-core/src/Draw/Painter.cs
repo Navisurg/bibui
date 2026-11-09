@@ -45,6 +45,7 @@ internal sealed class Painter
     internal void Record(DrawList list, UiNode root, WindowFrame window, ThemeTokens theme, FrameInput input)
     {
         list.Reset();
+        list.TextAntialias = _fonts.TextAntialias;
         list.Push(DrawOpKind.Clear).Color = DrawingContext.ParseColor(theme.Colors.Background);
         _drawing.Begin(list, window.Scale, input, theme, window.LogicalWidth, window.LogicalHeight);
         Node(root, theme, _drawing.Root);

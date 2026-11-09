@@ -3043,6 +3043,53 @@ Run("Texture lookups: a texture's raw channels pick a table's entries, on the ma
     LookupContract("managed", managed.Draw, managed.CreateTexture, managed.ReleaseTexture);
 });
 
+// Subpixel text: the text layer asks for it, and every renderer draws it for an
+// RGB-striped panel. The same text grayscale, subpixel and grayscale again, into
+// one buffer as a window's: its grayscale and subpixel glyphs differ only in what was
+// asked, so a renderer that kept them under one key would draw one as the other.
+void SubpixelContract(string name, Bibui.Core.Draw.DrawToPixels draw)
+{
+    var runtime = BibuiRuntime.Create();
+    runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
+        runtime.TextFromId("text", "Thin stems: till it, il1 |")), TestBuild.Window(320, 60), "bibui-light");
+    var bgra = GC.AllocateArray<byte>(320 * 60 * 4, pinned: true);
+    var target = new Bibui.Core.Draw.RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bgra, 0), 320, 60, 320 * 4);
+    byte[] FrameFor(TextAntialias asked)
+    {
+        runtime.Fonts.UseTextAntialias(asked);
+        runtime.Step();
+        draw(runtime.DrawList, target);
+        return bgra.ToArray();
+    }
+    // Pixels whose red and blue differ: colour fringes. The light theme's text
+    // is near neutral, so grayscale text has next to none.
+    static int Fringed(byte[] frame)
+    {
+        int n = 0;
+        for (int i = 0; i < frame.Length; i += 4) if (Math.Abs(frame[i] - frame[i + 2]) > 24) n++;
+        return n;
+    }
+
+    var grey = FrameFor(TextAntialias.Grayscale);
+    var extent = runtime.FindById("text")!.Extent;
+    var subpixel = FrameFor(TextAntialias.Subpixel);
+    Eq(extent, runtime.FindById("text")!.Extent, $"{name}: the text lays out the same either way");
+    IsTrue(Fringed(subpixel) > 20 && Fringed(subpixel) > 10 * Fringed(grey), $"{name}: subpixel text has coloured edges ({Fringed(subpixel)} fringed pixels, grayscale {Fringed(grey)})");
+    IsTrue(grey.AsSpan().SequenceEqual(FrameFor(TextAntialias.Grayscale)), $"{name}: back to grayscale, the grayscale frame again");
+}
+
+Run("Subpixel text: Skia draws the edges the text layer asks for", () =>
+{
+    using var skia = new SkiaCpuRenderer();
+    SubpixelContract("skia", skia.Draw);
+});
+
+Run("Subpixel text: the managed rasterizer draws the edges the text layer asks for", () =>
+{
+    using var managed = new ManagedRenderer();
+    SubpixelContract("managed", managed.Draw);
+});
+
 // Groups: a layer composited by a blend mode or through a colour matrix. The
 // same cases on every renderer, against the formulas on premultiplied values:
 // a backdrop of two colours under a group that covers the left half only, so

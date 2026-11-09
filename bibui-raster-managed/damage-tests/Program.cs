@@ -11,6 +11,7 @@ using Bibui.Raster.Managed.Backend;
 using Bibui.Core.Runtime;
 using Bibui.Core.Theming;
 using Bibui.Core.Runtime.Platform;
+using Bibui.Text;
 
 int passed = 0, failed = 0;
 string? filter = args.Length > 0 ? args[0] : null;
@@ -100,6 +101,34 @@ Run("A surface the renderer has not drawn, a new background and a resize are pai
     var smaller = new Surface(300, 160);
     Frame(rt, backend, smaller);
     Eq("resize", backend.LastFullRepaintReason);
+});
+
+Run("Text's edges follow what the text layer asks for, as a whole repaint draws them", () =>
+{
+    // The frames differ only in the edges the text asks for, so only the
+    // glyphs' hash can tell the tracker to repaint.
+    (BibuiRuntime, ManagedRenderer, Surface) App(bool tracked)
+    {
+        var rt = BibuiRuntime.Create();
+        rt.SetBuild(() =>
+        {
+            var page = rt.Column().Sized(Size.Fill, Size.Fill);
+            using (rt.Parent(page)) rt.Text("Thin stems: till it, il1 |");
+            return page;
+        }, ThemeLoader.BibuiLight(), TestBuild.Window(240, 40));
+        return (rt, new ManagedRenderer { DamageTracking = tracked }, new Surface(240, 40));
+    }
+    var (rt, tracked, target) = App(tracked: true);
+    var (wholeRt, whole, wholeTarget) = App(tracked: false);
+    foreach (var asked in new[] { TextAntialias.Grayscale, TextAntialias.Subpixel, TextAntialias.Grayscale })
+    {
+        rt.Fonts.UseTextAntialias(asked);
+        wholeRt.Fonts.UseTextAntialias(asked);
+        for (int i = 0; i < 2; i++) Frame(rt, tracked, target);
+        Frame(wholeRt, whole, wholeTarget);
+        for (int y = 0; y < 40; y++)
+            IsTrue(target.Row(y).SequenceEqual(wholeTarget.Row(y)), $"{asked}: row {y} of the tracked frame is the whole frame's");
+    }
 });
 
 Run("Turning tracking off and on again forgets every surface", () =>

@@ -565,6 +565,62 @@ public sealed unsafe partial class Canvas // strokes and dashes in Stroke/Canvas
         }
     }
 
+    /// <summary>
+    /// As <see cref="DrawA8"/> for a subpixel mask: three samples a pixel, left to
+    /// right, the red, green and blue stripes of an RGB-striped panel, each
+    /// blended into its own channel as DrawA8 blends, alpha at the largest.
+    /// Over a pixel that is not opaque the samples' mean is drawn: it is composited
+    /// again later, and colour there would fringe what lies under it.
+    /// </summary>
+    public void DrawSubpixel(ReadOnlySpan<byte> coverage, int width, int height, int x, int y, uint argb,
+        ReadOnlySpan<byte> coverageMap = default)
+    {
+        if (width <= 0 || height <= 0) return;
+        if (coverage.Length < 3 * width * height) throw new ArgumentException("Too few coverage bytes.", nameof(coverage));
+        if (!coverageMap.IsEmpty && coverageMap.Length < 256) throw new ArgumentException("A coverage map has 256 entries.", nameof(coverageMap));
+        var b = new IRect(x, y, x + width, y + height).Intersect(_s.Clip);
+        if (b.IsEmpty) return;
+        _s.Layer?.Touch(b);
+        uint pm = PmFor(argb);
+        if (pm == 0) return;
+        uint sa = pm >> 24, shi = pm >> 16 & 0xFF, sg = pm >> 8 & 0xFF, slo = pm & 0xFF;
+        // The sample in the pixel's bits 16..23 and the one in 0..7: red and
+        // blue, in the surface's byte order.
+        int hiAt = _surface.Order == PixelOrder.Rgba8888 ? 2 : 0, loAt = 2 - hiAt;
+        var t = Target();
+        var mask = _s.Mask;
+        bool mapped = !coverageMap.IsEmpty;
+        for (int yy = b.Top; yy < b.Bottom; yy++)
+        {
+            var src = coverage.Slice((yy - y) * width * 3, width * 3);
+            uint* d = t.Origin + (long)yy * t.Stride;
+            byte* m = mask is null ? null : mask.Origin + (long)yy * mask.Stride;
+            for (int xx = b.Left; xx < b.Right; xx++)
+            {
+                int i = (xx - x) * 3;
+                uint khi = src[i + hiAt], kg = src[i + 1], klo = src[i + loAt];
+                if ((khi | kg | klo) == 0) continue;
+                if (mapped) { khi = coverageMap[(int)khi]; kg = coverageMap[(int)kg]; klo = coverageMap[(int)klo]; }
+                if (m != null)
+                {
+                    uint mc = m[xx];
+                    khi = PixelMath.MulDiv255Round(khi, mc); kg = PixelMath.MulDiv255Round(kg, mc); klo = PixelMath.MulDiv255Round(klo, mc);
+                }
+                uint px = d[xx];
+                if (px >> 24 != 255) khi = kg = klo = (khi + kg + klo + 1) / 3;
+                uint ka = Math.Max(khi, Math.Max(kg, klo));
+                d[xx] = Channel(sa, sa, ka, px >> 24) << 24
+                    | Channel(shi, sa, khi, px >> 16 & 0xFF) << 16
+                    | Channel(sg, sa, kg, px >> 8 & 0xFF) << 8
+                    | Channel(slo, sa, klo, px & 0xFF);
+            }
+        }
+
+        // One channel's src-over at coverage k, premultiplied source s of alpha a.
+        static uint Channel(uint s, uint a, uint k, uint d)
+            => (s * (k + 1) >> 8) + (d * (256 - (a * (k + 1) >> 8)) >> 8);
+    }
+
     // ── Cores ──────────────────────────────────────────────────────────────
 
     private void FillPathCore(Path path, in Paint paint, bool exact)

@@ -88,7 +88,8 @@ public sealed class SkiaGlRenderer : IDisposable
             const uint GlRgba8 = 0x8058;
             _framebuffer = new GRBackendRenderTarget(_target.Width, _target.Height, sampleCount: 0, _target.StencilBits,
                 new GRGlFramebufferInfo(_target.Framebuffer, GlRgba8));
-            _surface = SKSurface.Create(_gpu, _framebuffer, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888)
+            _surface = SKSurface.Create(_gpu, _framebuffer, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888,
+                    SkiaOps.SurfaceProps)
                 ?? throw new InvalidOperationException("Skia made no surface over the GL framebuffer.");
             (_width, _height) = (_target.Width, _target.Height);
         }

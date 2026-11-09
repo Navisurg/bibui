@@ -322,10 +322,7 @@ public sealed class ManagedRenderer : IDisposable
                 Bitmap(c, img, list.LookupAt(op.Resource), op);
                 break;
             case DrawOpKind.BackdropBlur: BackdropBlur(c, op.Region, op.Rect, op.A); break;
-            case DrawOpKind.Glyphs:
-                Glyphs(c, list.FaceAt(op.Resource), op.C, list.Glyphs.Slice(op.Start, op.Count),
-                    list.Points.Slice(op.Start2, op.Count), op.A, op.B, op.Color);
-                break;
+            case DrawOpKind.Glyphs: Glyphs(c, in op, list); break;
         }
     }
 
@@ -427,34 +424,42 @@ public sealed class ManagedRenderer : IDisposable
 
     // Glyph masks are placed in device pixels, so the text origin goes through
     // the transform. A uniform scale scales the strike; anything with rotation
-    // or skew is not drawn (bibui never rotates text).
-    private void Glyphs(Canvas c, FontFace face, float sizePx, ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
-        float x, float baselineY, Rgba color)
+    // or skew is not drawn (bibui never rotates text). Masks and their blend are
+    // the edges the text layer asks for: subpixel ones for an RGB-striped panel.
+    private void Glyphs(Canvas c, in DrawOp op, DrawList list)
     {
+        var glyphs = list.Glyphs.Slice(op.Start, op.Count);
+        var positions = list.Points.Slice(op.Start2, op.Count);
         if (glyphs.IsEmpty) return;
         var m = c.Matrix;
-        var origin = Vector2.Transform(new Vector2(x, baselineY), m);
+        var origin = Vector2.Transform(new Vector2(op.A, op.B), m);
         float s = m.M11;
         if (!(m.M12 == 0 && m.M21 == 0 && m.M11 == m.M22 && m.M11 > 0)) return;
 
-        var strike = Strike(face, sizePx, s);
+        var strike = Strike(list.FaceAt(op.Resource), op.C, s);
         if (_placed.Length < glyphs.Length) _placed = new PlacedGlyph[Math.Max(glyphs.Length, _placed.Length * 2)];
         int n;
-        if (s == 1f) n = GlyphMasks.PlacedFromGlyphs(_glyphs, strike, glyphs, positions, origin.X, origin.Y, _placed.AsSpan(0, glyphs.Length));
+        if (s == 1f) n = GlyphMasks.PlacedFromGlyphs(_glyphs, strike, glyphs, positions, origin.X, origin.Y, _placed.AsSpan(0, glyphs.Length), list.TextAntialias);
         else
         {
             Span<Vector2> scaled = glyphs.Length <= 256 ? stackalloc Vector2[glyphs.Length] : new Vector2[glyphs.Length];
             for (int i = 0; i < scaled.Length; i++) scaled[i] = positions[i] * s;
-            n = GlyphMasks.PlacedFromGlyphs(_glyphs, strike, glyphs, scaled, origin.X, origin.Y, _placed.AsSpan(0, glyphs.Length));
+            n = GlyphMasks.PlacedFromGlyphs(_glyphs, strike, glyphs, scaled, origin.X, origin.Y, _placed.AsSpan(0, glyphs.Length), list.TextAntialias);
         }
 
+        var color = op.Color;
         var table = MaskGamma.Table(color.R, color.G, color.B);
-        for (int i = 0; i < n; i++)
-        {
-            var g = _placed[i];
-            c.DrawA8(g.Mask.Coverage, g.Mask.Width, g.Mask.Height, g.X, g.Y, color.Argb, table);
-        }
+        var blend = s_blend[(int)list.TextAntialias];
+        for (int i = 0; i < n; i++) blend(c, in _placed[i], color.Argb, table);
     }
+
+    // How a mask is blended, by TextAntialias (Grayscale, Subpixel).
+    private delegate void BlendMask(Canvas c, in PlacedGlyph g, uint argb, ReadOnlySpan<byte> table);
+    private static readonly BlendMask[] s_blend =
+    [
+        static (Canvas c, in PlacedGlyph g, uint argb, ReadOnlySpan<byte> table) => c.DrawA8(g.Mask.Coverage, g.Mask.Width, g.Mask.Height, g.X, g.Y, argb, table),
+        static (Canvas c, in PlacedGlyph g, uint argb, ReadOnlySpan<byte> table) => c.DrawSubpixel(g.Mask.Coverage, g.Mask.Width, g.Mask.Height, g.X, g.Y, argb, table),
+    ];
 
     internal static FontStrike Strike(FontFace face, float sizePx, float scale = 1f) => face.Strike(sizePx * scale);
 

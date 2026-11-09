@@ -3,7 +3,8 @@
 Glyphs as coverage masks, for a rasterizer that draws text itself. It renders
 the glyphs of a `Bibui.Text` strike (a font at a pixel size) with FreeType, at
 four quarter-pixel phases, keeps them in a cache the caller owns, places them in device
-pixels, and gives the gamma table to blend them with (`MaskGamma`). Its
+pixels, and gives the gamma table to blend them with (`MaskGamma`). Masks are
+grayscale, or for subpixel text three samples a pixel. Its
 settings and placement rule are those Skia's text resolves to, so the masks
 reproduce Skia's glyphs.
 
@@ -14,7 +15,7 @@ it:
 using Bibui.Glyphs;
 
 var cache = new Dictionary<FontStrike, Dictionary<uint, GlyphMask>>();   // the renderer's, for its life
-int n = GlyphMasks.PlacedFromGlyphs(cache, strike, glyphs, positions, originX, baselineY, placed);
+int n = GlyphMasks.PlacedFromGlyphs(cache, strike, glyphs, positions, originX, baselineY, placed, TextAntialias.Grayscale);
 var table = MaskGamma.Table(r, g, b);
 for (int i = 0; i < n; i++)
     canvas.DrawA8(placed[i].Mask.Coverage, placed[i].Mask.Width, placed[i].Mask.Height,

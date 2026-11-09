@@ -19,6 +19,7 @@ public static unsafe partial class FT
     public const int LOAD_FORCE_AUTOHINT = 1 << 5;
     public const int LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH = 1 << 9;
     public const int LOAD_TARGET_NORMAL = 0;
+    public const int LOAD_TARGET_LCD = 3 << 16;     // FT_LOAD_TARGET_(FT_RENDER_MODE_LCD)
 
     // FT_FaceRec.face_flags
     public const long FACE_FLAG_SCALABLE = 1 << 0;
@@ -26,6 +27,7 @@ public static unsafe partial class FT
     public const long FACE_FLAG_COLOR = 1 << 14;
 
     public const int RENDER_MODE_NORMAL = 0;
+    public const int RENDER_MODE_LCD = 3;
 
     // Offsets for LP64 (x86-64, arm64) and ILP32 (wasm32, where FT_Long and
     // pointers are 4 bytes; checked with offsetof under Emscripten 3.1.56).

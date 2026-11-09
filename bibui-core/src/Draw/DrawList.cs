@@ -180,6 +180,9 @@ public sealed class DrawList
     public ReadOnlySpan<Rgba> Colors => _colors.AsSpan(0, _colorCount);
     public ReadOnlySpan<ushort> Glyphs => _glyphs.AsSpan(0, _glyphCount);
 
+    /// <summary>The edges this frame's text asks for: the text layer's (<see cref="Fonts.UseTextAntialias"/>).</summary>
+    public TextAntialias TextAntialias { get; internal set; }
+
     /// <summary>A kept path an op names: its <see cref="VectorPath.Id"/> is the renderer's cache key.</summary>
     public VectorPath PathAt(int index) => _paths[index];
 

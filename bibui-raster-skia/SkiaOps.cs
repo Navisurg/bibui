@@ -92,10 +92,7 @@ internal sealed class SkiaOps : IDisposable
                     if (Textures.Get(op.Texture) is { } texture) Texture(canvas, texture, op, list);
                     break;
                 case DrawOpKind.BackdropBlur: BackdropBlur(surface, op.Region, op.Rect, op.A); break;
-                case DrawOpKind.Glyphs:
-                    Glyphs(canvas, list.FaceAt(op.Resource), op.C, list.Glyphs.Slice(op.Start, op.Count),
-                        list.Points.Slice(op.Start2, op.Count), op.A, op.B, op.Color);
-                    break;
+                case DrawOpKind.Glyphs: Glyphs(canvas, in op, list); break;
             }
         }
 
@@ -283,33 +280,38 @@ internal sealed class SkiaOps : IDisposable
         canvas.Restore();
     }
 
-    // There is one rendering mode: glyphs at subpixel positions, outlines
-    // autohinted at full strength, grayscale antialiasing.
-    private void Glyphs(SKCanvas canvas, FontFace face, float sizePx, ReadOnlySpan<ushort> glyphs, ReadOnlySpan<Vector2> positions,
-        float x, float baselineY, Rgba color)
+    // Glyphs at subpixel positions, outlines autohinted at full strength, with
+    // the edging the text asks for. Subpixel edges are for an RGB-striped panel
+    // (SurfaceProps); inside a layer that is not opaque, Skia draws them
+    // grayscale itself.
+    private void Glyphs(SKCanvas canvas, in DrawOp op, DrawList list)
     {
+        var glyphs = list.Glyphs.Slice(op.Start, op.Count);
         if (glyphs.IsEmpty) return;
+        var face = list.FaceAt(op.Resource);
+        float sizePx = op.C;
+        var edging = s_edging[(int)list.TextAntialias];
         // Per run, two lookups by integers the run already has, and one hash of
         // its glyphs: a text with emoji is several runs a line, and each pays this.
-        var sk = color.ToSk();
+        var sk = op.Color.ToSk();
         var paint = _textPaints.FromKey((uint)sk, sk, static c => new SKPaint { Color = c, IsAntialias = true });
-        ulong fontKey = FontKey(face.Id, sizePx);
-        var font = _textFonts.FromKey(fontKey, (Ops: this, Face: face, Size: sizePx), static p => new SKFont(p.Ops.Typeface(p.Face), p.Size)
+        ulong fontKey = FontKey(face.Id, sizePx, edging);
+        var font = _textFonts.FromKey(fontKey, (Ops: this, Face: face, Size: sizePx, Edging: edging), static p => new SKFont(p.Ops.Typeface(p.Face), p.Size)
         {
             Subpixel = true,
-            Edging = SKFontEdging.Antialias,   // grayscale, never LCD
+            Edging = p.Edging,
             ForceAutoHinting = true,
             Hinting = SKFontHinting.Full,
         });
         ulong run = RunKey(fontKey, glyphs);
         if (!_blobs.TryGet(run, out var blob))
         {
-            _blobBuilder.AddPositionedRun(glyphs, font, positions.AsSk());
+            _blobBuilder.AddPositionedRun(glyphs, font, list.Points.Slice(op.Start2, op.Count).AsSk());
             blob = _blobBuilder.Build();
             if (blob is null) return;
             _blobs.Add(run, blob);
         }
-        canvas.DrawText(blob, x, baselineY, paint);
+        canvas.DrawText(blob, op.A, op.B, paint);
     }
 
     // The positions are not in the key: a run's are its glyphs' advances summed
@@ -325,10 +327,17 @@ internal sealed class SkiaOps : IDisposable
         => System.IO.Hashing.XxHash3.HashToUInt64(MemoryMarshal.AsBytes(glyphs),
             unchecked((long)(fontKey ^ (ulong)glyphs.Length * 0x9E3779B97F4A7C15UL)));
 
-    // A face at a size, as one integer: its id and the size's bits, the same
-    // key the core's styles use. What a font, and a run's blob, are kept under.
-    private static ulong FontKey(int faceId, float sizePx)
-        => (ulong)(uint)faceId << 32 | (uint)BitConverter.SingleToInt32Bits(sizePx);
+    // A face at a size with an edging, as one integer: its id and the size's
+    // bits, the same key the core's styles use, the edging in the top two bits.
+    // What a font, and a run's blob, are kept under.
+    private static ulong FontKey(int faceId, float sizePx, SKFontEdging edging)
+        => (ulong)edging << 62 | (ulong)(uint)faceId << 32 | (uint)BitConverter.SingleToInt32Bits(sizePx);
+
+    // Skia's edging for each TextAntialias (Grayscale, Subpixel).
+    private static readonly SKFontEdging[] s_edging = [SKFontEdging.Antialias, SKFontEdging.SubpixelAntialias];
+
+    // Every surface's: subpixel text is drawn for an RGB-striped panel.
+    internal static readonly SKSurfaceProperties SurfaceProps = new(SKPixelGeometry.RgbHorizontal);
 
     private SKTypeface Typeface(FontFace face)
     {

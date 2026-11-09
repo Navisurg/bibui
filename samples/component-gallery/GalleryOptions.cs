@@ -15,13 +15,14 @@ public sealed record GalleryOptions(
     bool Help,
     string? Accent = null,
     ThemeMode Mode = ThemeMode.Dark,
-    bool FirstFrame = false)
+    bool FirstFrame = false,
+    bool Subpixel = false)
 {
     public const string Usage =
         """
         Usage: component-gallery [reference|check] [--size WxH]... [--out DIR]
                                  [--accent #RRGGBB [--mode dark|light]]
-                                 [--port N] [--first-frame] [--help]
+                                 [--subpixel] [--port N] [--first-frame] [--help]
 
           (no arguments)      opens the gallery on the Bibui.App package it was built
                               with: SilkSkiaGl unless -p:App=... chose another
@@ -39,6 +40,8 @@ public sealed record GalleryOptions(
                               instead of neutral-dark; with reference, written to
                               reference-seed/ rather than over reference/
           --mode dark|light   the generated theme's mode (default dark); needs --accent
+          --subpixel          text with subpixel edges, for an RGB-striped panel
+                              (default: grayscale edges)
           --port N            the BibuiTestServer port (default 44334); the server
                               runs only with BIBUI_TEST_SERVER=1 in the environment
           --first-frame       render the first frame headless, and exit
@@ -57,6 +60,7 @@ public sealed record GalleryOptions(
         bool reference = false, check = false, help = false, firstFrame = false;
         string? accent = null;
         ThemeMode? mode = null;
+        bool subpixel = false;
         var sizes = new List<(int, int)>();
         string? outDir = null;
 
@@ -94,6 +98,7 @@ public sealed record GalleryOptions(
                         default: error = $"Unknown --mode '{args[i]}': expected dark or light."; return null;
                     }
                     break;
+                case "--subpixel": subpixel = true; break;
                 case "--port":
                     if (i + 1 < args.Count && int.TryParse(args[i + 1], out int p)) { port = p; i++; }
                     break;
@@ -107,7 +112,7 @@ public sealed record GalleryOptions(
         }
 
         return new GalleryOptions(port, reference, check, sizes, outDir, help,
-            accent, mode ?? ThemeMode.Dark, firstFrame);
+            accent, mode ?? ThemeMode.Dark, firstFrame, subpixel);
     }
 
     private static (int, int)? ParseSize(string value)

@@ -230,6 +230,7 @@ internal sealed class DamageFrame
                     }
                     ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(0x2BUL, glyphs), positions), x, baselineY);
                     h = Hash64.Mix(Hash64.Mix(h, (ulong)(uint)face.Id << 32 | op.Color.Argb), sizePx);
+                    h = Hash64.Mix(h, (ulong)list.TextAntialias);   // grayscale or subpixel edges
                     var box = TextBox(x + l, x + r + sizePx, baselineY, face, sizePx);
                     box = new RectF(box.Left, box.Top + t, box.Right, box.Bottom + b);
                     Draw(ref d, h, Bounds(box, blur: 0f));
