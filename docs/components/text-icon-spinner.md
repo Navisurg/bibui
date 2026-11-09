@@ -43,6 +43,11 @@ public void EndFontFace()
   `TextColor.Secondary`). Without one, it is `TextPrimary`.
 - The weight comes from `BeginFontFace(weight: FontWeight.Bold)`. The family
   comes from `family`, or the one begun, or the body family.
+- Text has grayscale edges, or subpixel ones, which keep thin stems solid on
+  an RGB-striped panel: `runtime.Fonts.UseTextAntialias(TextAntialias.Subpixel)`.
+  Keep grayscale for any other display (BGR, OLED, or not known). Layout is
+  the same either way; subpixel text costs about twice as much to draw on the
+  CPU renderers.
 - A text is as large as what it holds, unless a size is begun with
   `BeginSizeX` or `BeginSizeY`. One line, no wrapping: for wrapped text use
   `runtime.MultilineTextField` with `events: 0`.

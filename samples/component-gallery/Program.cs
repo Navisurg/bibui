@@ -27,6 +27,8 @@ using Bibui.Text;
 //                            reports anything cut, spilling, or off the window
 //   dotnet run -- --accent "#E11D48" --mode light
 //                          → the same gallery in a theme generated from one seed
+//   dotnet run -- --subpixel
+//                          → text with subpixel edges, for an RGB-striped panel
 //   dotnet run -- --first-frame
 //                          → renders the first frame headless and exits (CI's start-up check)
 
@@ -65,6 +67,7 @@ var runtime = BibuiRuntime.Create();
 runtime.SetTheme(options.Theme());
 HotReloadListener.Register(runtime.RequestFrame);
 var gallery = new Gallery { State = InitialState() };
+if (options.Subpixel) runtime.Fonts.UseTextAntialias(TextAntialias.Subpixel);
 
 // CI's start-up check: one frame headless, then exit; a throw fails it.
 if (options.FirstFrame)

@@ -8,6 +8,17 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
+- **Subpixel text:** `fonts.UseTextAntialias(TextAntialias.Subpixel)` draws
+  text with one coverage per colour stripe of an RGB-striped panel, which
+  keeps thin stems solid on a ~110–140 dpi screen; `Grayscale` stays the
+  default, and right for any other display. It is the text layer's, and every
+  renderer reads it from the frame's draw list (`DrawList.TextAntialias`).
+  Layout is unchanged, and grayscale pixels too. Skia draws it with subpixel
+  edging on surfaces made with an RGB geometry; the managed rasterizer from
+  subpixel masks (`GlyphMasks.PlacedFromGlyphs(..., TextAntialias.Subpixel)`)
+  blended per channel (`Canvas.DrawSubpixel`). Over pixels that are not opaque, both draw it
+  grayscale. It costs about twice as much to draw on the CPU renderers. The
+  gallery takes `--subpixel`.
 - **`Bibui.Glyphs`**, a package of its own: glyphs as coverage masks, for a
   rasterizer that draws text itself. `GlyphMasks.PlacedFromGlyphs` renders
   glyphs with FreeType on first use, keeps them in the caller's cache (a

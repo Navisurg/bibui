@@ -43,6 +43,10 @@ public sealed class Fonts : IDisposable
     // compare one key and skip the dictionary.
     internal FontStyle? LastStyle;
 
+    // The edges asked for (UseTextAntialias): only handed down, the painter
+    // copying it into each frame's draw list. Measuring never reads it.
+    internal TextAntialias TextAntialias;
+
     // ── This frame's runs ────────────────────────────────────────────────────
 
     // rad's per-frame run cache, keyed by the Text instead of a hash of its
@@ -118,6 +122,13 @@ public sealed class Fonts : IDisposable
     /// </summary>
     public void UseClusterFont(Bibui.Text.FreeType.FontData font) => TextLayer.ClusterFaceFromData(this, font);
 
+    /// <summary>
+    /// Asks for text's edges to be drawn <paramref name="antialias"/> from the next
+    /// frame on: grayscale, the default, or subpixel, for an RGB-striped panel.
+    /// Layout is the same either way.
+    /// </summary>
+    public void UseTextAntialias(TextAntialias antialias) => TextAntialias = antialias;
+
     // ── Public: line metrics in a Font ───────────────────────────────────────
 
     /// <summary>
@@ -134,6 +145,16 @@ public sealed class Fonts : IDisposable
     /// </summary>
     public float LineAdvance(in Font font) => TextLayer.LineAdvanceFromSize(font.Size);
 
+}
+
+/// <summary>
+/// How text's glyph edges are asked to be drawn: one coverage a pixel, or one per
+/// colour stripe of the panel, which keeps thin stems solid at small sizes.
+/// </summary>
+public enum TextAntialias : byte
+{
+    Grayscale,
+    Subpixel,
 }
 
 /// <summary>
