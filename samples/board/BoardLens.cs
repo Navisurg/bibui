@@ -56,7 +56,7 @@ static partial class BoardLens   // the lens: BoardLenses.Board (its function an
     static void Block(UIView view, in Value shown, string id)
     {
         var ui = view.Ui;
-        var st = Bibui.Commands.Views.User<BoardState>(Bibui.Commands.Views.From(view.Views, view.Context.Top.View, view.Frame));
+        var st = Bibui.Commands.Views.User<BoardState>(Bibui.Commands.Views.From(view.Views, view.Model.GetCtx().View, view.Frame));
         float zoom = st.Zoom;
 
         var room = ui.Box().Sized(Size.Fill, Size.Fill);
@@ -128,8 +128,9 @@ static partial class BoardLens   // the lens: BoardLenses.Board (its function an
         box.Style.HoverBorderColor = UiColor.BorderHover;
         box.Style.BorderWidth = 1f;
 
-        // A part is drawn on its own, not as this view: its view state is its own node's (a case's tree: the case's).
-        using (view.Context.PushView(default))
+        // A part is drawn on its own, not as this view: its view state is its own node's (a case's tree: the
+        // case's), and a case is the case its card's commands act on (Open, Tree).
+        using (view.Model.ContextScope(view.Model.GetCtx() with { View = handle, Case = CaseId.From(view.Model.Tree, handle) }))
         using (ui.Parent(box))
         {
             UIView.Draw(view, part, place, Size.Px(PartFill));   // the part as Eval.At gave it: seen through its view already

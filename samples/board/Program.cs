@@ -49,7 +49,7 @@ Console.WriteLine($"Test port: {test.Port.SocketPath}");
 app.Frame = Frame;
 while (app.WaitForFrame())
 {
-    while (test.TryPull(app.Events, out var cmd)) w.Model.Push(cmd);
+    while (test.TryPull(app.Events, out var cmd, out var ctx)) w.Model.Push(cmd, ctx);   // in the context the client sent
     Frame();
 }
 return 0;
@@ -153,7 +153,8 @@ void BuildBoard()
                 double split = Resize(rs, top, below, weight[n - 1] / pair, 0.5, slot.Rect.Y + slot.Extent.Y - above.Rect.Y, top.DragDeltaY, App.PairLeast, App.PairMost);
                 (weight[n - 1], weight[n]) = (pair * split, pair - pair * split);
                 if (rs.LetGo && rs.Grabber == below)
-                    w.Model.Push(new BoardCmd.Panel_Resize(previous, p, split));
+                    using (w.Model.ContextScope(w.Model.GetCtx() with { PanelFrom = previous, PanelTo = p }))   // the pair: the one above grows by split
+                        w.Model.Push(new BoardCmd.Panel_Resize(split));
             }
             above = slot;
             previous = p;
@@ -203,7 +204,7 @@ Interaction Grabber(string id, SemanticSize width, SemanticSize height)
 // typed stays the panel's query, a draft until it is set. The panel is the context's (BuildPanel's).
 void QueryPopover(ModelStore t)
 {
-    var panelId = PanelId.From(t, view.Context.Top.Of(NodeKinds.Panel));
+    var panelId = w.Model.GetCtx().Panel;
     if (panelId.Query(t) is not { } query) return;
     var handle = panelId;   // its ids under the panel's, as its title's are
     string popover = $"{handle}/query", id = $"{handle}/query/line";
@@ -261,7 +262,7 @@ void QueryPopover(ModelStore t)
     runtime.Focus(id);
     if (ExpParser.Parse(query.Str, out var why) is { } e)
     {
-        w.Model.Push(new BoardCmd.Panel_SetLens(panelId, e));
+        w.Model.Push(new BoardCmd.Panel_SetLens(e));   // in BuildPanel's scope: the panel's
         s.QueryError = null;
     }
     else
@@ -279,7 +280,7 @@ void QueryPopover(ModelStore t)
 // (the query popover, a row's command that takes the panel it is shown in).
 void BuildPanel(ModelStore t, PanelId p)
 {
-    using var _ = view.Context.Push(NodeKinds.Panel, p);
+    using var _ = w.Model.ContextScope(w.Model.GetCtx() with { Panel = p });
     var box = runtime.Box().Sized(Size.Fill, Size.Fill);
     box.ChildLayoutAxis = LayoutAxis.Y;
     box.Style.Padding = EdgeInsets.All(10);
@@ -312,7 +313,7 @@ void BuildPanel(ModelStore t, PanelId p)
                 for (int i = 0; i < offered.Length; i++)
                 {
                     if (!runtime.SelectItem($"{id}/{i}", offered[i].Label, selected: ReferenceEquals(offered[i].Lens, lens)).Clicked) continue;
-                    w.Model.Push(new BoardCmd.Panel_SetLens(p, offered[i].Lens));
+                    w.Model.Push(new BoardCmd.Panel_SetLens(offered[i].Lens));
                     select.Close();
                 }
             select.End();
@@ -323,7 +324,7 @@ void BuildPanel(ModelStore t, PanelId p)
             runtime.Text(Exprs.ValueText(shown), ComponentSize.Sm, TextColor.Secondary);   // evaluated, and nothing there: why, not a blank panel
             return;
         }
-        using (view.Context.PushView(p))   // its lens draws as the panel's view: its view state the panel's
+        using (w.Model.ContextScope(w.Model.GetCtx() with { View = p }))   // its lens draws as the panel's view: its view state the panel's
             UIView.Draw(view, shown, $"{p}/shown", Size.Fill);
     }
 }
@@ -337,7 +338,8 @@ static void Seed(Workbench w)
     m.Do(new BoardCmd.Case_Add("Case 1", 4, 1));
     m.Do(new BoardCmd.Case_Add("Case 2", 3, 0));
     var t = Workbench.Published(m);
-    m.Do(new BoardCmd.Panel_Open(Nodes.IdOf(t, Nodes.Root), BoardLens.Call(Exprs.It.Get(NodeKinds.Names.Case))));   // the root's cases, as a board: board(it.case)
+    using (m.ContextScope(m.GetCtx() with { Node = Nodes.IdOf(t, Nodes.Root) }))
+        m.Do(new BoardCmd.Panel_Open(BoardLens.Call(Exprs.It.Get(NodeKinds.Names.Case))));   // the root's cases, as a board: board(it.case)
 }
 
 // The window as text: its panels, each its node through its lens, as the window shows them.
@@ -349,13 +351,13 @@ static void Text(Workbench w, TextWriter output)
     if (PanelId.First(t, Nodes.RootOf(t)).IsNone) { output.WriteLine("   no panels open"); return; }
     for (var p = PanelId.First(t, Nodes.RootOf(t)); !p.IsNone; p = p.Next(t))
     {
-        using var _ = text.Context.Push(NodeKinds.Panel, p);   // as BuildPanel: the panel for all of it, the view only for its lens
+        using var _ = w.Model.ContextScope(w.Model.GetCtx() with { Panel = p });   // as BuildPanel: the panel for all of it, the view only for its lens
         var row = p.RowFromId(t);
         var node = Workbench.Shown(w, t, row.Shows, null);
         string title = node.IsNone ? "(gone)" : TextView.Line(text, node);
         var panel = Workbench.Shown(w, t, row.Shows, row.Lens);
         if (panel.IsNone) output.WriteLine($"   panel {p}: {title}");
-        else using (text.Context.PushView(p)) TextView.Draw(text, panel, $"panel {p}: {title}");
+        else using (w.Model.ContextScope(w.Model.GetCtx() with { View = p })) TextView.Draw(text, panel, $"panel {p}: {title}");
     }
 }
 

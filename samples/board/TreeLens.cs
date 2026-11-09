@@ -79,7 +79,7 @@ static partial class TreeLens   // the lens: BoardLenses.Tree (its function, cal
         // A set with no parts (a pending segmentation's paths) has nothing to draw.
         if (!Complete(shown) || set.Kind != EvalKind.Parts || set.Address == 0 || Eval.Count(set) == 0) return;
         ulong which = Addresses.Hash(view.EvalCtx, set.Address);   // the set, the same in every generation
-        var st = Bibui.Commands.Views.User<TreeState>(Bibui.Commands.Views.From(view.Views, view.Context.Top.View, view.Frame));
+        var st = Bibui.Commands.Views.User<TreeState>(Bibui.Commands.Views.From(view.Views, view.Model.GetCtx().View, view.Frame));
         var drawing = Make(shown, set, view.EvalCtx);
 
         var canvas = ui.BoxFromId($"{id}/tree", InteractionKinds.Clip | InteractionKinds.LeftPress | InteractionKinds.Scroll);

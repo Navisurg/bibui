@@ -68,28 +68,35 @@ public abstract partial record class BoardCmd
 
     [Description("Adds a case: its title, the NMF modes of its factorisation (0 to Modes - 1), and the one it works on (Index).")]
     public sealed record Case_Add(string Title, long Modes, long Index) : BoardCmd;
-    [Description("Sets the mode a case works on: one of its own modes, by its place among them.")]
-    public sealed record Case_SetMode(CaseId Case, long Mode) : BoardCmd;
-    [Description("Opens a case in a new panel beside the board, its mode's vessels drawn as their tree (panel.open, with that lens).")]
+    [Description("Sets the mode the case works on: one of its own modes, by its place among them.")]
+    [Context.DependsOn<CaseId>]
+    public sealed record Case_SetMode(long Mode) : BoardCmd;
+    [Description("Opens the case in a new panel beside the board, its mode's vessels drawn as their tree (panel.open, with that lens).")]
+    [Context.DependsOn<CaseId>]
     [Short("Open")]
-    public sealed record Case_Open(CaseId Case) : BoardCmd;
-    [Description("Shows its vessels' tree under its card, or hides it: its own view rule, rows(it, it.title, it.picked, tree(...)), set or removed; its kind's otherwise.")]
+    public sealed record Case_Open : BoardCmd;
+    [Description("Shows the case's vessels' tree under its card, or hides it: its own view rule, rows(it, it.title, it.picked, tree(...)), set or removed; its kind's otherwise.")]
+    [Context.DependsOn<CaseId>]
     [Short("Tree")]
-    public sealed record Case_Tree(CaseId Case) : BoardCmd;
+    public sealed record Case_Tree : BoardCmd;
 
     //- the panels
 
-    [Description("Opens a new panel, the last: a node through a lens called over it (none: through its view rule).")]
-    public sealed record Panel_Open(NodeId Node, Expr? Lens) : BoardCmd;
-    [Description("Shows a panel's node through another expression over it (it): a lens its kind is offered through (Workbench.Offered), as the panel's select picks it, or any typed in its query.")]
-    public sealed record Panel_SetLens(PanelId Panel, Expr Lens) : BoardCmd;
+    [Description("Opens a new panel, the last: the context's node through a lens called over it (none: through its view rule).")]
+    [Context.DependsOn<NodeId>]
+    public sealed record Panel_Open(Expr? Lens) : BoardCmd;
+    [Description("Shows the panel's node through another expression over it (it): a lens its kind is offered through (Workbench.Offered), as the panel's select picks it, or any typed in its query.")]
+    [Context.DependsOn<PanelId>]
+    public sealed record Panel_SetLens(Expr Lens) : BoardCmd;
     [Description("Moves the border between the main panel and the rest: the rest's column gets Share of the window's width.")]
     public sealed record Panels_Resize(double Share) : BoardCmd;
-    [Description("Moves the border between two neighbouring panels of the column: First gets Share of the height they share, the pair's sum kept.")]
-    public sealed record Panel_Resize(PanelId First, PanelId Second, double Share) : BoardCmd;
-    [Description("Closes a panel.")]
+    [Description("Moves the border between two neighbouring panels of the column: the one from gets Share of the height they share, the pair's sum kept.")]
+    [Context.DependsOn<PanelId>(Role.From), Context.DependsOn<PanelId>(Role.To)]
+    public sealed record Panel_Resize(double Share) : BoardCmd;
+    [Description("Closes the panel.")]
+    [Context.DependsOn<PanelId>]
     [Short("X")]
-    public sealed record Panel_Close(PanelId Panel) : BoardCmd;
+    public sealed record Panel_Close : BoardCmd;
 
     //- reads
 
@@ -167,10 +174,11 @@ public static class App
 
     /// <summary>
     /// One command, applied to <paramref name="store"/>, the model's: its tree and its rows, the rows read and
-    /// written through each node's typed id; <paramref name="lenses"/> is what a panel's lens may call; <paramref name="ctx"/>
+    /// written through each node's typed id, in <paramref name="ctx"/>, the context it was pushed in (which
+    /// case, which panel); <paramref name="lenses"/> is what a panel's lens may call; <paramref name="eval"/>
     /// and <paramref name="text"/>, what an eval reads names with and draws its answer through (Workbench.Make's).
     /// </summary>
-    public static void Apply(ModelStore store, Cmd cmd, Pushes push, LensTable lenses, EvalContext ctx, Dictionary<string, TextDrawer> text)
+    public static void Apply(ModelStore store, Cmd cmd, in Context ctx, Pushes<Context> push, LensTable lenses, EvalContext eval, Dictionary<string, TextDrawer> text)
     {
         var root = Nodes.RootOf(store);
         switch (cmd)
@@ -184,29 +192,30 @@ public static class App
                 CaseId.New(store, root).Modify(store, new Node.Case(title, modes, index));   // its node, and its row
                 break;
             }
-            case BoardCmd.Case_SetMode(var @case, var mode):
+            case BoardCmd.Case_SetMode(var mode):
             {
+                var @case = ctx.Case;
                 if (mode < 0 || mode >= (@case.Modes(store)?.Count ?? 0)) break;   // one of its own modes only
                 @case.Modify(store, @case.RowFromId(store) with { Picked = mode });   // a new row: the one before kept for the generations that read it
                 break;
             }
-            case BoardCmd.Case_Tree(var caseId):
+            case BoardCmd.Case_Tree:
             {
                 // The case's own rule (its view_rule child), not its kind's: the other cards stay as they are.
-                bool showing = !ModelEval.ViewRuleFromNode(store, caseId).IsNone;
-                ModelEval.SetViewRuleForNode(store, lenses, caseId, showing ? null : CardWithTree);
+                bool showing = !ModelEval.ViewRuleFromNode(store, ctx.Case).IsNone;
+                ModelEval.SetViewRuleForNode(store, lenses, ctx.Case, showing ? null : CardWithTree);
                 break;
             }
-            case BoardCmd.Case_Open(var opened):
-                Open(store, lenses, opened, OpenLens);   // its picked mode's vessels, as their tree
+            case BoardCmd.Case_Open:
+                Open(store, lenses, ctx.Case, OpenLens);   // its picked mode's vessels, as their tree
                 break;
 
             //- the panels
-            case BoardCmd.Panel_Open(var node, var lens):
-                Open(store, lenses, node, lens);
+            case BoardCmd.Panel_Open(var lens):
+                Open(store, lenses, ctx.Node, lens);
                 break;
-            case BoardCmd.Panel_SetLens(var panel, var lens):
-                SetLens(store, panel, lens);   // any expression over its node: typed, it need not be a lens
+            case BoardCmd.Panel_SetLens(var lens):
+                SetLens(store, ctx.Panel, lens);   // any expression over its node: typed, it need not be a lens
                 break;
             case BoardCmd.Panels_Resize(var share):
             {
@@ -216,10 +225,11 @@ public static class App
                 main.Modify(store, main.RowFromId(store) with { Share = Math.Round(1 - Math.Clamp(share, ColumnLeast, ColumnMost), 4) });
                 break;
             }
-            case BoardCmd.Panel_Resize(var first, var second, var share):
+            case BoardCmd.Panel_Resize(var share):
             {
                 // One grows, the other gives way, the pair's sum kept. To four places: a pointer held
                 // still measures the same share, so changes nothing.
+                var (first, second) = (ctx.PanelFrom, ctx.PanelTo);
                 Node.Panel a = first.RowFromId(store), b = second.RowFromId(store);
                 if (a.Main || b.Main) break;   // two of the column's
                 double pair = a.Share + b.Share, grown = Math.Round(pair * Math.Clamp(share, PairLeast, PairMost), 4);
@@ -227,8 +237,9 @@ public static class App
                 second.Modify(store, b with { Share = Math.Round(pair - grown, 4) });
                 break;
             }
-            case BoardCmd.Panel_Close(var panel):
+            case BoardCmd.Panel_Close:
             {
+                var panel = ctx.Panel;
                 bool wasMain = panel.Main(store);   // false once released: its row reads as the default
                 Nodes.Release(store, panel);         // nothing once released
                 // The next panel takes the main one's place, so there is one while any is open.
@@ -240,7 +251,7 @@ public static class App
 
             //- a read: answered, nothing written, so no generation
             case BoardCmd.Eval(var e):
-                push.Output(TextView.Answer(e, ctx, text));
+                push.Output(TextView.Answer(e, eval, text));
                 break;
         }
     }

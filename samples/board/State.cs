@@ -1,3 +1,7 @@
+// The board's views are of its model, in its Context.
+global using UIView = Bibui.Views.UIView<Context>;
+global using UiDrawer = Bibui.Views.UiDrawer<Context>;
+
 using System.Text.Json.Serialization;
 using Bibui.Commands;
 using Bibui.Views;
@@ -12,7 +16,7 @@ using CoreLenses = Bibui.Commands.Lenses;
 // board's view lenses among its kinds), the names an expression may use, the view rules, the lenses.
 sealed class Workbench
 {
-    public required Model Model;
+    public required Model<Context> Model;   // the facts, and the context stack: what the code drawing now is about
     public required VesselCache Cache;     // the vessel layer's: segmentations, by what they are made from
     public required LensTable Lenses;      // every lens, by name: the core ones and the app's
     public required Dictionary<string, UiDrawer> Window;    // lens name → how it is drawn in a window (UIView's drawers)
@@ -57,7 +61,7 @@ sealed class Workbench
         //- the model's types, from its schema (the view lenses' kinds, BoardLenses.cs, among them), and
         // the model: its commands applied with the lens table, so the view's lens is checked as it is set.
         var types = ModelEval.MakeEvalTypes(NodeKinds.Schema);
-        var model = new Model((store, cmd, push) => App.Apply(store, cmd, push, lenses, ctx, text), wake, tree: NodeKinds.NewTree());   // starts with the schema's view rules
+        var model = new Model<Context>((store, cmd, in c, push) => App.Apply(store, cmd, c, push, lenses, ctx, text), wake, tree: NodeKinds.NewTree(), context: Context.Ops);   // starts with the schema's view rules
         model.Lenses = lenses;   // what view_rule.set may call
 
         //- the symbols: what each name in an expression means, each layer adding its own
@@ -73,7 +77,7 @@ sealed class Workbench
     }
 
     /// <summary>The tree evaluations read: the model's one tree, written in place by its commands (between frames).</summary>
-    public static ModelStore Published(Model model) => model.Tree;
+    public static ModelStore Published(Model<Context> model) => model.Tree;
 
     /// <summary>
     /// What a panel shows: its lens called over its node, `it` the node while it is evaluated
