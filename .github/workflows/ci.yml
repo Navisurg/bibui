@@ -69,6 +69,7 @@ jobs:
             bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj \
             bibui-platform-silk/bibui-platform-silk.csproj \
             bibui-platform-wayland/bibui-platform-wayland.csproj \
+            bibui-platform-portal/bibui-platform-portal.csproj \
             bibui-platform-browser/bibui-platform-browser.csproj \
             bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj \
             bibui-apps/silk-skia-cpu/bibui-app-silk-skia-cpu.csproj \
@@ -84,6 +85,7 @@ jobs:
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
             tests/wayland-hello/wayland-hello.csproj \
+            tests/portal-tests/portal-tests.csproj \
             tests/app-packages-tests/app-packages-tests.csproj \
             tests/browser-tests/browser-tests.csproj \
             samples/component-gallery/component-gallery.csproj \
@@ -108,6 +110,7 @@ jobs:
             tests/text-tests/text-tests.csproj \
             tests/png-tests/png-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
+            tests/portal-tests/portal-tests.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
             bibui-raster-managed/damage-tests/Bibui.Raster.Managed.DamageTests.csproj \
             tests/app-packages-tests/app-packages-tests.csproj \

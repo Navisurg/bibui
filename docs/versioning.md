@@ -8,7 +8,7 @@ a part of that API is retired.
 bibui follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 Every public package (`Bibui`, `Bibui.Core`, `Bibui.Text`, `Bibui.Glyphs`, `Bibui.Gl`, `Bibui.Testing`,
 `Bibui.Raster.Skia`, `Bibui.Raster.Managed`, `Bibui.Raster.Managed.Backend`,
-`Bibui.Platform.Silk`, `Bibui.Platform.Wayland`, `Bibui.Platform.Browser` and
+`Bibui.Platform.Silk`, `Bibui.Platform.Wayland`, `Bibui.Platform.Portal`, `Bibui.Platform.Browser` and
 the five `Bibui.App` packages) is released together, at the same version, from one tag. Depend on one version of all of them.
 
 Given a version `MAJOR.MINOR.PATCH`:

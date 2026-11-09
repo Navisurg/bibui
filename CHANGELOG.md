@@ -6,6 +6,22 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **`Bibui.Platform.Portal`**, a package of its own: the desktop's own file
+  chooser through xdg-desktop-portal's `org.freedesktop.portal.FileChooser`,
+  for any bibui window. `FileChooser.OpenAsync(new FileChooserOptions { Title,
+  Multiple, Directory, Filters, … })` returns the chosen files or folders as
+  local paths, or null when the person cancelled or there is no portal;
+  `FileChooser.ChooseAsync` says which (`FileChooserOutcome`) and why
+  (`Reason`). It holds no thread while the dialog is open, and without a
+  session bus or a portal it comes back `Unavailable` rather than throwing.
+  `FileChooser.VersionAsync()` asks the portal's version without opening a
+  dialog. It speaks D-Bus over the session bus socket itself, with no
+  dependency and no reflection, so it publishes with Native AOT. The dialog is
+  unparented: exporting a Wayland window's handle (xdg-foreign) is still to
+  come.
+
 ## [1.2.0] - 2026-11-11
 
 Text in more than one style, and Markdown edited in place. The text layer

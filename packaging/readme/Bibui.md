@@ -15,6 +15,7 @@ its dependencies are:
 | `Bibui.Core` | the core, the runtime (`BibuiRuntime`) and the components |
 | `Bibui.Platform.Silk` | a window through GLFW and OpenGL |
 | `Bibui.Platform.Wayland` | a window on raw Wayland, drawn on the CPU; Native AOT |
+| `Bibui.Platform.Portal` | the desktop's own file chooser, through xdg-desktop-portal |
 | `Bibui.Platform.Browser` | a `<canvas>` in a .NET WebAssembly app |
 | `Bibui.Raster.Skia`, `Bibui.Gl` | drawing with SkiaSharp, on the GPU or the CPU |
 | `Bibui.Raster.Managed.Backend` | drawing with a managed rasterizer and FreeType text, no SkiaSharp |

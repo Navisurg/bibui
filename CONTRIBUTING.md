@@ -57,6 +57,7 @@ dotnet run --project tests/bibui-runtime-tests -c Release       # runtime, compo
 dotnet run --project tests/text-tests -c Release
 dotnet run --project tests/png-tests -c Release
 dotnet run --project tests/wayland-tests -c Release             # headless; skips what needs a compositor
+dotnet run --project tests/portal-tests -c Release              # the file chooser against a fake bus; opens no dialog
 dotnet run --project tests/browser-tests -c Release             # the browser host's logic, no browser
 dotnet run --project bibui-raster-managed/tests -c Release
 dotnet run --project bibui-raster-managed/damage-tests -c Release  # damage tracking, byte for byte

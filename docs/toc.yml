@@ -13,6 +13,8 @@ items:
   href: theming.md
 - name: Native AOT
   href: aot.md
+- name: The file chooser
+  href: file-chooser.md
 - name: bibui in the browser
   href: browser.md
 - name: Versions and compatibility

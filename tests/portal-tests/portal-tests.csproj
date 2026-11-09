@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Headless tests for Bibui.Platform.Portal: the D-Bus wire format, the
+       file URIs, and the file chooser against a fake bus. Nothing here opens a
+       dialog. The cases that check bytes against GLib's own encoder need
+       python3 with PyGObject, and the live probe a session bus with a portal;
+       each reports SKIP when the machine has none. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>bibui-portal-tests</AssemblyName>
+    <RootNamespace>Bibui.PortalTests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui-platform-portal/bibui-platform-portal.csproj" />
+  </ItemGroup>
+</Project>
