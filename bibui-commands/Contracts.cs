@@ -8,7 +8,7 @@ namespace Bibui.Commands;
 /// <summary>
 /// A command set: an <c>abstract partial record</c> whose nested records are its commands. cmdgen
 /// makes it a <see cref="Cmd"/>, and writes their wire names (<c>Panel_Close</c> is <c>panel.close</c>),
-/// a push method each on a <see cref="Model"/>, and the set's table of <see cref="OpInfo"/>.
+/// a push method each on a <see cref="Model{TCtx}"/>, and the set's table of <see cref="OpInfo"/>.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class CommandSetAttribute : Attribute;
@@ -71,15 +71,13 @@ public sealed record ArgInfo(string Name, string Type, string Description, strin
 /// One operation, as its set's generated table holds it: its wire name, label,
 /// description, contracts, type and arguments, its text in a row (<see cref="ShortAttribute"/>;
 /// null: its label) and its icon (<see cref="IconAttribute"/>). For anything that lists or explains the app's commands: a palette, a test
-/// port's schema, an MCP server, a node's row. And how to make it where code is: <see cref="FromContext"/>, so
-/// library code (a row's buttons, a palette) makes any app's command with no code of the app's.
+/// port's schema, an MCP server, a node's row.
 /// </summary>
 public sealed record OpInfo(string Wire, string Label, string Description, OpKind Kind, OpFlags Flags, Type Type, ArgInfo[] Args, string? Short = null, string? Icon = null)
 {
-    // cmdgen's, per command: each argument named as its kind (CaseId Case) taken from that kind's slot of
-    // the context; any other (a seed; one of two panels) never the context's.
-    public Func<Context, Cmd?>? FromContext;       // the command, its arguments from the context; null when it lacks one, or one is never the context's
-    public Func<Context, ArgInfo?>? Missing;       // its first argument the context does not hold (now, or ever); null when it holds them all
+    // cmdgen's, per command.
+    public ArgInfo[] Context = [];   // what it reads from the context ([Context.DependsOn]): each field by its wire name (panel_from) and kind
+    public Cmd? Cmd;                 // the command, for one that takes no arguments: all it needs is the context, so a row pushes this; null for one with arguments
 
     /// <summary>The argument named <paramref name="name"/>, or null.</summary>
     public ArgInfo? Arg(string name)

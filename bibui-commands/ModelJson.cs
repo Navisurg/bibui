@@ -13,7 +13,6 @@ namespace Bibui.Commands;
 public static class ModelJson
 {
     static readonly List<RowItem> Row = [];   // one node's row, while it is written
-    static readonly ContextStack Context = new();   // the walk's: each node pushed as it is written, so its row is made in the context of the nodes above it; cleared each answer
 
     // How the outline's nodes are found on screen: the app's convention, said with every answer.
     const string Ui = "A field in [brackets] ([index] 2) is editable: a person changes it where it is shown, at <handle>/<key> (click it, then type), and a client may set it (node.set Node=<handle> Key=<key> Value=<expression>: 2, \"text\", $7.title). A node's row (row:) is what it shows on screen, left to right, each at <handle>/<key or command>: [key] an editable field, key a field shown, text → command a button running that command.";
@@ -28,9 +27,8 @@ public static class ModelJson
     /// <c>@gen</c>: <c>panel/#7@40</c>; it may start with <c>root</c>. Its last segment may name a field of
     /// the node's kind: answered as its value, from the node's row (its default before one is written).
     /// </summary>
-    public static string? Get(Utf8JsonWriter json, Model model, Schema schema, string path, int depth)
+    public static string? Get<TCtx>(Utf8JsonWriter json, Model<TCtx> model, Schema schema, string path, int depth) where TCtx : struct
     {
-        Context.Clear();   // the last answer's contexts are gone
         long gen = model.Gen;
         ModelStore? t = model.Tree;
         int at = path.LastIndexOf('@');
@@ -95,8 +93,12 @@ public static class ModelJson
     // A kind's name, by its index: the schema's; its index as text without one.
     static string NameOf(Schema schema, ushort kind) => Schemas.Of(schema, kind) is { } k ? k.Name : $"kind {kind}";
 
-    /// <summary>The generations after <paramref name="since"/> the log still holds, oldest first: each one's command and what pushed it.</summary>
-    public static void Log(Utf8JsonWriter json, Model model, JsonTypeInfo<Cmd> commands, long since)
+    /// <summary>
+    /// The generations after <paramref name="since"/> the log still holds, oldest first: each one's command,
+    /// the context it ran in (the fields its entry in <paramref name="ops"/> declares, beside its arguments,
+    /// as a client sends them), and what pushed it.
+    /// </summary>
+    public static void Log<TCtx>(Utf8JsonWriter json, Model<TCtx> model, JsonTypeInfo<Cmd> commands, IReadOnlyList<OpInfo> ops, long since) where TCtx : struct
     {
         json.WriteStartObject();
         json.WriteNumber("gen", model.Gen);
@@ -109,10 +111,31 @@ public static class ModelJson
             json.WriteNumber("gen", entry.Gen);
             if (entry.CauseGen != 0) json.WriteNumber("cause", entry.CauseGen);
             json.WritePropertyName("cmd");
-            JsonSerializer.Serialize(json, entry.Cmd, commands);   // the app's or the library's: one JSON for both
+            Cmd(json, entry.Cmd, entry.Ctx, commands, ops, model.Context);
             json.WriteEndObject();
         }
         json.WriteEndArray();
+        json.WriteEndObject();
+    }
+
+    /// <summary>
+    /// A command as a client sends it: its JSON (the app's or the library's: one JSON for both), and beside
+    /// its arguments the fields of <paramref name="ctx"/> its entry in <paramref name="ops"/> declares.
+    /// </summary>
+    public static void Cmd<TCtx>(Utf8JsonWriter json, Cmd cmd, in TCtx ctx, JsonTypeInfo<Cmd> commands, IReadOnlyList<OpInfo> ops, ContextOps<TCtx>? context) where TCtx : struct
+    {
+        OpInfo? op = null;
+        foreach (var o in ops) if (o.Type == cmd.GetType()) { op = o; break; }
+        if (op is null || op.Context.Length == 0 || context is null)
+        {
+            JsonSerializer.Serialize(json, cmd, commands);
+            return;
+        }
+        // Its arguments as its JSON writes them, then its context beside them, in the one object.
+        using var written = JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(cmd, commands));
+        json.WriteStartObject();
+        foreach (var property in written.RootElement.EnumerateObject()) property.WriteTo(json);
+        context.Write(json, op, ctx);
         json.WriteEndObject();
     }
 
@@ -123,7 +146,7 @@ public static class ModelJson
     /// <paramref name="most"/> entries, then how many more. An empty diff: nothing changed. Its
     /// fields, into the object the caller has open: what else an answer says is the caller's.
     /// </summary>
-    public static void Diff(Utf8JsonWriter json, Model model, Schema schema, long from, int most = 200)
+    public static void Diff<TCtx>(Utf8JsonWriter json, Model<TCtx> model, Schema schema, long from, int most = 200) where TCtx : struct
     {
         json.WriteNumber("from", from);
         json.WriteNumber("gen", model.Gen);
@@ -311,13 +334,12 @@ public static class ModelJson
         json.WriteStartObject();
         json.WriteString("key", NameOf(schema, n.Kind));
         json.WriteString("handle", id.ToString());
-        // Its row, as its kind declares it and the UI shows it (Schemas.RowOf): a field by its key and
-        // whether a person types into it; a command by its text there and its wire name. Each is on
-        // screen at <handle>/<key or command>. Its context: the nodes it is under, as the walk pushed
-        // them, and itself, as a row drawn in the window has (UIView.Commands).
-        using var _ = Context.Push(n.Kind, id);
+        // Its row, as its kind declares it (Schemas.RowOf): a field by its key and whether a person types
+        // into it; a command by its text there and its wire name. Each is on screen at <handle>/<key or
+        // command>. Every command of it: which are offered is the context's where the row is drawn, the
+        // app's, and a walk of the tree is in none.
         Row.Clear();
-        if (Schemas.Of(schema, n.Kind) is { } rowKind) Schemas.RowOf(rowKind, Context.Top, Row);
+        if (Schemas.Of(schema, n.Kind) is { } rowKind) Schemas.RowOf(rowKind, null, Row);
         if (Row.Count > 0)
         {
             json.WriteStartArray("row");

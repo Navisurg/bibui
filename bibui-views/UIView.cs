@@ -14,11 +14,14 @@ namespace Bibui.Views;
 // reached by. What is drawn twice in a frame keeps its id the first time, and the second gets a suffix
 // (12#12~2), so a client clicks the first.
 //
-// The UI never writes the model directly: it pushes commands onto the model's queue (Model.Push), and
+// The UI never writes the model directly: it pushes commands onto the model's queue (Push), and
 // they are applied with the next frame's. So every change a person makes is a logged command an agent
-// could also send: a pick sets its field with node.set (Model.SetField), and a node's row is the
-// commands its kind's [Row] lists that the context it is drawn in can fill, as buttons (Commands).
+// could also send: a pick sets its field with node.set. A node's row is the commands its kind's [Row]
+// lists that are offered where it is drawn, as buttons (Commands): it says which was pressed, and the
+// app's code that drew it, in the context that holds the node, pushes it.
 // What only the view keeps (a board's zoom, a tree's pan) is view state (ViewStates), never a command.
+// The context (which panel, which view) is the app's, on its model's stack: these drawers never read
+// or set it; an app's drawers read it there.
 //
 // NOTE(k): the ids are strings made per frame, a few per value drawn; the core's two-part box id
 // (open item) removes them.
@@ -36,11 +39,10 @@ public sealed class UIView
     public required BibuiRuntime Ui;
     public required EvalContext EvalCtx;
     public required ModelTypes Types;
-    public required Model Model;                                    // where its writes go (Push)
+    public required Action<Cmd> Push;                                    // where its writes go: the model's Push, in the context on top
     public required ViewStates Views;                                    // what a view keeps between frames (a board's layout and zoom, a tree's pan, zoom and drawing), by the node it is drawn for
     public long Frame;                                                   // this frame: what the view states it touches are kept for
     public required Dictionary<string, UiDrawer> Drawers;                // lens name → its drawing in a window: the app's, given at Make
-    public required ContextStack Context;                                // what is being drawn: the nodes it is about, by kind, and the view's node (Context.View: whose view state a lens keeps); pushed as drawing descends
 
     readonly HashSet<string> used = new();                               // the ids given this frame
     readonly List<RowItem> row = new();                                  // a node's row, read again for each node drawn (Commands)
@@ -80,14 +82,13 @@ public sealed class UIView
     }
 
     /// <summary>A view drawing with <paramref name="drawers"/>, the app's table of how each lens is drawn in a window.</summary>
-    public static UIView Make(BibuiRuntime ui, EvalContext ctx, ModelTypes types, Dictionary<string, UiDrawer> drawers, Model model, ViewStates views) =>
-        new() { Ui = ui, EvalCtx = ctx, Types = types, Drawers = drawers, Model = model, Views = views, Context = new ContextStack() };
+    public static UIView Make(BibuiRuntime ui, EvalContext ctx, ModelTypes types, Dictionary<string, UiDrawer> drawers, Action<Cmd> push, ViewStates views) =>
+        new() { Ui = ui, EvalCtx = ctx, Types = types, Drawers = drawers, Push = push, Views = views };
 
     /// <summary>The start of a frame's drawing: the ids given in the last are free again.</summary>
     public static void BeginFrame(UIView view, long frame)
     {
         view.used.Clear();
-        view.Context.Clear();   // the last frame's contexts are gone
         view.Frame = frame;
         foreach (var (id, (_, drawn)) in view.texts)   // a dictionary may lose entries while it is enumerated
             if (drawn < frame - 1) view.texts.Remove(id);
@@ -164,29 +165,28 @@ public sealed class UIView
     }
 
     /// <summary>
-    /// A node's row: its kind's [Row], from the schema (Schemas.RowOf: each command it lists while the
-    /// context can make it), a button each, labelled by its [Short]; pressed, made from the context
-    /// (OpInfo.FromContext) and pushed. The context is the one the row is drawn in, with the node in its
-    /// kind's slot: a command takes what it needs from it (the case, the panel it is shown in). Nothing
-    /// for anything that is not a node.
+    /// A node's row: its kind's [Row], from the schema (Schemas.RowOf: each command it lists that is
+    /// <paramref name="offered"/>, the model's Offers), a button each, labelled by its [Short]. The one
+    /// pressed, or null: its command takes no arguments (<see cref="OpInfo.Cmd"/>), and the caller pushes it
+    /// in the context it drew the row in, the one holding the node (the case, the panel it is shown in).
+    /// Nothing for anything that is not a node.
     /// </summary>
-    public static void Commands(UIView view, in Value shown)
+    public static OpInfo? Commands(UIView view, in Value shown, Func<OpInfo, bool> offered)
     {
         var bare = Bare(Eval.Load(shown));
-        if (!ModelEval.IsNode(bare)) return;
+        if (!ModelEval.IsNode(bare)) return null;
         var (t, slot) = ModelEval.NodeOf(bare);
-        if (Schemas.Of(view.Types.Schema, Nodes.At(t, slot).Kind) is not { } kind) return;
-        using var _ = view.Context.Push(kind.Index, Nodes.IdOf(t, slot));
+        if (Schemas.Of(view.Types.Schema, Nodes.At(t, slot).Kind) is not { } kind) return null;
         view.row.Clear();
-        Schemas.RowOf(kind, view.Context.Top, view.row);
+        Schemas.RowOf(kind, offered, view.row);
+        OpInfo? pressed = null;
         foreach (var item in view.row)
         {
             if (item.Command is not { } op) continue;   // a field the row lists: not drawn here
-            if (view.Ui.Button(Unique(view, $"{ModelEval.IdOf(bare)}/{op.Wire}"), op.Short ?? op.Label, size: ComponentSize.Sm).Clicked
-                && op.FromContext?.Invoke(view.Context.Top) is { } cmd)
-                view.Model.Push(cmd);
+            if (view.Ui.Button(Unique(view, $"{ModelEval.IdOf(bare)}/{op.Wire}"), op.Short ?? op.Label, size: ComponentSize.Sm).Clicked) pressed = op;
             view.Ui.Gap(6);
         }
+        return pressed;
     }
 
     static void PlainLine(UIView view, in Value shown, string id)
@@ -202,7 +202,6 @@ public sealed class UIView
     // left: so a node whose member is a list (the cases' case) shows that list as rows. The first 64.
     static void FieldsBlock(UIView view, in Value shown, string id)
     {
-        using var _ = view.Context.PushView(default);   // a part is drawn on its own, not as this view
         Parts(view, shown, id, EvalTypes.Bare(shown.Type)?.PartName ?? (i => $"[{i}]"), Size.Fill, Size.Fill);
     }
 
@@ -216,14 +215,10 @@ public sealed class UIView
     }
 
     // Under it: its first part's block, then each other part, one under another; a part that fills is given
-    // RowsFill, as its box is as high as what it holds. The node is the view its parts are drawn for (so a
-    // part's view state, a tree's pan, is the node's).
+    // RowsFill, as its box is as high as what it holds. Which view its parts keep their state for is the
+    // context's, set by the app's code that drew it (a card's case, by the board's lens).
     static void RowsBlock(UIView view, in Value shown, string id)
     {
-        // The node it lays out (a case, for its card): the view its parts are drawn for, and in its kind's slot.
-        using var scope = view.Context.Push();
-        if (ModelEval.NodeOf(Bare(shown)) is ({ } t, > 0 and var slot)) scope.View(Nodes.IdOf(t, slot)).Set(Nodes.At(t, slot).Kind, Nodes.IdOf(t, slot));
-        else scope.View(default);
         Parts(view, shown, id, null, Size.Fit, Size.Px(RowsFill));
     }
 
@@ -297,7 +292,7 @@ public sealed class UIView
                 var choice = Eval.At(choices, i, ctx);
                 if (!view.Ui.SelectItem($"{id}/{i}", Text(choice), selected: i == current).Clicked) continue;
                 if (ModelEval.AddressOf(view.Types, Bare(shown)) is var (node, key) && key is not null)
-                    view.Model.SetField(node, key, byPlace ? Exprs.Lit(i) : ChoiceLit(choice));
+                    view.Push(new BuiltinCmd.Node_Set { Node = node, Key = key, Value = byPlace ? Exprs.Lit(i) : ChoiceLit(choice) });
                 select.Close();
             }
         select.End();
@@ -376,7 +371,6 @@ public sealed class UIView
                     ctx.DynamicVar = outer;
                     using (ui.Parent(Yielding(ui, Cell))) view.Drawers[DrawnBy(view, cell).Name].Line(view, cell, $"{id}/{r}/{Exprs.Text(column)}");
                 }
-                Commands(view, part);
             }
         }
         ui.EndRowScrollList(ref at, Pitch, count);

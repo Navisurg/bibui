@@ -8,8 +8,8 @@ namespace Bibui.Commands;
 // a table's rows). Two forms because a value is drawn both inside its parent's row and on its own, and
 // only the line has to fit in the parent's. A drawer draws only its value: the name it is shown under is its
 // parent's to lay out (a field's name, a column's expression). A lens's arguments are its call's, as
-// written; the context (Context) is what is being drawn: the nodes it is about, by kind, and the view's
-// node (Context.View: a panel), whose view state a drawer keeps, pushed as drawing descends, as UIView's.
+// written. What the drawing is about (which panel, which view) is the app's context, on its model's
+// stack: an app's drawer reads it there; the core drawers need none.
 
 /// <summary>A value under a lens, on one line.</summary>
 public delegate string TextLine(TextView view, in Value shown);
@@ -18,13 +18,12 @@ public delegate void TextBlock(TextView view, in Value shown, int depth);
 /// <summary>A lens's drawing as text: its line, and its block when it has more to show than a line.</summary>
 public sealed record TextDrawer(TextLine Line, TextBlock? Block = null);
 
-/// <summary>What text drawing needs: where it writes, what names it evaluates with, the drawers by lens name (the app's table, filled where it hooks up), and the context it draws in.</summary>
+/// <summary>What text drawing needs: where it writes, what names it evaluates with, and the drawers by lens name (the app's table, filled where it hooks up).</summary>
 public sealed class TextView
 {
     public required TextWriter Out;
     public required EvalContext EvalCtx;
     public required Dictionary<string, TextDrawer> Drawers;   // lens name → its drawing as text: the app's, given at Make
-    public required ContextStack Context;                     // what is being drawn: the nodes it is about, by kind, and the view's node; one drawing's, made at Make
 
     // The core lenses' drawings as text, for the app's drawer table: text, edit and pick as the value's
     // text; fields, a line per part; table, a row per part.
@@ -35,18 +34,19 @@ public sealed class TextView
 
     /// <summary>A text view drawing with <paramref name="drawers"/>, the app's table of how each lens is drawn as text.</summary>
     public static TextView Make(TextWriter output, EvalContext ctx, Dictionary<string, TextDrawer> drawers) =>
-        new() { Out = output, EvalCtx = ctx, Drawers = drawers, Context = new ContextStack() };
+        new() { Out = output, EvalCtx = ctx, Drawers = drawers };
 
     /// <summary>
     /// What <paramref name="e"/> evaluates to, drawn as text through its view rule and lenses, under
     /// its own text: what an eval command answers, as <c>bp text</c> draws a panel. It reads the model
-    /// as <paramref name="ctx"/>'s names do, with no <c>it</c>.
+    /// as <paramref name="ctx"/>'s names do, with <c>it</c> the node <paramref name="it"/> (the one it is
+    /// asked in: a panel's), or nothing.
     /// </summary>
-    public static string Answer(Expr e, EvalContext ctx, Dictionary<string, TextDrawer> drawers)
+    public static string Answer(Expr e, EvalContext ctx, Dictionary<string, TextDrawer> drawers, NodeId it = default)
     {
         var output = new StringWriter();
         var outer = ctx.DynamicVar;
-        ctx.DynamicVar = Value.None;   // at the top of an evaluation, it names nothing
+        ctx.DynamicVar = !it.IsNone && ctx.Model is { } model ? ModelEval.Node(model.Types, model.Tree(), it) : Value.None;
         Draw(Make(output, ctx, drawers), Eval.Run(e, ctx), Exprs.Text(e));
         ctx.DynamicVar = outer;
         return output.ToString();
@@ -99,7 +99,6 @@ public sealed class TextView
     {
         long n = Math.Min(Eval.Count(shown), 32);
         var named = EvalTypes.Bare(shown.Type)?.PartName;
-        using var _ = view.Context.PushView(default);   // a part is drawn on its own, not as this view
         for (int i = 0; i < n; i++) Draw(view, Eval.At(shown, i, view.EvalCtx), named?.Invoke(i) ?? $"[{i}]", depth);
     }
 
@@ -108,10 +107,6 @@ public sealed class TextView
 
     static void RowsBlock(TextView view, in Value shown, int depth)
     {
-        // The node it lays out (a case, for its card): the view its parts are drawn for, and in its kind's slot, as UIView's.
-        using var scope = view.Context.Push();
-        if (ModelEval.NodeOf(Bare(shown)) is ({ } t, > 0 and var slot)) scope.View(Nodes.IdOf(t, slot)).Set(Nodes.At(t, slot).Kind, Nodes.IdOf(t, slot));
-        else scope.View(default);
         long n = Math.Min(Eval.Count(shown), 32);
         if (n > 0 && Eval.At(shown, 0, view.EvalCtx) is var first && view.Drawers[DrawnBy(view, first).Name].Block is { } block) block(view, first, depth);
         for (int i = 1; i < n; i++) Draw(view, Eval.At(shown, i, view.EvalCtx), $"[{i}]", depth);

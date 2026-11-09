@@ -28,19 +28,21 @@ public static partial class Node
 public abstract partial record AppCmd                 // cmdgen makes it a Cmd
 {
     [Description("Closes a panel.")]
-    public sealed record Panel_Close(PanelId Panel) : AppCmd;
+    [Context.DependsOn<PanelId>]                      // what it reads from the context: the panel it is in
+    public sealed record Panel_Close : AppCmd;
 }
 
-static void Apply(ModelStore store, Cmd cmd, Pushes push)   // the app's commands; the built-ins are the model's
+static void Apply(ModelStore store, Cmd cmd, in Context ctx, Pushes<Context> push)   // the app's commands; the built-ins are the model's
 {
     switch (cmd)
     {
-        case AppCmd.Panel_Close(var panel): Nodes.Release(store, panel); break;
+        case AppCmd.Panel_Close: Nodes.Release(store, ctx.Panel); break;
     }
 }
 
-var model = new Model(Apply, wake: runtime.RequestFrame);
-model.Push(new AppCmd.Panel_Close(panel));   // applied at model.Run(), at the top of the next frame
+var model = new Model<Context>(Apply, wake: runtime.RequestFrame, context: Context.Ops);
+using (model.ContextScope(model.GetCtx() with { Panel = panel }))
+    model.Push(new AppCmd.Panel_Close());   // queued with the context on top; applied at model.Run(), at the top of the next frame
 ```
 
 - **Nodes.** A `[NodeSet]` declares the app's kinds of node as records. Each kind gets a typed id
@@ -53,19 +55,27 @@ model.Push(new AppCmd.Panel_Close(panel));   // applied at model.Run(), at the t
   `$cmd` its JSON carries). The library's own commands (`BuiltinCmd`: `node.set`, which sets
   one field of a node to the value of an expression, and `view_rule.set`) go through the same
   model, log and wire (`CmdJson.For`).
-- **The `Model`** is the only writer of the tree. It queues what is pushed and applies it in
-  `Run`, one command at a time; commands pushed while one is applied run in the same `Run`. A
-  command that changed the tree publishes a generation, kept in a log with the command that
-  made it (`TryEntry`), so an older generation can still be read.
+- **The context** is the environment a command runs in (which panel, which case); its
+  arguments are what to do. A command declares what it reads, `[Context.DependsOn<PanelId>]`,
+  with a `Role` (`From`, `To`) for a second node of a kind; cmdgen makes the app's `Context`, a
+  field per kind and role some command declares (`Panel`, `PanelFrom`), and `View`. Code says
+  where it is in a scope (`model.ContextScope(model.GetCtx() with { … })`), and a command is
+  queued with the top; its apply is given it. On the wire a command carries the fields it
+  declares beside its arguments (`{"$cmd":"panel.close","panel":"#7"}`).
+- **The `Model<Context>`** is the only writer of the tree. It queues what is pushed and applies
+  it in `Run`, one command at a time, each in its context; commands pushed while one is applied
+  run in the same `Run`, in its context unless given another. A command that changed the tree
+  publishes a generation, kept in a log with the command that made it and its context
+  (`TryEntry`), so an older generation can still be read.
 - **Expressions and lenses.** `Expr` is a small language over everything the app exposes:
   the model's nodes and fields, and any `[Place]` an app registers (a cache, a computed layer).
   A lens is a function call that says how a value is seen (`board(it.case)`, `rows(it, …)`);
   a view rule says which lens a type, or one node, is seen through by default.
 - **What a command is.** `[Description]` on the record and its arguments, `[Label]`, `[Short]`
   and `[Icon]` for where it is shown, and `[ReadsOnly]`. cmdgen copies them into a table,
-  `<Set>Ops.All`: an `OpInfo` per command. Each `OpInfo` can also build its command from a
-  `Context` (the nodes the code drawing it is about, by kind), so library code can show a
-  node's row of commands for any app. Nothing is reflected.
+  `<Set>Ops.All`: an `OpInfo` per command, with what it reads from the context and, for one
+  without arguments, the command itself (`OpInfo.Cmd`), so library code can show a node's row of
+  commands for any app and the app pushes the one pressed. Nothing is reflected.
 - **Reading the model from outside.** `ModelJson` answers a node and what is under it, the
   command log, and the schema as JSON, for a test port or a CLI. `TextView` draws a value
   through its lenses as text.

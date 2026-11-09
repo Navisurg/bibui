@@ -229,17 +229,18 @@ public static class Schemas
     public static KindInfo? Of(Schema s, ushort kind) => kind < s.Kinds.Length ? s.Kinds[kind] : null;
 
     /// <summary>
-    /// The row of a node of <paramref name="kind"/> in context <paramref name="c"/> (the node in its kind's
-    /// slot, and whatever the code drawing it is about), added to <paramref name="into"/>: its kind's [Row],
-    /// each field as declared, each command while the context can make it (OpInfo.Missing). Allocates nothing.
+    /// The row of a node of <paramref name="kind"/>, added to <paramref name="into"/>: its kind's [Row], each
+    /// field as declared, each command <paramref name="offered"/> (the model's Offers: the context where it is
+    /// drawn holds what it reads; null: every one). A row's commands take no arguments (<see cref="OpInfo.Cmd"/>):
+    /// what they need is the context's. Allocates nothing.
     /// </summary>
-    public static void RowOf(KindInfo kind, in Context c, List<RowItem> into)
+    public static void RowOf(KindInfo kind, Func<OpInfo, bool>? offered, List<RowItem> into)
     {
         foreach (var entry in kind.Row ?? [])
         {
             if (entry.Op is { } op)
             {
-                if (op.Missing?.Invoke(c) is null && op.FromContext is not null) into.Add(new(null, null, op));
+                if (op.Cmd is not null && (offered is null || offered(op))) into.Add(new(null, null, op));
                 continue;
             }
             foreach (var (key, type) in kind.Shape?.Members ?? [])

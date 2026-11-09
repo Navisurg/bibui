@@ -14,39 +14,49 @@ public abstract record Cmd;
 
 /// <summary>
 /// A model's one state change: <paramref name="cmd"/> applied to <paramref name="tree"/>, in place:
-/// the only thing it writes. It may push follow-ups through <paramref name="push"/>; they run in
-/// the same <see cref="Model.Run"/>, after this batch. It is given the tree to write rather
-/// than the model, so it can be run on a tree that is not the model's (a dry run on a fork, a
-/// replay, a test), and cannot reach the model's log or its published generations. A command
-/// that must also act on the app's runtime is the rare one: the app's apply captures what it
-/// needs, and says so where it does.
+/// the only thing it writes, in the context it was pushed in (<paramref name="ctx"/>: which panel, which
+/// case; its arguments say what to do). It may push follow-ups through <paramref name="push"/>; they run
+/// in the same <see cref="Model{TCtx}.Run"/>, after this batch, in this command's context unless given
+/// another. It is given the tree to write rather than the model, so it can be run on a tree that is not
+/// the model's (a dry run on a fork, a replay, a test), and cannot reach the model's log or its published
+/// generations. A command that must also act on the app's runtime is the rare one: the app's apply
+/// captures what it needs, and says so where it does.
 /// </summary>
-public delegate void Apply(ModelStore tree, Cmd cmd, Pushes push);
+public delegate void Apply<TCtx>(ModelStore tree, Cmd cmd, in TCtx ctx, Pushes<TCtx> push) where TCtx : struct;
 
 /// <summary>
 /// Where commands are pushed, and what they answer: what an apply is given for its follow-ups and
 /// its output, and what <c>model.Cmds</c> pushes through (cmdgen's push methods:
-/// <c>push.Cmds.PanelSpawn()</c>). Onto a model's queue and its outputs, or into a list (a dry run,
-/// a test), where an output goes nowhere.
+/// <c>push.Cmds.PanelSpawn()</c>). Onto a model's queue, in the context on top of its stack (inside an
+/// apply, the running command's), and its outputs; or into a list (a dry run, a test), in the context
+/// it was made with, where an output goes nowhere.
 /// </summary>
-public readonly struct Pushes
+public readonly struct Pushes<TCtx> where TCtx : struct
 {
-    private readonly Model? _model;
-    private readonly List<Cmd>? _into;
+    private readonly Model<TCtx>? _model;
+    private readonly List<(Cmd Cmd, TCtx Ctx)>? _into;
+    private readonly TCtx _ctx;   // the list's: what a push without one is queued with
 
-    public Pushes(Model model) => _model = model;
-    public Pushes(List<Cmd> into) => _into = into;
+    public Pushes(Model<TCtx> model) => _model = model;
+    public Pushes(List<(Cmd Cmd, TCtx Ctx)> into, in TCtx ctx = default) => (_into, _ctx) = (into, ctx);
 
-    /// <summary>Queues <paramref name="cmd"/>.</summary>
+    /// <summary>Queues <paramref name="cmd"/> in the context on top: the running command's, inside an apply.</summary>
     public void Push(Cmd cmd)
     {
         if (_model is not null) _model.Push(cmd);
-        else _into?.Add(cmd);
+        else _into?.Add((cmd, _ctx));
+    }
+
+    /// <summary>Queues <paramref name="cmd"/> in <paramref name="ctx"/>: the running command's with a field changed (<c>ctx with { Node = x }</c>).</summary>
+    public void Push(Cmd cmd, in TCtx ctx)
+    {
+        if (_model is not null) _model.Push(cmd, ctx);
+        else _into?.Add((cmd, ctx));
     }
 
     /// <summary>
     /// What the command running answers, as text: a read's result (an eval's value), kept with the
-    /// model's <see cref="Model.Outputs"/> until whoever asked takes them. A command has no return value
+    /// model's <see cref="Model{TCtx}.Outputs"/> until whoever asked takes them. A command has no return value
     /// (it is queued and runs later), so this is how a read answers its caller.
     /// </summary>
     public void Output(string text) => _model?.Outputs.Add(text);
@@ -55,7 +65,7 @@ public readonly struct Pushes
 /// <summary>
 /// The commands every model runs itself, beside its app's: the library's, so an app neither declares
 /// nor applies them (Model.Run runs them; the app's apply never sees one). Pushed as any command is
-/// (<see cref="Model.SetViewRuleForType"/> is one), logged as any is, and on the wire by their $cmd names, beside
+/// (<see cref="Model{TCtx}.SetViewRuleForType"/> is one), logged as any is, and on the wire by their $cmd names, beside
 /// the app's (<see cref="CmdJson"/>): an app's command of the same name is a mistake its JSON refuses.
 /// </summary>
 public abstract record BuiltinCmd : Cmd
@@ -151,11 +161,11 @@ public static class CmdJson
 
 /// <summary>
 /// One published generation, as the model's log holds it: the command that made it (the app's or the
-/// library's), and the generation of the command that pushed that one (0 when
+/// library's) and the context it ran in, and the generation of the command that pushed that one (0 when
 /// it came from outside: a key, a click, a client). What it changed is the tree's edits and the tables'
 /// writes stamped with it, kept while the log holds it.
 /// </summary>
-public readonly record struct LogEntry(long Gen, long CauseGen, Cmd Cmd);
+public readonly record struct LogEntry<TCtx>(long Gen, long CauseGen, Cmd Cmd, TCtx Ctx) where TCtx : struct;
 
 /// <summary>
 /// An app's model: its tree of facts (<see cref="Tree"/>), and the one place it changes. Commands
@@ -166,13 +176,21 @@ public readonly record struct LogEntry(long Gen, long CauseGen, Cmd Cmd);
 /// the log holds it. The tree is one, written in place. The app's runtime
 /// (what it derives from the tree and keeps to draw it) is not here: the app holds the model, not
 /// the other way round. One thread runs it; nothing here is shared.
+/// <para>
+/// It also keeps the context stack: what the code running now is about (which panel, which case: the
+/// app's <typeparamref name="TCtx"/>, cmdgen's Context). Code says where it is in a scope
+/// (<see cref="ContextScope"/>), and a command is queued with a copy of the top, as rad's
+/// <c>rd_cmd</c> copies its registers. The model never reads a field of it: it stores, copies and hands
+/// it back, so it needs nothing of <typeparamref name="TCtx"/> but that it is a value.
+/// </para>
 /// <code>
-/// var ui = new Model(App.Apply, wake: runtime.RequestFrame);
-/// ui.Cmds.PanelSpawn();        // pushed (a method cmdgen writes for each command)
-/// ui.Run();                    // applied, and published if it changed the tree
+/// var ui = new Model&lt;Context&gt;(App.Apply, wake: runtime.RequestFrame, context: Context.Ops);
+/// using (ui.ContextScope(ui.GetCtx() with { Panel = p }))
+///     ui.Push(new AppCmd.Panel_Close());   // queued with { Panel = p }
+/// ui.Run();                                // applied in that context, and published if it changed the tree
 /// </code>
 /// </summary>
-public sealed class Model
+public sealed class Model<TCtx> where TCtx : struct
 {
     /// <summary>The tree, and through it the tables: read by anyone on the owner thread; written only by the apply, inside <see cref="Run"/>.</summary>
     public readonly ModelStore Tree;
@@ -184,38 +202,84 @@ public sealed class Model
     public long Gen;
 
     /// <summary>
-    /// What the commands run answered, in the order they ran (<see cref="Pushes.Output"/>):
+    /// What the commands run answered, in the order they ran (<see cref="Pushes{TCtx}.Output"/>):
     /// written by the apply, inside <see cref="Run"/>; taken and cleared by whoever answers for them
     /// (a test port, once its answer is due). A command that only answers changes nothing, so it
     /// publishes no generation and the log does not keep it.
     /// </summary>
     public readonly List<string> Outputs = new();
 
-    private readonly Apply _apply;
+    /// <summary>The app's functions over its context (cmdgen's Context.Ops): what a command lacks, and its context on the wire; null: none.</summary>
+    public readonly ContextOps<TCtx>? Context;
+
+    /// <summary>
+    /// Whether a command is offered where code is now: none of the context it declares is missing from
+    /// the top (<see cref="ContextOps{TCtx}.Missing"/>). Made once, so a row asking every frame makes no garbage.
+    /// </summary>
+    public readonly Func<OpInfo, bool> Offers;
+
+    private readonly Apply<TCtx> _apply;
     private EvalContext? _writing;    // node.set's: the model alone, over Tree (ModelEval.WriteContext); made the first time one runs
     private readonly Action? _wake;   // asks the loop for a frame, so what is pushed gets run (runtime.RequestFrame)
-    private readonly LogEntry[] _log;   // a ring: generation g at (g - 1) % length, while it is among the last length
-    private List<(Cmd Cmd, long Cause)> _pending = new(64), _running = new(64);   // each with the generation that pushed it
+    private readonly LogEntry<TCtx>[] _log;   // a ring: generation g at (g - 1) % length, while it is among the last length
+    private List<(Cmd Cmd, TCtx Ctx, long Cause)> _pending = new(64), _running = new(64);   // each in its context, with the generation that pushed it
+    private TCtx[] _stack = new TCtx[64];   // the context scopes open now; [0] the empty context, never popped
+    private int _top;
 
     /// <summary>
     /// A model whose log keeps the last <paramref name="logLength"/> generations. <paramref name="wake"/>
     /// is called on every push. It starts from <paramref name="tree"/> (cmdgen's NodeKinds.NewTree: the
-    /// root and the view rules the schema declares), or an empty one.
+    /// root and the view rules the schema declares), or an empty one. <paramref name="context"/> is the
+    /// app's context functions (cmdgen's Context.Ops).
     /// </summary>
-    public Model(Apply apply, Action? wake = null, int logLength = 256, ModelStore? tree = null)
+    public Model(Apply<TCtx> apply, Action? wake = null, int logLength = 256, ModelStore? tree = null, ContextOps<TCtx>? context = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(logLength, 1);
-        (_apply, _wake, _log) = (apply, wake, new LogEntry[logLength]);
+        (_apply, _wake, _log, Context) = (apply, wake, new LogEntry<TCtx>[logLength], context);
         Tree = tree ?? Nodes.NewTree(gen: 1);
+        Offers = op => Context?.Missing(_stack[_top], op) is null;
     }
 
     /// <summary>Commands are pushed and not yet run: what a test port waits for before it answers.</summary>
     public bool HasPending => _pending.Count > 0;
 
-    /// <summary>Queues <paramref name="cmd"/> for the next <see cref="Run"/>, and wakes the loop for it.</summary>
-    public void Push(Cmd cmd)
+    //- the context
+
+    /// <summary>
+    /// The context on top: what the code running now is about. A copy, as it is when called: read it
+    /// where it is used (<c>model.GetCtx() with { … }</c> inside <see cref="ContextScope"/>), never kept
+    /// across a scope, or a nested scope built from it drops what the outer one set.
+    /// </summary>
+    public TCtx GetCtx() => _stack[_top];
+
+    /// <summary>
+    /// <paramref name="ctx"/> on top until the scope is disposed: the code inside it, and the commands it
+    /// pushes, are in it. Only in a <c>using</c>, so scopes end in the order they began.
+    /// </summary>
+    public Scope ContextScope(in TCtx ctx)
     {
-        _pending.Add((cmd, 0));
+        if (++_top == _stack.Length) Array.Resize(ref _stack, _stack.Length * 2);
+        _stack[_top] = ctx;
+        return new(this);
+    }
+
+    /// <summary>A context scope: on top until disposed. Only in a <c>using</c>.</summary>
+    public readonly ref struct Scope
+    {
+        private readonly Model<TCtx> _model;
+        internal Scope(Model<TCtx> model) => _model = model;
+        public void Dispose() => _model._top--;
+    }
+
+    //- pushing
+
+    /// <summary>Queues <paramref name="cmd"/> for the next <see cref="Run"/> in the context on top, and wakes the loop for it.</summary>
+    public void Push(Cmd cmd) => Push(cmd, _stack[_top]);
+
+    /// <summary>Queues <paramref name="cmd"/> for the next <see cref="Run"/> in <paramref name="ctx"/> (a client's, read from the wire; a follow-up's, changed), and wakes the loop for it.</summary>
+    public void Push(Cmd cmd, in TCtx ctx)
+    {
+        _pending.Add((cmd, ctx, 0));
         _wake?.Invoke();
     }
 
@@ -244,10 +308,13 @@ public sealed class Model
         Run();
     }
 
+    //- running
+
     /// <summary>
-    /// Runs what is pushed, one command at a time, in the order pushed. Each command that changed
-    /// the tree publishes a generation. Commands pushed while one runs (its follow-ups) run in the
-    /// same Run, after the batch they were pushed in, and remember which generation pushed them;
+    /// Runs what is pushed, one command at a time, in the order pushed, each in its context: on top of the
+    /// stack while it runs, as rad installs a command's registers, and given to the apply. Each command
+    /// that changed the tree publishes a generation. Commands pushed while one runs (its follow-ups) run in
+    /// the same Run, after the batch they were pushed in, and remember which generation pushed them;
     /// a follow-up of a command that changed nothing inherits that command's cause.
     /// </summary>
     public void Run()
@@ -257,23 +324,26 @@ public sealed class Model
             (_pending, _running) = (_running, _pending);
             for (int i = 0; i < _running.Count; i++)
             {
-                var (cmd, cause) = _running[i];
+                var (cmd, ctx, cause) = _running[i];
                 int pushedBefore = _pending.Count;
                 long changes = Tree.Tree.Changes + Tree.Clock.Changes;   // the tree's edits and the tables' writes
-                // The library's commands, the app's never seeing them; then the app's.
-                switch (cmd)
+                using (ContextScope(ctx))
                 {
-                    case BuiltinCmd.ViewRule_Set { Node.IsNone: true } set: ModelEval.SetViewRuleForType(Tree, Lenses, set.Type, set.Lens); break;
-                    case BuiltinCmd.ViewRule_Set set: ModelEval.SetViewRuleForNode(Tree, Lenses, set.Node, set.Lens); break;
-                    case BuiltinCmd.Node_Set set when Tree.Schema is { } schema:
-                        ModelEval.Set(Tree, _writing ??= ModelEval.WriteContext(Tree, schema), set.Node, set.Key, set.Value);
-                        break;
-                    case BuiltinCmd.Node_Set: break;   // a tree without a schema has no fields
-                    default: _apply(Tree, cmd, new Pushes(this)); break;
+                    // The library's commands, the app's never seeing them; then the app's.
+                    switch (cmd)
+                    {
+                        case BuiltinCmd.ViewRule_Set { Node.IsNone: true } set: ModelEval.SetViewRuleForType(Tree, Lenses, set.Type, set.Lens); break;
+                        case BuiltinCmd.ViewRule_Set set: ModelEval.SetViewRuleForNode(Tree, Lenses, set.Node, set.Lens); break;
+                        case BuiltinCmd.Node_Set set when Tree.Schema is { } schema:
+                            ModelEval.Set(Tree, _writing ??= ModelEval.WriteContext(Tree, schema), set.Node, set.Key, set.Value);
+                            break;
+                        case BuiltinCmd.Node_Set: break;   // a tree without a schema has no fields
+                        default: _apply(Tree, cmd, ctx, new Pushes<TCtx>(this)); break;
+                    }
                 }
                 long by = cause;
-                if (Tree.Tree.Changes + Tree.Clock.Changes != changes) by = Publish(cmd, cause);
-                for (int k = pushedBefore; k < _pending.Count; k++) _pending[k] = (_pending[k].Cmd, by);
+                if (Tree.Tree.Changes + Tree.Clock.Changes != changes) by = Publish(cmd, ctx, cause);
+                for (int k = pushedBefore; k < _pending.Count; k++) _pending[k] = _pending[k] with { Cause = by };
             }
             _running.Clear();
         }
@@ -281,10 +351,10 @@ public sealed class Model
 
     // Logs the generation written, and opens the next: what no generation the log still holds reads
     // (row versions, edits of the shape) is let go.
-    private long Publish(Cmd cmd, long cause)
+    private long Publish(Cmd cmd, in TCtx ctx, long cause)
     {
         Gen = Tree.Clock.Gen;
-        _log[(Gen - 1) % _log.Length] = new LogEntry(Gen, cause, cmd);
+        _log[(Gen - 1) % _log.Length] = new LogEntry<TCtx>(Gen, cause, cmd, ctx);
         Tree.Clock.Gen = Gen + 1;
         Nodes.Retire(Tree, OldestGen);
         return Gen;
@@ -296,11 +366,10 @@ public sealed class Model
     public long OldestGen => Math.Max(1, Gen - _log.Length + 1);
 
     /// <summary>Generation <paramref name="gen"/>'s entry, if the log still holds it.</summary>
-    public bool TryEntry(long gen, out LogEntry entry)
+    public bool TryEntry(long gen, out LogEntry<TCtx> entry)
     {
         bool held = gen >= OldestGen && gen <= Gen;
         entry = held ? _log[(gen - 1) % _log.Length] : default;
         return held;
     }
-
 }

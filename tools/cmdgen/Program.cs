@@ -16,10 +16,13 @@
 //     ([ReadsOnly]), type and arguments (with the node kind of a typed id argument: CaseId),
 //     looked up by command, wire name, type or label.
 //
-// With a node set beside it, also FromContext and Missing: a command made from a Context (the library's:
-// a frame of the ContextStack the UI pushes as it draws, a node per kind), each argument named as its kind
-// and of its kind's id type (PanelId Panel) taken from that kind's slot, so a palette, a button or a menu
-// can run any command without code of its own; any other argument is the context's to ask for, never to guess.
+// And the app's context: the environment a command runs in (which panel, which case), apart from its
+// arguments (what to do). A command declares what it reads, [Context.DependsOn<PanelId>(Role.From)], and
+// the Context is a field per kind and role some command declares (Panel, PanelFrom), and View: one struct,
+// the model's stack's (Model<Context>). Beside it, its functions (Context.Ops): what a command lacks, and
+// its declared fields on the wire. In the table, each command's declared fields (OpInfo.Context), and for
+// one without arguments, the command itself (OpInfo.Cmd): what a row's button pushes, in the context
+// where the row is drawn.
 //
 // It warns of a command no `case` or pattern names, which nothing would handle (CMDGEN4),
 // and of one without a [Description], which a palette or a client can only show by name
@@ -151,14 +154,6 @@ var kindNames = nodeSets.SelectMany(s => s.Kinds).Select(k => k.Identifier.Text)
 foreach (var (set, ns, kinds) in nodeSets)
     foreach (var k in kinds)
         KindIds.Of[k.Identifier.Text + "Id"] = (k.Identifier.Text, $"global::{(ns is null ? "" : ns + ".")}{set}Kinds.{k.Identifier.Text}");
-// Commands are made from the library's Context (a frame of a ContextStack: a node per kind), each
-// argument from its kind's slot; with one node set, whose kinds the slots are. Two node sets would share
-// kind indexes, and a slot could not say which set's, so neither is made from a context.
-bool fromContexts = nodeSets.Count == 1;
-string? kindsType = nodeSets.Count == 1 ? $"global::{(nodeSets[0].Namespace is { } kns ? kns + "." : "")}{nodeSets[0].Name}Kinds" : null;
-
-if (nodeSets.Count > 1)
-    Console.Error.WriteLine("warning CMDGEN8: More than one [NodeSet]: their kinds share a context's slots, so commands are not made from a context (no OpInfo.FromContext).");
 
 //- the commands nothing handles: a command whose type no `case` or pattern names anywhere is
 // dropped when pushed, and only the app's log would say so. A warning, not an error: one may be
@@ -234,6 +229,47 @@ foreach (var m in roots.SelectMany(r => r.DescendantNodes().OfType<MethodDeclara
 }
 foreach (var c in places.GroupBy(p => p.Class))   // one registration per class: its queries read one state
     if (c.Select(p => p.State).Distinct().Count() > 1) Fail(c.First().Query, $"{c.Key}'s Places read one state: their queries' first parameters differ.");
+//- the context: what each command reads from it, [Context.DependsOn<T>(Role)] on its record, a node id
+// type (NodeId, or a kind's: PanelId) in a role (This when none is said). Its field is the kind's in that
+// role, Panel, PanelFrom; on the wire, panel, panel_from. The Context is every field some command
+// declares, each once, in the order first declared.
+var contextFields = new List<(string Field, string Wire, string Type, string? Kind)>();
+var dependsOn = new Dictionary<RecordDeclarationSyntax, List<(string Field, string Wire, string Type, string? Kind)>>();
+foreach (var (set, _, commands) in sets)
+    foreach (var c in commands)
+    {
+        var fields = new List<(string Field, string Wire, string Type, string? Kind)>();
+        foreach (var a in c.AttributeLists.SelectMany(l => l.Attributes).Where(a => IsNamed(a, "DependsOn")))
+        {
+            var type = a.Name.DescendantNodesAndSelf().OfType<GenericNameSyntax>().FirstOrDefault()?.TypeArgumentList.Arguments.FirstOrDefault()?.ToString();
+            var role = a.ArgumentList?.Arguments.FirstOrDefault()?.Expression.ToString() is { } r ? r[(r.LastIndexOf('.') + 1)..] : "This";
+            if (type is null) { Fail(a, $"{set}.{c.Identifier.Text}: DependsOn says what it reads by a type argument: [Context.DependsOn<PanelId>]."); continue; }
+            if (role is not ("This" or "From" or "To")) { Fail(a, $"{set}.{c.Identifier.Text}: {role} is no Role: This, From or To."); continue; }
+            string? kind = KindIds.Of.TryGetValue(type, out var id) ? id.Kind : null;
+            if (kind is null && type != "NodeId") { Fail(a, $"{set}.{c.Identifier.Text} depends on a {type}: the context holds nodes, a NodeId or a kind's id (PanelId)."); continue; }
+            var field = (kind ?? "Node") + (role == "This" ? "" : role);
+            var f = (field, Snake(field), type, kind is null ? null : Quote(Snake(kind)));
+            if (fields.Any(x => x.Field == field)) { Fail(a, $"{set}.{c.Identifier.Text} depends on {field} twice."); continue; }
+            fields.Add(f);
+            if (contextFields.FindIndex(x => x.Field == field) is var at and >= 0)
+            {
+                if (contextFields[at].Type != type) Fail(a, $"{field} is a {contextFields[at].Type} to one command and a {type} to {set}.{c.Identifier.Text}.");
+            }
+            else contextFields.Add(f);
+        }
+        dependsOn[c] = fields;
+    }
+
+// A row's commands are pushed as they are (OpInfo.Cmd), in the context where the row is drawn: one that
+// takes arguments has no value to push, so it is no row's.
+foreach (var (_, _, kinds) in nodeSets)
+    foreach (var k in kinds)
+        foreach (var arg in Attribute(k.AttributeLists, "Row")?.ArgumentList?.Arguments ?? default)
+            if (arg.Expression is TypeOfExpressionSyntax { Type: var rowType }
+                && rowType.ToString()[(rowType.ToString().LastIndexOf('.') + 1)..] is var command
+                && sets.SelectMany(x => x.Commands).FirstOrDefault(c => c.Identifier.Text == command) is { ParameterList.Parameters.Count: > 0 } taking)
+                Fail(arg, $"{k.Identifier.Text}'s row names {rowType}, which takes arguments: a row's command takes none, and reads what it needs from the context ([Context.DependsOn]).");
+
 if (failed) return 1;
 // What cmdgen writes a shape and a reader for: each Place's data and key, as declared (a type reached
 // from two Places, once).
@@ -268,9 +304,11 @@ foreach (var u in roots.Where(r => r.DescendantNodes().OfType<TypeDeclarationSyn
                                  || r.DescendantNodes().OfType<MethodDeclarationSyntax>().Any(m => places.Any(p => p.Query == m)))
              .SelectMany(r => r.Usings).Select(u => u.ToString()).Distinct())
     if (u != "using System.Text.Json.Serialization;" && u != "using Bibui.Commands;") code.AppendLine(u);
+// The context's type, as the generated code names it: in the first set's namespace.
+string ctxType = sets.Count == 0 ? "" : $"global::{(sets[0].Namespace is { } cns ? cns + "." : "")}Context";
 foreach (var (set, ns, commands) in sets)
 {
-    const string model = "global::Bibui.Commands.Model";
+    string model = $"global::Bibui.Commands.Model<{ctxType}>", pushes = $"global::Bibui.Commands.Pushes<{ctxType}>";
     code.AppendLine();
     if (ns is not null) code.AppendLine($"namespace {ns}\n{{");
 
@@ -289,7 +327,7 @@ foreach (var (set, ns, commands) in sets)
         /// <c>model.Cmds.CounterSet(42)</c>. A push only queues the command: it runs when the
         /// model runs its commands.
         /// </summary>
-        public readonly struct {{set}}Queue(global::Bibui.Commands.Pushes push)
+        public readonly struct {{set}}Queue({{pushes}} push)
         {
         """);
     foreach (var c in commands)
@@ -309,10 +347,10 @@ foreach (var (set, ns, commands) in sets)
             extension({{model}} model)
             {
                 /// <summary>This model's commands, as methods that push them.</summary>
-                public {{set}}Queue Cmds => new(new global::Bibui.Commands.Pushes(model));
+                public {{set}}Queue Cmds => new(new {{pushes}}(model));
             }
 
-            extension(global::Bibui.Commands.Pushes push)
+            extension({{pushes}} push)
             {
                 /// <summary>The commands, as methods that push them where these pushes go: an apply's follow-ups.</summary>
                 public {{set}}Queue Cmds => new(push);
@@ -340,28 +378,14 @@ foreach (var (set, ns, commands) in sets)
             $"new(\"{p.Identifier.Text}\", \"{p.Type}\", {Text(Attribute(p.AttributeLists, "Description")) ?? "\"\""}, {ParamKind(p) ?? "null"})"));
         var shortText = Text(Attribute(c.AttributeLists, "Short"));
         var icon = Text(Attribute(c.AttributeLists, "Icon"));
-        // How it is made from a context: each argument named as its kind (CaseId Case) from that kind's
-        // slot; any other (a seed, panel.resize's First and Second) never the context's, so neither made
-        // nor offered from one. Missing: its first argument the context does not hold.
-        var builders = "";
-        if (fromContexts)
-        {
-            int at = commands.IndexOf(c);
-            var parameters = c.ParameterList?.Parameters ?? default;
-            var slots = parameters.Select(p => ContextSlot(p, kindNames, kindsType!)).ToList();
-            var missing = new StringBuilder("c => ");
-            for (int i = 0; i < slots.Count; i++)
-            {
-                if (slots[i] is not { } slot) { missing.Append($"All![{at}].Args[{i}]"); break; }
-                missing.Append($"c.Of({slot.Slot}).IsNone ? All![{at}].Args[{i}] : ");
-            }
-            if (slots.All(x => x is not null)) missing.Append("null");
-            var made = slots.All(x => x is not null)
-                ? $"c => {string.Concat(slots.Select(x => $"c.Of({x!.Value.Slot}).IsNone ? null : "))}new {set}.{name}({string.Join(", ", slots.Select(x => x!.Value.Value))})"
-                : "null";
-            builders = $" {{ FromContext = {made}, Missing = {missing} }}";
-        }
-        code.AppendLine($"        new(\"{WireName(name)}\", {label}, {description}, OpKind.Command, {flags}, typeof({set}.{name}), [{argInfos}]{(shortText is null ? "" : $", Short: {shortText}")}{(icon is null ? "" : $", Icon: {icon}")}){builders},");
+        // What it reads from the context, by its fields' wire names; and the command itself when it takes no
+        // arguments: what a row pushes.
+        var reads = dependsOn[c].Select(f => $"new(\"{f.Wire}\", \"{f.Type}\", \"\", {f.Kind ?? "null"})");
+        var builders = new List<string>();
+        if (dependsOn[c].Count > 0) builders.Add($"Context = [{string.Join(", ", reads)}]");
+        if ((c.ParameterList?.Parameters.Count ?? 0) == 0) builders.Add($"Cmd = new {set}.{name}()");
+        var init = builders.Count == 0 ? "" : $" {{ {string.Join(", ", builders)} }}";
+        code.AppendLine($"        new(\"{WireName(name)}\", {label}, {description}, OpKind.Command, {flags}, typeof({set}.{name}), [{argInfos}]{(shortText is null ? "" : $", Short: {shortText}")}{(icon is null ? "" : $", Icon: {icon}")}){init},");
     }
     code.AppendLine($$"""
             ];
@@ -402,6 +426,93 @@ foreach (var (set, ns, commands) in sets)
         """);
     code.AppendLine("}");
     if (ns is not null) code.AppendLine("}");
+}
+
+// The context: one struct for the app, beside its first set. Its fields are what the commands declare
+// they read, and View; DependsOn is nested in it, so a command says [Context.DependsOn<PanelId>]. Its
+// functions are switches over the fields by their wire names: the library knows a field only by name.
+if (sets.Count > 0)
+{
+    code.AppendLine();
+    if (sets[0].Namespace is { } ctxNs) code.AppendLine($"namespace {ctxNs}\n{{");
+    code.AppendLine("""
+        /// <summary>
+        /// The environment a command runs in: which node, of each kind and role a command reads (its
+        /// [Context.DependsOn]), and the view. Code says where it is in a scope of the model
+        /// (<c>model.ContextScope(model.GetCtx() with { Panel = p })</c>) and a command is queued with the top;
+        /// its apply is given it. A field nobody set is none.
+        /// </summary>
+        public readonly partial record struct Context
+        {
+            /// <summary>The node the view being drawn is for: whose view state its lens keeps. Set by the app before it draws a lens; no command reads it.</summary>
+            public global::Bibui.Commands.NodeId View { get; init; }
+        """);
+    foreach (var f in contextFields)
+        code.AppendLine($"    public {f.Type} {f.Field} {{ get; init; }}");
+    code.AppendLine("""
+
+            /// <summary>What a command reads from the context: the node of <typeparamref name="T"/>'s kind (a NodeId: any) in <paramref name="role"/>, its field Panel, PanelFrom.</summary>
+            [global::System.AttributeUsage(global::System.AttributeTargets.Class, AllowMultiple = true)]
+            public sealed class DependsOnAttribute<T>(global::Bibui.Commands.Role role = global::Bibui.Commands.Role.This) : global::System.Attribute
+            {
+                public global::Bibui.Commands.Role Role { get; } = role;
+            }
+
+            /// <summary>Its functions, for library code that knows a field only by its wire name: the model's, a test port's.</summary>
+            public static readonly global::Bibui.Commands.ContextOps<Context> Ops = new() { Missing = MissingOf, Read = ReadFrom, Write = WriteTo };
+
+            static global::Bibui.Commands.ArgInfo? MissingOf(in Context c, global::Bibui.Commands.OpInfo op)
+            {
+                foreach (var f in op.Context)
+                    if (f.Name switch
+                    {
+        """);
+    foreach (var f in contextFields)
+        code.AppendLine($"                \"{f.Wire}\" => c.{f.Field}.IsNone,");
+    code.AppendLine("""
+                        _ => false,
+                    }) return f;
+                return null;
+            }
+
+            static string? ReadFrom(global::Bibui.Commands.OpInfo op, global::System.Text.Json.JsonElement request, global::Bibui.Commands.ModelStore tree, ref Context c)
+            {
+                foreach (var f in op.Context)
+                {
+                    if (!request.TryGetProperty(f.Name, out var v)) continue;   // left out: none
+                    if (v.ValueKind != global::System.Text.Json.JsonValueKind.String || !global::Bibui.Commands.NodeId.TryParse(v.GetString(), out var id))
+                        return $"{f.Name}: a node is named by its id, a string like \"#4\".";
+                    switch (f.Name)
+                    {
+        """);
+    foreach (var f in contextFields)
+    {
+        var value = f.Kind is null ? "global::Bibui.Commands.Nodes.SlotOf(tree, id) != 0 ? id : default" : $"{f.Type}.From(tree, id)";
+        var what = f.Kind is null ? "no node" : $"no {f.Kind.Trim('"').Replace('_', ' ')}";
+        code.AppendLine($"                case \"{f.Wire}\": c = c with {{ {f.Field} = {value} }}; if (c.{f.Field}.IsNone) return $\"{f.Wire}: {{id}} names {what}.\"; break;");
+    }
+    code.AppendLine("""
+                        default: break;
+                    }
+                }
+                return null;
+            }
+
+            static void WriteTo(global::System.Text.Json.Utf8JsonWriter json, global::Bibui.Commands.OpInfo op, in Context c)
+            {
+                foreach (var f in op.Context)
+                    switch (f.Name)
+                    {
+        """);
+    foreach (var f in contextFields)
+        code.AppendLine($"                case \"{f.Wire}\": if (!c.{f.Field}.IsNone) json.WriteString(\"{f.Wire}\", c.{f.Field}{(f.Kind is null ? "" : ".Id")}.ToString()); break;");
+    code.AppendLine("""
+                        default: break;
+                    }
+            }
+        }
+        """);
+    if (sets[0].Namespace is not null) code.AppendLine("}");
 }
 
 foreach (var (set, ns, kinds) in nodeSets)
@@ -472,7 +583,7 @@ foreach (var (set, ns, kinds) in nodeSets)
             }
         }
         // Its row: [Row(nameof(Note), typeof(Cmd.Picture_Clear), …)], a field by its key, a command by its
-        // entry in its set's table (what library code makes it from: OpInfo.FromContext); a command no set
+        // entry in its set's table (what a row pushes: OpInfo.Cmd); a command no set
         // declares, or a key the kind does not hold, is said.
         var row = new List<string>();
         var keys = (k.ParameterList?.Parameters ?? default).Select(q => q.Identifier.Text).ToHashSet();
@@ -1208,20 +1319,6 @@ static string TypeName(ParameterSyntax p)
     return t.Contains('.') ? t[(t.LastIndexOf('.') + 1)..] : t;
 }
 
-
-// Where a command's argument comes from in a context: named as its kind and of its kind's id type
-// (CaseId Case), its kind's slot (c.Of(NodeKinds.Case)), the slot's node taken as that kind's (the code
-// that pushed it pushed a node of its kind); null for any other, which the context does not hold.
-static (string Slot, string Value)? ContextSlot(ParameterSyntax p, HashSet<string> kinds, string kindsType)
-{
-    var name = p.Identifier.Text;
-    var kind = ParamKind(p)?.Trim('"');
-    if (kind is null) return null;
-    var slot = kinds.FirstOrDefault(k => Snake(k) == kind);
-    if (slot is null || slot != name) return null;
-    var at = $"{kindsType}.{slot}";
-    return (at, $"{slot}Id.Known(c.Of({at}))");
-}
 
 // The node kind of a parameter, as a C# string literal ("panel"): its type's, a {Kind}Id; or null.
 static string? ParamKind(ParameterSyntax p) =>

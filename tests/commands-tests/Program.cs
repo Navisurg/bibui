@@ -49,7 +49,7 @@ static void Eq<T>(T expected, T actual, string message)
 Run("Model: commands run in the order pushed, and follow-ups in the same Run, after their batch", () =>
 {
     var log = new Log();
-    var model = new Model((tree, cmd, m) =>
+    var model = new Model<Context>((tree, cmd, in _, m) =>
     {
         log.Ran.Add(TestCmdOps.Of((TestCmd)cmd).Wire);
         if (cmd is TestCmd.Counter_Reset) m.Cmds.CounterSet(0);   // a follow-up
@@ -65,7 +65,7 @@ Run("Model: commands run in the order pushed, and follow-ups in the same Run, af
 
 Run("Model: a command that only answers publishes nothing, its output kept until taken", () =>
 {
-    var model = new Model((tree, cmd, push) => push.Output($"ran {TestCmdOps.Of((TestCmd)cmd).Wire}\n"));
+    var model = new Model<Context>((tree, cmd, in _, push) => push.Output($"ran {TestCmdOps.Of((TestCmd)cmd).Wire}\n"));
     model.Cmds.CounterReset();
     model.Cmds.CounterIncrementBy(2);
     model.Run();
@@ -80,7 +80,7 @@ Run("Model: a command that only answers publishes nothing, its output kept until
 Run("Model: a push wakes the loop, once per push", () =>
 {
     int wakes = 0;
-    var model = new Model((ModelStore _, Cmd _, Pushes _) => { }, wake: () => wakes++);
+    var model = new Model<Context>((ModelStore _, Cmd _, in Context _, Pushes<Context> _) => { }, wake: () => wakes++);
     model.Cmds.CounterReset();
     model.Cmds.CounterReset();
     Eq(2, wakes, "wakes");
@@ -100,7 +100,7 @@ static Table<CountRow, NodeId> Counts(ModelStore t)
 // A row as generation gen saw it (the default when its ring no longer reaches gen).
 static T RowAt<T, TId>(Table<T, TId> table, TId id, long gen) where TId : struct { table.FromIdAt(id, gen, out var row); return row; }
 
-static void Count(ModelStore t, Cmd cmd, Pushes m)
+static void Count(ModelStore t, Cmd cmd, in Context ctx, Pushes<Context> m)
 {
     var root = Nodes.IdOf(t, Nodes.Root);
     long n = Counts(t).FromId(root).N;
@@ -109,7 +109,7 @@ static void Count(ModelStore t, Cmd cmd, Pushes m)
         case TestCmd.Counter_IncrementBy(var amount): Counts(t).SetRow(root, new(n + amount)); break;
         case TestCmd.Counter_Set(var value): Counts(t).SetRow(root, new(value)); break;
         case TestCmd.Counter_Reset: m.Cmds.CounterSet(0); break;
-        case TestCmd.Counter_Peek or TestCmd.Counter_Point: break;
+        case TestCmd.Counter_Peek or TestCmd.Counter_Point or TestCmd.Item_Mark or TestCmd.Item_Swap: break;
     }
 }
 
@@ -117,7 +117,7 @@ static long CountOf(ModelStore t) => Counts(t).FromId(Nodes.IdOf(t, Nodes.Root))
 
 Run("Model: a command that changes the model publishes one generation; one that changes nothing publishes none", () =>
 {
-    var model = new Model(Count);
+    var model = new Model<Context>(Count);
     model.Cmds.CounterIncrementBy(2);
     model.Cmds.CounterPeek();
     model.Cmds.CounterIncrementBy(3);
@@ -133,7 +133,7 @@ Run("Model: a command that changes the model publishes one generation; one that 
 
 Run("Model: a follow-up remembers the generation that pushed it; one pushed by a command that changed nothing inherits its cause", () =>
 {
-    var model = new Model(Count);
+    var model = new Model<Context>(Count);
     model.Cmds.CounterIncrementBy(4);
     model.Run();
     model.Cmds.CounterReset();   // changes nothing itself, pushes Set(0)
@@ -143,9 +143,9 @@ Run("Model: a follow-up remembers the generation that pushed it; one pushed by a
     Eq(new TestCmd.Counter_Set(0), set.Cmd, "the follow-up made generation 2");
     Eq(0L, set.CauseGen, "its cause, reset, changed nothing and came from outside");
 
-    var chained = new Model((t, cmd, m) =>
+    var chained = new Model<Context>((t, cmd, in c, m) =>
     {
-        Count(t, cmd, m);
+        Count(t, cmd, c, m);
         if (cmd is TestCmd.Counter_IncrementBy(1)) m.Cmds.CounterIncrementBy(10);   // a follow-up of a command that changed the model
     });
     chained.Cmds.CounterIncrementBy(1);
@@ -157,7 +157,7 @@ Run("Model: a follow-up remembers the generation that pushed it; one pushed by a
 
 Run("Model: an old generation's rows read as they were after later commands", () =>
 {
-    var model = new Model(Count);
+    var model = new Model<Context>(Count);
     model.Cmds.CounterIncrementBy(1);
     model.Cmds.CounterIncrementBy(1);
     model.Cmds.CounterIncrementBy(1);
@@ -171,7 +171,7 @@ Run("Model: an old generation's rows read as they were after later commands", ()
 
 Run("Model: the log keeps the last generations, and drops the oldest; a row's own history is its ring's", () =>
 {
-    var model = new Model(Count, logLength: 4);
+    var model = new Model<Context>(Count, logLength: 4);
     for (int i = 0; i < 6; i++) model.Cmds.CounterIncrementBy(1);
     model.Run();
     var root = Nodes.IdOf(model.Tree, Nodes.Root);
@@ -196,7 +196,7 @@ Run("NodeId: written #1043, read back (with or without its #), and in a command'
 Run("Place generations: the model's is its generation, moved by a command that changes it; a Place given none never moves; an address's is its Place's", () =>
 {
     // An apply that adds an item for Counter_IncrementBy, and changes nothing for Counter_Peek.
-    var model = new Model((t, cmd, _) => { if (cmd is TestCmd.Counter_IncrementBy) ItemId.New(t, ListsOrNew(t)); }, tree: ShelfKinds.NewTree());
+    var model = new Model<Context>((t, cmd, in _, _) => { if (cmd is TestCmd.Counter_IncrementBy) ItemId.New(t, ListsOrNew(t)); }, tree: ShelfKinds.NewTree());
     var ctx = new EvalContext();
     ModelEval.AddSymbols(ctx, ModelEval.MakeEvalTypes(ShelfKinds.Schema), () => model.Tree);
     Places.AddListing(ctx);
@@ -277,36 +277,106 @@ Run("Typed ids by node: a node's children of a kind (First, Next; none past the 
     Eq(true, ItemId.First(t, new NodeId(9999)).IsNone && b.Next(t).IsNone && a.Next(t).IsNone, "none: under a node gone, past the last, after one released");
 });
 
-Run("Context: a reader monad: code reads the top; a scope sets slots over it (local), and the top is as it was when the scope ends", () =>
+Run("Context: a scope puts a context on top until it ends; one built from the top keeps what outer scopes set", () =>
 {
-    var t = Nodes.NewTree();
+    var t = ShelfKinds.NewTree();
     var lists = ListsOrNew(t);
     var (a, b) = (ItemId.New(t, lists), ItemId.New(t, lists));
-    var ctx = new ContextStack();
-    Eq(true, ctx.Top.Of(ShelfKinds.Item).IsNone && ctx.Top.View.IsNone, "empty to begin with");
-    using (ctx.Push(ShelfKinds.Lists, Nodes.IdOf(t, lists)))
+    var model = new Model<Context>((_, _, in _, _) => { }, tree: t);
+    Eq(true, model.GetCtx().Item.IsNone && model.GetCtx().View.IsNone, "empty to begin with");
+    using (model.ContextScope(model.GetCtx() with { Item = a, View = a.Id }))
     {
-        using (ctx.Push(ShelfKinds.Item, a))
-        {
-            Eq((a.Id, Nodes.IdOf(t, lists)), (ctx.Top.Of(ShelfKinds.Item), ctx.Top.Of(ShelfKinds.Lists)), "inner: its own slot, and the outer's");
-            using (ctx.Push(ShelfKinds.Item, b))
-                Eq(b.Id, ctx.Top.Of(ShelfKinds.Item), "a nearer scope's node shadows the outer's");
-            Eq(a.Id, ctx.Top.Of(ShelfKinds.Item), "and the outer's is back, nothing restored by hand");
-            using (ctx.PushView(a)) Eq(a.Id, ctx.Top.View, "the view: a slot like any");
-        }
-        Eq(true, ctx.Top.Of(ShelfKinds.Item).IsNone, "popped: as it was");
+        using (model.ContextScope(model.GetCtx() with { ItemTo = b }))
+            Eq((a, b, a.Id), (model.GetCtx().Item, model.GetCtx().ItemTo, model.GetCtx().View), "inner: its own field, and the outer's");
+        Eq(true, model.GetCtx().ItemTo.IsNone && model.GetCtx().Item == a, "the inner ended: as the outer set it");
+        using (model.ContextScope(model.GetCtx() with { Item = default }))
+            Eq(true, model.GetCtx().Item.IsNone, "a scope may clear a field");
     }
-    int Deep(int n) { using var _ = ctx.Push(ShelfKinds.Item, n % 2 == 0 ? a : b); return n == 0 ? (ctx.Top.Of(ShelfKinds.Item) == a.Id ? 1 : 0) : Deep(n - 1); }
-    Eq(1, Deep(40), "40 deep: past its first block, grown, each frame its own");
-    Eq(true, ctx.Top.Of(ShelfKinds.Item).IsNone, "every frame popped");
+    Eq(true, model.GetCtx().Item.IsNone, "every scope ended: empty");
+    int Deep(int n) { using var _ = model.ContextScope(model.GetCtx() with { Item = n % 2 == 0 ? a : b }); return n == 0 ? (model.GetCtx().Item == a ? 1 : 0) : Deep(n - 1); }
+    Eq(1, Deep(80), "80 deep: past the stack's first size, grown");
+    Eq(true, model.GetCtx().Item.IsNone, "and every one popped");
+});
 
-    // Several slots in one scope; a context kept after its scope, good until the frame's Clear.
-    Context kept;
-    using (ctx.Push().Set(ShelfKinds.Item, a).View(b)) kept = ctx.Top;
-    Eq((a.Id, b.Id), (kept.Of(ShelfKinds.Item), kept.View), "two slots, one scope; read after it ended");
-    Eq(true, ctx.Top.View.IsNone, "the top: as it was");
-    ctx.Clear();
-    Eq(true, ctx.Top.Of(ShelfKinds.Item).IsNone, "cleared: a new frame begins empty");
+Run("Context: a command is queued with the top and its apply is given it; a follow-up runs in its context, or in a changed copy", () =>
+{
+    var t = ShelfKinds.NewTree();
+    var lists = ListsOrNew(t);
+    var (a, b) = (ItemId.New(t, lists), ItemId.New(t, lists));
+    var ran = new List<string>();
+    var model = new Model<Context>((_, cmd, in ctx, push) =>
+    {
+        ran.Add($"{TestCmdOps.Of((TestCmd)cmd).Wire} {ctx.Item} {ctx.ItemFrom} {ctx.ItemTo}");
+        if (cmd is TestCmd.Item_Swap) push.Push(new TestCmd.Item_Mark());                     // in the running command's context
+        if (cmd is TestCmd.Item_Swap) push.Push(new TestCmd.Item_Mark(), ctx with { Item = ctx.ItemTo });   // in a changed copy
+    }, tree: t);
+    using (model.ContextScope(model.GetCtx() with { Item = a }))
+        model.Push(new TestCmd.Item_Mark());
+    model.Push(new TestCmd.Item_Mark());   // outside every scope: none
+    using (model.ContextScope(model.GetCtx() with { ItemFrom = a, ItemTo = b }))
+        model.Push(new TestCmd.Item_Swap());
+    model.Run();
+    Eq(string.Join(" | ", [$"item.mark {a.Id} #0 #0", "item.mark #0 #0 #0", $"item.swap #0 {a.Id} {b.Id}",
+                           $"item.mark #0 {a.Id} {b.Id}", $"item.mark {b.Id} {a.Id} {b.Id}"]),
+       string.Join(" | ", ran), "each in the context it was pushed in");
+    Eq(true, model.GetCtx().ItemFrom.IsNone, "after Run, the top is as it was");
+});
+
+Run("Context: a command is offered only where the context holds what it declares; one with no arguments is its own value", () =>
+{
+    var t = ShelfKinds.NewTree();
+    var a = ItemId.New(t, ListsOrNew(t));
+    var model = new Model<Context>((_, _, in _, _) => { }, tree: t, context: Context.Ops);
+    var mark = TestCmdOps.Of(new TestCmd.Item_Mark());
+    Eq("item:ItemId", string.Join(",", mark.Context.Select(f => $"{f.Name}:{f.Type}")), "what it declares, by wire name");
+    Eq(true, mark.Cmd is TestCmd.Item_Mark, "no arguments: the command itself");
+    Eq(true, TestCmdOps.Of(new TestCmd.Counter_Set(1)).Cmd is null, "arguments: none");
+    Eq(false, model.Offers(mark), "no item: not offered");
+    using (model.ContextScope(model.GetCtx() with { Item = a }))
+        Eq(true, model.Offers(mark), "an item: offered");
+    Eq(true, model.Offers(TestCmdOps.Of(new TestCmd.Counter_Reset())), "one that reads nothing: offered anywhere");
+});
+
+Run("Context: the log writes each command as a client sends it, its declared fields beside its arguments", () =>
+{
+    var t = ShelfKinds.NewTree();
+    var lists = ListsOrNew(t);
+    var (a, b) = (ItemId.New(t, lists), ItemId.New(t, lists));
+    var model = new Model<Context>((tree, _, in _, _) => Counts(tree).SetRow(Nodes.IdOf(tree, Nodes.Root), new(CountOf(tree) + 1)), tree: t, context: Context.Ops);
+    using (model.ContextScope(model.GetCtx() with { Item = a, ItemFrom = a, ItemTo = b }))
+        model.Push(new TestCmd.Item_Swap());
+    model.Run();
+    var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+    using (var json = new Utf8JsonWriter(buffer))
+        ModelJson.Log(json, model, CmdJson.For(Json.Default.Options, TestCmdOps.All), TestCmdOps.All, 0);
+    var log = System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan);
+    Eq(true, log.Contains($"{{\"$cmd\":\"item.swap\",\"item_from\":\"{a.Id}\",\"item_to\":\"{b.Id}\"}}"), $"its from and to, not its item: {log}");
+});
+
+Run("Context: on the wire a command has only the fields it declares, beside its arguments; read back, a node of another kind refused", () =>
+{
+    var t = ShelfKinds.NewTree();
+    var lists = ListsOrNew(t);
+    var (a, b) = (ItemId.New(t, lists), ItemId.New(t, lists));
+    var swap = TestCmdOps.Of(new TestCmd.Item_Swap());
+    var all = new Context { Item = a, ItemFrom = a, ItemTo = b, View = a.Id };
+    var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+    using (var json = new Utf8JsonWriter(buffer))
+    {
+        json.WriteStartObject();
+        Context.Ops.Write(json, swap, all);
+        json.WriteEndObject();
+    }
+    var text = System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan);
+    Eq($"{{\"item_from\":\"{a.Id}\",\"item_to\":\"{b.Id}\"}}", text, "its two, not item, not the view");
+
+    var read = new Context();
+    using var doc = JsonDocument.Parse(text);
+    Eq(null, Context.Ops.Read(swap, doc.RootElement, t, ref read), "read back");
+    Eq((a, b, true), (read.ItemFrom, read.ItemTo, read.Item.IsNone), "its two, the rest none");
+
+    using var wrong = JsonDocument.Parse($"{{\"item_from\":\"{Nodes.IdOf(t, lists)}\"}}");
+    Eq(true, Context.Ops.Read(swap, wrong.RootElement, t, ref read)?.Contains("names no item") == true, "a list where an item goes: refused");
 });
 
 Run("Typed ids: only a check makes one (From, At, New); a command's JSON reads one against the tree, refusing another kind's", () =>
@@ -527,7 +597,7 @@ Run("cmdgen: the table holds each command's wire name, label, description, contr
     Eq(reset, TestCmdOps.ByLabel("Reset"), "by label");
     Eq(reset, TestCmdOps.ByType(typeof(TestCmd.Counter_Reset)), "by type");
     Eq(null, TestCmdOps.ByWire("counter.nope"), "an unknown wire name");
-    Eq(6, TestCmdOps.All.Length, "every command");
+    Eq(8, TestCmdOps.All.Length, "every command");
 });
 
 Run("CmdJson: one JSON for Cmd, the app's commands and the library's by their $cmd names; an app's with a built-in's name refused at startup", () =>
@@ -844,7 +914,7 @@ Run("Tables: a node's row from its making, its last versions in a ring; a write 
 
 Run("View rules: in the tree a model starts with (the schema's: NodeKinds.NewTree), changed by the built-in command (Model.SetViewRuleForType), logged, read each frame", () =>
 {
-    var model = new Model((_, _, _) => { }, tree: ShelfKinds.NewTree());   // an app's apply that knows nothing of view rules
+    var model = new Model<Context>((_, _, in _, _) => { }, tree: ShelfKinds.NewTree());   // an app's apply that knows nothing of view rules
     var types = ModelEval.MakeEvalTypes(ShelfKinds.Schema);
     var ctx = new EvalContext();
     var (item, zoom) = (types.Kinds[ShelfKinds.Item]!, types.ByField[("frame", "zoom")]);
@@ -886,7 +956,7 @@ Run("View rules: in the tree a model starts with (the schema's: NodeKinds.NewTre
 
 Run("View rules: a node's own, by the same built-in command (Model.SetViewRuleForNode), read before its kind's; a gone node or a call of no lens refused", () =>
 {
-    var model = new Model((_, _, _) => { }, tree: ShelfKinds.NewTree());
+    var model = new Model<Context>((_, _, in _, _) => { }, tree: ShelfKinds.NewTree());
     var lenses = new LensTable();
     lenses.ByName.Add("frame", new LensFunc { Name = "frame", Description = "" });
     model.Lenses = lenses;
@@ -917,7 +987,7 @@ Run("View rules: a node's own, by the same built-in command (Model.SetViewRuleFo
 
 Run("node.set: a built-in; its value an expression over the model alone, `it` the node; refused for a field not editable, a value not of its type, none", () =>
 {
-    var model = new Model((_, _, _) => { }, tree: ShelfKinds.NewTree());
+    var model = new Model<Context>((_, _, in _, _) => { }, tree: ShelfKinds.NewTree());
     var t = model.Tree;
     var lists = ListsOrNew(t);
     var a = Nodes.IdOf(t, Nodes.New(t, lists, ShelfKinds.Item));
@@ -1248,6 +1318,14 @@ public abstract partial record TestCmd
 
     [Description("Carries a handle: its JSON is the handle's text.")]
     public sealed record Counter_Point(ItemId At) : TestCmd;
+
+    [Description("Marks the item the context is about.")]
+    [Context.DependsOn<ItemId>]
+    public sealed record Item_Mark : TestCmd;
+
+    [Description("Swaps two items: the context's from and to.")]
+    [Context.DependsOn<ItemId>(Role.From), Context.DependsOn<ItemId>(Role.To)]
+    public sealed record Item_Swap : TestCmd;
 }
 
 [JsonSerializable(typeof(TestCmd))]

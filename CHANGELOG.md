@@ -16,14 +16,16 @@ All notable changes to bibui are recorded here. The format is based on
   set to the value of an expression) and `view_rule.set` go through the same model and wire.
   Values are read through a small expression language (`Expr`) over the model and any
   `[Place]` the app registers, and seen through lenses and view rules. cmdgen, a build step
-  the package brings, writes the typed ids, tables, wire names, push methods and an `OpInfo`
-  per command, which can build its command from a `Context`. `ModelJson` and `TextView` read
+  the package brings, writes the typed ids, tables, wire names, push methods, an `OpInfo`
+  per command, and the app's `Context`: the environment a command runs in, a field per node a
+  command declares it reads (`[Context.DependsOn<PanelId>]`), kept on the model's stack and
+  queued with each command (`Model<Context>`). `ModelJson` and `TextView` read
   the model as JSON and as text. See `packaging/readme/Bibui.Commands.md`.
 
 - **`Bibui.Views`: a model's values drawn as widgets through their lenses.** `UIView` draws a
   value through the app's drawer for its lens, or by its shape (fields, a table, rows, a pick),
-  and a node's row of commands as buttons built from the context it is drawn in
-  (`ContextStack`). It never writes the model directly: a pick is a `node.set`, a button pushes
+  and a node's row of commands as buttons, the one pressed pushed by the app in the context it
+  drew the row in. It never writes the model directly: a pick is a `node.set`, a button pushes
   its command. See `packaging/readme/Bibui.Views.md`.
 
 - **`samples/board`: an app built on Bibui.Commands and Bibui.Views.** Cases shown as cards on
