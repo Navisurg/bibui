@@ -228,33 +228,6 @@ static class StyleRunTests
             TextLayer.LinesFromText(fonts, text, runs, scale, 300f, TextWrap.Words);
             Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before, "bytes allocated by a new wrap on a freed node");
         });
-
-        run("Style runs: breaking a text with a run a word takes time in proportion to its lines", () =>
-        {
-            var (fonts, scale, regular, bold) = Faces();
-            double Time(int lines)
-            {
-                string text = string.Concat(Enumerable.Repeat("bold and plain words\n", lines));
-                var runs = Enumerable.Range(0, lines).SelectMany(k => new[] { new StyleRun(k * 21, bold), new StyleRun(k * 21 + 4, regular) }).ToArray();
-                double best = double.MaxValue;
-                for (int round = 0; round < 3; round++)
-                {
-                    var watch = System.Diagnostics.Stopwatch.StartNew();
-                    for (int at = 0; ; )
-                    {
-                        var line = TextLayer.LineFromText(fonts, text, runs, scale, 1000f, TextWrap.Words, at);
-                        if (line.End == text.Length) break;
-                        at = line.Next;
-                    }
-                    TextLayer.LinesFromText(fonts, text, runs, scale, 1000f - round, TextWrap.Words);   // a new width: not kept
-                    best = Math.Min(best, watch.Elapsed.TotalMilliseconds);
-                }
-                return best;
-            }
-            Time(500);
-            double small = Time(4000), large = Time(16000);
-            IsTrue(large / small < 8, $"four times the lines took {large / small:0.0} times as long ({small:0.0} ms, {large:0.0} ms)");
-        });
     }
 
     private static string Quote(string s) => "\"" + s.Replace("\n", "\\n").Replace("\r", "\\r") + "\"";

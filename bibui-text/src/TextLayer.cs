@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Globalization;
 using System.Text;
@@ -721,6 +722,7 @@ public static class TextLayer
     public static float WidthFromChars(Fonts f, ReadOnlySpan<char> chars, ReadOnlySpan<StyleRun> styles, int start, int end, float scale)
     {
         RunsStart(styles);
+        Debug.Assert(RunsInOrder(styles), "A styled text's runs are in order, each with a style.");
         float width = 0f;
         int run = RunAt(styles, start);
         for (int at = start; at < end; )
@@ -775,6 +777,7 @@ public static class TextLayer
         float width, TextWrap wrap, int at)
     {
         RunsStart(styles);
+        Debug.Assert(RunsInOrder(styles), "A styled text's runs are in order, each with a style.");
         int run = RunAt(styles, at);
         return LineOfRuns(f, chars, styles, scale, width, wrap, at, ref run);
     }
@@ -928,19 +931,26 @@ public static class TextLayer
             throw new ArgumentException("A styled text's runs start with one at 0.", nameof(styles));
     }
 
+    // In order, each with a style: what RunAt's search and every walk over runs assume.
+    private static bool RunsInOrder(ReadOnlySpan<StyleRun> styles)
+    {
+        for (int k = 0; k < styles.Length; k++)
+            if (styles[k].Style is null || k > 0 && styles[k].Start < styles[k - 1].Start) return false;
+        return true;
+    }
+
     // A wrap key's style for a styled text: each run's start and its style's
-    // key, hashed in turn. The runs are checked whole on the way: in order, each
-    // with a style.
+    // key, hashed in turn, the runs checked whole first.
     private static ulong RunsKey(ReadOnlySpan<StyleRun> styles)
     {
         RunsStart(styles);
+        if (!RunsInOrder(styles))
+            throw new ArgumentException("A styled text's runs are in order, each with a style.", nameof(styles));
         Span<ulong> pair = stackalloc ulong[2];
         ulong key = 0;
         for (int k = 0; k < styles.Length; k++)
         {
             var run = styles[k];
-            if (k > 0 && run.Start < styles[k - 1].Start) throw new ArgumentException("A styled text's runs are in order.", nameof(styles));
-            if (run.Style is null) throw new ArgumentException("A styled text's runs each have a style.", nameof(styles));
             (pair[0], pair[1]) = ((ulong)run.Start, run.Style.Key);
             key = System.IO.Hashing.XxHash64.HashToUInt64(MemoryMarshal.AsBytes(pair), unchecked((long)key));
         }
