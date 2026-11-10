@@ -21,8 +21,8 @@ Fixtures: `text-label`, `text-align-right`, `text-centered-accent`,
 ## Text
 
 ```cs
-public Text Text(ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null, FontSlot? family = null)
-public Text TextFromId(string id, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null, FontSlot? family = null)
+public Text Text(ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null, FontSlot? family = null, FontWeight? weight = null)
+public Text TextFromId(string id, ReadOnlySpan<char> text, FontSize? fontSize = null, UiColor? textColor = null, FontSlot? family = null, FontWeight? weight = null)
 
 public void BeginFontSize(FontSize size)
 public void EndFontSize()
@@ -41,8 +41,15 @@ public void EndFontFace()
   `BeginFontSize`, or `Md`.
 - `textColor` is a token (`UiColor.TextSecondary`, or a `TextColor` such as
   `TextColor.Secondary`). Without one, it is `TextPrimary`.
-- The weight comes from `BeginFontFace(weight: FontWeight.Bold)`. The family
-  comes from `family`, or the one begun, or the body family.
+- The weight comes from `weight`, or `BeginFontFace(weight: FontWeight.Bold)`.
+  The family comes from `family`, or the one begun, or the body family.
+- `FontWeight` is the face: `Regular`, `Bold`, `Italic` or `BoldItalic`. A
+  weight begun replaces the one in scope, slant included, so `Bold` inside an
+  `Italic` scope is upright bold. The built-in Inter has an italic at both
+  weights. A family an app registers is set in its file nearest the theme's
+  weight in that slant (`FontRegistry.Register(family, files)` reads each
+  file's weight and slant from the file), and in its nearest upright when it
+  has no italic.
 - Text has grayscale edges, or subpixel ones, which keep thin stems solid on
   an RGB-striped panel: `runtime.Fonts.UseTextAntialias(TextAntialias.Subpixel)`.
   Keep grayscale for any other display (BGR, OLED, or not known). Layout is

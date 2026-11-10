@@ -24,10 +24,14 @@ public sealed partial class BibuiRuntime
     // One set per runtime, for its life. What draws the list is the loop
     // owner's choice, and none of the runtime's business.
     private readonly Fonts _fonts = new();
-    // The face each theme slot is set in, [slot * 2 + bold]: filled from the
-    // frame's theme in BeginBuild (FontResolution.SlotFacesFill), so build,
-    // layout and paint read the same faces, one entry each.
-    private readonly FontFace[] _slotFaces = new FontFace[FontResolution.SlotFaceCount];
+    // The face each theme slot is set in, [slot * FontWeight.Count + weight]:
+    // filled when the typography changes (FontResolution.SlotFacesFill), so
+    // build, layout and paint read the same faces, one entry each.
+    private readonly FontFace?[] _slotFaces = new FontFace?[FontResolution.SlotFaceCount];
+    // The typography _slotFaces were filled under: faces depend on nothing else of
+    // a theme, and a theme fade keeps the same typography, so the table is filled
+    // when this changes, not every frame.
+    private TypographyTokens? _slotTypography;
     private readonly RenderCaches _caches = new();
     private readonly Painter _painter;
 
@@ -35,7 +39,8 @@ public sealed partial class BibuiRuntime
     {
         _painter = new Painter(_caches, _fonts, _slotFaces);
         // A font asked for before the first frame gets the default theme's faces.
-        FontResolution.SlotFacesFill(_slotFaces, _fonts, _theme);
+        FontResolution.SlotFacesFill(_slotFaces, _fonts, _theme.Typography);
+        _slotTypography = _theme.Typography;
         _measure = MeasureLeaf;
     }
 
@@ -229,7 +234,11 @@ public sealed partial class BibuiRuntime
 
         if (events is not null) ApplyInput(events);
         _frameTheme = PaintedTheme(_theme);
-        FontResolution.SlotFacesFill(_slotFaces, _fonts, _frameTheme);
+        if (!ReferenceEquals(_slotTypography, _frameTheme.Typography))
+        {
+            FontResolution.SlotFacesFill(_slotFaces, _fonts, _frameTheme.Typography);
+            _slotTypography = _frameTheme.Typography;
+        }
         Rates = MotionRates.From(_theme.Motion, Dt, Instant);
         _buildStarted = Stopwatch.GetTimestamp();
         BeginDropDowns();
@@ -342,7 +351,7 @@ public sealed partial class BibuiRuntime
                 // already this frame, in this style (layout asks once per axis),
                 // the handle the text has is the answer; otherwise walk, and keep
                 // the new one.
-                var font = FontResolution.FontFromText(_slotFaces, text, _measureTheme!, _measureScale);
+                var font = FontResolution.FontFromText(_fonts, _slotFaces, text, _measureTheme!, _measureScale);
                 var style = TextLayer.StyleFromFont(_fonts, font, font.Scale);
                 if (!TextLayer.RunsAreCurrent(_fonts, text.Runs, style))
                     text.Runs = TextLayer.RunsFromChars(_fonts, text.Content, style);

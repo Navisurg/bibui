@@ -47,10 +47,16 @@ public sealed class Text : UiComponent
     public UiColor? Color { get; internal set; }
 }
 
-public enum FontSlot { Body, Display, Heading, Mono }
+/// <summary>Which of the theme's families a text is set in. <see cref="Count"/> is not a family: it is how many there are.</summary>
+public enum FontSlot { Body, Display, Heading, Mono, Count }
 
-/// <summary>How heavy a text is set: the theme's normal weight, or its bold one.</summary>
-public enum FontWeight { Regular, Bold }
+/// <summary>
+/// The face of a family a text is set in: its weight, upright or italic. The
+/// value is the face's column in the runtime's slot table; bit 0 is bold, bit 1
+/// italic. <see cref="Count"/> is not a face: it is how many there are, for
+/// tables sized by them.
+/// </summary>
+public enum FontWeight { Regular = 0, Bold = 1, Italic = 2, BoldItalic = 3, Count = 4 }
 
 /// <summary>
 /// A standalone glyph, sized and colored independently — for placing a Lucide-style icon

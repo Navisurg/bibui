@@ -82,7 +82,7 @@ public sealed unsafe class FontData
         return new FontData(bytes, Path.GetFileNameWithoutExtension(resourceName));
     }
 
-    private static FontData? s_interRegular, s_interSemiBold;
+    private static FontData? s_interRegular, s_interSemiBold, s_interItalic, s_interSemiBoldItalic;
 
     /// <summary>The embedded Inter Regular, the same bytes bibui embeds. Loaded once per process.</summary>
     public static FontData InterRegular => s_interRegular ?? Interlocked.CompareExchange(ref s_interRegular,
@@ -91,6 +91,14 @@ public sealed unsafe class FontData
     /// <summary>The embedded Inter SemiBold, which bibui draws every weight from 600 up with.</summary>
     public static FontData InterSemiBold => s_interSemiBold ?? Interlocked.CompareExchange(ref s_interSemiBold,
         FromEmbeddedResource(typeof(FontData).Assembly, "Bibui.Text.Assets.Fonts.Inter-SemiBold.ttf"), null) ?? s_interSemiBold!;
+
+    /// <summary>The embedded Inter Italic, the upright Regular's italic.</summary>
+    public static FontData InterItalic => s_interItalic ?? Interlocked.CompareExchange(ref s_interItalic,
+        FromEmbeddedResource(typeof(FontData).Assembly, "Bibui.Text.Assets.Fonts.Inter-Italic.ttf"), null) ?? s_interItalic!;
+
+    /// <summary>The embedded Inter SemiBold Italic, the SemiBold's italic.</summary>
+    public static FontData InterSemiBoldItalic => s_interSemiBoldItalic ?? Interlocked.CompareExchange(ref s_interSemiBoldItalic,
+        FromEmbeddedResource(typeof(FontData).Assembly, "Bibui.Text.Assets.Fonts.Inter-SemiBoldItalic.ttf"), null) ?? s_interSemiBoldItalic!;
 
     public override string ToString() => Name.Length > 0 ? Name : $"FontData({Length} bytes)";
 }

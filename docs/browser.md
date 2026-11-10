@@ -209,6 +209,8 @@ The counter, published in Release on the interpreter, is about 5.8 MB, 1.7 MB
 with Brotli: the .NET runtime and its interpreter (2.7 MB of it), the base
 library, bibui with its embedded fonts, the managed rasterizer, and FreeType
 and HarfBuzz. A server or CDN that compresses serves the smaller figure.
+These were measured before the embedded italic faces, which add about
+0.84 MB before compression.
 
 Ahead-of-time compilation (`-p:RunAOTCompilation=true`) compiles the app's
 code to WebAssembly: frames take a third to a half of the time, and the

@@ -125,7 +125,7 @@ reference:
 
 | | Showcase, Wayland + managed, Native AOT |
 |---|---|
-| Executable | about **5.2 MB**, one file |
+| Executable | about **5.2 MB**, one file (measured before the embedded italic faces, which add about 0.84 MB) |
 | First rendered frame (1440 × 900), from spawn | about **29 ms** |
 
 The app above and the [getting-started](getting-started.md) app publish

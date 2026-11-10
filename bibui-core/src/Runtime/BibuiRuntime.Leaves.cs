@@ -1,3 +1,4 @@
+using System.Diagnostics;
 
 namespace Bibui.Core.Runtime;
 
@@ -56,7 +57,7 @@ public sealed partial class BibuiRuntime
     public Font FontInScope(FontSize? size = null, FontSlot? family = null)
     {
         var face = FaceInScope();
-        return FontResolution.FontFromSize(_slotFaces, size ?? SizeInScope(), family ?? face.Family, face.Weight, _theme, ScaleFactor);
+        return FontResolution.FontFromSize(_fonts, _slotFaces, size ?? SizeInScope(), family ?? face.Family, face.Weight, _theme, ScaleFactor);
     }
 
     /// <summary>
@@ -169,6 +170,8 @@ public sealed partial class BibuiRuntime
         var face = FaceInScope();
         text.Weight = weight ?? face.Weight;
         text.Family = family ?? face.Family;
+        Debug.Assert((uint)text.Weight < (uint)FontWeight.Count && (uint)text.Family < (uint)FontSlot.Count,
+            "FontWeight.Count and FontSlot.Count are counts, not a face or a family.");
         return text;
     }
 

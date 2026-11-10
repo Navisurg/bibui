@@ -40,6 +40,8 @@
          assembly FontData reads them from. -->
     <EmbeddedResource Include="Assets/Fonts/Inter-Regular.ttf" LogicalName="Bibui.Text.Assets.Fonts.Inter-Regular.ttf" />
     <EmbeddedResource Include="Assets/Fonts/Inter-SemiBold.ttf" LogicalName="Bibui.Text.Assets.Fonts.Inter-SemiBold.ttf" />
+    <EmbeddedResource Include="Assets/Fonts/Inter-Italic.ttf" LogicalName="Bibui.Text.Assets.Fonts.Inter-Italic.ttf" />
+    <EmbeddedResource Include="Assets/Fonts/Inter-SemiBoldItalic.ttf" LogicalName="Bibui.Text.Assets.Fonts.Inter-SemiBoldItalic.ttf" />
   </ItemGroup>
 
   <ItemGroup>

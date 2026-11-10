@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Bibui.Core.Runtime;
 
 // Each stack is pushed by a Begin and popped by its End; the scope form,
@@ -319,13 +321,17 @@ public sealed partial class BibuiRuntime
     /// Texts built until <see cref="EndFontFace"/> are set in <paramref name="family"/>
     /// at <paramref name="weight"/>. Either left out is the one already in scope,
     /// so <c>BeginFontFace(weight: FontWeight.Bold)</c> makes what is inside bold
-    /// in whatever family it was. A text's own family and weight still win
-    /// (<see cref="Text"/>).
+    /// in whatever family it was. A weight begun replaces the one in scope, slant
+    /// included: <c>FontWeight.Bold</c> inside an italic is upright bold, and
+    /// <c>FontWeight.BoldItalic</c> is both. A text's own family and weight still
+    /// win (<see cref="Text"/>).
     /// </summary>
     public void BeginFontFace(FontSlot? family = null, FontWeight? weight = null)
     {
         var outer = FaceInScope();
         _faceStack.Add((family ?? outer.Family, weight ?? outer.Weight));
+        Debug.Assert((uint)_faceStack[^1].Weight < (uint)FontWeight.Count && (uint)_faceStack[^1].Family < (uint)FontSlot.Count,
+            "FontWeight.Count and FontSlot.Count are counts, not a face or a family.");
     }
 
     /// <summary>Ends the innermost <see cref="BeginFontFace"/>.</summary>

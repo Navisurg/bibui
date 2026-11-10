@@ -22,7 +22,8 @@ Source:   https://lucide.dev
 -------------------------------------------------------------------------------
 2. Inter typeface
 -------------------------------------------------------------------------------
-What:     Inter-Regular.ttf and Inter-SemiBold.ttf, embedded as resources.
+What:     Inter-Regular.ttf, Inter-SemiBold.ttf, Inter-Italic.ttf and
+          Inter-SemiBoldItalic.ttf (Inter 4.1), embedded as resources.
 Where:    bibui-text/Assets/Fonts/ (embedded in Bibui.Text).
 Licence:  SIL Open Font License 1.1. The full licence is in
           bibui-text/Assets/Fonts/Inter-LICENSE.txt and is packed into the

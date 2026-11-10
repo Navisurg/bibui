@@ -21,7 +21,8 @@ foreach (TextLine line in TextLayer.LinesFromText(runtime.Fonts, paragraph, styl
 ```
 
 Fonts of the app's own are registered once, before the first frame, with
-`FontRegistry.Register(family, weight, bytes)`, and a theme names them.
+`FontRegistry.Register(family, files…)`, each file's weight and slant read
+from the file, and a theme names them.
 
 Text is UTF-16 throughout. bibui looks up no installed fonts for text, so it
 measures and draws the same on every machine, but one: the colour emoji font

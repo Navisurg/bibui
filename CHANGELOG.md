@@ -43,6 +43,18 @@ All notable changes to bibui are recorded here. The format is based on
 - **Markdown source spans:** `MarkdownBlock.SourceStart` and `SourceEnd`, the
   lines of the source each block came from, markers included.
 
+- **Italics:** `FontWeight.Italic` and `FontWeight.BoldItalic`, beside
+  `Regular` and `Bold`, set a text in its family's italic:
+  `runtime.Text(text, weight: FontWeight.Italic)`, or
+  `runtime.BeginFontFace(weight: FontWeight.BoldItalic)`. Inter Italic and
+  Inter SemiBold Italic are embedded beside the upright faces, opened the
+  first time italic text is asked for. `FontRegistry.Register(family, files…)`
+  and `RegisterFromEmbeddedResource(family, assembly, names…)` register a
+  family's files in one call, each at the weight and slant it says it is (its
+  OS/2 table); `IsRegistered(family)` says whether any is. A family with no
+  italic is set upright in its own face. `Bibui.Text`, and so a Native AOT app
+  or a browser download, grows by about 840 KB.
+
 ### Changed
 
 - **Breaking:** rendering glyphs into masks is no longer the text layer's.
@@ -62,6 +74,30 @@ All notable changes to bibui are recorded here. The format is based on
   in sight in a dimmer blue (half the alpha), with no caret; it hid it. A field
   that keeps a selection after losing focus, to another field or on Enter or
   Escape, now shows it.
+
+- The Markdown viewer sets emphasis in italic, and strong emphasis inside it
+  in the semibold italic; both were in the upright face. Italic is narrower
+  than upright, so a paragraph with emphasis can break into lines
+  differently.
+
+- A family registered with `FontRegistry` is set in its file nearest the
+  weight asked for, the heavier on a tie; a weight it has no file for was set
+  in Inter. A family whose only file is a 400 is now set in it where the theme
+  asks for 600, not in Inter SemiBold.
+
+### Removed
+
+- **Breaking:** a font file's weight given by hand: `FontRegistry.Register(family,
+  weight, bytes)`, `RegisterFromEmbeddedResource(family, weight, assembly,
+  resourceName)` and `IsRegistered(family, weight)`; and `TextEngine.Register`,
+  `Resolve` and `Strike(family, weight, sizePx)`, which nothing in bibui used.
+  Register a family's files with `Register(family, files…)` or
+  `RegisterFromEmbeddedResource(family, assembly, names…)`; each file's weight
+  and slant are read from the file. `IsRegistered(family)` takes the family
+  alone. A TrueType collection (`.ttc`) or a WOFF/WOFF2 file, which only the
+  numbered `Register` took, can no longer be registered. Removed without a
+  deprecated release first, so the next release is a major one
+  ([versioning](docs/versioning.md)).
 
 ### Fixed
 
