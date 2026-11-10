@@ -32,9 +32,10 @@ static class ScrollListTests
         public int First, Last;
         public float Bottom;   // where the last row built ends, from the top of the view
 
-        public Lab(ScrollBy by, Func<int, float>? heightOf = null)
+        public Lab(ScrollBy by, Func<int, float>? heightOf = null, ScrollPt start = default)
         {
             _height = heightOf ?? (_ => Pitch);
+            Pt = start;   // a point kept from before the list was built, as a view state keeps one
             Runtime.SetBuild(() =>
             {
                 var panel = Runtime.BoxFromId("panel").Sized(Size.Fill, Size.Fill);
@@ -93,6 +94,22 @@ static class ScrollListTests
             list.Frame();
             Eq((50, 50 + 14), (list.First, list.Last), "row 50, part of it above, to the spare row below");
             Near(10f, ((Box)list.Runtime.FindById("list")!).ViewOffset.Y, 0.01f, "offset by the pixels into row 50");
+        });
+
+        run("RowScrollList: a list built again, not measured yet, keeps the point it is given, not clamped to a guessed height", () =>
+        {
+            // Row 980 is within the last screenful of the 300 px view, but past it for the 4096 px a view not laid
+            // out yet is built for: clamped to that, a list shown again (a page gone back to) would lose its place.
+            var list = new Lab(ScrollBy.Pixels, start: new ScrollPt { Idx = 980 });
+            Eq((980, 0f), (list.Pt.Idx, list.Pt.Px), "the point kept through its first frames");
+            Eq(980, list.First, "row 980 at the top");
+        });
+
+        run("ScrollList: a list built again, not measured yet, keeps the point it is given, not clamped to a guessed height", () =>
+        {
+            var list = new Lab(ScrollBy.Pixels, _ => Pitch, start: new ScrollPt { Idx = 980 });
+            Eq((980, 0f), (list.Pt.Idx, list.Pt.Px), "the point kept through its first frames");
+            Eq(980, list.First, "row 980 at the top");
         });
 
         run("RowScrollList: the wheel moves whole rows by rows and pixels by pixels, from the first row to the last", () =>

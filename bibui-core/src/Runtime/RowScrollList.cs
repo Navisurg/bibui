@@ -49,9 +49,11 @@ public static class RowScrollList
 
         pt.Ease(runtime);
 
-        // The top shown, in rows, kept between the first row and the last screenful.
+        // The top shown, in rows, kept between the first row and the last screenful. Unmeasured, only to the
+        // last row: a view built again (shown again after being hidden) keeps its point, not one clamped to a
+        // guessed height.
         float height = view.Extent.Y > 0f ? view.Extent.Y : Unmeasured;   // last frame's
-        float top = Math.Clamp(pt.Idx + ((float)by * pt.Px + pt.Off) / pitch, 0f, MaxTop(height, pitch, count, by));
+        float top = Math.Clamp(pt.Idx + ((float)by * pt.Px + pt.Off) / pitch, 0f, view.Extent.Y > 0f ? MaxTop(height, pitch, count, by) : MathF.Max(0f, count - 1));
         int first = (int)top;
         int last = Math.Min(count, first + (int)MathF.Ceiling(height / pitch) + 1);
         view.ViewOffset = view.TargetViewOffset = new Vector2(0f, (top - first) * pitch);
@@ -67,7 +69,8 @@ public static class RowScrollList
         if (runtime.ParentInScope is not Box { Claims: var claims } view || (claims & InteractionKinds.Scroll) == 0)
             throw new InvalidOperationException("EndRowScrollList pops the list's view, and the parent in scope is not one: a parent pushed inside the list was not popped.");
         runtime.EndParent(view);
-        float scale = (float)by, height = view.Extent.Y > 0f ? view.Extent.Y : Unmeasured;
+        if (!(view.Extent.Y > 0f)) return;   // unmeasured: no wheel has reached it, and its range is not known to keep to
+        float scale = (float)by, height = view.Extent.Y;
         double before = (double)pt.Idx * pitch + scale * pt.Px;   // where the list comes to rest, in pixels
 
         // The target in pixels, with the wheel, kept in range: whole rows of it

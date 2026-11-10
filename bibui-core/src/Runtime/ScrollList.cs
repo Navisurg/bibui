@@ -162,6 +162,7 @@ public static class ScrollList
         if (runtime.ParentInScope is not Box { Claims: var claims } view || (claims & InteractionKinds.Scroll) == 0)
             throw new InvalidOperationException("EndScrollList pops the list's view, and the parent in scope is not one: a parent pushed inside the list was not popped.");
         runtime.EndParent(view);
+        if (!(view.Extent.Y > 0f)) return;   // unmeasured: no wheel has reached it, and the room under it is a guess
         float dy = runtime.InteractionsFor(view).ScrollY;
 
         // The room under the view, exact once the last row was built; below 0 a gap.

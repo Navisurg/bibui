@@ -107,6 +107,10 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Fixed
 
+- `RowScrollList`, `ScrollList`: a list built again, not laid out yet (shown
+  again after being hidden, as a page gone back to), keeps the scroll point
+  it is given. Its first frame clamped the point to the 4096 px it is built
+  for then, so a list scrolled near its end lost its place.
 - `ScrollList`: the wheel up at the top, or past it, no longer moves what is
   shown down. The first row jumped down by each notch and eased back, a
   flicker for as long as the wheel turned.
