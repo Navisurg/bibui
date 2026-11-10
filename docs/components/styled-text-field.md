@@ -81,6 +81,23 @@ steady frame allocates nothing. The field moves the ranges in your buffer, in
 place: an end into a cluster, and with each edit. Focus is the runtime's. Without focus, the field keeps its selection in sight, dimmer,
 and shows no caret.
 
+## Markdown source
+
+`MarkdownHighlight.RangesFromSource` writes a Markdown source's syntax as
+ranges, the colouring the `MarkdownEditor` gives the block it edits: markers
+dimmed, code in the accent colour, strong bold, emphasis italic, sorted and not
+overlapping. The array grows to the most ranges found and never shrinks.
+
+```csharp
+int count = MarkdownHighlight.RangesFromSource(_source.Str, ref _ranges);
+runtime.StyledTextField("notes", _source, _state, _ranges.AsSpan(0, count));
+```
+
+It is a grammar of its own, as small as it can be, so it can differ from how
+the viewer renders: emphasis is found within a line, not across a paragraph's
+lines, and strikethrough, autolinks, HTML, setext underlines and thematic
+breaks are left plain.
+
 ## Theme tokens
 
 As `MultilineTextField`'s, and each range's `Color`, a token resolved at paint

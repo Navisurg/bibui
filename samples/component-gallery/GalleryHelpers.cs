@@ -26,6 +26,7 @@ internal static class GalleryHelpers
     "Textarea"         => "Several lines of text to type into: runtime.MultilineTextField, wrapping and scrolling.",
     "TextField"        => "The text field itself: a buffer and an edit state the caller holds, drawn with its caret and selection.",
     "StyledTextField"  => "runtime.StyledTextField: a multi-line field with ranges in colours and weights of their own, for syntax in an editor.",
+    "MarkdownEditor"   => "runtime.MarkdownEditor: a Markdown document rendered, the block being edited shown as its source, coloured.",
     "Checkbox"         => "runtime.Checkbox: on, off or mixed, with a label. It reports a click; the caller flips the value.",
     "Switch"           => "runtime.Switch: an on/off setting that slides between its two ends.",
     "RadioGroup"       => "runtime.RadioGroup: exactly one of a few options, all shown at once.",

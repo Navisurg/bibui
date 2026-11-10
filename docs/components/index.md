@@ -91,6 +91,7 @@ change. Each page names the fixture it shows.
 | [Progress](progress.md) | A filled share of a track | `Box` |
 | [Separator](separator.md) | A line between things | `Box` |
 | [Markdown](markdown.md) | A read-only Markdown viewer | `MarkdownWidget` |
+| [MarkdownEditor](markdown-editor.md) | A Markdown document rendered, the block being edited shown as its source | `MarkdownEditorWidget` |
 | [Text, Icon and Spinner](text-icon-spinner.md) | The runtime's own leaves | `Text`, `Icon`, `Spinner` |
 
 [Fixtures by component](fixtures.md) lists every fixture of every component and
