@@ -7352,6 +7352,124 @@ Run("runtime.MultilineTextField: moving the caret past the last row scrolls its 
         $"the wheel moved it, and the caret did not pull it back: {view.TargetViewOffset.Y} after {scrolled}");
 });
 
+// A focused multi-line field of 50 lines ("line 01", ...), `rows` rows tall and
+// 300 px wide; and whether a Page key was left after it.
+(BibuiRuntime Runtime, Box View, BibuiStr Text, Func<bool> PageLeft) MountPages(TextEditState edit, int rows = 10)
+{
+    var text = BibuiStr.FromStrLit(string.Join("\n", Enumerable.Range(1, 50).Select(i => $"line {i:00}")));
+    var runtime = BibuiRuntime.Create();
+    Box view = null!;
+    bool pageLeft = false;
+    runtime.SetBuild(() =>
+    {
+        var parent = runtime.BoxFromId("parent");
+        parent.ChildLayoutAxis = LayoutAxis.Y;
+        parent.Sized(Size.Px(300f), Size.Px(600f));
+        using (runtime.Parent(parent))
+        using (runtime.Parent(FieldFrame(runtime, SemanticSize.ChildrenSum())))
+        using (runtime.SizeY(Bibui.Core.Runtime.TextField.Rows(runtime, rows)))
+        {
+            runtime.Focus("field");
+            view = (Box)runtime.MultilineTextField("field", text, edit).Node;
+        }
+        pageLeft |= runtime.UnconsumedEvents.Any(e => e.Key is Bibui.Core.Key.PageUp or Bibui.Core.Key.PageDown);
+        return parent;
+    }, TestBuild.Window(400, 700));
+    runtime.Step();
+    runtime.Step();
+    return (runtime, view, text, () => { bool left = pageLeft; pageLeft = false; return left; });
+}
+
+int LineOfOffset(BibuiStr text, int offset) => text.Str[..offset].Count('\n');
+
+Run("runtime.MultilineTextField: Page Down and Page Up move a page of lines at the caret's column, and the view with them", () =>
+{
+    var edit = new TextEditState { Cursor = 5, Mark = 5 };   // after "line "
+    var (runtime, view, text, _) = MountPages(edit);
+    float advance = runtime.Fonts.LineAdvance(runtime.FontInScope());
+
+    PressKey(runtime, Bibui.Core.Key.PageDown);
+    Eq(9, LineOfOffset(text, edit.Cursor), "ten rows shown: a page of nine, one kept");
+    Eq(9 * 8 + 5, edit.Cursor, "at the same column");
+    Eq(edit.Cursor, edit.Mark, "nothing selected");
+    IsTrue(MathF.Abs(view.TargetViewOffset.Y - 9 * advance) < 0.01f, $"the view a page down too: {view.TargetViewOffset.Y}");
+
+    PressKey(runtime, Bibui.Core.Key.PageDown, shift: true);
+    Eq(18, LineOfOffset(text, edit.Cursor), "a second page");
+    Eq(9, LineOfOffset(text, edit.Mark), "Shift keeps the mark");
+
+    PressKey(runtime, Bibui.Core.Key.PageUp);
+    PressKey(runtime, Bibui.Core.Key.PageUp);
+    Eq(5, edit.Cursor, "two pages up, on the first line at the column");
+    Eq(0f, view.TargetViewOffset.Y, "and the view at the top");
+    PressKey(runtime, Bibui.Core.Key.PageUp);
+    Eq(0, edit.Cursor, "on the first line, Page Up goes to the start");
+
+    var oneRow = new TextEditState();
+    var (single, _, singleText, _) = MountPages(oneRow, rows: 1);
+    PressKey(single, Bibui.Core.Key.PageDown);
+    Eq(1, LineOfOffset(singleText, oneRow.Cursor), "a field one row tall pages a line, not none");
+});
+
+Run("runtime.MultilineTextField: past the last page, Page Down stops on the last line, then goes to the end", () =>
+{
+    var edit = new TextEditState { Cursor = 45 * 8 + 5, Mark = 45 * 8 + 5 };   // line 46
+    var (runtime, view, text, _) = MountPages(edit);
+    var font = runtime.FontInScope();
+    float bottom = runtime.Fonts.LineHeight(font) + 49 * runtime.Fonts.LineAdvance(font) - view.Extent.Y;
+    PressKey(runtime, Bibui.Core.Key.PageDown);
+    Eq(49 * 8 + 5, edit.Cursor, "the last line, at the column");
+    IsTrue(MathF.Abs(view.TargetViewOffset.Y - bottom) < 0.01f, $"the view on its last page: {view.TargetViewOffset.Y}, not {bottom}");
+    PressKey(runtime, Bibui.Core.Key.PageDown);
+    Eq((int)text.Length, edit.Cursor, "then the end");
+});
+
+Run("runtime.MultilineTextField: two Page Downs in one frame go two pages, the view with them", () =>
+{
+    var edit = new TextEditState();
+    var (runtime, view, text, _) = MountPages(edit);
+    float advance = runtime.Fonts.LineAdvance(runtime.FontInScope());
+    runtime.ProcessEvent(BibUiEvent.FromKey(Bibui.Core.Key.PageDown, false, false));
+    runtime.ProcessEvent(BibUiEvent.FromKey(Bibui.Core.Key.PageDown, false, false));
+    runtime.Step();
+    Eq(18, LineOfOffset(text, edit.Cursor), "two pages");
+    IsTrue(MathF.Abs(view.TargetViewOffset.Y - 18 * advance) < 0.01f, $"the view moved by both: {view.TargetViewOffset.Y}");
+});
+
+Run("runtime.MultilineTextField: Alt+Page Down and Ctrl+Page Down, as the window sends them, are left to the app", () =>
+{
+    var edit = new TextEditState();
+    var (runtime, _, _, pageLeft) = MountPages(edit);
+    runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.PageDown, KeyModifiers.Alt)]);
+    Eq(0, edit.Cursor, "Alt: the caret stays");
+    IsTrue(pageLeft(), "Alt: the key is the app's");
+    runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.PageDown, KeyModifiers.Ctrl)]);
+    Eq(0, edit.Cursor, "Ctrl: the caret stays");
+    IsTrue(pageLeft(), "Ctrl: the key is the app's");
+    runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.PageDown)]);
+    Eq(9 * 8, edit.Cursor, "without either, the window's Page Down pages");
+});
+
+Run("runtime.TextField: a single line leaves Page Up and Page Down to the app", () =>
+{
+    var text = BibuiStr.FromStrLit("Hello, world");
+    var edit = new TextEditState { Cursor = 3, Mark = 3 };
+    var runtime = BibuiRuntime.Create();
+    bool pageLeft = false;
+    runtime.SetBuild(() =>
+    {
+        var parent = runtime.BoxFromId("parent");
+        parent.Sized(Size.Px(300f), Size.Px(100f));
+        runtime.Focus("line");
+        using (runtime.Parent(parent)) runtime.TextField("line", text, edit);
+        pageLeft |= runtime.UnconsumedEvents.Any(e => e.Key == Bibui.Core.Key.PageDown);
+        return parent;
+    }, TestBuild.Window(400, 200));
+    runtime.Step();
+    PressKey(runtime, Bibui.Core.Key.PageDown);
+    IsTrue(edit.Cursor == 3 && pageLeft, "the caret stays, and the key is left");
+});
+
 Run("runtime.TextField: typing edits the caller's buffer; Enter submits and gives focus up", () =>
 {
     var text = BibuiStr.FromStrLit("Hello");

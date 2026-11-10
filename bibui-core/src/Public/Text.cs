@@ -160,6 +160,10 @@ public enum TextActionFlags : UInt32
     // Selects everything. The only action whose result does not depend on where
     // the caret is, which is why it cannot be said with a delta.
     SelectAll = 1 << 7,
+
+    // With DeltaY: a page of lines rather than one, as many as the field shows
+    // less one. Page Up and Page Down.
+    PageScan = 1 << 8,
 }
 
 

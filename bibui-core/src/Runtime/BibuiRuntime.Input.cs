@@ -151,6 +151,9 @@ public sealed partial class BibuiRuntime
                     // FromKey decided on Ctrl and Shift; the event reports all that
                     // was held, Alt and Super included.
                     ev.Modifiers = held;
+                    // With Alt, Page Up and Down are the app's, as with Ctrl: a plain Press.
+                    if ((held & KeyModifiers.Alt) != 0 && (ev.Flags & TextActionFlags.PageScan) != 0)
+                        (ev.Kind, ev.DeltaY, ev.Flags) = (BibUiEventKind.Press, 0, default);
                     ev.Repeat = e.Repeat;
                     break;
                 }

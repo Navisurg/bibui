@@ -540,8 +540,8 @@ Escape (`Cancelled`) and, on a single line, Enter (`Submitted`).
 reads it before the box is built, for a look such as an input's outline.
 
 The window translates each key down into an intent for the text fields, so
-its `Kind` depends on the key: `Navigate` for the arrows, Home and End (and
-Ctrl+A), `Submit` for Enter, `Edit` for Backspace, Delete, Ctrl+X and Ctrl+V,
+its `Kind` depends on the key: `Navigate` for the arrows, Home and End, Page
+Up and Page Down without Ctrl or Alt (and Ctrl+A), `Submit` for Enter, `Edit` for Backspace, Delete, Ctrl+X and Ctrl+V,
 `Copy` for Ctrl+C, and `Press` for everything else. A shortcut handler
 filters on **`BibUiEvent.IsKeyDown`**, true for all of them, and then reads
 `Key`; filtering on `Press` alone never sees ↑, ↓ or Enter.

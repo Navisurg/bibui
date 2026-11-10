@@ -100,6 +100,16 @@ should also acquire its frame with `InteractionKinds.Disabled`, as the
 - Escape ends the edit: `Interaction.Cancelled`, and the field gives up focus.
   On a single line that edits, Enter does too, as `Interaction.Submitted`. A
   multi-line field takes Enter as a line break.
+- Up and Down move a line; in a multi-line field, Page Up and Page Down move
+  a page: the lines the field shows less one, with the view moving as far, so
+  the caret keeps its place on screen. A page is the field's own height, so a
+  field sized to fit its text (`ChildrenSum()`) pages to its start or end.
+  Each keeps the caret's column as near as the line allows, and Shift
+  selects. On the first line or the last they go to the start or the end of
+  the text; in a single line, Up and Down always do. They are `Navigate`
+  events, so a read-only field takes them too. A single-line field leaves
+  Page Up and Page Down to the app, and every field does with Ctrl or Alt
+  held.
 
 ## State the caller owns
 

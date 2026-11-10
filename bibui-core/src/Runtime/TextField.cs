@@ -198,11 +198,15 @@ public static class TextField
     }
 
     // Applies and eats the frame's events of the given kinds, in order. A move
-    // between lines is the field's; the rest is TextOp's. Answers whether the
-    // text changed.
+    // between lines is the field's; the rest is TextOp's. A page is pageRows
+    // lines; with pageRows 0 (a single line) a page is left to the app, not
+    // eaten. pagedLines is how many lines the frame's pages moved the caret,
+    // down when positive, for the field to move its view as far. Answers
+    // whether the text changed.
     internal static bool ApplyEdits(BibuiRuntime runtime, BibuiStr text, TextEditState edit, uint kinds,
-        Font font, float wrapWidth, TextWrap wrap)
+        Font font, float wrapWidth, TextWrap wrap, int pageRows, out int pagedLines)
     {
+        pagedLines = 0;
         bool edited = false;
         Span<char> charBuf = stackalloc char[TextOp.MaxCharsPerCodePoint];
         foreach (var ev in runtime.UnconsumedEvents)
@@ -210,7 +214,8 @@ public static class TextField
             if ((kinds & 1u << (int)ev.Kind) == 0) continue;
             if (ev.Kind == BibUiEventKind.Navigate && ev.DeltaY != 0)
             {
-                MoveVertically(runtime, font, text, edit, wrapWidth, wrap, ev);
+                if ((ev.Flags & TextActionFlags.PageScan) != 0 && pageRows == 0) continue;
+                pagedLines += MoveVertically(runtime, font, text, edit, wrapWidth, wrap, ev, pageRows);
                 ev.Eat();
                 continue;
             }
@@ -240,18 +245,22 @@ public static class TextField
     }
 
     // Up or down a line, by the sign of ev.DeltaY, to the char nearest the
-    // caret's x on that line. With no line there — above the first, below the
-    // last, or anywhere in a single line — the start or end of the text.
-    // Shift keeps the mark.
-    internal static void MoveVertically(BibuiRuntime runtime, Font font, BibuiStr text, TextEditState edit,
-        float wrapWidth, TextWrap wrap, BibUiEvent ev)
+    // caret's x on that line; with PageScan, pageRows lines, or as many as
+    // there are. With no line there — the caret already on the first line, or
+    // the last, or anywhere in a single line — the start or end of the text.
+    // Shift keeps the mark. Answers how many lines a page moved the caret
+    // (0 for a line, or to the start or end), for the field to move its view
+    // as far, so the caret keeps its place on screen.
+    internal static int MoveVertically(BibuiRuntime runtime, Font font, BibuiStr text, TextEditState edit,
+        float wrapWidth, TextWrap wrap, BibUiEvent ev, int pageRows)
     {
         var fonts = runtime.Fonts;
         var style = TextLayer.StyleFromFont(fonts, font, font.Scale);
         var lines = TextLayer.LinesFromText(fonts, text.Str, style, font.Scale, wrapWidth, wrap);
+        bool page = (ev.Flags & TextActionFlags.PageScan) != 0;
         int on = LineOf(lines, edit.Cursor);
-        int to = on + Math.Sign(ev.DeltaY);
-        if (to < 0 || to >= lines.Length)
+        int to = Math.Clamp(on + Math.Sign(ev.DeltaY) * (page ? pageRows : 1), 0, lines.Length - 1);
+        if (to == on)
         {
             edit.Cursor = ev.DeltaY > 0 ? (int)text.Length : 0;
         }
@@ -261,6 +270,7 @@ public static class TextField
             edit.Cursor = lines[to].Start + CharAtX(fonts, font, text.Str[lines[to].Start..lines[to].End], caretX);
         }
         if ((ev.Flags & TextActionFlags.KeepMark) == 0) edit.Mark = edit.Cursor;
+        return page && to != on ? to - on : 0;
     }
 
     // The line an offset is on: the last that starts at or before it.
@@ -309,7 +319,7 @@ public static class TextFieldExtensions
             HandlePointer(runtime, font, interaction, text.Str, edit, pointerX, focused);
         }
 
-        bool edited = focused && ApplyEdits(runtime, text, edit, events, font, float.PositiveInfinity, TextWrap.Words);
+        bool edited = focused && ApplyEdits(runtime, text, edit, events, font, float.PositiveInfinity, TextWrap.Words, 0, out _);
         if (focused) EndingKeys(runtime, ref interaction, submits: (events & 1u << (int)BibUiEventKind.Text) != 0);
 
         // An empty buffer shows the placeholder, in a quieter colour, the same way.
@@ -389,7 +399,18 @@ public static class TextFieldExtensions
             edit.Cursor += lineStart; edit.Mark += lineStart;
         }
 
-        bool edited = focused && ApplyEdits(runtime, text, edit, events, font, room, wrap);
+        // A page is the lines the view showed last frame less one, kept from the
+        // page before: one line's height, then an advance for each more (a
+        // hundredth of a line of slack, so a view sized to n lines shows n). One
+        // line before the first layout, and at least a line, so a field one row
+        // tall still pages (0 would leave the key to the app). A field sized to
+        // its text shows all of it, so its page goes to its end. The view moves
+        // as far as the pages moved the caret; its clamp keeps it in range.
+        int shownRows = 1 + (int)MathF.Floor((view.Extent.Y - lineHeight) / lineAdvance + 0.01f);
+        int pagedLines = 0;
+        bool edited = focused && ApplyEdits(runtime, text, edit, events, font, room, wrap, Math.Max(1, shownRows - 1), out pagedLines);
+        if (pagedLines != 0)
+            view.TargetViewOffset = view.TargetViewOffset with { Y = view.TargetViewOffset.Y + pagedLines * lineAdvance };
         if (focused) EndingKeys(runtime, ref interaction, submits: false);
 
         // An empty buffer shows the placeholder, in a quieter colour, the same way.
