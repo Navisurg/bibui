@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A ScrollList whose rows are measured by building them: the gap a row's first frame leaves. See Program.cs. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>scroll-list-measured-late</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui-apps/wayland-managed/bibui-app-wayland-managed.csproj" />
+    <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
+  </ItemGroup>
+</Project>
