@@ -109,7 +109,7 @@ void Frame()
 
 static (string Group, string[] Routes)[] NavGroups() => new[]
     {
-        ("Inputs & Forms", new[] { "Button", "Input", "Textarea", "TextField", "Checkbox", "Switch", "RadioGroup",
+        ("Inputs & Forms", new[] { "Button", "Input", "Textarea", "TextField", "StyledTextField", "Checkbox", "Switch", "RadioGroup",
             "Select", "Slider", "Toggle",
             "ToggleGroup", "DatePicker", "Calendar", "TimePicker", "ColorPicker" }),
         ("Display", new[] { "Text", "Badge", "Avatar", "Card", "Alert", "Separator", "Label",
@@ -295,7 +295,7 @@ static void BuildDemo(BibuiRuntime runtime, GalleryState state, Gallery gallery)
 {
     switch (state.Route)
     {
-        case "Button" or "Input" or "Textarea" or "TextField" or "Checkbox" or "Switch" or "RadioGroup"
+        case "Button" or "Input" or "Textarea" or "TextField" or "StyledTextField" or "Checkbox" or "Switch" or "RadioGroup"
             or "Select" or "Slider" or "Toggle" or "ToggleGroup" or "DatePicker" or "Calendar"
             or "TimePicker" or "ColorPicker":
             DemoInputs.Build(runtime, state.Route, state.Inputs, s => gallery.State = state with { Inputs = s }); break;

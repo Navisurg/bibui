@@ -19,6 +19,11 @@ namespace Bibui.Core.Runtime;
 public static class TextField
 {
     internal static readonly UiColor Highlight = UiColor.Rgba(59, 130, 246, 110);
+    // The selection of a field without focus: the same blue, dimmer.
+    internal static readonly UiColor UnfocusedHighlight = Highlight.WithAlpha(55 / 255f);
+    // A hundredth of a line of slack in counting the lines a view shows, so a
+    // view sized to n lines shows n.
+    private const float RowSlack = 0.01f;
     internal const float CaretWidth = 2f;
     internal const string Dots = "\u2026";
     internal const float DotsGap = 2f;   // between a cut line and its "…"
@@ -184,7 +189,19 @@ public static class TextField
         var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
         float before = TextLayer.WidthFromChars(runtime.Fonts, line[..lo], style, font.Scale);
         if (caret == hi && hi > lo) before += TextLayer.WidthFromChars(runtime.Fonts, line[lo..hi], style, font.Scale);
+        DrawCaretAt(runtime, view, before, top, height, edited);
+    }
 
+    // The lines a page moves in a view: those it showed, one line's height then
+    // an advance for each more, less one. At least one, so a field one row tall
+    // still pages (0 would leave the key to the app), and one before the first
+    // layout.
+    internal static int PageRows(float viewHeight, float lineHeight, float lineAdvance)
+        => Math.Max(1, (int)MathF.Floor((viewHeight - lineHeight) / lineAdvance + RowSlack));
+
+    // The same, at x from the line's start, measured by the caller.
+    internal static void DrawCaretAt(BibuiRuntime runtime, Box view, float before, float top, SemanticSize height, bool edited)
+    {
         // The caret follows the cursor: 60 halvings a second by default, half the way each frame at 60 Hz.
         float rate = edited ? 1f : runtime.Rates.Follow;
         float easedX = runtime.Animate(view.Id!, "caret-x", before, rate);
@@ -345,7 +362,7 @@ public static class TextFieldExtensions
 
         using (runtime.Parent(view))
         {
-            DrawLine(runtime, shown, lo, hi, color, focused ? Highlight : Highlight.WithAlpha(55 / 255f));
+            DrawLine(runtime, shown, lo, hi, color, focused ? Highlight : UnfocusedHighlight);
             // Draw carret last so it appears over text
             if (focused) DrawCaret(runtime, view, font, shown, lo, hi, caret, top: 0f, SemanticSize.Pixels(lineHeight), edited);
         }
@@ -400,15 +417,11 @@ public static class TextFieldExtensions
         }
 
         // A page is the lines the view showed last frame less one, kept from the
-        // page before: one line's height, then an advance for each more (a
-        // hundredth of a line of slack, so a view sized to n lines shows n). One
-        // line before the first layout, and at least a line, so a field one row
-        // tall still pages (0 would leave the key to the app). A field sized to
-        // its text shows all of it, so its page goes to its end. The view moves
-        // as far as the pages moved the caret; its clamp keeps it in range.
-        int shownRows = 1 + (int)MathF.Floor((view.Extent.Y - lineHeight) / lineAdvance + 0.01f);
+        // page before (PageRows). A field sized to its text shows all of it, so
+        // its page goes to its end. The view moves as far as the pages moved the
+        // caret; its clamp keeps it in range.
         int pagedLines = 0;
-        bool edited = focused && ApplyEdits(runtime, text, edit, events, font, room, wrap, Math.Max(1, shownRows - 1), out pagedLines);
+        bool edited = focused && ApplyEdits(runtime, text, edit, events, font, room, wrap, PageRows(view.Extent.Y, lineHeight, lineAdvance), out pagedLines);
         if (pagedLines != 0)
             view.TargetViewOffset = view.TargetViewOffset with { Y = view.TargetViewOffset.Y + pagedLines * lineAdvance };
         if (focused) EndingKeys(runtime, ref interaction, submits: false);
@@ -445,7 +458,7 @@ public static class TextFieldExtensions
             int selectionEnd = Math.Clamp(hi, line.Start, line.End) - line.Start;
             using (runtime.Parent(row))
                 DrawLine(runtime, shown[line.Start..line.End], selectionStart, selectionEnd, color,
-                    focused ? Highlight : Highlight.WithAlpha(55 / 255f));
+                    focused ? Highlight : UnfocusedHighlight);
         }
 
         // Draw carret last so it appears over text: on its line as on a single line, at that line's place.
