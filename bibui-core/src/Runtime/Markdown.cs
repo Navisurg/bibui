@@ -43,7 +43,13 @@ internal sealed class MarkdownParse
 /// the viewer had last frame, as <see cref="TextFieldExtensions.MultilineTextField"/> does. A line
 /// is a row of texts, one per stretch of a single style.</para>
 ///
-/// <para>It owns no state. A link is a box that takes a press; the destination
+/// <para>Its text can be selected as a text field's can: pressed and dragged
+/// over, a word double-clicked, all of it with Ctrl+A, and copied with Ctrl+C
+/// as plain text — lines of a paragraph joined by spaces, blocks by blank
+/// lines, table cells by tabs. The viewer takes focus on a press to do it, and
+/// shows the selection only while it has focus, as a field does.</para>
+///
+/// <para>It owns no state but that selection. A link is a box that takes a press; the destination
 /// of the one clicked comes back in <see cref="MarkdownWidget.ClickedLink"/>. A
 /// task box reports its click the same way, as the offset in the source of the
 /// character between its brackets, for the caller to rewrite with
@@ -158,7 +164,12 @@ public static class Markdown
     internal static MarkdownWidget Build(BibuiRuntime runtime, string id, Cache cache, Entry entry, float? width,
         ComponentSize textSize, bool ranged = false, int first = 0, int count = 0)
     {
-        Box root = runtime.BoxFromId(id);
+        // The viewer is pressed and dragged over to select, asked after what it
+        // holds: a press goes to the first box that asks, and a link's or a task
+        // box's is its own. Blocks drawn for an editor (ranged) take their presses
+        // themselves, and select nothing here.
+        Box root = runtime.BoxFromId(id, ranged ? InteractionKinds.None : InteractionKinds.LeftPress | InteractionKinds.Keyboard);
+        bool focused = !ranged && runtime.IsFocused(id);
         root.ChildLayoutAxis = LayoutAxis.Y;
         root.SizeX = width is { } w ? SemanticSize.Pixels(w) : SemanticSize.ParentPct(1f);
         root.SizeY = SemanticSize.ChildrenSum();
@@ -167,7 +178,8 @@ public static class Markdown
         float room = width ?? (root.Extent.X > 0f ? root.Extent.X : runtime.SurfaceWidth / MathF.Max(1f, runtime.ScaleFactor));
 
         var writer = cache.Writer;
-        writer.Begin(runtime, entry, textSize);
+        writer.Begin(runtime, entry, textSize,
+            focused ? Math.Min(entry.Anchor, entry.Caret) : 0, focused ? Math.Max(entry.Anchor, entry.Caret) : 0);
         using (runtime.Parent(root))
         using (runtime.FontFace(FontSlot.Body, FontWeight.Regular))
         using (runtime.SizeX(SemanticSize.Text()))
@@ -178,8 +190,151 @@ public static class Markdown
         }
         var result = new MarkdownWidget(root, writer.ClickedLink, writer.ToggledTask);
         writer.End();
+        if (ranged) return result;
+        // Drawn with the selection as it stood; a change shows on the frame it asks for.
+        var (anchor, caret) = (entry.Anchor, entry.Caret);
+        var interaction = runtime.InteractionsFor(root);
+        Select(runtime, entry, interaction);
+        if ((anchor, caret) != (entry.Anchor, entry.Caret) || interaction.Focused != focused) runtime.RequestFrame();
         return result;
     }
+
+    // ── Selection ───────────────────────────────────────────────────────────
+
+    // Where the selection is, in the document's text as last laid out: its
+    // chars counted in the order they were built, separators not counted, so a
+    // place keeps its count when the lines break elsewhere or text is added after it.
+
+    private static void Select(BibuiRuntime runtime, Entry entry, Interaction interaction)
+    {
+        if (interaction.Pressed || interaction.Dragging)
+        {
+            int at = HitTest(runtime, entry, interaction.X, interaction.Y, out int spot);
+            if (interaction.PressCount > 1 && spot >= 0)
+            {
+                // Double click selects the word, and dragged on, selects by words; a
+                // triple click the paragraph, and dragged on, by paragraphs.
+                var (start, end) = interaction.PressCount > 2 ? Paragraph(entry, spot) : Word(runtime, entry, spot, at);
+                if (interaction.Pressed) (entry.Anchor, entry.Caret) = (start, end);
+                else entry.Caret = at < entry.Anchor ? start : end;
+            }
+            else
+            {
+                entry.Caret = at;
+                bool extend = !interaction.Pressed || (interaction.Modifiers & KeyModifiers.Shift) != 0;
+                if (!extend || entry.Anchor < 0) entry.Anchor = at;
+            }
+        }
+        if (!interaction.Focused) return;
+        foreach (var ev in runtime.UnconsumedEvents)
+        {
+            if (ev.Kind == BibUiEventKind.Copy && entry.Anchor != entry.Caret)
+            {
+                runtime.ClipboardSet(Selected(entry));
+                ev.Eat();
+            }
+            else if (ev.Kind == BibUiEventKind.Navigate && (ev.Flags & TextActionFlags.SelectAll) != 0)
+            {
+                (entry.Anchor, entry.Caret) = (0, entry.Length);
+                ev.Eat();
+            }
+        }
+    }
+
+    /// <summary>The place nearest the pointer, and the spot it is in (-1 for none): the line under it, or the nearest line, and the char nearest across it.</summary>
+    private static int HitTest(BibuiRuntime runtime, Entry entry, float x, float y, out int spot)
+    {
+        spot = -1;
+        int best = -1;
+        float bestScore = float.PositiveInfinity;
+        for (int r = 0; r < entry.Rows.Count; r++)
+        {
+            var row = entry.Rows[r];
+            if (row.First == row.End) continue;
+            var (at, size) = (row.Box.Rect, row.Box.Extent);
+            float dy = y < at.Y ? at.Y - y : y > at.Y + size.Y ? y - at.Y - size.Y : 0f;
+            float dx = x < at.X ? at.X - x : x > at.X + size.X ? x - at.X - size.X : 0f;
+            float score = dy * 10000f + dx;   // the line first, then across it: a table's cells share a line
+            if (score < bestScore) (best, bestScore) = (r, score);
+        }
+        if (best < 0) return 0;
+        var line = entry.Rows[best];
+        float across = x - line.Box.Rect.X;
+        for (int i = line.First; i < line.End; i++)
+        {
+            var s = entry.Spots[i];
+            spot = i;
+            if (across <= s.X) return s.Flat;
+            if (across < s.X + s.Width || i == line.End - 1)
+            {
+                var chars = entry.Document!.Text.Span.Slice(s.Start, s.Length);
+                return s.Flat + TextField.CharAtX(runtime.Fonts, s.Font, chars, across - s.X);
+            }
+        }
+        return 0;
+    }
+
+    private static (int Start, int End) Word(BibuiRuntime runtime, Entry entry, int spot, int at)
+    {
+        var s = entry.Spots[spot];
+        var chars = entry.Document!.Text.Span.Slice(s.Start, s.Length);
+        var style = TextLayer.StyleFromFont(runtime.Fonts, s.Font, s.Font.Scale);
+        int i = Math.Clamp(at - s.Flat, 0, chars.Length);
+        int start = TextLayer.ScanWord(runtime.Fonts, style, chars, i, -1);
+        int end = TextLayer.ScanWord(runtime.Fonts, style, chars, start, +1);
+        return (s.Flat + start, s.Flat + end);
+    }
+
+    /// <summary>
+    /// The spots between the line breaks on either side of <paramref name="spot"/>:
+    /// a paragraph across the lines it wrapped onto, a list item, a table's row, a
+    /// line of code.
+    /// </summary>
+    private static (int Start, int End) Paragraph(Entry entry, int spot)
+    {
+        var spots = entry.Spots;
+        int first = spot, last = spot;
+        while (first > 0 && spots[first].Before < Joint.Line) first--;
+        while (last + 1 < spots.Count && spots[last + 1].Before < Joint.Line) last++;
+        return (spots[first].Flat, spots[last].Flat + spots[last].Length);
+    }
+
+    /// <summary>The selection as plain text: each spot's part of it, with what stood between the spots.</summary>
+    private static string Selected(Entry entry)
+    {
+        int lo = Math.Min(entry.Anchor, entry.Caret), hi = Math.Max(entry.Anchor, entry.Caret);
+        var text = entry.Document!.Text.Span;
+        var sb = new System.Text.StringBuilder();
+        foreach (var s in entry.Spots)
+        {
+            int start = Math.Max(lo, s.Flat), end = Math.Min(hi, s.Flat + s.Length);
+            bool empty = s.Length == 0 && s.Flat > lo && s.Flat < hi;   // a blank line of code inside it
+            if (start >= end && !empty) continue;
+            if (sb.Length > 0 || empty) sb.Append(s.Before switch
+            {
+                Joint.Space => " ",
+                Joint.Cell => "\t",
+                Joint.Line => "\n",
+                Joint.Block => "\n\n",
+                _ => "",
+            });
+            if (start < end) sb.Append(text.Slice(s.Start + start - s.Flat, end - start));
+        }
+        return sb.ToString();
+    }
+
+    // What stands between a spot and the one before it, when copied: nothing on
+    // the same line, a space where a paragraph wrapped, a tab between cells, a
+    // line break, a blank line between blocks. Ordered: the widest one asked for wins.
+    internal enum Joint : byte { None, Space, Cell, Line, Block }
+
+    // A stretch of one style on a line, as last built: Length chars of the
+    // document's text from Start, the selection's count from Flat, its chars
+    // starting X px into its line.
+    internal readonly record struct Spot(int Start, int Length, int Flat, float X, float Width, Font Font, Joint Before);
+
+    // A line as last built: a retained box, for where it was, and its spots.
+    internal record struct Row(Box Box, int First, int End);
 
     // ── Per runtime ─────────────────────────────────────────────────────────
 
@@ -252,6 +407,21 @@ public static class Markdown
         public MarkdownDocument? Document;
         public long Used;
 
+        // The selection, as places in the text last built (see Select): the
+        // end it was started from and the end that moves. Equal: none.
+        public int Anchor, Caret;
+        // The text last built: its spots and lines, and how many chars it holds.
+        public readonly List<Spot> Spots = [];
+        public readonly List<Row> Rows = [];
+        public int Length;
+        private readonly List<string> _rowIds = [];
+
+        public string RowIdAt(int n)
+        {
+            while (_rowIds.Count <= n) _rowIds.Add($"{id}/line{_rowIds.Count}");
+            return _rowIds[n];
+        }
+
         // The n-th retained box of a build — a link piece, a task box, a code
         // block — named once and kept, so a frame allocates no ids.
         public string IdAt(int n)
@@ -310,6 +480,7 @@ public static class Markdown
     {
         public int Start, End;    // in Writer._placed
         public float Width;
+        public bool Hard;         // ended by a hard line break
     }
 
     // ── The build ───────────────────────────────────────────────────────────
@@ -329,6 +500,12 @@ public static class Markdown
         private int _block = -1;     // the top-level block being drawn in a range, or -1
         private float _breakSlack;   // how far a word may run into a cell's padding before it is broken
 
+        // The selection being drawn, [_lo, _hi) of the chars counted as they are built;
+        // the next spot's count, its x on its line, and what stands before it.
+        private int _lo, _hi, _flat;
+        private float _x;
+        private Joint _gap;
+
         // Line widths and vertical padding are the theme's (Borders, Density), never literals:
         // at the default theme they are the 1 px lines and the padding this was drawn with.
         private float LineWidth => _runtime.Theme.Borders.Width;
@@ -343,8 +520,11 @@ public static class Markdown
 
         public Look Body => new(_textSize, FontSlot.Body, false, UiColor.TextPrimary);
 
-        public void Begin(BibuiRuntime runtime, Entry entry, ComponentSize textSize)
+        public void Begin(BibuiRuntime runtime, Entry entry, ComponentSize textSize, int lo, int hi)
         {
+            (_lo, _hi, _flat, _x, _gap) = (lo, hi, 0, 0f, Joint.None);
+            entry.Spots.Clear();
+            entry.Rows.Clear();
             _runtime = runtime;
             _entry = entry;
             _doc = entry.Document!;
@@ -361,12 +541,52 @@ public static class Markdown
 
         public void End()
         {
+            _entry.Length = _flat;
             _runtime = null!;
             _entry = null!;
             _doc = null!;
         }
 
         private string NextId() => _block < 0 ? _entry.IdAt(_nextId++) : _entry.IdAt(_block, _nextId++);
+
+        private void Before(Joint gap) { if (gap > _gap) _gap = gap; }
+
+        // A line of spots: a retained box, so a press next frame finds where it was.
+        private Box BeginRow()
+        {
+            Box row = _runtime.BoxFromId(_entry.RowIdAt(_entry.Rows.Count));
+            row.ChildLayoutAxis = LayoutAxis.X;
+            _entry.Rows.Add(new Row(row, _entry.Spots.Count, _entry.Spots.Count));
+            _x = 0f;
+            return row;
+        }
+
+        private void EndRow() => _entry.Rows[^1] = _entry.Rows[^1] with { End = _entry.Spots.Count };
+
+        // Records a spot of chars starting padX into the box at the line's x, and moves on past the box.
+        private void Spot(int start, int length, float width, Font font, float padX)
+        {
+            _entry.Spots.Add(new Spot(start, length, _flat, _x + padX, width, font, _gap));
+            _flat += length;
+            _x += width + 2f * padX;
+            _gap = Joint.None;
+        }
+
+        // The chars as texts, split where the selection begins and ends, the selected
+        // part in a box with the highlight behind it, as a text field draws it.
+        private void Chars(ReadOnlySpan<char> chars, int flat, FontSize size, UiColor color, FontSlot family)
+        {
+            int lo = Math.Clamp(_lo - flat, 0, chars.Length), hi = Math.Clamp(_hi - flat, 0, chars.Length);
+            if (lo >= hi) { _runtime.Text(chars, size, color, family); return; }
+            if (lo > 0) _runtime.Text(chars[..lo], size, color, family);
+            Box selection = _runtime.Box();
+            selection.ChildLayoutAxis = LayoutAxis.X;
+            selection.SizeX = SemanticSize.ChildrenSum();
+            selection.SizeY = SemanticSize.ChildrenSum();
+            selection.Style.BackgroundColor = TextField.Highlight;
+            using (_runtime.Parent(selection)) _runtime.Text(chars[lo..hi], size, color, family);
+            if (hi < chars.Length) _runtime.Text(chars[hi..], size, color, family);
+        }
 
         private float Px(Look look) => _runtime.FontInScope(look.Size).Size;
 
@@ -377,7 +597,11 @@ public static class Markdown
             float px = Px(look);
             for (int i = 0; i < blocks.Count; i++)
             {
-                if (i > 0) _runtime.Gap(Gap(blocks, i, px, tight));
+                if (i > 0)
+                {
+                    _runtime.Gap(Gap(blocks, i, px, tight));
+                    Before(tight ? Joint.Line : Joint.Block);
+                }
                 Block(blocks[i], room, look, tight);
             }
         }
@@ -392,7 +616,11 @@ public static class Markdown
             float px = Px(look);
             for (int i = first; i < first + count; i++)
             {
-                if (i > 0) _runtime.Gap(Gap(blocks, i, px, tight: false));
+                if (i > 0)
+                {
+                    _runtime.Gap(Gap(blocks, i, px, tight: false));
+                    Before(Joint.Block);
+                }
                 Box box = _runtime.BoxFromId(_entry.BlockId(i), InteractionKinds.LeftPress);
                 box.ChildLayoutAxis = LayoutAxis.Y;
                 box.SizeX = SemanticSize.ParentPct(1f);
@@ -502,9 +730,20 @@ public static class Markdown
                 {
                     int newline = code[start..].IndexOf('\n');
                     int end = newline < 0 ? code.Length : start + newline;
-                    if (index++ > 0) _runtime.Gap(advance - lineHeight);
+                    if (index++ > 0) { _runtime.Gap(advance - lineHeight); Before(Joint.Line); }
+                    Box row = BeginRow();
+                    row.SizeX = SemanticSize.ChildrenSum();
+                    row.SizeY = SemanticSize.Pixels(lineHeight);
+                    using (_runtime.Parent(row))
                     using (_runtime.FontFace(FontSlot.Mono, FontWeight.Regular))
-                        _runtime.Text(code[start..end], mono.Size, look.Color, FontSlot.Mono);
+                    {
+                        int flat = _flat;
+                        var chars = code[start..end];
+                        Spot(block.TextStart + start, end - start,
+                            TextLayer.WidthFromChars(_runtime.Fonts, chars, TextLayer.StyleFromFont(_runtime.Fonts, font, font.Scale), font.Scale), font, 0f);
+                        Chars(chars, flat, mono.Size, look.Color, FontSlot.Mono);
+                    }
+                    EndRow();
                     if (newline < 0) break;
                     start = end + 1;
                 }
@@ -549,7 +788,7 @@ public static class Markdown
             for (int k = 0; k < count; k++)
             {
                 var item = list.Children[k];
-                if (k > 0) _runtime.Gap(list.Tight ? TightGap : MathF.Round(px * 0.85f));
+                if (k > 0) { _runtime.Gap(list.Tight ? TightGap : MathF.Round(px * 0.85f)); Before(list.Tight ? Joint.Line : Joint.Block); }
 
                 Box row = _runtime.Box();
                 row.ChildLayoutAxis = LayoutAxis.X;
@@ -678,6 +917,7 @@ public static class Markdown
                 var cells = table.Children[r].Children;
                 if (r > 0)
                 {
+                    Before(Joint.Line);
                     Box line = _runtime.Box();
                     line.SizeX = SemanticSize.Pixels(tableWidth);
                     line.SizeY = SemanticSize.Pixels(LineWidth);
@@ -703,6 +943,7 @@ public static class Markdown
                     cell.Style.Padding = EdgeInsets.Symmetric(padX, Dense(CellPadY));
                     if (c > 0) cell.Style.BorderLeft = new EdgeBorder(LineWidth, UiColor.Border);
                     if (c >= cells.Count) continue;
+                    if (c > 0) Before(Joint.Cell);
                     using (_runtime.Parent(cell))
                         Inline(_doc.RunsOf(cells[c]), widths[c] - 2f * padX, cellLook, table.Aligns[c]);
                 }
@@ -900,6 +1141,7 @@ public static class Markdown
                 if (_frags[i].Break)
                 {
                     EndLine(ref lineStart, ref x, ref content);
+                    _lines[^1] = _lines[^1] with { Hard = true };
                     content = false;
                     i++;
                     continue;
@@ -1001,16 +1243,15 @@ public static class Markdown
             for (int l = 0; l < _lines.Count; l++)
             {
                 var line = _lines[l];
-                if (l > 0) _runtime.Gap(advance - lineHeight);
-                Box row = _runtime.Box();
-                row.ChildLayoutAxis = LayoutAxis.X;
+                if (l > 0) { _runtime.Gap(advance - lineHeight); Before(_lines[l - 1].Hard ? Joint.Line : Joint.Space); }
+                Box row = BeginRow();
                 row.SizeX = SemanticSize.Pixels(MathF.Max(room, 0f));
                 row.SizeY = SemanticSize.Pixels(lineHeight);
                 using var inRow = _runtime.Parent(row);
 
                 float slack = MathF.Max(0f, room - line.Width);
-                if (align == MarkdownAlign.Center && slack > 0f) _runtime.Gap(MathF.Floor(slack / 2f));
-                else if (align == MarkdownAlign.Right && slack > 0f) _runtime.Gap(MathF.Floor(slack));
+                if (align == MarkdownAlign.Center && slack > 0f) _runtime.Gap(_x = MathF.Floor(slack / 2f));
+                else if (align == MarkdownAlign.Right && slack > 0f) _runtime.Gap(_x = MathF.Floor(slack));
 
                 int p = line.Start;
                 while (p < line.End)
@@ -1027,6 +1268,7 @@ public static class Markdown
                     Piece(runs[first.Run], first.Start, end - first.Start, width, look, lineHeight);
                     p = q;
                 }
+                EndRow();
             }
         }
 
@@ -1046,11 +1288,13 @@ public static class Markdown
             var chars = _doc.Text.Span.Slice(start, length);
             float textHeight = _runtime.Fonts.LineHeight(font);
             float top = MathF.Round((lineHeight - textHeight) / 2f);
+            int flat = _flat;
+            Spot(start, length, width, font, code ? CodePadX : 0f);
 
             if (!code && !link && !strike && top <= 0f)
             {
                 using (_runtime.FontFace(family, weight))
-                    _runtime.Text(chars, look.Size, color, family);
+                    Chars(chars, flat, look.Size, color, family);
                 return;
             }
 
@@ -1078,7 +1322,7 @@ public static class Markdown
             using (_runtime.Parent(box))
             {
                 using (_runtime.FontFace(family, weight))
-                    _runtime.Text(chars, look.Size, color, family);
+                    Chars(chars, flat, look.Size, color, family);
                 if (link) Overlay(padX, top + MathF.Round(textHeight * UnderlineAt), width, hovering ? StrongLine : LineWidth, color);
                 if (strike) Overlay(padX, top + MathF.Round(textHeight * StrikeAt), width, LineWidth, color);
             }

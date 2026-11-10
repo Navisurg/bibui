@@ -4,7 +4,8 @@ A read-only Markdown viewer built from boxes and texts. It supports CommonMark
 blocks and inlines, with GFM tables, task items, strikethrough and bare-URL
 autolinks. A paragraph wraps as one paragraph across its styles: a bold word, a
 code span and plain text break together. Links and task boxes take the press and
-report it. The viewer never changes the source.
+report it. Its text can be selected and copied, as a text field's can. The viewer
+never changes the source.
 
 ![markdown-basic](images/markdown-basic.png)
 
@@ -77,11 +78,35 @@ exclusive.
 
 ## Claims and reports
 
-- Each link and each task box claims `InteractionKinds.LeftPress`. A table wider
+- The root claims `InteractionKinds.LeftPress | Keyboard`, to select. Each link
+  and each task box claims `InteractionKinds.LeftPress`. A table wider
   than the viewer scrolls sideways (`ViewScrollX | ClampX | Clip`).
 - It returns a `MarkdownWidget`. `ClickedLink` is the destination of a link
   clicked this frame. `ToggledTask` is the source offset of a task box clicked
   this frame, or -1.
+
+## Selecting and copying
+
+The viewer's text selects as a text field's does, and nothing outside it needs
+to change:
+
+- A press and a drag select from where it was pressed to the pointer, across
+  lines and blocks; Shift extends. A double click selects a word, and dragged on,
+  selects by words. A triple click selects the paragraph (a list item, a table's
+  row, a line of code), and dragged on, by paragraphs.
+- Ctrl+A selects all of it, and Ctrl+C copies the selection as plain text: a
+  paragraph's lines joined by a space where they wrapped and a line break where
+  it broke, blocks apart by a blank line (a tight list's items by a line break),
+  a table's cells by a tab and its rows by a line break, a code block's lines as
+  they are.
+- The root claims `LeftPress | Keyboard` and takes focus on a press; the
+  selection shows only while it has focus. It asks after what it holds, so a
+  link or a task box still takes its own press.
+- The selection is kept with the viewer's id, counted in the text as it is
+  built, so it keeps its place when the lines break at another width.
+
+Blocks drawn for `MarkdownEditor` select nothing here: the editor takes their
+presses itself.
 
 ## State the caller owns
 

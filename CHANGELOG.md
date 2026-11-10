@@ -6,6 +6,17 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Markdown's text can be selected and copied**, as a text field's: a drag
+  selects across lines and blocks, Shift extends, a double click selects a word
+  and a triple click a paragraph (each dragged on by the same unit), Ctrl+A
+  selects all, and Ctrl+C copies plain text: wrapped lines joined by a space,
+  blocks by a blank line, table cells by a tab. The selection is the viewer's
+  own, kept with its id; links and task boxes still take their own press. The
+  viewer's root now claims `LeftPress | Keyboard`. Blocks drawn for
+  `MarkdownEditor` are left as they were.
+
 ## [1.2.0] - 2026-11-11
 
 Text in more than one style, and Markdown edited in place. The text layer
