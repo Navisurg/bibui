@@ -33,6 +33,12 @@ All notable changes to bibui are recorded here. The format is based on
   of lines, the lines in sight less one, at the caret's column, the view
   moving with it; Shift selects. `TextActionFlags.PageScan` marks the move as
   a page.
+- **A text in more than one style, in the text layer:** `StyleRun` (a style
+  from a start on), and `TextLayer.LinesFromText`, `LineFromText` and
+  `WidthFromChars` over runs, beside the ones over one style. A word is
+  measured in the runs it lies in, a space in its run, and a cluster whole,
+  in the run it starts in; styled lines are kept with the others. Text in one
+  style is measured as before.
 
 - **Markdown source spans:** `MarkdownBlock.SourceStart` and `SourceEnd`, the
   lines of the source each block came from, markers included.

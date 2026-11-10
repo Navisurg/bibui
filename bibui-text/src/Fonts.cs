@@ -302,3 +302,14 @@ internal sealed class WrapNode
 /// line is the one that ends at the text's end; its Next is its End.
 /// </summary>
 public readonly record struct TextLine(int Start, int End, int Next);
+
+/// <summary>
+/// One run of a text set in more than one style: from <see cref="Start"/> until
+/// the next run's start, or the text's end, the text is set in <see cref="Style"/>.
+/// A styled text is given as its runs in order, the first starting at 0; a run
+/// may be empty (its start the next one's). Each run's piece is measured as a
+/// text of its own set beside the one before it. A cluster is never split: one
+/// that a run starts inside is measured whole in the run it starts in, and the
+/// run takes over after it.
+/// </summary>
+public readonly record struct StyleRun(int Start, FontStyle Style);

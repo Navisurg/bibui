@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Globalization;
 using System.Text;
@@ -699,5 +700,260 @@ public static class TextLayer
         for (char c; i < end && (c = chars[i]) != ' ' && GlyphDirect(direct, c, out _, out float advance); i++) pen += advance;
         width = pen;
         return i;
+    }
+
+    // ── Styled text ──────────────────────────────────────────────────────────
+    //
+    // A text in more than one style (StyleRun), measured and broken beside the
+    // functions over one style rather than through them: a run's piece of a
+    // word is measured as a word in that run's style, a space in the run it is
+    // in, and a cluster whole, in the run it starts in (RunTakesOver). A loop
+    // over a text moves its run forward with its index (RunFrom), so it passes
+    // each run once.
+
+    /// <summary>
+    /// How wide chars <paramref name="start"/>..<paramref name="end"/> of a styled
+    /// text are, in logical px over <paramref name="scale"/>: each run's piece
+    /// measured as <see cref="WidthFromChars(Fonts, ReadOnlySpan{char}, FontStyle, float)"/>
+    /// measures a text, and the pieces summed, as texts set side by side are.
+    /// <paramref name="styles"/> are the text's runs (<see cref="StyleRun"/>),
+    /// their starts into <paramref name="chars"/>.
+    /// </summary>
+    public static float WidthFromChars(Fonts f, ReadOnlySpan<char> chars, ReadOnlySpan<StyleRun> styles, int start, int end, float scale)
+    {
+        RunsStart(styles);
+        Debug.Assert(RunsInOrder(styles), "A styled text's runs are in order, each with a style.");
+        float width = 0f;
+        int run = RunAt(styles, start);
+        for (int at = start; at < end; )
+        {
+            run = RunFrom(styles, run, at);
+            int limit = run + 1 < styles.Length ? RunTakesOver(f, chars, styles[run].Style, styles[run + 1].Start, end) : end;
+            width += WidthFromChars(f, chars[at..limit], styles[run].Style, scale);
+            at = limit;
+        }
+        return width;
+    }
+
+    /// <summary>
+    /// <see cref="LinesFromText(Fonts, ReadOnlySpan{char}, FontStyle, float, float, TextWrap)"/>
+    /// for a styled text: <paramref name="styles"/> are its runs (<see cref="StyleRun"/>),
+    /// each line broken as <see cref="LineFromText(Fonts, ReadOnlySpan{char}, ReadOnlySpan{StyleRun}, float, float, TextWrap, int)"/>
+    /// breaks it. Kept with the wraps of texts in one style, under the text and its runs.
+    /// </summary>
+    public static ReadOnlySpan<TextLine> LinesFromText(Fonts f, ReadOnlySpan<char> chars, ReadOnlySpan<StyleRun> styles, float scale,
+        float width, TextWrap wrap)
+    {
+        var key = WrapKey.For(chars, width, RunsKey(styles), scale, wrap);
+        ref var node = ref CollectionsMarshal.GetValueRefOrAddDefault(f.Wraps, key, out bool found);
+        if (!found)
+        {
+            node = f.FirstFreeWrap ?? new WrapNode();
+            f.FirstFreeWrap = node.NextFree;
+            node.NextFree = null;
+            int n = 0, run = 0;
+            for (int at = 0; ; )
+            {
+                var line = LineOfRuns(f, chars, styles, scale, width, wrap, at, ref run);
+                if (n == node.Lines.Length) Array.Resize(ref node.Lines, n * 2);
+                node.Lines[n++] = line;
+                if (line.End == chars.Length) break;
+                at = line.Next;
+            }
+            node.Count = n;
+        }
+        node!.Touched = f.WrapFrame;
+        return node.Lines.AsSpan(0, node.Count);
+    }
+
+    /// <summary>
+    /// <see cref="LineFromText(Fonts, ReadOnlySpan{char}, FontStyle, float, float, TextWrap, int)"/>
+    /// for a styled text: <paramref name="styles"/> are its runs (<see cref="StyleRun"/>).
+    /// A word is measured piece by piece, each in the run it lies in; a space, and
+    /// a cluster, in the run it is in. A text given as one run breaks as the text
+    /// in that run's style does.
+    /// </summary>
+    public static TextLine LineFromText(Fonts f, ReadOnlySpan<char> chars, ReadOnlySpan<StyleRun> styles, float scale,
+        float width, TextWrap wrap, int at)
+    {
+        RunsStart(styles);
+        Debug.Assert(RunsInOrder(styles), "A styled text's runs are in order, each with a style.");
+        int run = RunAt(styles, at);
+        return LineOfRuns(f, chars, styles, scale, width, wrap, at, ref run);
+    }
+
+    // LineFromText's loop, over runs. `run` is the run at `at` or one before it,
+    // and is left at or before the next line's start, so a caller breaking a text
+    // line after line passes each run once.
+    private static TextLine LineOfRuns(Fonts f, ReadOnlySpan<char> chars, ReadOnlySpan<StyleRun> styles, float scale,
+        float width, TextWrap wrap, int at, ref int run)
+    {
+        int n = chars[at..].IndexOfAny('\n', '\r');
+        int end = n < 0 ? chars.Length : at + n;
+        int after = end == chars.Length ? end
+            : chars[end] == '\r' && end + 1 < chars.Length && chars[end + 1] == '\n' ? end + 2 : end + 1;
+        run = RunFrom(styles, run, at);
+
+        if (wrap == TextWrap.Characters)
+        {
+            if (at == end) return new TextLine(at, at, after);
+            int stop = ScanCluster(f, styles[run].Style, chars, at, +1, out float clusters);
+            while (stop < end)
+            {
+                run = RunFrom(styles, run, stop);
+                int next = ScanCluster(f, styles[run].Style, chars, stop, +1, out float advance);
+                if (!Fits((clusters + advance) / scale, width)) break;
+                (stop, clusters) = (next, clusters + advance);
+            }
+            return new TextLine(at, stop, stop == end ? after : stop);
+        }
+
+        int textStart = -1;
+        int lastEnd = at;
+        float lineWidth = 0f;
+        float space = 0f;      // a space's width in spaceRun
+        int spaceRun = -1;
+        int i = at;
+        while (true)
+        {
+            int wordStart = i;
+            if (textStart >= 0)
+            {
+                run = RunFrom(styles, run, wordStart - 1);
+                if (run != spaceRun) (space, spaceRun) = (SpaceInStyle(f, styles[run].Style), run);
+            }
+            int runBefore = run;
+            float word = WordOfRuns(f, chars, styles, ref run, ref i, end);
+            float w = textStart < 0 ? word : lineWidth + space + word;
+            if (textStart >= 0 && !Fits(w / scale, width))
+            {
+                // The next line starts back at this word, its runs walked into.
+                run = runBefore;
+                if (chars[wordStart..end].IndexOfAnyExcept(' ') >= 0) return new TextLine(at, lastEnd, wordStart);
+                return new TextLine(at, end, after);
+            }
+            if (textStart < 0 && i > wordStart) textStart = wordStart;
+            lineWidth = w;
+            lastEnd = i;
+            if (i >= end) break;
+            i++;
+        }
+        return new TextLine(at, end, after);
+    }
+
+    // The word from i to the next space or `end`, in physical px, i left at its
+    // end: its piece in each run measured as a word in that run's style, and the
+    // pieces added. `run` is the run at i or one before it, and is left at the
+    // word's last. Only a word that reaches a run's start on a char at or above
+    // 256 asks whether a cluster crosses it.
+    private static float WordOfRuns(Fonts f, ReadOnlySpan<char> chars, ReadOnlySpan<StyleRun> styles, ref int run, ref int i, int end)
+    {
+        float word = 0f;
+        while (true)
+        {
+            run = RunFrom(styles, run, i);
+            var style = styles[run].Style;
+            int start = i;
+            int limit = run + 1 < styles.Length ? Math.Min(end, styles[run + 1].Start) : end;
+            float piece = WordInStyle(f, chars, style, ref i, limit);
+            if (i == limit && limit < end && chars[limit] >= 256)
+            {
+                int whole = RunTakesOver(f, chars, style, limit, end);
+                if (whole > limit)
+                {
+                    i = start;
+                    piece = WordInStyle(f, chars, style, ref i, whole);
+                }
+            }
+            word += piece;
+            if (i >= end || chars[i] == ' ') return word;
+        }
+    }
+
+    // A word in one style from i to the next space or `limit`, in physical px, i
+    // left at its end, as LineFromText measures one: summed by the fast path
+    // (WordFast) when that takes it whole, else walked.
+    private static float WordInStyle(Fonts f, ReadOnlySpan<char> chars, FontStyle style, ref int i, int limit)
+    {
+        int start = i;
+        float word = 0f;
+        i = WordFast(chars, i, limit, style.Strike.Direct, ref word);
+        if (i < limit && chars[i] != ' ')
+        {
+            int s = chars[i..limit].IndexOf(' ');
+            i = s < 0 ? limit : i + s;
+            word = WidthOfRuns(f, RunsFromChars(f, chars[start..i], style), 1f);
+        }
+        return word;
+    }
+
+    // A space's width in a style, physical px, as LineFromText measures one.
+    private static float SpaceInStyle(Fonts f, FontStyle style)
+        => GlyphDirect(style.Strike.Direct, ' ', out _, out float space) ? space : WidthOfRuns(f, RunsFromChars(f, " ", style), 1f);
+
+    // Where a run that starts at `at` takes over, no further than `end`: at, or
+    // the end of the cluster that crosses it, measured in `style`, the run's
+    // before it. A char below 256 always starts a cluster (ScanCluster), so a run
+    // that starts on one takes over where it starts.
+    private static int RunTakesOver(Fonts f, ReadOnlySpan<char> chars, FontStyle style, int at, int end)
+    {
+        if (at >= end || at <= 0 || chars[at] < 256) return Math.Min(at, end);
+        int start = ScanCluster(f, style, chars, at, -1, out _);
+        return Math.Min(end, Math.Max(at, ScanCluster(f, style, chars, start, +1, out _)));
+    }
+
+    // The run at `index`, from `run`, which is at or before it: the last run that
+    // starts at or before it.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    private static int RunFrom(ReadOnlySpan<StyleRun> styles, int run, int index)
+    {
+        while (run + 1 < styles.Length && styles[run + 1].Start <= index) run++;
+        return run;
+    }
+
+    // The run at `index`, found by halving: the last that starts at or before it.
+    private static int RunAt(ReadOnlySpan<StyleRun> styles, int index)
+    {
+        int lo = 0, hi = styles.Length - 1;
+        while (lo < hi)
+        {
+            int mid = (lo + hi + 1) / 2;
+            if (styles[mid].Start <= index) lo = mid;
+            else hi = mid - 1;
+        }
+        return lo;
+    }
+
+    // What every call over runs asks, in constant time: some, the first at 0.
+    private static void RunsStart(ReadOnlySpan<StyleRun> styles)
+    {
+        if (styles.IsEmpty || styles[0].Start != 0 || styles[0].Style is null)
+            throw new ArgumentException("A styled text's runs start with one at 0.", nameof(styles));
+    }
+
+    // In order, each with a style: what RunAt's search and every walk over runs assume.
+    private static bool RunsInOrder(ReadOnlySpan<StyleRun> styles)
+    {
+        for (int k = 0; k < styles.Length; k++)
+            if (styles[k].Style is null || k > 0 && styles[k].Start < styles[k - 1].Start) return false;
+        return true;
+    }
+
+    // A wrap key's style for a styled text: each run's start and its style's
+    // key, hashed in turn, the runs checked whole first.
+    private static ulong RunsKey(ReadOnlySpan<StyleRun> styles)
+    {
+        RunsStart(styles);
+        if (!RunsInOrder(styles))
+            throw new ArgumentException("A styled text's runs are in order, each with a style.", nameof(styles));
+        Span<ulong> pair = stackalloc ulong[2];
+        ulong key = 0;
+        for (int k = 0; k < styles.Length; k++)
+        {
+            var run = styles[k];
+            (pair[0], pair[1]) = ((ulong)run.Start, run.Style.Key);
+            key = System.IO.Hashing.XxHash64.HashToUInt64(MemoryMarshal.AsBytes(pair), unchecked((long)key));
+        }
+        return key;
     }
 }
