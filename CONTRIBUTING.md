@@ -77,6 +77,13 @@ Layout is asserted over the laid-out nodes, not over pixels: build the tree,
 then check bounds with `runtime.FindById(...)` or `BibuiPage.GetBounds(...)`
 (`Bibui.Testing`). Add a test beside the change it covers.
 
+Tests are deterministic. Do not assert on wall-clock time; a timing ratio
+fails under CI load. Show that something is fast by how it is built, and
+that it does not allocate with `GC.GetAllocatedBytesForCurrentThread`.
+Check a result against an independent one rather than a recorded fixture: a
+text given as one style run must break exactly as the plain function breaks
+it.
+
 ### Pixel verification
 
 bibui's rendering is also checked as pictures: every component state is
@@ -213,12 +220,62 @@ JIT-only for now, because Silk.NET itself is not AOT-clean.
 A performance change must not alter pixels. Measure before and after on the
 same machine and put the numbers in the pull request.
 
+### The smallest change that does the job
+
+- Give everyone the behaviour rather than an option to opt into it. An
+  option, overload or constant added so that existing behaviour stays the
+  same is one more thing every caller has to learn.
+- Extend a value that exists rather than thread a parallel one beside it
+  through every layer.
+- Change an internal signature rather than add an overload, and derive a
+  value (`Highlight.WithAlpha(...)`) rather than add a constant.
+- One way to do a thing. When a second way is the honest one, remove the
+  first, even as a breaking change, rather than keep both.
+- A component with good defaults rather than public parts each app has to
+  assemble. The parts stay internal, as `Markdown`'s range drawing is.
+
+### Leave the common path alone
+
+New behaviour goes in new functions beside the existing ones, and the plain
+path keeps its code. Text in more than one style is measured by functions
+beside `LinesFromText`, not by sending plain text through them as one run,
+which made plain line breaking about 20% slower.
+
+### No magic numbers
+
+A count, size or index comes from what it counts. An enum that sizes a
+table has a `Count` value, the index is computed in one helper, and a flag
+is tested by its name, not as `& 1`. A public value that could index past a
+table, such as `Count` itself, is checked with `Debug.Assert` where it
+enters, so a release build pays nothing; a rule checked in more than one
+place is one helper that each check calls.
+
+A number chosen by feel, such as how far a wheel notch scrolls, is a change
+of its own with the reason behind it, not part of another change.
+
+### Nothing per frame that does not change per frame
+
+Compute a thing when what it depends on changes, not every frame, and make
+the dependency visible: a function takes the part of the theme it reads,
+not the whole theme, and an immutable input is compared by reference to
+tell when it changed. Resolve what may not be needed when it is first asked
+for (`??=`), and keep it in the caches bibui has (`Fonts.Wraps`, the font
+provider's) rather than a new one.
+
 ## Pull requests
 
 - **One change per pull request**, with a title that says what it does.
+  A layer and a feature built on it are two changes: the text layer's
+  measuring first, then the component that uses it.
 - **Describe** what changed and why, anything a reviewer must decide, and
   any change to the public API or to pixels. If pixels changed on purpose,
   list the gallery pages affected and add before/after screenshots.
+- **Size**: for a change to `bibui-core` or `bibui-text`, put
+  `git diff --stat main` (without tests and font files) in the description.
+  A rework after review should come out smaller.
+- **A new component's design is agreed first.** Open it as a draft pull
+  request with its API and the open questions, one per bullet, under what a
+  reviewer must decide.
 - **Checks**, with numbers: every project in CI's build list builds in
   Release with 0 warnings, and the test programs your change affects pass.
   Say which you ran.
