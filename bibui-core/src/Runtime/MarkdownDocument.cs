@@ -89,8 +89,27 @@ public sealed class MarkdownBlock
     /// <summary>A table's column alignments, one per column.</summary>
     public IReadOnlyList<MarkdownAlign> Aligns { get; internal set; } = [];
 
+    /// <summary>
+    /// Where the block's lines start in the source it was parsed from: the
+    /// first char of its first line, indent and markers included (the <c>#</c>s,
+    /// a fence, a <c>&gt;</c>, a list marker). A block nested in a quote or a
+    /// list item shares its lines with its containers' markers. The document
+    /// starts at 0. -1 on a block that <see cref="MarkdownDocument.Parse"/> did not make.
+    /// </summary>
+    public int SourceStart { get; internal set; } = -1;
+
+    /// <summary>
+    /// Where the block's lines end in the source: just past the last char of
+    /// its last line, before the line break. Blank lines after it are not its
+    /// own, nor are lines that are only link reference definitions. The
+    /// document ends at the source's length. -1 on a block that
+    /// <see cref="MarkdownDocument.Parse"/> did not make.
+    /// </summary>
+    public int SourceEnd { get; internal set; } = -1;
+
     // ── Parse state ─────────────────────────────────────────────────────────
     internal int RawStart, RawLength, RawSource = -1;
+    internal int FirstLine = -1, LastLine = -1;   // the source lines the block took
     internal int ContentIndent;          // list item
     internal bool HasContent;            // list item: a non-blank line has been seen
     internal char Marker;                // list: '-', '+', '*', '.', ')'

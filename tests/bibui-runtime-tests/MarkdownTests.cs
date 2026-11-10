@@ -1,7 +1,9 @@
+using System.Numerics;
 using System.Text;
 using Bibui.Core;
 using Bibui.Text;
 using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 using Bibui.Core.TextEdit;
 using Bibui.Raster.Skia;
 
@@ -79,6 +81,15 @@ static class MarkdownTests
             string actual = Dump(markdown);
             if (actual != expected)
                 throw new Exception($"\n--- expected\n{expected}\n--- got\n{actual}");
+            SpansHold(markdown);
+        }
+
+        void SpansAre(string expected, string markdown)
+        {
+            string actual = Spans(markdown);
+            if (actual != expected)
+                throw new Exception($"\n--- expected\n{expected}\n--- got\n{actual}");
+            SpansHold(markdown);
         }
 
         // ── Blocks ──────────────────────────────────────────────────────────
@@ -247,6 +258,171 @@ static class MarkdownTests
 
         run("Markdown: an empty source is an empty document", () => Is("", ""));
 
+        // ── Source spans ────────────────────────────────────────────────────
+
+        run("Markdown spans: each top-level block covers its whole lines, markers included", () => SpansAre(
+            "\"# Title #\" | \"Setext\\n===\" | \"- a\\n\\n- b\" | \"> quote\\nlazy\" | \"```c\\nx\\n\\ny\\n```\" | "
+            + "\"| a | b |\\n|---|---|\\n| 1 | 2 |\" | \"---\" | \"    code\" | \"tail\"",
+            "# Title #\n\nSetext\n===\n\n- a\n\n- b\n\n> quote\nlazy\n\n```c\nx\n\ny\n```\n\n"
+            + "| a | b |\n|---|---|\n| 1 | 2 |\n\n---\n\n    code\n\n\ntail\n"));
+
+        run("Markdown spans: a line of only reference definitions is no block's; one that opens a paragraph is its", () => SpansAre(
+            "\"See [x].\" | \"[y]: https://y.dev\\nAfter [y].\"",
+            "[x]: https://x.dev\n\nSee [x].\n\n[y]: https://y.dev\nAfter [y]."));
+
+        run("Markdown spans: an unclosed fence ends at its last line that is not blank", () => SpansAre(
+            "\"```\\ncode\"",
+            "```\ncode\n\n\n"));
+
+        run("Markdown spans: offsets are into the source as given, CRLF and leading tabs included", () => SpansAre(
+            "\"# T\" | \"\\tcode\" | \"para\\r\\nmore\"",
+            "# T\r\n\r\n\tcode\r\npara\r\nmore\r\n"));
+
+        run("Markdown spans: a table includes its delimiter row; a paragraph before its header keeps its own lines", () => SpansAre(
+            "\"Intro\" | \"| a |\\n|---|\\n| 1 |\"",
+            "Intro\n| a |\n|---|\n| 1 |"));
+
+        run("Markdown spans: nested blocks lie inside their containers, siblings in order", () =>
+        {
+            const string source = "> - one\n>   more\n> - two\n>\n> | a |\n> |---|\n> | 1 |";
+            SpansHold(source);
+            var doc = MarkdownDocument.Parse(source);
+            var list = doc.Root.Children[0].Children[0];
+            Equal(MarkdownBlockKind.List, list.Kind, "the quote's first child");
+            Equal("> - one\n>   more", source[list.Children[0].SourceStart..list.Children[0].SourceEnd], "the first item");
+            Equal("> - two", source[list.Children[1].SourceStart..list.Children[1].SourceEnd], "the second item");
+            var table = doc.Root.Children[0].Children[1];
+            Equal("> | 1 |", source[table.Children[1].SourceStart..table.Children[1].SourceEnd], "the table's last row");
+        });
+
+        run("Markdown spans: a leading tab in a list item or a quote counts as the columns it reaches", () =>
+        {
+            foreach (var source in new[] { "- a\n\n\tcode in the item", "-\tx\n\ty", ">\tcode\n>\tmore", "> - a\n>\n>\t\tcode" })
+                SpansHold(source);
+            SpansAre("\"- a\\n\\n\\tcode in the item\" | \"after\"", "- a\n\n\tcode in the item\n\nafter");
+        });
+
+        run("Markdown spans: the document covers the whole source", () =>
+        {
+            const string source = "para\n\n\n";
+            var doc = MarkdownDocument.Parse(source);
+            Equal(0, doc.Root.SourceStart, "start");
+            Equal(source.Length, doc.Root.SourceEnd, "end");
+        });
+
+        // ── Drawing a range of blocks ───────────────────────────────────────
+
+        run("Markdown range: two ranges split anywhere are as tall as the whole document", () =>
+        {
+            var doc = MarkdownDocument.Parse(RangeSample);
+            int count = doc.Root.Children.Count;
+            float whole = Height(doc, null);
+            Equal(whole, Height(doc, ..), "the whole range");
+            for (int k = 0; k <= count; k++)
+            {
+                float split = Height(doc, ..k) + Height(doc, k..);
+                IsTrue(MathF.Abs(split - whole) < 0.01f, $"split at {k}: {split}, whole {whole}");
+            }
+        });
+
+        run("Markdown range: the whole range draws the pixels the whole document does", () =>
+        {
+            var doc = MarkdownDocument.Parse(RangeSample);
+            var whole = Viewer(doc, null).Runtime.LastFrame();
+            var ranged = Viewer(doc, ..).Runtime.LastFrame();
+            IsTrue(whole.RawBgraBytes.AsSpan().SequenceEqual(ranged.RawBgraBytes), "the frames differ");
+        });
+
+        run("Markdown range: a block keeps its boxes' names wherever the range starts", () =>
+        {
+            var doc = MarkdownDocument.Parse(RangeSample);
+            int code = IndexOf(doc, MarkdownBlockKind.CodeBlock);
+            foreach (var range in new[] { 1.., code.. })
+            {
+                var (runtime, _, _) = Viewer(doc, range);
+                IsTrue(runtime.FindById($"md/b{code}") is not null, $"block {code}'s box, drawing {range}");
+                IsTrue(runtime.FindById($"md/b{code}/0") is not null, $"block {code}'s code view, drawing {range}");
+            }
+        });
+
+        run("Markdown range: a press on a block reports it; a link's or a task box's is theirs", () =>
+        {
+            var doc = MarkdownDocument.Parse(RangeSample);
+            int plain = IndexOf(doc, MarkdownBlockKind.Paragraph), list = IndexOf(doc, MarkdownBlockKind.List);
+            var (runtime, last, _) = Viewer(doc, ..);
+            using var page = Bibui.Testing.BibuiPage.From(runtime, runtime.BuildTree);
+
+            page.Click($"md/b{plain}");
+            Equal(plain, last().Pressed, "the pressed block");
+            var box = runtime.FindById($"md/b{plain}")!;
+            IsTrue(last().At.X > 0f && last().At.Y >= 0f && last().At.Y <= box.Extent.Y,
+                $"pressed at {last().At}, inside {box.Extent}");
+
+            int link = IndexOf(doc, MarkdownBlockKind.Paragraph, withLink: true);
+            page.Click($"md/b{link}/0");
+            Equal("https://example.com", last().Widget.ClickedLink, "the clicked link");
+            Equal(-1, last().Pressed, "a block, under the link");
+
+            page.Click($"md/b{list}/0");
+            IsTrue(last().Widget.TaskClicked, "the task box should report its click");
+            Equal(-1, last().Pressed, "a block, under the task box");
+        });
+
+        run("Markdown range: a press is reported where it was, from the block's corner", () =>
+        {
+            var doc = MarkdownDocument.Parse(RangeSample);
+            int plain = IndexOf(doc, MarkdownBlockKind.Paragraph);
+            var (runtime, last, _) = Viewer(doc, ..);
+            var box = runtime.FindById($"md/b{plain}")!;
+            float x = box.Rect.X + 12f, y = box.Rect.Y + 7f;
+            runtime.Step([WindowEvent.Mouse(WindowEventKind.MouseMove, x, y, MouseButton.Unknown),
+                WindowEvent.Mouse(WindowEventKind.MouseDown, x, y, MouseButton.Left)]);
+            Equal(plain, last().Pressed, "the block, as the button goes down");
+            Equal(new Vector2(12f, 7f), last().At, "where in it");
+        });
+
+        run("Markdown range: two ranges with one block scope keep a block's boxes as it moves from one to the other", () =>
+        {
+            var doc = MarkdownDocument.Parse("First.\n\n```\n" + new string('x', 400) + "\n```\n\nLast.");
+            int active = 0;
+            var runtime = BibuiRuntime.Create();
+            runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
+            {
+                Markdown.DrawRange(runtime, "before", doc, ..active, 300f, ComponentSize.Md, "doc", out _, out _);
+                Markdown.DrawRange(runtime, "after", doc, (active + 1).., 300f, ComponentSize.Md, "doc", out _, out _);
+            }), new WindowFrame(400, 600, 1f, 60f));
+            for (int i = 0; i < 3; i++) runtime.Step();
+            var view = (Box)(runtime.FindById("doc/b1/0") ?? throw new Exception("the code view, in the range after"));
+            view.TargetViewOffset = view.ViewOffset = new Vector2(80f, 0f);
+            runtime.Step();
+
+            active = 2;   // the code block moves into the range before
+            for (int i = 0; i < 3; i++) runtime.Step();
+            IsTrue(ReferenceEquals(view, runtime.FindById("doc/b1/0")), "the same retained view");
+            Equal(80f, view.TargetViewOffset.X, "its scroll kept");
+        });
+
+        run("Markdown range: two ranges of one scope holding the same block in a frame throw", () =>
+        {
+            var doc = MarkdownDocument.Parse(RangeSample);
+            var runtime = BibuiRuntime.Create();
+            runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
+            {
+                Markdown.DrawRange(runtime, "one", doc, ..2, 300f, ComponentSize.Md, "doc", out _, out _);
+                Markdown.DrawRange(runtime, "two", doc, 1.., 300f, ComponentSize.Md, "doc", out _, out _);
+            }), new WindowFrame(400, 600, 1f, 60f));
+            Throws<InvalidOperationException>(() => runtime.Step(), "block 1 in both");
+
+            var apart = BibuiRuntime.Create();
+            apart.SetBuild(() => apart.Into(apart.Column().Sized(Size.Fill, Size.Fill), () =>
+            {
+                Markdown.DrawRange(apart, "one", doc, ..2, 300f, ComponentSize.Md, "doc", out _, out _);
+                Markdown.DrawRange(apart, "two", doc, 2.., 300f, ComponentSize.Md, "doc", out _, out _);
+            }), new WindowFrame(400, 600, 1f, 60f));
+            apart.Step();
+            apart.Step();   // the next frame claims afresh
+        });
+
         // ── Layout ──────────────────────────────────────────────────────────
 
         run("Markdown layout: a paragraph of equal words wraps greedily into the lines the width allows", () =>
@@ -365,6 +541,88 @@ static class MarkdownTests
                 $"a steady frame allocated {frame} bytes; {texts.Length} plain texts allocate {yardstick}, a parse {parse}");
         });
     }
+
+    // The source of each top-level block, quoted, separated by " | ".
+    public static string Spans(string markdown)
+    {
+        var doc = MarkdownDocument.Parse(markdown);
+        return string.Join(" | ", doc.Root.Children.Select(b => Quote(markdown[b.SourceStart..b.SourceEnd]
+            .Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\t", "\\t"))));
+    }
+
+    // What every parse keeps: each block within its container, siblings in order
+    // and not overlapping (but table cells, which share their row's line), and
+    // top-level blocks starting at a line's start.
+    public static void SpansHold(string markdown)
+    {
+        var doc = MarkdownDocument.Parse(markdown);
+        Equal(0, doc.Root.SourceStart, "the document's start");
+        Equal(markdown.Length, doc.Root.SourceEnd, "the document's end");
+        foreach (var block in doc.Root.Children)
+            IsTrue(block.SourceStart == 0 || markdown[block.SourceStart - 1] is '\n' or '\r',
+                $"a {block.Kind} starts at {block.SourceStart}, inside a line of {Quote(markdown)}");
+        Hold(doc.Root);
+
+        void Hold(MarkdownBlock parent)
+        {
+            MarkdownBlock? previous = null;
+            foreach (var child in parent.Children)
+            {
+                IsTrue(child.SourceStart >= parent.SourceStart && child.SourceEnd <= parent.SourceEnd && child.SourceStart <= child.SourceEnd,
+                    $"a {child.Kind} at {child.SourceStart}..{child.SourceEnd} is outside its {parent.Kind} at {parent.SourceStart}..{parent.SourceEnd} in {Quote(markdown)}");
+                if (previous is not null && parent.Kind != MarkdownBlockKind.TableRow)
+                    IsTrue(previous.SourceEnd <= child.SourceStart,
+                        $"a {previous.Kind} ending at {previous.SourceEnd} runs into the {child.Kind} at {child.SourceStart} in {Quote(markdown)}");
+                previous = child;
+                Hold(child);
+            }
+        }
+    }
+
+    // A heading, paragraphs (one with a link), a task list, code and a table.
+    private const string RangeSample =
+        "# Release\n\nPlain text, long enough to wrap onto a second line at the width the viewer is drawn at.\n\n"
+        + "See [the site](https://example.com) for more.\n\n- [ ] write it\n- [x] test it\n\n"
+        + "## Code\n\n```\nvar x = 1;\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nThe end.";
+
+    private static void Throws<T>(Action body, string what) where T : Exception
+    {
+        try { body(); }
+        catch (T) { return; }
+        throw new Exception($"{what}: expected {typeof(T).Name}");
+    }
+
+    private static int IndexOf(MarkdownDocument doc, MarkdownBlockKind kind, bool withLink = false)
+    {
+        var blocks = doc.Root.Children;
+        for (int i = 0; i < blocks.Count; i++)
+            if (blocks[i].Kind == kind && (!withLink || doc.RunsOf(blocks[i]).ToArray().Any(r => r.Link >= 0))) return i;
+        throw new Exception($"no {kind} in the sample");
+    }
+
+    // The viewer drawing `range` of `doc` (all of it, by the whole-document
+    // overload, when null), laid out twice; and the widget the last frame built.
+    private static (BibuiRuntime Runtime, Func<(MarkdownWidget Widget, int Pressed, Vector2 At)> Last, UiNode Root) Viewer(
+        MarkdownDocument doc, Range? range)
+    {
+        (MarkdownWidget, int, Vector2) last = default;
+        var runtime = BibuiRuntime.Create();
+        runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
+            {
+                int pressed = -1;
+                Vector2 at = default;
+                var widget = range is { } r
+                    ? Markdown.DrawRange(runtime, "md", doc, r, 360f, ComponentSize.Md, null, out pressed, out at)
+                    : runtime.Markdown("md", doc, width: 360f);
+                last = (widget, pressed, at);
+            }),
+            new WindowFrame(400, 900, 1f, 60f));
+        runtime.Step();
+        runtime.Step();
+        return (runtime, () => last, runtime.FindById("md") ?? throw new Exception("the viewer was not built"));
+    }
+
+    private static float Height(MarkdownDocument doc, Range? range) => Viewer(doc, range).Root.Extent.Y;
 
     private static long SteadyFrame(BibuiRuntime runtime)
     {

@@ -34,6 +34,9 @@ All notable changes to bibui are recorded here. The format is based on
   moving with it; Shift selects. `TextActionFlags.PageScan` marks the move as
   a page.
 
+- **Markdown source spans:** `MarkdownBlock.SourceStart` and `SourceEnd`, the
+  lines of the source each block came from, markers included.
+
 ### Changed
 
 - **Breaking:** rendering glyphs into masks is no longer the text layer's.
