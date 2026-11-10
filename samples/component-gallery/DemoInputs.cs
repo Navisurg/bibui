@@ -38,6 +38,7 @@ internal static class DemoInputs
             case "Textarea": TextareaPage(runtime); break;
             case "Checkbox": CheckboxPage(runtime, state, set); break;
             case "TextField": TextFieldPage(runtime); break;
+            case "StyledTextField": DemoStyledTextField.Page(runtime); break;
             case "Switch": SwitchPage(runtime, state, set); break;
             case "RadioGroup": RadioGroupPage(runtime, state, set); break;
             case "Select": SelectPage(runtime, state, set); break;

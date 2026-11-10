@@ -40,6 +40,12 @@ All notable changes to bibui are recorded here. The format is based on
   in the run it starts in; styled lines are kept with the others. Text in one
   style is measured as before.
 
+- **`runtime.StyledTextField`:** a multi-line field with `TextStyleRange`s,
+  ranges of its text in a colour or a `FontWeight` of their own, for syntax
+  in an editor, sorted and not overlapping. Lines, the caret and the pointer
+  follow each range's face; the field's edits shift the caller's ranges in
+  place. `StyledTextState` is what it keeps between frames, the caller's.
+
 - **Markdown source spans:** `MarkdownBlock.SourceStart` and `SourceEnd`, the
   lines of the source each block came from, markers included.
 
