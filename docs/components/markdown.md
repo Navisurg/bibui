@@ -51,6 +51,27 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
 Italics are set in the body face, because the type system has no oblique face
 yet.
 
+## Source spans
+
+Every `MarkdownBlock` says which lines of the source it came from, in
+`SourceStart` and `SourceEnd`: char offsets into the text you parsed, the end
+exclusive.
+
+- A block's span is whole lines, from the first char of its first line to the
+  last char of its last, before the line break. It includes the indent and the
+  markers: the `#`s of a heading, a fence, a setext underline, a `>`, a list
+  marker, a table's delimiter row.
+- A nested block shares its lines with its containers' markers: the paragraph
+  in `> text` spans the whole line.
+- Blank lines after a block are not its own, and nor are lines that are only
+  link reference definitions. A paragraph that opens with a definition spans it.
+- The text between two top-level blocks is blank lines and definitions.
+- An unclosed fence ends at its last line that is not blank, though the code
+  block it draws keeps the blank lines after it.
+- A quote or list item keeps the lines its markers are on, even when they
+  hold only link reference definitions.
+- The document spans the whole source, from 0.
+
 ## Claims and reports
 
 - Each link and each task box claims `InteractionKinds.LeftPress`. A table wider

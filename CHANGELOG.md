@@ -40,6 +40,9 @@ All notable changes to bibui are recorded here. The format is based on
   in the run it starts in; styled lines are kept with the others. Text in one
   style is measured as before.
 
+- **Markdown source spans:** `MarkdownBlock.SourceStart` and `SourceEnd`, the
+  lines of the source each block came from, markers included.
+
 ### Changed
 
 - **Breaking:** rendering glyphs into masks is no longer the text layer's.

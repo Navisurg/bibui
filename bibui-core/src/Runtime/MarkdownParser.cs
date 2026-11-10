@@ -40,15 +40,28 @@ internal sealed class MarkdownParser
     private readonly List<(int Start, int End, int Line)> _leafLines = [];
     private MarkdownAlign[] _tableAligns = [];
     private int _line;
+    private bool _lineBlank;   // the line being parsed has nothing past its containers' markers
 
     public MarkdownDocument Run(ReadOnlySpan<char> text)
     {
         Prepare(text);
         var root = new MarkdownBlock(MarkdownBlockKind.Document);
         _open.Add(root);
-        for (_line = 0; _line < _lineStart.Count; _line++) Line(_lineStart[_line], _lineEnd[_line]);
+        for (_line = 0; _line < _lineStart.Count; _line++)
+        {
+            Line(_lineStart[_line], _lineEnd[_line]);
+            // A line with content belongs to every block still open after it:
+            // the containers it continued, lazily or not, and the leaf. One
+            // that is blank past its markers belongs only to the quotes and
+            // list items whose markers it holds.
+            if (!_lineBlank) TookOpen();
+        }
         CloseFrom(1);
         CloseLeaf();
+
+        root.SourceStart = 0;
+        root.SourceEnd = text.Length;
+        foreach (var block in root.ChildList) Spans(block);
 
         var inlines = new InlineParser(this);
         Inlines(root, inlines);
@@ -95,6 +108,42 @@ internal sealed class MarkdownParser
     // The source offset of a position in _src on line `line`, past its leading whitespace.
     private int SourceOffset(int pos, int line) => pos - _lineStart[line] + _origStart[line] - _lineDelta[line];
 
+    // The source offset just past line `line`'s last char: its length in _src,
+    // less what expanding its leading tabs added.
+    private int SourceLineEnd(int line) => _origStart[line] + _lineEnd[line] - _lineStart[line] - _lineDelta[line];
+
+    // ── Source spans ────────────────────────────────────────────────────────
+
+    // The line being parsed belongs to `block`.
+    private void Took(MarkdownBlock block)
+    {
+        if (block.FirstLine < 0) block.FirstLine = _line;
+        block.LastLine = _line;
+    }
+
+    private void TookOpen()
+    {
+        for (int i = 1; i < _open.Count; i++) Took(_open[i]);
+        if (_leaf is not null) Took(_leaf);
+    }
+
+    // Lines to source offsets, depth first. A block that took no line of its
+    // own (a table cell takes its row's) spans its children.
+    private void Spans(MarkdownBlock block)
+    {
+        foreach (var child in block.ChildList) Spans(child);
+        if (block.FirstLine >= 0)
+        {
+            block.SourceStart = _origStart[block.FirstLine];
+            block.SourceEnd = SourceLineEnd(block.LastLine);
+        }
+        else if (block.ChildList.Count > 0)
+        {
+            block.SourceStart = block.ChildList[0].SourceStart;
+            block.SourceEnd = block.ChildList[^1].SourceEnd;
+        }
+    }
+
     private void Line(int p, int e)
     {
         // 1. Continue the open containers.
@@ -106,6 +155,7 @@ internal sealed class MarkdownParser
             {
                 int ind = Indent(p, e);
                 if (ind > 3 || p + ind >= e || _src[p + ind] != '>') break;
+                Took(c);
                 p += ind + 1;
                 if (p < e && _src[p] == ' ') p++;
             }
@@ -118,6 +168,7 @@ internal sealed class MarkdownParser
             matched++;
         }
         bool blank = IsBlank(p, e);
+        _lineBlank = blank;
         bool allMatched = matched == _open.Count;
 
         // 2. A code block takes the line as it is.
@@ -125,7 +176,12 @@ internal sealed class MarkdownParser
         {
             int ind = Indent(p, e), q = p + ind, run = 0;
             while (q + run < e && _src[q + run] == fence.FenceChar) run++;
-            if (ind <= 3 && run >= fence.FenceLength && IsBlank(q + run, e)) { CloseLeaf(); return; }
+            if (ind <= 3 && run >= fence.FenceLength && IsBlank(q + run, e))
+            {
+                Took(fence);
+                CloseLeaf();
+                return;
+            }
             int strip = Math.Min(ind, fence.FenceIndent);
             _leafLines.Add((p + strip, e, _line));
             return;
@@ -158,6 +214,7 @@ internal sealed class MarkdownParser
                 var quote = new MarkdownBlock(MarkdownBlockKind.Quote);
                 Tip.ChildList.Add(quote);
                 _open.Add(quote);
+                Took(quote);
                 p = q + 1;
                 if (p < e && _src[p] == ' ') p++;
                 blank = IsBlank(p, e);
@@ -189,10 +246,13 @@ internal sealed class MarkdownParser
             var item = new MarkdownBlock(MarkdownBlockKind.ListItem) { ContentIndent = contentStart - p };
             list.ChildList.Add(item);
             _open.Add(item);
+            Took(list);
+            Took(item);
             p = spaces > 4 && !emptyItem ? markerEnd + 1 : contentStart;
             blank = IsBlank(p, e);
             item.HasContent = !blank;
         }
+        _lineBlank = blank;
 
         // A list whose item the line did not continue, and which no new item joined, ends.
         if (!blank)
@@ -224,6 +284,7 @@ internal sealed class MarkdownParser
         {
             paragraph.Kind = MarkdownBlockKind.Heading;
             paragraph.Level = level;
+            Took(paragraph);   // the underline
             CloseLeaf();
             return;
         }
@@ -232,6 +293,7 @@ internal sealed class MarkdownParser
             CloseLeaf();
             var heading = new MarkdownBlock(MarkdownBlockKind.Heading) { Level = hLevel };
             Tip.ChildList.Add(heading);
+            Took(heading);
             SetRaw(heading, _src.AsSpan(hStart, hEnd - hStart), hStart < hEnd ? SourceOffset(hStart, _line) : -1);
             return;
         }
@@ -247,7 +309,9 @@ internal sealed class MarkdownParser
         if (IsThematicBreak(at, e))
         {
             CloseLeaf();
-            Tip.ChildList.Add(new MarkdownBlock(MarkdownBlockKind.ThematicBreak));
+            var rule = new MarkdownBlock(MarkdownBlockKind.ThematicBreak);
+            Tip.ChildList.Add(rule);
+            Took(rule);
             return;
         }
         if (_leaf is { Kind: MarkdownBlockKind.Table }) { _leafLines.Add((at, e, _line)); return; }
@@ -257,10 +321,16 @@ internal sealed class MarkdownParser
             if (SplitCells(header.Start, header.End).Count == aligns.Length)
             {
                 _leafLines.RemoveAt(_leafLines.Count - 1);
-                if (_leafLines.Count > 0) CloseLeaf();
+                // The header was the paragraph's last line; now it is the table's first.
+                if (_leafLines.Count > 0)
+                {
+                    _leaf.LastLine = _leafLines[^1].Line;
+                    CloseLeaf();
+                }
                 else { Tip.ChildList.Remove(_leaf); _leaf = null; }
                 OpenLeaf(new MarkdownBlock(MarkdownBlockKind.Table) { Aligns = aligns });
                 _tableAligns = aligns;
+                _leaf!.FirstLine = header.Line;
                 _leafLines.Add(header);
                 return;
             }
@@ -403,14 +473,14 @@ internal sealed class MarkdownParser
     private void CloseTable(MarkdownBlock table)
     {
         int columns = _tableAligns.Length;
-        foreach (var (start, end, _) in _leafLines)
+        foreach (var (start, end, line) in _leafLines)
         {
-            var row = new MarkdownBlock(MarkdownBlockKind.TableRow);
+            var row = new MarkdownBlock(MarkdownBlockKind.TableRow) { FirstLine = line, LastLine = line };
             table.ChildList.Add(row);
             var cells = SplitCells(start, end);
             for (int c = 0; c < columns; c++)
             {
-                var cell = new MarkdownBlock(MarkdownBlockKind.TableCell);
+                var cell = new MarkdownBlock(MarkdownBlockKind.TableCell) { FirstLine = line, LastLine = line };
                 row.ChildList.Add(cell);
                 if (c >= cells.Count) { SetRaw(cell, default, -1); continue; }
                 // \| is a pipe in a cell, inside a code span too.

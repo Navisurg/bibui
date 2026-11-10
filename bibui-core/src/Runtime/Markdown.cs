@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using Bibui.Core;
 using Bibui.Core.TextEdit;
@@ -76,8 +77,65 @@ public static class Markdown
         source.ReplaceRange((offset, offset + 1), mark == ' ' ? "x" : " ");
     }
 
+    // The space the viewer leaves above top-level block `block` of `document`:
+    // 0 above the first. For an editor that draws its own content between two
+    // ranges, spaced as the block it stands for. Called while building: it reads
+    // the font in scope at the theme's sizes.
+    internal static float GapAbove(BibuiRuntime runtime, MarkdownDocument document, int block,
+        ComponentSize textSize = ComponentSize.Md)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(document);
+        var blocks = document.Root.Children;
+        ArgumentOutOfRangeException.ThrowIfNegative(block);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(block, Math.Max(1, blocks.Count));
+        if (block == 0) return 0f;
+        using (runtime.FontFace(FontSlot.Body, FontWeight.Regular))
+            return Gap(blocks, block, runtime.FontInScope(textSize).Size, tight: false);
+    }
+
+    // Part of a document: the top-level blocks in `blocks`, spaced as in the
+    // whole document, gap above the first included. Each block is a retained
+    // box, `{blockScope}/b{index}`, with the boxes inside it named after it, so
+    // an editor drawing the blocks before and after its own as two ranges of
+    // one scope keeps a block's boxes (a wide table its scroll) as it moves
+    // between them. Without a scope they are named under `id`. Two ranges of
+    // one scope holding the same block in a frame throw. The names follow the
+    // block's index, so a block inserted or removed before it hands its boxes
+    // to the block that has its index now. `pressedBlock` is the block pressed
+    // this frame, or -1: a press its links and task boxes leave, at
+    // `pressedAt` from the block's top-left corner.
+    internal static MarkdownWidget DrawRange(BibuiRuntime runtime, string id, MarkdownDocument document, Range blocks,
+        float? width, ComponentSize textSize, string? blockScope, out int pressedBlock, out Vector2 pressedAt)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(document);
+        var (first, count) = blocks.GetOffsetAndLength(document.Root.Children.Count);
+        var cache = Caches.GetValue(runtime, static _ => new Cache());
+        var entry = cache.Entry(id);
+        entry.Parsed = false;
+        entry.Document = document;
+        entry.BlockScope = blockScope ?? id;
+        cache.Claim(entry.BlockScope, runtime.FrameCount, first, count);
+        var result = Build(runtime, id, cache, entry, width, textSize, ranged: true, first, count);
+        pressedBlock = cache.Writer.PressedBlock;
+        pressedAt = cache.Writer.PressedAt;
+        return result;
+    }
+
+    // The space above blocks[i], i > 0, in a container whose text is `px` high.
+    internal static float Gap(IReadOnlyList<MarkdownBlock> blocks, int i, float px, bool tight)
+    {
+        if (blocks[i].Kind == MarkdownBlockKind.Heading) return MathF.Round(px * 1.4f);
+        if (blocks[i - 1].Kind == MarkdownBlockKind.Heading) return MathF.Round(px * 0.6f);
+        return tight ? TightGap : MathF.Round(px * 0.85f);
+    }
+
+    // `count` top-level blocks from `first`, or with `ranged` false all of them,
+    // drawn as they are and not each in a box of its own.
     internal static MarkdownWidget Build(BibuiRuntime runtime, string id, Cache cache, Entry entry, float? width,
-        ComponentSize textSize)
+        ComponentSize textSize, bool ranged = false, int first = 0, int count = 0)
     {
         Box root = runtime.BoxFromId(id);
         root.ChildLayoutAxis = LayoutAxis.Y;
@@ -93,7 +151,10 @@ public static class Markdown
         using (runtime.FontFace(FontSlot.Body, FontWeight.Regular))
         using (runtime.SizeX(SemanticSize.Text()))
         using (runtime.SizeY(SemanticSize.Text()))
-            writer.Blocks(entry.Document!.Root.Children, room, writer.Body, tight: false);
+        {
+            if (ranged) writer.Range(entry.Document!.Root.Children, first, count, room, writer.Body);
+            else writer.Blocks(entry.Document!.Root.Children, room, writer.Body, tight: false);
+        }
         var result = new MarkdownWidget(root, writer.ClickedLink, writer.ToggledTask);
         writer.End();
         return result;
@@ -108,6 +169,33 @@ public static class Markdown
         private long _clock;
 
         public readonly Writer Writer = new();
+
+        // The blocks each block scope has drawn this frame, so two ranges that
+        // would name one block's boxes alike are refused rather than one losing
+        // them to the other.
+        private readonly Dictionary<string, ScopeDraws> _scopes = new(StringComparer.Ordinal);
+
+        private sealed class ScopeDraws
+        {
+            public long Frame = -1;
+            public readonly List<(int First, int End)> Ranges = [];
+        }
+
+        public void Claim(string scope, long frame, int first, int count)
+        {
+            if (count == 0) return;
+            if (!_scopes.TryGetValue(scope, out var drawn)) _scopes[scope] = drawn = new ScopeDraws();
+            if (drawn.Frame != frame)
+            {
+                drawn.Frame = frame;
+                drawn.Ranges.Clear();
+            }
+            foreach (var (start, end) in drawn.Ranges)
+                if (first < end && start < first + count)
+                    throw new InvalidOperationException(
+                        $"Blocks {first}..{first + count} under block scope '{scope}' overlap blocks {start}..{end} drawn under it this frame: two ranges of one scope must not hold the same block.");
+            drawn.Ranges.Add((first, first + count));
+        }
 
         public Entry Entry(string id)
         {
@@ -134,6 +222,8 @@ public static class Markdown
     internal sealed class Entry(string id)
     {
         private readonly List<string> _ids = [];
+        private readonly List<string> _blockIds = [];
+        private readonly List<List<string>?> _idsInBlock = [];
 
         // The source last parsed, refilled in place when it changes: an edit
         // copies into it, and allocates only when the source outgrows it.
@@ -149,6 +239,40 @@ public static class Markdown
         {
             while (_ids.Count <= n) _ids.Add($"{id}/{_ids.Count}");
             return _ids[n];
+        }
+
+        // What a range's block boxes are named under: the viewer's id, or the
+        // name the ranges of one document share. Set before a range is drawn;
+        // a new one names them afresh.
+        public string BlockScope
+        {
+            get => _blockScope ?? id;
+            set
+            {
+                if (value == BlockScope) return;
+                _blockScope = value;
+                _blockIds.Clear();
+                _idsInBlock.Clear();
+            }
+        }
+
+        private string? _blockScope;
+
+        // A top-level block's own box when a range is drawn, and the n-th
+        // retained box inside it: numbered per block, so a block keeps its
+        // names wherever the range around it starts.
+        public string BlockId(int block)
+        {
+            while (_blockIds.Count <= block) _blockIds.Add($"{BlockScope}/b{_blockIds.Count}");
+            return _blockIds[block];
+        }
+
+        public string IdAt(int block, int n)
+        {
+            while (_idsInBlock.Count <= block) _idsInBlock.Add(null);
+            var ids = _idsInBlock[block] ??= [];
+            while (ids.Count <= n) ids.Add($"{BlockId(block)}/{ids.Count}");
+            return ids[n];
         }
     }
 
@@ -182,6 +306,7 @@ public static class Markdown
         private MarkdownDocument _doc = null!;
         private ComponentSize _textSize;
         private int _nextId, _listDepth;
+        private int _block = -1;     // the top-level block being drawn in a range, or -1
         private float _breakSlack;   // how far a word may run into a cell's padding before it is broken
 
         // Line widths and vertical padding are the theme's (Borders, Density), never literals:
@@ -193,6 +318,8 @@ public static class Markdown
 
         public string? ClickedLink;
         public int ToggledTask = -1;
+        public int PressedBlock = -1;
+        public Vector2 PressedAt;
 
         public Look Body => new(_textSize, FontSlot.Body, false, UiColor.TextPrimary);
 
@@ -207,6 +334,9 @@ public static class Markdown
             _breakSlack = 0f;
             ClickedLink = null;
             ToggledTask = -1;
+            PressedBlock = -1;
+            PressedAt = default;
+            _block = -1;
         }
 
         public void End()
@@ -216,7 +346,7 @@ public static class Markdown
             _doc = null!;
         }
 
-        private string NextId() => _entry.IdAt(_nextId++);
+        private string NextId() => _block < 0 ? _entry.IdAt(_nextId++) : _entry.IdAt(_block, _nextId++);
 
         private float Px(Look look) => _runtime.FontInScope(look.Size).Size;
 
@@ -227,15 +357,41 @@ public static class Markdown
             float px = Px(look);
             for (int i = 0; i < blocks.Count; i++)
             {
-                var block = blocks[i];
-                if (i > 0)
+                if (i > 0) _runtime.Gap(Gap(blocks, i, px, tight));
+                Block(blocks[i], room, look, tight);
+            }
+        }
+
+        // Top-level blocks first..first+count, each in a box of its own that
+        // takes a press after its links and task boxes have asked, so a press
+        // they leave reports which block it fell on. The range opens with the
+        // gap the whole document has above its first block, so ranges drawn
+        // one after another stand exactly where the whole document would.
+        public void Range(IReadOnlyList<MarkdownBlock> blocks, int first, int count, float room, Look look)
+        {
+            float px = Px(look);
+            for (int i = first; i < first + count; i++)
+            {
+                if (i > 0) _runtime.Gap(Gap(blocks, i, px, tight: false));
+                Box box = _runtime.BoxFromId(_entry.BlockId(i), InteractionKinds.LeftPress);
+                box.ChildLayoutAxis = LayoutAxis.Y;
+                box.SizeX = SemanticSize.ParentPct(1f);
+                box.SizeY = SemanticSize.ChildrenSum();
+
+                _block = i;
+                _nextId = 0;
+                using (_runtime.Parent(box))
+                    Block(blocks[i], room, look, tight: false);
+                _block = -1;
+
+                // On the press, not the click, as a text field puts its caret: an
+                // editor swaps the block for its own as the button goes down.
+                var press = _runtime.InteractionsFor(box);
+                if (press.Pressed)
                 {
-                    float gap = tight ? TightGap : MathF.Round(px * 0.85f);
-                    if (block.Kind == MarkdownBlockKind.Heading) gap = MathF.Round(px * 1.4f);
-                    else if (blocks[i - 1].Kind == MarkdownBlockKind.Heading) gap = MathF.Round(px * 0.6f);
-                    _runtime.Gap(gap);
+                    PressedBlock = i;
+                    PressedAt = new Vector2(press.X - box.Rect.X, press.Y - box.Rect.Y);
                 }
-                Block(block, room, look, tight);
             }
         }
 
