@@ -80,6 +80,7 @@ static class ScrollListTests
         }
 
         public double Target => At(Pt.Idx, Pt.Px);
+        public double Shown => At(Pt.Idx, Pt.Px + Pt.Off);   // what is shown at the top of the view
         public double End => At(Count) - Height;   // the top of the last screenful
     }
 
@@ -139,6 +140,31 @@ static class ScrollListTests
             target.Pt.Target(Count - 1);
             target.Settle();
             Near(target.End, target.Target, 0.01, "by a target, the same");
+        });
+
+        run("ScrollList: the wheel up at the top, or past it, leaves the first row on the top and does not move what is shown down", () =>
+        {
+            var list = new Lab(ScrollBy.Pixels, Uneven);
+            var view = (Box)list.Runtime.FindById("list")!;
+            for (int k = 0; k < 10; k++)
+            {
+                list.Wheel(-120f);
+                Eq((0, 0f, 0f), (list.Pt.Idx, list.Pt.Px, list.Pt.Off), $"wheel {k + 1} up at the top: nothing moves");
+                Near(0, view.ViewOffset.Y, 0.01, "the first row on the top");
+            }
+            list.Wheel(200f);
+            list.Settle();
+            double shown = list.Shown;
+            for (int k = 0; k < 12; k++)
+            {
+                list.Wheel(-120f);   // a notch a frame, past the top
+                Eq(true, list.Shown <= shown + 0.01, $"wheel {k + 1} up past the top: what is shown moves up, never down ({shown} to {list.Shown})");
+                shown = list.Shown;
+            }
+            list.Frame();
+            Eq((0, 0f), (list.Pt.Idx, list.Pt.Px), "the target is the top");
+            list.Settle();
+            Near(0, view.ViewOffset.Y, 0.01, "at rest, on the top");
         });
 
         run("ScrollList: rows of one height scroll as RowScrollList's do by pixels", () =>

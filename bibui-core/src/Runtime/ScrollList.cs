@@ -97,8 +97,9 @@ public struct ScrollRows
     // At row 0 nothing is above: neither the target nor what is shown.
     internal static void Top(ref ScrollPt pt)
     {
+        float shown = MathF.Max(pt.Px + pt.Off, 0f);
         pt.Px = MathF.Max(pt.Px, 0f);
-        pt.Off = MathF.Max(pt.Px + pt.Off, 0f) - pt.Px;
+        pt.Off = shown - pt.Px;
     }
 }
 

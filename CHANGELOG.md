@@ -49,6 +49,12 @@ All notable changes to bibui are recorded here. The format is based on
   focused field or not; filter on `IsKeyDown`, as the docs ask. A focused
   multi-line field takes them; a single-line field leaves them to the app.
 
+### Fixed
+
+- `ScrollList`: the wheel up at the top, or past it, no longer moves what is
+  shown down. The first row jumped down by each notch and eased back, a
+  flicker for as long as the wheel turned.
+
 ## [1.1.0] - 2026-11-06
 
 The window separated from the runtime, text on a layer of its own, and focus
