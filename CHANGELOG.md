@@ -1,10 +1,18 @@
 # Changelog
 
 All notable changes to bibui are recorded here. The format is based on
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and bibui follows
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). bibui does not
+follow Semantic Versioning for now: a minor release may change or remove
+public API, marked **Breaking** below ([versioning](docs/versioning.md)).
 
 ## [Unreleased]
+
+### Changed
+
+- `docs/versioning.md`: bibui does not follow semantic versioning for now. A
+  minor release may change or remove public API, as 1.1.0 and 1.2.0 did;
+  each such change is marked **Breaking** in the changelog, with what to use
+  instead. A patch release still never changes the public API.
 
 ## [1.2.0] - 2026-11-11
 
