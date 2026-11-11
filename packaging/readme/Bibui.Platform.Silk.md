@@ -9,6 +9,14 @@ context, `SilkGl.Target` is the framebuffer a renderer draws into, between
 memory that `Bibui.Gl`'s `GlCpuFramebuffer` shows on it. The clipboard goes
 through TextCopy.
 
+Files dropped on the window from another application reach the runtime as a
+`WindowEvent.FilesDropped`, for a box claiming `InteractionKinds.Drop`. GLFW
+reports only the drop: the paths, and no drag before them, so a target is
+never lit while a drag is over it. The drop lands where the pointer was last
+reported, which Windows, macOS and X11 move to the drop point. On Wayland GLFW
+reports no pointer during a drag, so there the drop has no position and is the
+window's, in the frame's events, rather than a box's.
+
 ```csharp
 using var window = SilkWindow.Open(SilkGl.Options(new PlatformWindowOptions("My app", 960, 640)));
 var gl = SilkGl.Target(window);

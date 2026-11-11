@@ -50,9 +50,15 @@ All notable changes to bibui are recorded here. The format is based on
   drop no box took stays in the frame's events
   (`BibUiEventKind.FilesDropped`, its `Paths`) for the app. A window reports a
   drag with `WindowEvent.FileDragOver`, `FileDragLeave` and `FilesDropped`.
-  The Wayland window takes a drag whose offer carries `text/uri-list`, as a
-  file manager's does, and reads its `file:` URIs as paths; the Silk and
-  browser windows report none yet.
+  A host that hears of no drag before the drop sends `FilesDropped` alone, at
+  NaN (`WindowEvent.FilesDropped(paths)`) when it does not know where: then the
+  drop is the window's, in the frame's events, and no box's. The Wayland
+  window takes a drag whose offer carries `text/uri-list`, as a file manager's
+  does, and reads its `file:` URIs as paths. The Silk window reports GLFW's
+  drop: the paths only, no drag before them, where the pointer was last
+  reported (Windows, macOS and X11 put it at the drop point), and with no
+  position on Wayland, where GLFW reports no pointer during a drag. The
+  browser window reports none yet. See [What a window reports](docs/concepts.md#what-a-window-reports).
 
 ## [1.2.0] - 2026-11-11
 

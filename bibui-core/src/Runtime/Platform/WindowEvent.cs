@@ -17,17 +17,28 @@ public enum WindowEventKind
     /// <summary>Focus left the window. Whatever was held is not held any more.</summary>
     FocusLost,
 
+    // Files dragged in from another application. A host sends what its platform
+    // tells it: FileDragOver and FileDragLeave only if it hears of the drag
+    // before the drop (Wayland does, GLFW does not), and FilesDropped always,
+    // at NaN when it does not know where.
+
     /// <summary>
     /// A drag carrying files is over the window, at X/Y: sent as it enters and
     /// as it moves. Until <see cref="FileDragLeave"/> or <see cref="FilesDropped"/>,
-    /// the drag is there.
+    /// the drag is there. A platform that does not report a drag until it is
+    /// dropped (GLFW) never sends it.
     /// </summary>
     FileDragOver,
 
     /// <summary>The drag carrying files left the window, or was called off, without dropping.</summary>
     FileDragLeave,
 
-    /// <summary>Files were dropped on the window at X/Y; <see cref="WindowEvent.Paths"/> holds them. The drag is over.</summary>
+    /// <summary>
+    /// Files were dropped on the window at X/Y; <see cref="WindowEvent.Paths"/>
+    /// holds them. The drag is over. X/Y are NaN when the platform did not say
+    /// where: then no box takes the drop, and it stays in the frame's events.
+    /// It may come with no <see cref="FileDragOver"/> before it.
+    /// </summary>
     FilesDropped,
 }
 
@@ -103,4 +114,10 @@ public readonly struct WindowEvent
         ArgumentNullException.ThrowIfNull(paths);
         return new() { Kind = WindowEventKind.FilesDropped, X = x, Y = y, Paths = paths };
     }
+
+    /// <summary>
+    /// <paramref name="paths"/> were dropped on the window, the platform did not
+    /// say where: X/Y are NaN, so the drop is the window's, not a box's.
+    /// </summary>
+    public static WindowEvent FilesDropped(IReadOnlyList<string> paths) => FilesDropped(float.NaN, float.NaN, paths);
 }

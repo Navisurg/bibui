@@ -111,6 +111,67 @@ static class DropTests
             Eq((500f, 50f), (drop.X, drop.Y), "and where");
         });
 
+        run("File drop: a drop the platform gave no position is the window's: no box takes it, the app reads it from the events", () =>
+        {
+            var lab = new Lab();
+            lab.Frame(WindowEvent.FilesDropped(["/home/u/a.png"]));
+            IsTrue(!lab.Left.Dropped && !lab.Right.Dropped && !lab.Cover.Dropped, "no box: nobody knows where it fell");
+            IsTrue(!lab.Left.FileDragOver && !lab.Right.FileDragOver, "and nothing was lit");
+            var drop = lab.Unclaimed.Single(e => e.Kind == BibUiEventKind.FilesDropped);
+            Eq("/home/u/a.png", string.Join("|", drop.Paths!), "the app reads the paths off the event");
+            IsTrue(float.IsNaN(drop.X) && float.IsNaN(drop.Y), "with no position");
+            Eq(null, lab.Runtime.FileDragPosition, "and no drag is left");
+        });
+
+        // GLFW reports a drop as its paths and nothing more: no enter, motion or
+        // leave, and no position. The Silk window gives it the pointer's.
+        run("Silk window: a GLFW drop lands where the pointer was last reported, with no drag before it", () =>
+        {
+            var window = new SilkWindow(null!);
+            window.Pointer(WindowEvent.Mouse(WindowEventKind.MouseMove, 120f, 40f, MouseButton.Unknown));
+            window.Pointer(WindowEvent.Mouse(WindowEventKind.MouseMove, 250f, 60f, MouseButton.Unknown));
+            string[] glfw = ["/tmp/a.png", "/tmp/b c.txt"];
+            window.Dropped(glfw);
+            glfw[0] = "/changed";   // GLFW's array is the window's to forget
+            var drop = window.Events[^1];
+            Eq(WindowEventKind.FilesDropped, drop.Kind, "a drop");
+            Eq((250f, 60f), (drop.X, drop.Y), "where the pointer was last reported");
+            Eq("/tmp/a.png|/tmp/b c.txt", string.Join("|", drop.Paths!), "the paths, in GLFW's order, kept as they were");
+            Eq(0, window.Events.Count(e => e.Kind is WindowEventKind.FileDragOver or WindowEventKind.FileDragLeave), "no drag events: GLFW has none");
+
+            var lab = new Lab();
+            lab.Frame([.. window.Events]);
+            IsTrue(lab.Right.Dropped, "the box under the pointer takes it, through the same path as Wayland's");
+            Eq("/tmp/a.png|/tmp/b c.txt", string.Join("|", lab.Right.DroppedFiles!), "with its paths");
+
+            int before = window.Events.Count;
+            window.Dropped([]);
+            Eq(before, window.Events.Count, "a drop of nothing is not reported");
+        });
+
+        run("Silk window: a GLFW drop after the pointer left, or before it ever came, has no position", () =>
+        {
+            var fresh = new SilkWindow(null!);
+            fresh.Dropped(["/a"]);
+            IsTrue(float.IsNaN(fresh.Events[^1].X) && float.IsNaN(fresh.Events[^1].Y), "no pointer reported yet: no position");
+
+            var window = new SilkWindow(null!);
+            window.Pointer(WindowEvent.Mouse(WindowEventKind.MouseMove, 250f, 60f, MouseButton.Unknown));
+            window.PointerLeft();
+            window.Dropped(["/b"]);
+            var drop = window.Events[^1];
+            IsTrue(float.IsNaN(drop.X) && float.IsNaN(drop.Y), "the pointer left (Wayland, where GLFW moves no cursor for a drag): no position");
+
+            var lab = new Lab();
+            lab.Frame(drop);
+            IsTrue(!lab.Left.Dropped && !lab.Right.Dropped, "so no box takes it");
+            Eq(1, lab.Unclaimed.Count(e => e.Kind == BibUiEventKind.FilesDropped), "and it stays in the frame's events");
+
+            window.Pointer(WindowEvent.Mouse(WindowEventKind.MouseMove, 30f, 150f, MouseButton.Unknown));
+            window.Dropped(["/c"]);
+            Eq((30f, 150f), (window.Events[^1].X, window.Events[^1].Y), "reported again, it has one again");
+        });
+
         run("File drag: the position and the target follow the drag; moves in one frame are one, where it ended", () =>
         {
             var lab = new Lab();
