@@ -102,6 +102,7 @@ jobs:
             bibui-platform-silk/bibui-platform-silk.csproj
             bibui-platform-wayland/bibui-platform-wayland.csproj
             bibui-platform-portal/bibui-platform-portal.csproj
+            bibui-imaging/bibui-imaging.csproj
             bibui-platform-browser/bibui-platform-browser.csproj
             bibui-apps/silk-skia-gl/bibui-app-silk-skia-gl.csproj
             bibui-apps/silk-skia-cpu/bibui-app-silk-skia-cpu.csproj

@@ -23,6 +23,23 @@ All notable changes to bibui are recorded here. The format is based on
   dependency and no reflection, so it publishes with Native AOT. The dialog is
   unparented: exporting a Wayland window's handle (xdg-foreign) is still to
   come.
+- **`Bibui.Imaging`**, a package of its own: JPEG and WebP decode, to the same
+  straight 8-bit `RgbaImage` as `Png.Decode`, through the system's libraries,
+  which are loaded the first time a picture of their kind is decoded. It
+  depends on `Bibui.Core` only, links nothing, and `Bibui` includes it.
+  - `Jpeg.Decode`, through libjpeg-turbo (`libturbojpeg.so.0`): baseline and
+    progressive, every subsampling, grey and Adobe CMYK, turned upright by the
+    EXIF orientation (a portrait phone photo comes back portrait).
+  - `WebP.Decode`, through libwebp (`libwebp.so.7`): lossy, lossless and either
+    with alpha. An animated WebP is refused.
+  - Each throws its own `JpegException` or `WebPException` (a `FormatException`,
+    as `PngException` is), and `DllNotFoundException` when its library is not
+    installed; `Jpeg.IsAvailable` and `WebP.IsAvailable` ask first.
+  - **`Images.Decode(bytes)`**: PNG, JPEG or WebP, told apart by the first bytes
+    (`Images.FormatOf`, `ImageFormat`), or null for anything it cannot decode:
+    an unknown format, a corrupt or truncated file, a missing library. It never
+    throws for what is in the bytes. `Images.DecodeFile(path)` is null as well
+    for a file that cannot be read. See [Pictures](docs/concepts.md#pictures).
 
 ## [1.2.0] - 2026-11-11
 

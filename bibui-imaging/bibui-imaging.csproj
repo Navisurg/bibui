@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- nuget.org metadata of a public package: URLs, icon, README, base tags. -->
+  <Import Project="../packaging/PublicPackage.props" />
+
+  <!-- Pictures beyond PNG: JPEG through the system's libjpeg-turbo, WebP through
+       its libwebp, and Images.Decode for any picture by its first bytes. The
+       libraries are loaded by hand on the first decode, not imported, so the
+       package links nothing; PNG and RgbaImage stay in Bibui.Core. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Bibui.Imaging</AssemblyName>
+    <RootNamespace>Bibui.Imaging</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- The libraries are called through function pointers, on pinned pixels. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NuGetAudit>false</NuGetAudit>
+    <UseAppHost>false</UseAppHost>
+    <PackageId>Bibui.Imaging</PackageId>
+    <Description>Bibui.Imaging: JPEG and WebP decode to Bibui.Core's RgbaImage, through the system's libjpeg-turbo and libwebp, loaded on the first decode, and Images.Decode for a PNG, JPEG or WebP told apart by its first bytes. No dependency beyond Bibui.Core; Native AOT clean.</Description>
+    <PackageTags>$(PackageTags);image;jpeg;webp;png;decode;aot</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- RgbaImage, which it decodes to, and Png, which Images.Decode calls. -->
+    <ProjectReference Include="../bibui-core/bibui-core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The licence and the third-party notices travel with the package. -->
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="../NOTICE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+</Project>

@@ -836,6 +836,43 @@ callback draws the handle with `ctx.DrawTexture`.
   `rowBytes`.
 - Textures are made, updated and released on the thread that draws.
 
+### Pictures
+
+A picture from a file or the clipboard becomes a texture in two steps: decode it
+to an `RgbaImage` (`Bibui.Core.Imaging`: straight 8-bit RGBA, rows `Stride`
+apart), then make an `RGBA8` texture of its pixels. PNG is in `Bibui.Core`;
+JPEG, WebP and `Images.Decode` are in the `Bibui.Imaging` package.
+
+```csharp
+using Bibui.Core.Imaging;   // RgbaImage, Png
+using Bibui.Imaging;        // Images, Jpeg, WebP
+
+RgbaImage? image = Images.Decode(bytes);          // PNG, JPEG or WebP; null if not
+if (image is not null)
+    picture = renderer.CreateTexture(TextureFormat.RGBA8, TextureKind.Static,
+        image.Width, image.Height, image.Pixels, image.Stride);
+// in a Draw callback: ctx.DrawTexture(picture, ctx.Logical);
+```
+
+`Images.Decode` reads the format from the first bytes and answers null for
+anything it cannot decode (an unknown format, a corrupt or truncated file, a
+missing library) rather than throwing, so bytes a person pasted or attached can
+go straight to it. `Images.FormatOf` says which format the bytes are, and each
+format's own class decodes it alone and throws to say why it could not:
+
+- **`Png`** decodes and encodes in managed code, every form PNG defines.
+- **`Jpeg`** decodes through the system's libjpeg-turbo (`libturbojpeg.so.0`):
+  baseline and progressive, grey and CMYK. It honours the EXIF orientation, so a
+  phone photo comes back upright, at its upright size.
+- **`WebP`** decodes through the system's libwebp (`libwebp.so.7`): lossy,
+  lossless, and either with alpha. An animated WebP is refused.
+
+The two libraries are on every desktop Linux, and are loaded the first time a
+picture of their kind is decoded, not at start-up: without one, an app runs, PNG
+still decodes, and `Jpeg.IsAvailable` or `WebP.IsAvailable` is false. None of
+the decoders applies colour management: an ICC profile or `gAMA` is ignored, as
+the Skia backend's decode ignores it, so a picture draws the same on either.
+
 ## Hosts and renderers
 
 The runtime is independent of the window and of the rasterizer. It holds no

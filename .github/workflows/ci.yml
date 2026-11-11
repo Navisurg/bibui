@@ -43,6 +43,7 @@ jobs:
           dotnet-version: "10.0.x"
 
       # FreeType and HarfBuzz: the managed raster backend's text engine.
+      # libjpeg-turbo and libwebp: JPEG and WebP decode (tests/image-tests).
       # clang and zlib: Native AOT links with them.
       - name: Install system packages
         shell: bash
@@ -50,7 +51,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libfreetype6 libharfbuzz0b clang zlib1g-dev
+            libfreetype6 libharfbuzz0b libturbojpeg libwebp7 clang zlib1g-dev
 
       # Every project in the repository. Each sets TreatWarningsAsErrors; it is
       # passed here too, so a project that forgets it still fails on a warning.
@@ -62,6 +63,7 @@ jobs:
             bibui-text/bibui-text.csproj \
             bibui-glyphs/bibui-glyphs.csproj \
             bibui-core/bibui-core.csproj \
+            bibui-imaging/bibui-imaging.csproj \
             bibui-gl/bibui-gl.csproj \
             bibui-testing/bibui-testing.csproj \
             bibui-raster-skia/bibui-raster-skia.csproj \
@@ -83,6 +85,7 @@ jobs:
             tests/bibui-runtime-tests/bibui-runtime-tests.csproj \
             tests/text-tests/text-tests.csproj \
             tests/png-tests/png-tests.csproj \
+            tests/image-tests/image-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
             tests/wayland-hello/wayland-hello.csproj \
             tests/portal-tests/portal-tests.csproj \
@@ -109,6 +112,7 @@ jobs:
             tests/bibui-runtime-tests/bibui-runtime-tests.csproj \
             tests/text-tests/text-tests.csproj \
             tests/png-tests/png-tests.csproj \
+            tests/image-tests/image-tests.csproj \
             tests/wayland-tests/wayland-tests.csproj \
             tests/portal-tests/portal-tests.csproj \
             bibui-raster-managed/tests/Bibui.Raster.Managed.Tests.csproj \
