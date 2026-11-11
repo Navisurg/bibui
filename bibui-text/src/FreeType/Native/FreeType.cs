@@ -19,12 +19,20 @@ public static unsafe partial class FT
     public const int LOAD_FORCE_AUTOHINT = 1 << 5;
     public const int LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH = 1 << 9;
     public const int LOAD_TARGET_NORMAL = 0;
+    public const int LOAD_COLOR = 1 << 20;
     public const int LOAD_TARGET_LCD = 3 << 16;     // FT_LOAD_TARGET_(FT_RENDER_MODE_LCD)
 
     // FT_FaceRec.face_flags
     public const long FACE_FLAG_SCALABLE = 1 << 0;
     public const long FACE_FLAG_FIXED_SIZES = 1 << 1;
     public const long FACE_FLAG_COLOR = 1 << 14;
+
+    // FT_Glyph_Format: FT_IMAGE_TAG('b', 'i', 't', 's')
+    public const uint GLYPH_FORMAT_BITMAP = 0x62697473;
+
+    // FT_Bitmap.pixel_mode
+    public const byte PIXEL_MODE_GRAY = 2;
+    public const byte PIXEL_MODE_BGRA = 7;
 
     public const int RENDER_MODE_NORMAL = 0;
     public const int RENDER_MODE_LCD = 3;
@@ -45,6 +53,7 @@ public static unsafe partial class FT
     public static readonly int Face_Glyph = P64 ? 152 : 84;
 
     // FT_GlyphSlotRec
+    public static readonly int Slot_Format = P64 ? 144 : 72;
     public static readonly int Slot_Bitmap = P64 ? 152 : 76;
     public static readonly int Slot_BitmapLeft = P64 ? 192 : 100;
     public static readonly int Slot_BitmapTop = P64 ? 196 : 104;
@@ -55,6 +64,7 @@ public static unsafe partial class FT
     public const int Bitmap_Width = 4;
     public const int Bitmap_Pitch = 8;
     public static readonly int Bitmap_Buffer = P64 ? 16 : 12;
+    public static readonly int Bitmap_PixelMode = P64 ? 26 : 18;
 
     // FT_Bitmap_Size: one entry of FT_FaceRec.available_sizes
     public static readonly int BitmapSize_Size = P64 ? 32 : 16;

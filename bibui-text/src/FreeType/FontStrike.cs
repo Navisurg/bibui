@@ -39,7 +39,7 @@ public sealed unsafe class FontStrike
     /// How much a bitmap-only face's glyphs are scaled to reach <see cref="Size"/>:
     /// the size over the bitmap size the strike picked. 1 for an outline face.
     /// </summary>
-    internal float BitmapScale { get; } = 1f;
+    public float BitmapScale { get; } = 1f;
 
     internal FontStrike(Font font, float sizePx)
     {

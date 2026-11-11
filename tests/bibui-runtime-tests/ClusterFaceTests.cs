@@ -1,5 +1,8 @@
 using Bibui.Core;
+using Bibui.Core.Draw;
 using Bibui.Core.Runtime;
+using Bibui.Raster.Managed.Backend;
+using Size = Bibui.Core.Size;
 using Bibui.Text;
 using Bibui.Text.FreeType;
 
@@ -8,11 +11,13 @@ using Bibui.Text.FreeType;
 /// sets up the system's colour emoji font (Fonts.UseClusterFont; on Linux,
 /// Fontconfig.UseColorEmoji), and a strike that loads a face with bitmaps and no
 /// outlines (CBDT, Noto Color Emoji). The fixture is a subset of Noto Color
-/// Emoji with one bitmap size, 109 px.
+/// Emoji with one bitmap size, 109 px. Colour glyphs are drawn as images by
+/// both renderers; the COLR fixture is a subset of Noto Znamenny.
 /// </summary>
 static class ClusterFaceTests
 {
     static readonly string Fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "NotoColorEmoji-subset.ttf");
+    static readonly string ColrFixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "NotoZnamenny-COLR-subset.ttf");
 
     public static void Register(Action<string, Action> run)
     {
@@ -109,7 +114,9 @@ static class ClusterFaceTests
             }
         });
 
-        run("Walk: Skia draws an emoji's run in colour, from the cluster face, with nothing of its own to change", () =>
+        // Both renderers draw an emoji's run in colour from the cluster face: Skia from
+        // the face as it is, the managed rasterizer from the strike's colour masks.
+        void Draws(string name, DrawToPixels draw) => run($"Walk: {name} draws an emoji's run in colour, from the cluster face", () =>
         {
             int ColourPixels(string text)
             {
@@ -121,18 +128,98 @@ static class ClusterFaceTests
                     using (runtime.Parent(row)) runtime.Text(text);
                     return row;
                 }, TestBuild.Window(120, 40));
-                var bgra = runtime.Frame().RawBgraBytes;
-                int coloured = 0;
-                for (int p = 0; p + 3 < bgra.Length; p += 4)
-                {
-                    int b = bgra[p], g = bgra[p + 1], r = bgra[p + 2];
-                    if (Math.Max(r, Math.Max(g, b)) - Math.Min(r, Math.Min(g, b)) > 80) coloured++;
-                }
-                return coloured;
+                return Coloured(runtime.Frame(draw).RawBgraBytes);
             }
             int plain = ColourPixels("ok"), emoji = ColourPixels("ok 👍");
             Check(plain == 0, $"text alone draws no strongly coloured pixel (got {plain})");
             Check(emoji > 40, $"the thumb draws in its own colours (got {emoji} strongly coloured pixels)");
+        });
+        Draws("Skia", Frames.Skia.Draw);
+        Draws("the managed rasterizer", new ManagedRenderer().Draw);
+
+        // The bitmap is 109 px; drawn unscaled from its top, it would cover the lines
+        // around it. Where Skia puts the emoji is where the text layer laid it out.
+        run("Colour glyphs: the managed rasterizer draws an emoji at the text's size, where Skia draws it", () =>
+        {
+            var runtime = BibuiRuntime.Create();
+            runtime.Fonts.UseClusterFont(FontData.FromFile(Fixture));
+            runtime.SetBuild(() =>
+            {
+                var col = runtime.Column().Sized(Size.Px(200f), Size.Px(120f));
+                col.Style.BackgroundColor = UiColor.Rgba(255, 255, 255, 255);
+                using (runtime.Parent(col))
+                {
+                    runtime.Text("a line above");
+                    runtime.Text("ok 👍 ok");
+                    runtime.Text("a line below");
+                }
+                return col;
+            }, TestBuild.Window(200, 120, 2f));
+            runtime.Step();
+            var skia = ColouredBounds(runtime.LastFrame(Frames.Skia.Draw));
+            var managed = ColouredBounds(runtime.LastFrame(new ManagedRenderer().Draw));
+            Check(skia.Right > skia.Left, "Skia draws the emoji");
+            Check(Math.Abs(managed.Left - skia.Left) <= 2 && Math.Abs(managed.Top - skia.Top) <= 2
+                && Math.Abs(managed.Right - skia.Right) <= 2 && Math.Abs(managed.Bottom - skia.Bottom) <= 2,
+                $"the managed rasterizer's emoji spans {managed}, Skia's {skia}");
+        });
+
+        run("Colour glyphs: a bitmap glyph is an image, scaled to the strike's size from its 109 px", () =>
+        {
+            using var fonts = new Fonts();
+            fonts.UseClusterFont(FontData.FromFile(Fixture));
+            var strike = fonts.ClusterFace.Strike(20f);
+            var placed = Placed(strike, fonts.ClusterFace.FreeType.GlyphIndex(0x1F600), 10.3f, 30.6f);
+            var mask = placed.Mask;
+            Check(mask.IsColor && mask.Coverage.IsEmpty, "an image, not coverage");
+            Check(mask.Width is >= 18 and <= 26 && mask.Height is >= 18 and <= 26, $"about 20 px square: {mask.Width}×{mask.Height}");
+            Check(mask.Pixels.Length == mask.Width * mask.Height * 4, "4 bytes a pixel");
+            bool premultiplied = true;
+            for (int i = 0; i < mask.Pixels.Length; i += 4)
+                premultiplied &= mask.Pixels[i] <= mask.Pixels[i + 3] && mask.Pixels[i + 1] <= mask.Pixels[i + 3] && mask.Pixels[i + 2] <= mask.Pixels[i + 3];
+            Check(premultiplied, "no channel above its alpha");
+            Check(placed.X == 10 + mask.Left && placed.Y == 31 - mask.Top, $"placed on whole pixels: ({placed.X}, {placed.Y})");
+        });
+
+        run("Colour glyphs: a COLR glyph's layers are blended into one image", () =>
+        {
+            using var fonts = new Fonts();
+            fonts.UseClusterFont(FontData.FromFile(ColrFixture));
+            var face = fonts.ClusterFace;
+            Check(face.FreeType.HasColor && face.FreeType.IsScalable, "the fixture is a colour face with outlines");
+            var mask = Placed(face.Strike(40f), face.FreeType.GlyphIndex(0x1CF00), 0f, 40f).Mask;
+            Check(mask.IsColor && !mask.IsEmpty, $"an image: {mask.Width}×{mask.Height}");
+        });
+
+        run("Colour glyphs: an emoji that appears in a damage-tracked frame is drawn, as in a whole one", () =>
+        {
+            var runtime = BibuiRuntime.Create();
+            runtime.Fonts.UseClusterFont(FontData.FromFile(Fixture));
+            bool shown = false;
+            runtime.SetBuild(() =>
+            {
+                var row = runtime.Row().Sized(Size.Px(240f), Size.Px(40f));
+                row.Style.BackgroundColor = UiColor.Rgba(255, 255, 255, 255);
+                using (runtime.Parent(row)) runtime.Text(shown ? "ab 😀 👍🏽 x" : "ab x");
+                return row;
+            }, TestBuild.Window(240, 40, 2f));
+            int w = 480, h = 80;
+            var bytes = GC.AllocateArray<byte>(w * h * 4, pinned: true);
+            var target = new RasterPixels(System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(bytes, 0), w, h, w * 4);
+            var tracked = new ManagedRenderer { DamageTracking = true };
+            runtime.Step();
+            tracked.Draw(runtime.DrawList, target);
+            shown = true;
+            runtime.Step();
+            tracked.Draw(runtime.DrawList, target);
+            Check(tracked.LastRepaint is { Count: > 0 }, $"the second frame was repainted in part ({tracked.LastFullRepaintReason})");
+            var whole = runtime.LastFrame(new ManagedRenderer().Draw).RawBgraBytes;
+            Check(whole.Length == bytes.Length, "the same size");
+            int differ = 0;
+            for (int i = 0; i < whole.Length; i += 4)
+                if (BitConverter.ToUInt32(bytes, i) != BitConverter.ToUInt32(whole, i)) differ++;
+            Check(differ == 0, $"{differ} px differ from a whole draw");
+            Check(Coloured(bytes) > 40, "and the emoji are in it, in colour");
         });
 
         run("Strike: a face with bitmaps and no outlines loads at any size, its metrics from its bitmap size", () =>
@@ -171,8 +258,44 @@ static class ClusterFaceTests
     static string Describe(Fonts fonts, TextRun[] runs) => string.Join(" | ", runs.Select(r =>
         $"{(r.Style.Face == fonts.ClusterFace && fonts.ClusterFace != TextLayer.FaceBuiltIn(fonts, 400) ? "emoji" : "text")} {r.GlyphCount} glyphs at {r.X:F2} wide {r.Width:F2}"));
 
+    // How many pixels are strongly coloured: an emoji's, never grey text's.
+    static int Coloured(byte[] bgra)
+    {
+        int coloured = 0;
+        for (int p = 0; p + 3 < bgra.Length; p += 4)
+        {
+            int b = bgra[p], g = bgra[p + 1], r = bgra[p + 2];
+            if (Math.Max(r, Math.Max(g, b)) - Math.Min(r, Math.Min(g, b)) > 80) coloured++;
+        }
+        return coloured;
+    }
+
     static void Check(bool value, string message)
     {
         if (!value) throw new Exception(message);
+    }
+
+    // The box around a frame's strongly coloured pixels, in device pixels; empty when there are none.
+    static (int Left, int Top, int Right, int Bottom) ColouredBounds(Pixels frame)
+    {
+        int left = int.MaxValue, top = int.MaxValue, right = 0, bottom = 0;
+        var bgra = frame.RawBgraBytes;
+        for (int y = 0; y < frame.Height; y++)
+            for (int x = 0; x < frame.Width; x++)
+            {
+                int p = (y * frame.Width + x) * 4;
+                int b = bgra[p], g = bgra[p + 1], r = bgra[p + 2];
+                if (Math.Max(r, Math.Max(g, b)) - Math.Min(r, Math.Min(g, b)) <= 80) continue;
+                left = Math.Min(left, x); top = Math.Min(top, y); right = Math.Max(right, x + 1); bottom = Math.Max(bottom, y + 1);
+            }
+        return right == 0 ? (0, 0, 0, 0) : (left, top, right, bottom);
+    }
+
+    // One glyph of a strike as the managed rasterizer gets it: its mask, placed at (x, baselineY).
+    static Bibui.Glyphs.PlacedGlyph Placed(FontStrike strike, uint glyph, float x, float baselineY)
+    {
+        var into = new Bibui.Glyphs.PlacedGlyph[1];
+        Bibui.Glyphs.GlyphMasks.PlacedFromGlyphs(new(), strike, [(ushort)glyph], [System.Numerics.Vector2.Zero], x, baselineY, into, TextAntialias.Grayscale);
+        return into[0];
     }
 }

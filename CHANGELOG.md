@@ -8,6 +8,19 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
+- **Colour glyphs in the managed rasterizer** (#104). Emoji (CBDT bitmaps, as
+  Noto Color Emoji has) and COLRv0 layers are drawn in their own colours by
+  `Bibui.Raster.Managed.Backend`, at the text's size and on its line, as the
+  Skia renderers already drew them. A colour face's glyphs come from
+  `Bibui.Glyphs` as premultiplied BGRA images (`GlyphMask.IsColor`,
+  `GlyphMask.Pixels`): a bitmap is scaled from the size the font carries to
+  the strike's by area averaging (that scale is `FontStrike.BitmapScale`, now
+  public), and placed on whole pixels.
+  `Canvas.DrawPremultiplied` composites one through the clip, its alpha
+  scaled by the text colour's. Before, the managed rasterizer drew an emoji
+  as a grey mask of its 109 px bitmap, in the text colour, over the lines
+  around it.
+
 - **`Bibui.Platform.Portal`**, a package of its own: the desktop's own file
   chooser through xdg-desktop-portal's `org.freedesktop.portal.FileChooser`,
   for any bibui window. `FileChooser.OpenAsync(new FileChooserOptions { Title,

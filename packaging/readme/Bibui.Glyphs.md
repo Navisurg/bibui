@@ -8,6 +8,12 @@ grayscale, or for subpixel text three samples a pixel. Its
 settings and placement rule are those Skia's text resolves to, so the masks
 reproduce Skia's glyphs.
 
+A colour face's glyphs (an emoji font's bitmaps, as Noto Color Emoji has, or
+COLRv0 layers) are images instead: `GlyphMask.IsColor`, with premultiplied
+BGRA in `GlyphMask.Pixels`, a bitmap scaled from the size the font carries to
+the strike's, placed on whole pixels. They are drawn as they are, their alpha
+scaled by the text colour's, not filled with it.
+
 The managed rasterizer (`Bibui.Raster.Managed.Backend`) draws its text with
 it:
 
@@ -18,8 +24,11 @@ var cache = new Dictionary<FontStrike, Dictionary<uint, GlyphMask>>();   // the 
 int n = GlyphMasks.PlacedFromGlyphs(cache, strike, glyphs, positions, originX, baselineY, placed, TextAntialias.Grayscale);
 var table = MaskGamma.Table(r, g, b);
 for (int i = 0; i < n; i++)
-    canvas.DrawA8(placed[i].Mask.Coverage, placed[i].Mask.Width, placed[i].Mask.Height,
-        placed[i].X, placed[i].Y, argb, table);
+{
+    var m = placed[i].Mask;
+    if (m.IsColor) canvas.DrawPremultiplied(m.Pixels, m.Width, m.Height, placed[i].X, placed[i].Y, (byte)(argb >> 24));
+    else canvas.DrawA8(m.Coverage, m.Width, m.Height, placed[i].X, placed[i].Y, argb, table);
+}
 ```
 
 The cache is confined to the thread of the text engine its strikes come from,

@@ -1,5 +1,6 @@
 NotoColorEmoji-subset.ttf: a subset of Noto Color Emoji, Copyright 2013 Google LLC.
-It is licensed under the SIL Open Font License, Version 1.1, below.
+NotoZnamenny-COLR-subset.ttf: a subset of Noto Znamenny Musical Notation, Copyright 2022 The Noto Project Authors (https://github.com/notofonts/znamenny).
+Both are licensed under the SIL Open Font License, Version 1.1, below.
 
 Copyright 2013 Google LLC
 
