@@ -314,7 +314,12 @@ public static class TextFieldExtensions
     /// </summary>
     public static BibuiWidget TextField(this BibuiRuntime runtime, string id, BibuiStr text,
         TextEditState edit, uint events = global::Bibui.Core.Runtime.TextField.SingleLineEvents,
-        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default)
+        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default) =>
+        runtime.SingleLine(id, text, edit, events, textColor, placeholder, int.MaxValue);
+
+    // A TextField that, without focus, shows only its first `cut` chars: an EllipsisTextField's line.
+    private static BibuiWidget SingleLine(this BibuiRuntime runtime, string id, BibuiStr text,
+        TextEditState edit, uint events, TextColor textColor, ReadOnlySpan<char> placeholder, int cut)
     {
         Font font = runtime.FontInScope();
         float lineHeight = runtime.Fonts.LineHeight(font);
@@ -342,6 +347,7 @@ public static class TextFieldExtensions
         // An empty buffer shows the placeholder, in a quieter colour, the same way.
         bool empty = text.Length == 0;
         ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
+        if (!focused && cut < shown.Length) shown = shown[..cut];
         TextColor color = empty ? TextColor.Secondary : textColor;
 
         // Not focused: no caret, and the selection drawn dimmer. Empty: the
@@ -484,10 +490,12 @@ public static class TextFieldExtensions
     }
 
     /// <summary>
-    /// A <see cref="SingleLine"/> named <paramref name="id"/> in the box in scope,
-    /// ending in "…" when it is wider than the box: the line gives up room for
-    /// the "…". Focused, it scrolls instead. The box must not be sized by its
-    /// children, and whether the line fits is told by its width last frame.
+    /// A <see cref="TextField"/> named <paramref name="id"/> in the box in scope,
+    /// ending in "…" when it is wider than the box: cut after the last word that
+    /// fits with the "…" (or the last letter, when not even the first word does),
+    /// the "…" right after it. Focused, it shows the whole line and scrolls
+    /// instead. The box must not be sized by its children, and whether the line
+    /// fits is told by its width last frame.
     /// </summary>
     public static BibuiWidget EllipsisTextField(this BibuiRuntime runtime, string id, BibuiStr text,
         TextEditState edit, uint events = 0,
@@ -499,13 +507,22 @@ public static class TextFieldExtensions
             : float.PositiveInfinity;
         box.ChildLayoutAxis = LayoutAxis.X;
 
-        var line = runtime.TextField(id, text, edit, events, textColor, placeholder);
         bool empty = text.Length == 0;
         ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
         Font font = runtime.FontInScope();
-        if (line.Interaction.Focused || TextLayer.WidthFromChars(runtime.Fonts, shown, TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale) <= room)
-            return line;   // fits, or being edited: it scrolls instead
+        var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+        if (runtime.IsFocused(id) || TextLayer.WidthFromChars(runtime.Fonts, shown, style, font.Scale) <= room)
+            return runtime.TextField(id, text, edit, events, textColor, placeholder);   // fits, or being edited: it scrolls instead
 
+        // The words that fit beside the "…"; a first word wider than that is cut at a letter.
+        float width = room - DotsGap - TextLayer.WidthFromChars(runtime.Fonts, Dots, style, font.Scale);
+        int cut = TextLayer.LineFromText(runtime.Fonts, shown, style, font.Scale, width, TextWrap.Words, 0).End;
+        if (TextLayer.WidthFromChars(runtime.Fonts, shown[..cut], style, font.Scale) > width)
+            cut = TextLayer.LineFromText(runtime.Fonts, shown, style, font.Scale, width, TextWrap.Characters, 0).End;
+        cut = shown[..cut].TrimEnd(' ').Length;
+
+        var line = runtime.SingleLine(id, text, edit, events, textColor, placeholder, cut);
+        line.Node.SizeX = SemanticSize.Pixels(TextLayer.WidthFromChars(runtime.Fonts, shown[..cut], style, font.Scale));
         runtime.Gap(DotsGap);
         using (runtime.SizeX(SemanticSize.Text()))
         using (runtime.SizeY(SemanticSize.Text()))

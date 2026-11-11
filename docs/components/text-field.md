@@ -73,7 +73,9 @@ public const uint MultiLineEvents, MultiLineReadOnlyEvents;
 
 Sizes: `SingleLine` is one line tall and as wide as its parent. `Ellipsis` needs
 a parent that is not sized by its children, because it measures the width that
-parent had last frame. `Multiline` is as tall as the size begun with
+parent had last frame. Too wide for it, `Ellipsis` shows the words that fit
+beside the "…" (the letters, when not even the first word does) and puts the
+"…" right after them; focused, it shows the whole line and scrolls. `Multiline` is as tall as the size begun with
 `runtime.BeginSizeY`: `SemanticSize.ChildrenSum()` to fit its lines,
 `TextField.Rows(runtime, n)` for `n` lines, or a share.
 

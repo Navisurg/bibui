@@ -129,6 +129,10 @@ All notable changes to bibui are recorded here. The format is based on
   again after being hidden, as a page gone back to), keeps the scroll point
   it is given. Its first frame clamped the point to a height it had not
   measured, so a list scrolled near its end lost its place.
+- `EllipsisTextField` cuts a line too wide for its box after the last whole
+  word that fits beside the "…", or the last whole letter when not even the
+  first word does, and puts the "…" right after it. It clipped the line at the
+  box's edge, through a letter, with the "…" at the far end.
 - `ScrollList`: the wheel up at the top, or past it, no longer moves what is
   shown down. The first row jumped down by each notch and eased back, a
   flicker for as long as the wheel turned.

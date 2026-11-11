@@ -7456,9 +7456,12 @@ Run("runtime.Gap: pixels along the parent's axis, nothing across it", () =>
     Eq(new System.Numerics.Vector2(8f, 0f), rowGap.Extent, "along a row");
 });
 
-Run("runtime.EllipsisTextField: \"…\" only when the line is wider than its box, and the line gives it room", () =>
+Run("runtime.EllipsisTextField: \"…\" only when the line is wider than its box, after the last whole word that fits, or letter when no word does", () =>
 {
-    foreach (var (words, cut) in new[] { ("Fits", false), ("A label far too long for a box this narrow", true) })
+    const string Long = "A label far too long for a box this narrow";
+    // What it shows, and the next step the cut could not take: a word, or a letter when no word fits.
+    foreach (var (words, shown, more) in new[] { ("Fits", "Fits", ""), (Long, "A label far too", " long"),
+                 ("Supercalifragilisticexpialidocious", "Supercalifragili", "s") })
     {
         var runtime = BibuiRuntime.Create();
         Box box = null!;
@@ -7471,13 +7474,22 @@ Run("runtime.EllipsisTextField: \"…\" only when the line is wider than its box
         }), TestBuild.Window(400, 100));
         runtime.Step();
         runtime.Step();   // whether it fits is told by last frame's width
+        var texts = Texts(runtime);
         using var page = runtime.Page();
-        bool dots = Texts(runtime).Contains("\u2026");
-        Eq(cut, dots, $"\"{words}\" ends in \"…\"");
-        var line = box.FirstChild!;   // the line's own box, inside the label
         var font = runtime.FontInScope();
-        float dotsWidth = TextLayer.WidthFromChars(runtime.Fonts, "\u2026", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
-        Eq(cut ? 120f - 2f - dotsWidth : 120f, line.Extent.X, "the line takes what the gap and the \"…\" leave");
+        var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
+        float Width(string chars) => TextLayer.WidthFromChars(runtime.Fonts, chars, style, font.Scale);
+        bool cut = shown != words;
+        Eq(cut, texts.Contains("\u2026"), $"\"{words}\" ends in \"…\"");
+        Eq(shown, texts[0], $"\"{words}\" shows its words up to the cut");
+        var line = box.FirstChild!;   // the line's own box, inside the label
+        if (!cut) { Eq(120f, line.Extent.X, "a line that fits takes the box"); continue; }
+        IsTrue(Width(shown) + 2f + Width("\u2026") <= 120f && Width(shown + more) + 2f + Width("\u2026") > 120f,
+            $"\"{shown}\" fits beside the \"…\", and \"{shown + more}\" would not");
+        Eq(Width(shown), line.Extent.X, "a cut line is as wide as what it shows, so the \"…\" follows it");
+        var dots = line.Next!.Next!;   // after the gap
+        IsTrue(MathF.Abs(line.Rect.X + line.Extent.X + 2f - dots.Rect.X) < 0.01f, "the \"…\" two pixels after the last letter");
+        IsTrue(dots.Rect.X + dots.Extent.X <= box.Rect.X + box.Extent.X + 0.01f, "inside the box");
     }
 });
 
