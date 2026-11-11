@@ -63,13 +63,9 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Changed
 
-- **Breaking:** `RowScrollList` and `ScrollList` scroll from the first row at
-  the top to the last row at the top: the range is the rows', never the
-  view's. The end was the last row on the bottom, a clamp computed from the
-  view's height and written into the `ScrollPt`; nothing about the view is
-  kept in the point now, so a view not laid out yet, or one that grows or
-  shrinks, leaves it where it was. A list not laid out yet is built as tall as
-  the window, no longer a fixed 4096 px.
+- `RowScrollList`, `ScrollList`: a list not laid out yet is built as tall as
+  the window, no longer a fixed 4096 px. It decides only how many rows are
+  built, never where the list may scroll to.
 - `ScrollList` takes, for a row measured by building it, a lower bound of its
   height until it is known (one line of its text, say), where its docs said
   the exact height. A lower bound never stops the list short of the view's

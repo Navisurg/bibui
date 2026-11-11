@@ -83,9 +83,7 @@ public struct ScrollRows
             return false;
         }
 
-        // In view. The first row built sets the view's offset; the last row goes no
-        // higher than the top.
-        if (Built == 0 && pt.Idx == Count - 1) Bottom(ref pt);
+        // In view. The first row built sets the view's offset.
         if (Built == 0)
         {
             View.ViewOffset = View.TargetViewOffset = new Vector2(0f, pt.Px + pt.Off);
@@ -96,14 +94,6 @@ public struct ScrollRows
         Row++;
         More = Row < Count && Y < Height;
         return true;
-    }
-
-    // At the last row nothing is below its top: neither the target nor what is shown.
-    internal static void Bottom(ref ScrollPt pt)
-    {
-        float shown = MathF.Min(pt.Px + pt.Off, 0f);
-        pt.Px = MathF.Min(pt.Px, 0f);
-        pt.Off = shown - pt.Px;
     }
 
     // At row 0 nothing is above: neither the target nor what is shown.
@@ -131,8 +121,8 @@ public struct ScrollRows
 public static class ScrollList
 {
     // How far down to build: the view's height as last laid out, and before that
-    // the window's, which no view in it can be taller than. It only says how many
-    // rows are built, never where the list may scroll to.
+    // the window's, which no view in it can be taller than. Not laid out, it says
+    // only how many rows are built, never where the list may scroll to.
     internal static float BuildHeight(BibuiRuntime runtime, Box view) =>
         view.Extent.Y > 0f ? view.Extent.Y : runtime.Window.Height / runtime.Window.Scale;
 
@@ -163,25 +153,31 @@ public static class ScrollList
         {
             Row = pt.Px + pt.Off < 0f ? pt.Idx - 1 : pt.Idx,
             More = count > 0,
-            Height = BuildHeight(runtime, view),
+            Height = BuildHeight(runtime, view),   // last frame's, or the window's
             Count = count,
             View = view,
         };
     }
 
-    /// <summary>Pops the view and moves the target by the wheel over it.</summary>
+    /// <summary>Pops the view and moves the target by the wheel over it, no further than to rest the last row on the bottom.</summary>
     public static void EndScrollList(this BibuiRuntime runtime, ref ScrollPt pt, in ScrollRows rows)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         if (runtime.ParentInScope is not Box { Claims: var claims } view || (claims & InteractionKinds.Scroll) == 0)
             throw new InvalidOperationException("EndScrollList pops the list's view, and the parent in scope is not one: a parent pushed inside the list was not popped.");
         runtime.EndParent(view);
+        if (!(view.Extent.Y > 0f)) return;   // unmeasured: no wheel has reached it, and the room under it is a guess
         float dy = runtime.InteractionsFor(view).ScrollY;
 
-        // What is shown stays put and eases to the target. How far it may go is the
-        // rows' to say (Next keeps the last row's top in view), not the view's.
+        // The room under the view, exact once the last row was built; below 0 a gap.
+        bool sawEnd = rows.Built > 0 && pt.Idx + rows.Built == rows.Count;
+        float room = sawEnd ? rows.Y - rows.Height : float.PositiveInfinity;
+
+        // What is shown stays put and eases to the target; a gap closes at once.
+        dy = MathF.Min(dy, room + pt.Off);
         pt.Px += dy;
         pt.Off -= dy;
+        if (room < 0f) pt.Off += room;
 
         pt.Idx = Math.Min(pt.Idx, Math.Max(0, rows.Count - 1));
         if (pt.Idx == 0) ScrollRows.Top(ref pt);

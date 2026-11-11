@@ -11,10 +11,10 @@ caller owns.
   known before it is built, or, for a row measured by building it, no more than
   it is (a lower bound, such as one line of its text) until then.
 
-Where a list may scroll is its rows' to say, never its view's: from the first
-row at the top to the last row at the top. Nothing about the view's size is kept
-in the `ScrollPt`, so a list not laid out yet, or one whose view grows or
-shrinks, keeps the point it was given.
+A list scrolls from the first row on the top to the last row on the bottom. The
+end is found from the view's height only once the view has been laid out: a
+list not laid out yet (built again after being hidden) keeps the point it was
+given, rather than one clamped to a height it has not been laid out at.
 
 ## Build
 
