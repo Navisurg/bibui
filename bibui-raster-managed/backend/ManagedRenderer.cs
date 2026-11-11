@@ -450,7 +450,13 @@ public sealed class ManagedRenderer : IDisposable
         var color = op.Color;
         var table = MaskGamma.Table(color.R, color.G, color.B);
         var blend = s_blend[(int)list.TextAntialias];
-        for (int i = 0; i < n; i++) blend(c, in _placed[i], color.Argb, table);
+        for (int i = 0; i < n; i++)
+        {
+            ref readonly var g = ref _placed[i];
+            // A colour glyph (an emoji) is drawn as its image, its alpha the text colour's.
+            if (g.Mask.IsColor) c.DrawPremultiplied(g.Mask.Pixels, g.Mask.Width, g.Mask.Height, g.X, g.Y, color.A);
+            else blend(c, in g, color.Argb, table);
+        }
     }
 
     // How a mask is blended, by TextAntialias (Grayscale, Subpixel).

@@ -8,7 +8,8 @@ namespace Bibui.Glyphs;
 /// <summary>
 /// The coverage of one glyph at one strike and one quarter-pixel x phase: an A8
 /// image, <see cref="Width"/> bytes per row (a subpixel mask: three samples a
-/// pixel, left to right), placed with its top-left at (<c>originX + Left</c>,
+/// pixel, left to right), or a colour glyph's premultiplied pixels
+/// (<see cref="IsColor"/>), placed with its top-left at (<c>originX + Left</c>,
 /// <c>baselineY - Top</c>). The coverage is FreeType's own,
 /// before any gamma: blend it through <see cref="MaskGamma.Table"/>.
 ///
@@ -27,15 +28,37 @@ public sealed class GlyphMask
     public int Height { get; }
 
     private readonly byte[] _coverage;
+    private readonly byte[] _pixels;
 
-    /// <summary>Row-major coverage, stride <see cref="Width"/> (a subpixel mask: <c>3 * Width</c>).</summary>
+    /// <summary>Row-major coverage, stride <see cref="Width"/> (a subpixel mask: <c>3 * Width</c>). Empty for a colour glyph.</summary>
     public ReadOnlySpan<byte> Coverage => _coverage;
+
+    /// <summary>
+    /// Whether this is a colour glyph (an emoji's bitmap, COLR layers): an image in
+    /// <see cref="Pixels"/>, drawn as it is, its alpha scaled by the text colour's,
+    /// rather than coverage filled with the text colour.
+    /// </summary>
+    public bool IsColor => _pixels.Length > 0;
+
+    /// <summary>
+    /// A colour glyph's pixels: premultiplied B, G, R, A bytes, row-major, stride
+    /// <c>4 × Width</c>; on a little-endian machine, one premultiplied 0xAARRGGBB
+    /// <see cref="uint"/> a pixel. Empty for a coverage mask.
+    /// </summary>
+    public ReadOnlySpan<byte> Pixels => _pixels;
 
     public bool IsEmpty => Width == 0 || Height == 0;
 
     internal GlyphMask(int left, int top, int width, int height, byte[] coverage)
+        : this(left, top, width, height, coverage, []) { }
+
+    /// <summary>A colour glyph: <paramref name="bgra"/> premultiplied, 4 bytes a pixel.</summary>
+    internal static GlyphMask Color(int left, int top, int width, int height, byte[] bgra)
+        => new(left, top, width, height, [], bgra);
+
+    private GlyphMask(int left, int top, int width, int height, byte[] coverage, byte[] pixels)
     {
-        Left = left; Top = top; Width = width; Height = height; _coverage = coverage;
+        Left = left; Top = top; Width = width; Height = height; _coverage = coverage; _pixels = pixels;
     }
 }
 
@@ -64,6 +87,13 @@ public readonly record struct PlacedGlyph(GlyphMask Mask, int X, int Y);
 /// Skia backend's text paint (IsAutohinted, HintingLevel Full, SubpixelText)
 /// resolves to on FreeType, and the placement rule is its raster glyph
 /// painter's, so the masks reproduce its glyphs exactly.</para>
+///
+/// <para><b>Colour faces.</b> A face with colour glyphs is loaded with
+/// <c>FT_LOAD_COLOR</c>: CBDT bitmaps (from the bitmap size the strike picked,
+/// scaled to its size by area averaging) and COLRv0 layers (blended by FreeType)
+/// come back as premultiplied BGRA masks (<see cref="GlyphMask.IsColor"/>), placed
+/// on whole pixels and whatever the antialias. A glyph such a face has no colour
+/// for is coverage, as any other.</para>
 /// </summary>
 public static unsafe class GlyphMasks
 {
@@ -114,6 +144,12 @@ public static unsafe class GlyphMasks
     // its integer origin.
     private static PlacedGlyph PlacedFromGlyph(Dictionary<uint, GlyphMask> masks, FontStrike strike, uint glyph, float x, float y, TextAntialias antialias)
     {
+        if (strike.Font.HasColor)
+        {
+            // A colour glyph is an image, placed on whole pixels: one mask a glyph.
+            if (!masks.TryGetValue(glyph << 3, out var c)) masks[glyph << 3] = c = RenderColor(strike, glyph);
+            return new PlacedGlyph(c, (int)MathF.Floor(x + 0.5f) + c.Left, (int)MathF.Floor(y + 0.5f) - c.Top);
+        }
         float px = x + SubpixelBias;
         float ix = MathF.Floor(px);
         int sub = (int)((px - ix) * 4f) & 3;
@@ -158,5 +194,49 @@ public static unsafe class GlyphMasks
             FT.Read<int>(slot, FT.Slot_BitmapLeft),
             FT.Read<int>(slot, FT.Slot_BitmapTop),
             width, rows, coverage);
+    }
+
+    // A glyph of a colour face: FreeType's BGRA bitmap (a CBDT PNG decoded, or COLR
+    // layers blended), scaled from the bitmap size to the strike's by area averaging.
+    // A glyph the face has no colour for comes back as coverage, and is kept as that.
+    private static GlyphMask RenderColor(FontStrike strike, uint glyph)
+    {
+        strike.Activate();
+        IntPtr face = strike.Font.FtFace;
+        int flags = FT.LOAD_COLOR | (strike.Font.IsScalable ? FT.LOAD_NO_HINTING : 0);
+        if (FT.FT_Load_Glyph(face, glyph, flags) != 0) return GlyphMask.Empty;
+        IntPtr slot = FT.Read<IntPtr>(face, FT.Face_Glyph);
+        IntPtr bmp = slot + FT.Slot_Bitmap;
+        // A CBDT glyph loads as its bitmap; COLR layers load as an outline, and
+        // rendering it blends them into one.
+        if (FT.Read<uint>(slot, FT.Slot_Format) != FT.GLYPH_FORMAT_BITMAP && FT.FT_Render_Glyph(slot, FT.RENDER_MODE_NORMAL) != 0)
+            return GlyphMask.Empty;
+        int rows = (int)FT.Read<uint>(bmp, FT.Bitmap_Rows);
+        int width = (int)FT.Read<uint>(bmp, FT.Bitmap_Width);
+        if (rows == 0 || width == 0) return GlyphMask.Empty;
+        int pitch = FT.Read<int>(bmp, FT.Bitmap_Pitch);
+        byte mode = FT.Read<byte>(bmp, FT.Bitmap_PixelMode);
+        byte* buf = (byte*)FT.Read<IntPtr>(bmp, FT.Bitmap_Buffer);
+        if (buf == null || pitch < 0) return GlyphMask.Empty;
+        int left = FT.Read<int>(slot, FT.Slot_BitmapLeft), top = FT.Read<int>(slot, FT.Slot_BitmapTop);
+
+        if (mode != FT.PIXEL_MODE_BGRA)
+        {
+            if (mode != FT.PIXEL_MODE_GRAY) return GlyphMask.Empty;
+            var coverage = new byte[width * rows];
+            for (int y = 0; y < rows; y++)
+                new ReadOnlySpan<byte>(buf + y * pitch, width).CopyTo(coverage.AsSpan(y * width, width));
+            return new GlyphMask(left, top, width, rows, coverage);
+        }
+
+        var src = new byte[width * rows * 4];
+        for (int y = 0; y < rows; y++)
+            new ReadOnlySpan<byte>(buf + y * pitch, width * 4).CopyTo(src.AsSpan(y * width * 4, width * 4));
+        float s = strike.BitmapScale;
+        if (s == 1f) return GlyphMask.Color(left, top, width, rows, src);
+
+        int w = Math.Max(1, (int)MathF.Round(width * s)), h = Math.Max(1, (int)MathF.Round(rows * s));
+        var scaled = ColorScale.Resample(src, width, rows, w, h);
+        return GlyphMask.Color((int)MathF.Round(left * s), (int)MathF.Round(top * s), w, h, scaled);
     }
 }

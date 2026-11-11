@@ -566,6 +566,45 @@ public sealed unsafe partial class Canvas // strokes and dashes in Stroke/Canvas
     }
 
     /// <summary>
+    /// Composites a premultiplied image whose top-left pixel is device
+    /// (<paramref name="x"/>, <paramref name="y"/>) — a colour glyph — unscaled,
+    /// through the clip, into the current layer, its alpha scaled by
+    /// <paramref name="alpha"/>. The transform is not applied: the caller places it.
+    /// <paramref name="bgra"/> is B, G, R, A bytes a pixel, row-major, stride
+    /// <c>4 × width</c>: premultiplied 0xAARRGGBB on a little-endian machine,
+    /// swapped to the surface's order on the way in.
+    /// </summary>
+    public void DrawPremultiplied(ReadOnlySpan<byte> bgra, int width, int height, int x, int y, byte alpha = 255)
+    {
+        if (width <= 0 || height <= 0 || alpha == 0) return;
+        if (bgra.Length < width * height * 4) throw new ArgumentException("Too few pixel bytes.", nameof(bgra));
+        var b = new IRect(x, y, x + width, y + height).Intersect(_s.Clip);
+        if (b.IsEmpty) return;
+        _s.Layer?.Touch(b);
+        var px = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(bgra);
+        bool swap = _surface.Order == PixelOrder.Rgba8888;
+        var t = Target();
+        var mask = _s.Mask;
+        for (int yy = b.Top; yy < b.Bottom; yy++)
+        {
+            var src = px.Slice((yy - y) * width, width);
+            uint* d = t.Origin + (long)yy * t.Stride;
+            byte* m = mask is null ? null : mask.Origin + (long)yy * mask.Stride;
+            for (int xx = b.Left; xx < b.Right; xx++)
+            {
+                uint s = src[xx - x];
+                if (s == 0) continue;
+                uint k = alpha;
+                if (m != null) k = PixelMath.MulDiv255Round(k, m[xx]);
+                if (k == 0) continue;
+                if (k != 255) s = PixelMath.ScaleByCoverage(s, k);
+                if (swap) s = PixelMath.SwapRB(s);
+                d[xx] = PixelMath.SrcOver(s, d[xx]);
+            }
+        }
+    }
+
+    /// <summary>
     /// As <see cref="DrawA8"/> for a subpixel mask: three samples a pixel, left to
     /// right, the red, green and blue stripes of an RGB-striped panel, each
     /// blended into its own channel as DrawA8 blends, alpha at the largest.

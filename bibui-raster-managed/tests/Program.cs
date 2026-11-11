@@ -395,6 +395,34 @@ static class Tests
         Assert(s.GetPixelArgb(1, 1) == 0xFFFF0000, "as ARGB");
     }
 
+    public static void DrawPremultipliedCompositesAColourGlyph()
+    {
+        // A 2×1 image: opaque blue, then half-transparent red (premultiplied: 0x80 red at alpha 0x80).
+        byte[] bgra = [0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x80, 0x80];
+        var s = new Surface(4, 2);
+        var c = new Canvas(s);
+        c.Clear(0xFFFFFFFF);
+        c.DrawPremultiplied(bgra, 2, 1, 1, 0);
+        Assert(s.GetPixelArgb(1, 0) == 0xFF0000FF, $"opaque: the image's own colour, got {s.GetPixelArgb(1, 0):X8}");
+        uint half = s.GetPixelArgb(2, 0);
+        Assert(half >> 24 == 0xFF && ((half >> 16) & 0xFF) == 0xFF && Math.Abs((int)(half & 0xFF) - 0x7F) <= 1, $"half red over white is pink, got {half:X8}");
+        Assert(s.GetPixelArgb(0, 0) == 0xFFFFFFFF && s.GetPixelArgb(1, 1) == 0xFFFFFFFF, "nothing outside the image");
+
+        c.Clear(0xFFFFFFFF);
+        c.ClipRect(new Rect(2, 0, 4, 2));
+        c.DrawPremultiplied(bgra, 2, 1, 1, 0, alpha: 0);
+        c.DrawPremultiplied(bgra, 2, 1, 1, 0);
+        Assert(s.GetPixelArgb(1, 0) == 0xFFFFFFFF, "through the clip");
+
+        var rgba = new Surface(2, 1, PixelOrder.Rgba8888);
+        new Canvas(rgba).DrawPremultiplied(bgra, 2, 1, 0, 0);
+        Assert(rgba.GetPixelArgb(0, 0) == 0xFF0000FF, $"blue on an RGBA surface is still blue, got {rgba.GetPixelArgb(0, 0):X8}");
+
+        var faded = new Surface(1, 1);
+        new Canvas(faded).DrawPremultiplied(bgra, 1, 1, 0, 0, alpha: 0x80);
+        Assert(Math.Abs((int)(faded.GetPixel(0, 0) >> 24) - 0x80) <= 1, $"the text colour's alpha scales it, got {faded.GetPixel(0, 0):X8}");
+    }
+
     public static unsafe void WrapsCallerMemoryWithStride()
     {
         var mem = new uint[10 * 6];

@@ -174,16 +174,21 @@ Licence:  MIT (Emscripten is MIT or University of Illinois/NCSA, at the
 Source:   https://emscripten.org
 
 -------------------------------------------------------------------------------
-12. Noto Color Emoji (a test fixture)
+12. Noto Color Emoji and Noto Znamenny Musical Notation (test fixtures)
 -------------------------------------------------------------------------------
 What:     A subset of Noto Color Emoji, eleven code points, as the test
-          fixture for a colour emoji face (CBDT bitmaps) and its strike.
-Where:    tests/bibui-runtime-tests/Fixtures/NotoColorEmoji-subset.ttf (in
-          the source only, not in any package).
+          fixture for a colour emoji face (CBDT bitmaps) and its strike; and
+          a subset of Noto Znamenny Musical Notation, four code points, as
+          the fixture for COLRv0 colour glyphs.
+Where:    tests/bibui-runtime-tests/Fixtures/NotoColorEmoji-subset.ttf and
+          NotoZnamenny-COLR-subset.ttf (in the source only, not in any
+          package).
 Licence:  SIL Open Font License 1.1. The full licence is in
           tests/bibui-runtime-tests/Fixtures/OFL.txt.
-          Copyright 2013 Google LLC
-Source:   https://github.com/googlefonts/noto-emoji
+          Copyright 2013 Google LLC (Noto Color Emoji)
+          Copyright 2022 The Noto Project Authors (Noto Znamenny)
+Source:   https://github.com/googlefonts/noto-emoji,
+          https://github.com/notofonts/znamenny
 
 -------------------------------------------------------------------------------
 Not redistributed by bibui
