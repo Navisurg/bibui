@@ -52,7 +52,10 @@ public static BibuiWidget MultilineTextField(
     uint events = MultiLineEvents,
     TextColor textColor = TextColor.Primary,
     ReadOnlySpan<char> placeholder = default,
-    TextWrap wrap = TextWrap.Words)
+    TextWrap wrap = TextWrap.Words,
+    SubmitKey submitKey = SubmitKey.None)
+
+public enum SubmitKey { None, Enter, CtrlEnter }
 
 public static SemanticSize Rows(BibuiRuntime runtime, int rows);
 public static void InputStyle(BibuiRuntime runtime, Box box, bool focused, bool error = false, bool disabled = false);
@@ -70,6 +73,7 @@ public const uint MultiLineEvents, MultiLineReadOnlyEvents;
 | `textColor` | The text's colour. A placeholder is always `TextColor.Secondary`. |
 | `placeholder` | Shown, quieter, while the buffer is empty. |
 | `wrap` | `Multiline` breaks between words, or anywhere. `TextWrap` is in `Bibui.Text`. |
+| `submitKey` | Which Enter submits a `Multiline` that edits: `None` (every Enter breaks the line), `Enter` (Shift+Enter breaks the line; a chat box) or `CtrlEnter` (Enter and Shift+Enter break the line). |
 
 Sizes: `SingleLine` is one line tall and as wide as its parent. `Ellipsis` needs
 a parent that is not sized by its children, because it measures the width that
@@ -101,7 +105,9 @@ should also acquire its frame with `InteractionKinds.Disabled`, as the
   and cut go to the clipboard through `runtime.ClipboardSet`.
 - Escape ends the edit: `Interaction.Cancelled`, and the field gives up focus.
   On a single line that edits, Enter does too, as `Interaction.Submitted`. A
-  multi-line field takes Enter as a line break.
+  multi-line field takes Enter as a line break, unless it is the field's
+  `submitKey`: that Enter inserts nothing and reports `Submitted`, and the
+  field keeps focus, to be typed into again.
 - Up and Down move a line; in a multi-line field, Page Up and Page Down move
   a page: the lines the field shows less one, with the view moving as far, so
   the caret keeps its place on screen. A page is the field's own height, so a
@@ -193,5 +199,18 @@ sealed class MessageBox
         runtime.EndParent(frame);
         return frame;
     }
+}
+```
+
+A chat box sends with Enter and breaks the line with Shift+Enter. It keeps
+focus, so the next message is typed straight in:
+
+```csharp
+BibuiWidget prompt = runtime.MultilineTextField("prompt", _prompt, _edit, submitKey: SubmitKey.Enter);
+if (prompt.Interaction.Submitted && _prompt.Length > 0)
+{
+    Send(_prompt.ToString());
+    _prompt.ReplaceRange((0, (int)_prompt.Length), "");
+    _edit.Cursor = _edit.Mark = 0;
 }
 ```

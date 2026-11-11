@@ -113,7 +113,8 @@ public record struct Interaction
 
     /// <summary>
     /// Enter, while it had focus: the edit is done. Reported by the component
-    /// that read the key (a single-line text field); it gives up focus.
+    /// that read the key: a single-line text field, which gives up focus, or a
+    /// multi-line one given a <c>SubmitKey</c>, which keeps it.
     /// </summary>
     public bool Submitted { get; set; }
 

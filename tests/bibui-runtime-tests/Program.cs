@@ -7309,7 +7309,7 @@ Run("LinesFromText: by characters, a line holds what fits and the next starts wh
 // A field in a 300 px parent with no padding, which a press focuses; with
 // whether it has focus, and what it reported in the last frame.
 (BibuiRuntime Runtime, Func<bool> Focused, Func<Interaction> Last) MountField(BibuiStr text, TextEditState edit, bool multiline = false,
-    uint events = uint.MaxValue)
+    uint events = uint.MaxValue, SubmitKey submitKey = SubmitKey.None)
 {
     var runtime = BibuiRuntime.Create();
     Interaction last = default;
@@ -7328,7 +7328,7 @@ Run("LinesFromText: by characters, a line holds what fits and the next starts wh
                 using (runtime.Parent(field))
                 using (runtime.SizeY(Bibui.Core.Runtime.TextField.Rows(runtime, 3)))
                     line = runtime.MultilineTextField("field", text, edit,
-                        events == uint.MaxValue ? Bibui.Core.Runtime.TextField.MultiLineEvents : events);
+                        events == uint.MaxValue ? Bibui.Core.Runtime.TextField.MultiLineEvents : events, submitKey: submitKey);
             }
             else
             {
@@ -7719,6 +7719,76 @@ Run("runtime.MultilineTextField: Enter ends the line, and Up goes back to it", (
     Eq("one\ntwo", text.ToString());
     PressKey(runtime, Bibui.Core.Key.Up);
     Eq(3, edit.Cursor, "the end of line one, at about the same x");
+});
+
+Run("runtime.MultilineTextField SubmitKey.Enter: Enter submits, inserts nothing and keeps focus; Shift+Enter breaks the line", () =>
+{
+    var text = BibuiStr.FromStrLit("");
+    var edit = new TextEditState();
+    var (runtime, focused, last) = MountField(text, edit, multiline: true, submitKey: SubmitKey.Enter);
+    runtime.Focus("field");
+    runtime.Step();
+    TypeInto(runtime, "hi");
+    PressKey(runtime, Bibui.Core.Key.Enter, shift: true);
+    Eq("hi\n", text.ToString(), "Shift+Enter is a line break");
+    IsTrue(!last().Submitted, "and no submit");
+    TypeInto(runtime, "there");
+    PressKey(runtime, Bibui.Core.Key.Enter);
+    Eq("hi\nthere", text.ToString(), "Enter inserts nothing");
+    IsTrue(last().Submitted, "it is reported as Submitted");
+    runtime.Step();
+    IsTrue(focused(), "the field keeps focus, to be typed into again");
+    IsTrue(!last().Submitted, "reported once");
+    PressKey(runtime, Bibui.Core.Key.Enter, ctrl: true);
+    IsTrue(last().Submitted, "Ctrl+Enter submits too");
+});
+
+Run("runtime.MultilineTextField SubmitKey.CtrlEnter: Ctrl+Enter, as the window sends it, submits; Enter breaks the line", () =>
+{
+    var text = BibuiStr.FromStrLit("");
+    var edit = new TextEditState();
+    var (runtime, focused, last) = MountField(text, edit, multiline: true, submitKey: SubmitKey.CtrlEnter);
+    runtime.Focus("field");
+    runtime.Step();
+    TypeInto(runtime, "a");
+    runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.Enter)]);
+    Eq("a\n", text.ToString(), "Enter is a line break");
+    IsTrue(!last().Submitted, "and no submit");
+    runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.Enter, KeyModifiers.Ctrl)]);
+    Eq("a\n", text.ToString(), "Ctrl+Enter inserts nothing");
+    IsTrue(last().Submitted, "it submits");
+    runtime.Step();
+    IsTrue(focused(), "and the field keeps focus");
+});
+
+Run("runtime.MultilineTextField: without a SubmitKey, Enter and Ctrl+Enter break the line and nothing submits", () =>
+{
+    var text = BibuiStr.FromStrLit("");
+    var edit = new TextEditState();
+    var (runtime, _, last) = MountField(text, edit, multiline: true);
+    runtime.Focus("field");
+    runtime.Step();
+    PressKey(runtime, Bibui.Core.Key.Enter);
+    IsTrue(!last().Submitted, "Enter: no submit");
+    PressKey(runtime, Bibui.Core.Key.Enter, ctrl: true);
+    Eq("\n\n", text.ToString(), "two line breaks");
+    IsTrue(!last().Submitted, "Ctrl+Enter: no submit");
+});
+
+Run("runtime.MultilineTextField SubmitKey: a field that does not edit submits nothing, and Escape still ends the edit", () =>
+{
+    var text = BibuiStr.FromStrLit("read me");
+    var edit = new TextEditState();
+    var (runtime, focused, last) = MountField(text, edit, multiline: true,
+        events: Bibui.Core.Runtime.TextField.MultiLineReadOnlyEvents, submitKey: SubmitKey.Enter);
+    runtime.Focus("field");
+    runtime.Step();
+    PressKey(runtime, Bibui.Core.Key.Enter);
+    IsTrue(!last().Submitted, "read-only: Enter is not a submit");
+    IsTrue(focused(), "and focus stays");
+    PressKey(runtime, Bibui.Core.Key.Escape);
+    IsTrue(last().Cancelled, "Escape cancels");
+    IsTrue(!focused(), "and gives focus up");
 });
 
 // A field with "hello" selected, single-line or multi-line, focused or not:
