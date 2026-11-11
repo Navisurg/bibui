@@ -2,7 +2,7 @@
   <PropertyGroup>
     <!-- The next release. 0.9.0 was the first public version (see
          docs/versioning.md). -->
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <!-- Package metadata every bibui package shares. -->
     <Authors>Navisurg ApS</Authors>
     <Copyright>Copyright 2026 Navisurg ApS</Copyright>
@@ -16,7 +16,7 @@
 
     CI passes ContinuousIntegrationBuild=true to its pack steps. In a git
     checkout the SDK's built-in SourceLink then maps the repository root to /_/
-    and stamps the commit (AssemblyInformationalVersion 1.1.0+<sha>, the
+    and stamps the commit (AssemblyInformationalVersion 1.2.0+<sha>, the
     nuspec's repository commit): the public repo's commit when the public repo
     packs. The PathMap below maps the same root to /_/ without a git checkout,
     so the mapping never depends on one. Neither is set for an ordinary build:
