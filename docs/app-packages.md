@@ -54,7 +54,7 @@ takes the parts it needs (`Bibui.Core`, a renderer) and leaves the choice of win
 and renderer to the app.
 
 Each package depends on exactly the version of `Bibui.Core`, its window and its
-renderer that it was built with (`[1.1.0]`, not `>= 1.1.0`). They are
+renderer that it was built with (`[1.2.0]`, not `>= 1.2.0`). They are
 released together, so an app that also references one of them directly
 references the same version.
 

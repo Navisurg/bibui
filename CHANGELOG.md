@@ -6,6 +6,17 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-11
+
+Text in more than one style, and Markdown edited in place. The text layer
+measures and breaks a text in runs of their own style, and
+`StyledTextField` is a multi-line field over it, with ranges in a colour or a
+weight; `MarkdownEditor` renders a document and shows the block being edited
+as its source. Inter's italics are embedded, and emphasis is set in them.
+Subpixel text can be asked for on an RGB panel, and glyph masks moved out of
+the text layer into a package of their own (`Bibui.Glyphs`). This release
+changes and removes public API; each change below says what to use instead.
+
 ### Added
 
 - **Subpixel text:** `fonts.UseTextAntialias(TextAntialias.Subpixel)` draws
@@ -120,8 +131,7 @@ All notable changes to bibui are recorded here. The format is based on
   and slant are read from the file. `IsRegistered(family)` takes the family
   alone. A TrueType collection (`.ttc`) or a WOFF/WOFF2 file, which only the
   numbered `Register` took, can no longer be registered. Removed without a
-  deprecated release first, so the next release is a major one
-  ([versioning](docs/versioning.md)).
+  deprecated release first.
 
 ### Fixed
 
@@ -1019,7 +1029,8 @@ before it was published.
   pipeline.
 - The `Bibui.Contracts` and `Bibui.Runtime` packages (merged into `Bibui`).
 
-[Unreleased]: https://github.com/Navisurg/bibui/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Navisurg/bibui/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/Navisurg/bibui/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Navisurg/bibui/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Navisurg/bibui/compare/v0.10.1...v1.0.0
 [0.10.1]: https://github.com/Navisurg/bibui/compare/v0.10.0...v0.10.1
