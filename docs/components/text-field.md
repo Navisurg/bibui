@@ -52,7 +52,8 @@ public static BibuiWidget MultilineTextField(
     uint events = MultiLineEvents,
     TextColor textColor = TextColor.Primary,
     ReadOnlySpan<char> placeholder = default,
-    TextWrap wrap = TextWrap.Words)
+    TextWrap wrap = TextWrap.Words,
+    (int Min, int Max)? fitRows = null)
 
 public static SemanticSize Rows(BibuiRuntime runtime, int rows);
 public static void InputStyle(BibuiRuntime runtime, Box box, bool focused, bool error = false, bool disabled = false);
@@ -70,6 +71,7 @@ public const uint MultiLineEvents, MultiLineReadOnlyEvents;
 | `textColor` | The text's colour. A placeholder is always `TextColor.Secondary`. |
 | `placeholder` | Shown, quieter, while the buffer is empty. |
 | `wrap` | `Multiline` breaks between words, or anywhere. `TextWrap` is in `Bibui.Text`. |
+| `fitRows` | `Multiline` grows with its text: a row for each line it draws, from `Min` rows to `Max`, then it scrolls. Null takes the height begun for it. |
 
 Sizes: `SingleLine` is one line tall and as wide as its parent. `Ellipsis` needs
 a parent that is not sized by its children, because it measures the width that
@@ -78,6 +80,18 @@ beside the "…" (the letters, when not even the first word does) and puts the
 "…" right after them; focused, it shows the whole line and scrolls. `Multiline` is as tall as the size begun with
 `runtime.BeginSizeY`: `SemanticSize.ChildrenSum()` to fit its lines,
 `TextField.Rows(runtime, n)` for `n` lines, or a share.
+
+A prompt box grows with what is typed, up to a limit: give `Multiline`
+`fitRows: (min, max)` and it is a row tall for each line it draws, at least
+`min` rows and at most `max`, whatever height is begun. Past `max` it
+scrolls, with the caret's line kept in sight.
+A line is a line as drawn: a wrapped line counts once for each row it wraps
+into, and an empty field counts its placeholder's lines. The height follows
+the frame's edits, so it grows in the frame a line is typed. Lines wrap at the
+width the field had last frame, as the field's own wrapping does, so on its
+first frame, and in the frame its width changes, a text that wraps is a frame
+late in height too. `StyledTextField` takes the same `fitRows`, counting the
+lines its ranges' faces wrap into.
 
 `InputStyle(runtime, box, focused, error, disabled)` pads and outlines a box you
 hold, built before the field, so pass `runtime.IsFocused(id)`. It uses the focus
@@ -194,4 +208,11 @@ sealed class MessageBox
         return frame;
     }
 }
+```
+
+A prompt that starts a line tall and grows to eight, then scrolls, needs no
+height begun:
+
+```csharp
+runtime.MultilineTextField("prompt", _prompt, _edit, placeholder: "Ask anything", fitRows: (1, 8));
 ```

@@ -22,7 +22,8 @@ public static BibuiWidget StyledTextField(
     uint events = MultiLineEvents,
     TextColor textColor = TextColor.Primary,
     ReadOnlySpan<char> placeholder = default,
-    TextWrap wrap = TextWrap.Words)
+    TextWrap wrap = TextWrap.Words,
+    (int Min, int Max)? fitRows = null)
 
 public readonly record struct TextStyleRange(
     int Start, int Length, UiColor? Color = null, FontWeight? Weight = null)

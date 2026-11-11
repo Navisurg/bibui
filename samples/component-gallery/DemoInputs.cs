@@ -270,6 +270,8 @@ internal static class DemoInputs
         "input dir:  /tmp/job-42/in\noutput dir: /tmp/job-42/out\n--- stdout ---\nframes processed: 128\n"
         + "frames dropped:   0\nelapsed:          1.42s\n--- stderr ---\n(empty)");
     private static readonly TextEditState TextareaLogEdit = new();
+    private static readonly BibuiStr GrowsText = new(64);
+    private static readonly TextEditState GrowsEdit = new();
 
     private static void InputPage(BibuiRuntime runtime)
     {
@@ -302,6 +304,12 @@ internal static class DemoInputs
         LiveField(runtime, "demo-textarea", TextareaText, TextareaEdit, "Write something…", lines: true, rows: 4, width: 400f);
         runtime.Gap(16f);
         runtime.Text($"{TextareaText.Length} characters", ComponentSize.Sm, TextColor.Secondary);
+        runtime.Gap(24f);
+
+        Heading(runtime, "Grows with its text: a line to six, then it scrolls");
+        var grows = runtime.BeginParent(InputBox(runtime, "demo-textarea-grows", runtime.IsFocused("demo-textarea-grows"), width: 400f, lines: true));
+        runtime.MultilineTextField("demo-textarea-grows", GrowsText, GrowsEdit, placeholder: "Type, and Enter for a new line…", fitRows: (1, 6));
+        runtime.EndParent(grows);
         runtime.Gap(24f);
 
         Heading(runtime, "Error");

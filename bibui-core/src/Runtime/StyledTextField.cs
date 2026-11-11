@@ -66,12 +66,14 @@ public static class StyledTextFieldExtensions
     /// gives them again next frame. Text typed where a range starts or ends
     /// goes outside it. Lines break, and the caret and the pointer are placed,
     /// with each range in its own face; a range that only colours changes no
-    /// width, so it is measured as plain text.
+    /// width, so it is measured as plain text. Sized as MultilineTextField is,
+    /// <paramref name="fitRows"/> too.
     /// </summary>
     public static BibuiWidget StyledTextField(this BibuiRuntime runtime, string id, BibuiStr text,
         StyledTextState state, Span<TextStyleRange> ranges,
         uint events = global::Bibui.Core.Runtime.TextField.MultiLineEvents,
-        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default, TextWrap wrap = TextWrap.Words)
+        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default, TextWrap wrap = TextWrap.Words,
+        (int Min, int Max)? fitRows = null)
     {
         Debug.Assert(StyledText.InOrder(ranges, text.Str.Length),
             "A styled field's ranges are sorted by their starts, none overlapping the one before it, all inside its text.");
@@ -79,12 +81,12 @@ public static class StyledTextFieldExtensions
         StyledText.Snap(runtime.Fonts, font, text.Str, ranges);
         int runCount = state.Room(ranges);
         return Field(runtime, id, text, state.Edit, font, ranges, state.Runs.AsSpan(0, runCount), state.Faces.AsSpan(0, runCount),
-            events, textColor, placeholder, wrap);
+            events, textColor, placeholder, wrap, fitRows);
     }
 
     private static BibuiWidget Field(BibuiRuntime runtime, string id, BibuiStr text, TextEditState edit, Font font,
         Span<TextStyleRange> ranges, Span<StyleRun> runs, Span<Font> faces, uint events, TextColor textColor,
-        ReadOnlySpan<char> placeholder, TextWrap wrap)
+        ReadOnlySpan<char> placeholder, TextWrap wrap, (int Min, int Max)? fitRows)
     {
         // The field's own view: as tall as the size pushed, scrolling, cut at its edge.
         var claims = InteractionKinds.ViewScrollY | InteractionKinds.ClampY | InteractionKinds.Clip
@@ -130,6 +132,8 @@ public static class StyledTextFieldExtensions
         TextColor color = empty ? TextColor.Secondary : textColor;
         if (edited || empty) styled = new StyledText(runtime, shown, font, empty ? [] : ranges, runs, faces);
         var lines = styled.Lines(room, wrap);
+        // Fitted to the lines as edited this frame, so it grows with the line typed.
+        if (fitRows is { } fit) view.SizeY = FitRows(runtime, lines.Length, fit);
 
         // Not focused: no caret, and the selection drawn dimmer. Empty: the
         // caret is before the placeholder, which is not text to select.
