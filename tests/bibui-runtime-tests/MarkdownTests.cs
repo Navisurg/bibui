@@ -357,6 +357,7 @@ static class MarkdownTests
             var box = runtime.FindById($"md/b{plain}")!;
             IsTrue(last().At.X > 0f && last().At.Y >= 0f && last().At.Y <= box.Extent.Y,
                 $"pressed at {last().At}, inside {box.Extent}");
+            Equal(box.Extent, last().Size, "the pressed block's size");
 
             int link = IndexOf(doc, MarkdownBlockKind.Paragraph, withLink: true);
             page.Click($"md/b{link}/0");
@@ -388,8 +389,8 @@ static class MarkdownTests
             var runtime = BibuiRuntime.Create();
             runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
             {
-                Markdown.DrawRange(runtime, "before", doc, ..active, 300f, ComponentSize.Md, "doc", out _, out _);
-                Markdown.DrawRange(runtime, "after", doc, (active + 1).., 300f, ComponentSize.Md, "doc", out _, out _);
+                Markdown.DrawRange(runtime, "before", doc, ..active, 300f, ComponentSize.Md, "doc", out _, out _, out _);
+                Markdown.DrawRange(runtime, "after", doc, (active + 1).., 300f, ComponentSize.Md, "doc", out _, out _, out _);
             }), new WindowFrame(400, 600, 1f, 60f));
             for (int i = 0; i < 3; i++) runtime.Step();
             var view = (Box)(runtime.FindById("doc/b1/0") ?? throw new Exception("the code view, in the range after"));
@@ -408,16 +409,16 @@ static class MarkdownTests
             var runtime = BibuiRuntime.Create();
             runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
             {
-                Markdown.DrawRange(runtime, "one", doc, ..2, 300f, ComponentSize.Md, "doc", out _, out _);
-                Markdown.DrawRange(runtime, "two", doc, 1.., 300f, ComponentSize.Md, "doc", out _, out _);
+                Markdown.DrawRange(runtime, "one", doc, ..2, 300f, ComponentSize.Md, "doc", out _, out _, out _);
+                Markdown.DrawRange(runtime, "two", doc, 1.., 300f, ComponentSize.Md, "doc", out _, out _, out _);
             }), new WindowFrame(400, 600, 1f, 60f));
             Throws<InvalidOperationException>(() => runtime.Step(), "block 1 in both");
 
             var apart = BibuiRuntime.Create();
             apart.SetBuild(() => apart.Into(apart.Column().Sized(Size.Fill, Size.Fill), () =>
             {
-                Markdown.DrawRange(apart, "one", doc, ..2, 300f, ComponentSize.Md, "doc", out _, out _);
-                Markdown.DrawRange(apart, "two", doc, 2.., 300f, ComponentSize.Md, "doc", out _, out _);
+                Markdown.DrawRange(apart, "one", doc, ..2, 300f, ComponentSize.Md, "doc", out _, out _, out _);
+                Markdown.DrawRange(apart, "two", doc, 2.., 300f, ComponentSize.Md, "doc", out _, out _, out _);
             }), new WindowFrame(400, 600, 1f, 60f));
             apart.Step();
             apart.Step();   // the next frame claims afresh
@@ -615,19 +616,19 @@ static class MarkdownTests
 
     // The viewer drawing `range` of `doc` (all of it, by the whole-document
     // overload, when null), laid out twice; and the widget the last frame built.
-    private static (BibuiRuntime Runtime, Func<(MarkdownWidget Widget, int Pressed, Vector2 At)> Last, UiNode Root) Viewer(
+    private static (BibuiRuntime Runtime, Func<(MarkdownWidget Widget, int Pressed, Vector2 At, Vector2 Size)> Last, UiNode Root) Viewer(
         MarkdownDocument doc, Range? range)
     {
-        (MarkdownWidget, int, Vector2) last = default;
+        (MarkdownWidget, int, Vector2, Vector2) last = default;
         var runtime = BibuiRuntime.Create();
         runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
             {
                 int pressed = -1;
-                Vector2 at = default;
+                Vector2 at = default, size = default;
                 var widget = range is { } r
-                    ? Markdown.DrawRange(runtime, "md", doc, r, 360f, ComponentSize.Md, null, out pressed, out at)
+                    ? Markdown.DrawRange(runtime, "md", doc, r, 360f, ComponentSize.Md, null, out pressed, out at, out size)
                     : runtime.Markdown("md", doc, width: 360f);
-                last = (widget, pressed, at);
+                last = (widget, pressed, at, size);
             }),
             new WindowFrame(400, 900, 1f, 60f));
         runtime.Step();

@@ -61,6 +61,16 @@ All notable changes to bibui are recorded here. The format is based on
   italic is set upright in its own face. `Bibui.Text`, and so a Native AOT app
   or a browser download, grows by about 840 KB.
 
+- **`MarkdownEditor`:** a Markdown document rendered, with the block being
+  edited shown as its source in a `StyledTextField` in its place, its markers
+  dimmed, code in the accent colour, strong and emphasis in their faces. A
+  press edits a block; edits, joins and ticked tasks go into the caller's
+  `BibuiStr`. The caller keeps a `MarkdownEditState`, and setting it opens a
+  block.
+
+- `MarkdownHighlight.RangesFromSource(text, ref ranges)`: a Markdown source's
+  syntax as `StyledTextField` ranges, the editor's colouring for any field.
+
 ### Changed
 
 - **Breaking:** rendering glyphs into masks is no longer the text layer's.

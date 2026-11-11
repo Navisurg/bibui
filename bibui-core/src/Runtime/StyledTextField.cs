@@ -34,6 +34,22 @@ public sealed class StyledTextState
     // into arrays that grow to the most runs seen and never shrink.
     internal StyleRun[] Runs = [];
     internal Font[] Faces = [];
+
+    // How many runs `ranges` make, two for each that sets a face and the
+    // field's, or none; Runs and Faces grown to hold them.
+    internal int Room(ReadOnlySpan<TextStyleRange> ranges)
+    {
+        int faced = 0;
+        foreach (ref readonly var range in ranges) if (range.Weight is not null) faced++;
+        int count = faced == 0 ? 0 : 2 * faced + 1;
+        if (count > Runs.Length)
+        {
+            int size = (int)BitOperations.RoundUpToPowerOf2((uint)count);
+            Array.Resize(ref Runs, size);
+            Array.Resize(ref Faces, size);
+        }
+        return count;
+    }
 }
 
 /// <summary>The StyledTextField component, called on the runtime that builds it.</summary>
@@ -61,16 +77,7 @@ public static class StyledTextFieldExtensions
             "A styled field's ranges are sorted by their starts, none overlapping the one before it, all inside its text.");
         Font font = runtime.FontInScope();
         StyledText.Snap(runtime.Fonts, font, text.Str, ranges);
-        int faced = 0;
-        foreach (ref readonly var range in ranges) if (range.Weight is not null) faced++;
-        // A run where each range that sets a face starts and ends, and the field's at 0.
-        int runCount = faced == 0 ? 0 : 2 * faced + 1;
-        if (runCount > state.Runs.Length)
-        {
-            int size = (int)BitOperations.RoundUpToPowerOf2((uint)runCount);
-            Array.Resize(ref state.Runs, size);
-            Array.Resize(ref state.Faces, size);
-        }
+        int runCount = state.Room(ranges);
         return Field(runtime, id, text, state.Edit, font, ranges, state.Runs.AsSpan(0, runCount), state.Faces.AsSpan(0, runCount),
             events, textColor, placeholder, wrap);
     }

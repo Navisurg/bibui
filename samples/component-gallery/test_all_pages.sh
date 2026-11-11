@@ -59,7 +59,7 @@ except Exception:
 # Group slug (nav-group-<slug>) and the routes under it, in sidebar order:
 # the same as NavGroups() in Program.cs.
 NAV_GROUPS=(
-    "inputs-and-forms:Button Input Textarea TextField StyledTextField Checkbox Switch RadioGroup Select Slider Toggle ToggleGroup DatePicker Calendar TimePicker ColorPicker"
+    "inputs-and-forms:Button Input Textarea TextField StyledTextField MarkdownEditor Checkbox Switch RadioGroup Select Slider Toggle ToggleGroup DatePicker Calendar TimePicker ColorPicker"
     "display:Text Badge Avatar Card Alert Separator Label Progress Skeleton Spinner RatioBox KeyboardShortcut Table Markdown PagedTable FormField ListItem EmptyState Toast"
     "overlays:Dialog AlertDialog Popover HoverPreview Tooltip Drawer DropdownMenu ContextMenu CommandPalette"
     "navigation:Tabs Accordion Expander NavBar Sidebar Breadcrumb Pagination MenuBar"
