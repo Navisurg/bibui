@@ -14,7 +14,9 @@ namespace Bibui.Core.Runtime;
 /// says. A field that takes events claims the keyboard, so a press on it gives
 /// it focus (<see cref="Interaction.Focused"/>); Escape ends the edit
 /// (<see cref="Interaction.Cancelled"/>), and so does Enter on a single line
-/// (<see cref="Interaction.Submitted"/>), each giving focus up.
+/// (<see cref="Interaction.Submitted"/>), each giving focus up. A multi-line
+/// field given a <see cref="SubmitKey"/> reports that Enter as submitted too,
+/// and keeps focus.
 /// </summary>
 public static class TextField
 {
@@ -218,10 +220,11 @@ public static class TextField
     // between lines is the field's; the rest is TextOp's. A page is pageRows
     // lines; with pageRows 0 (a single line) a page is left to the app, not
     // eaten. pagedLines is how many lines the frame's pages moved the caret,
-    // down when positive, for the field to move its view as far. Answers
-    // whether the text changed.
+    // down when positive, for the field to move its view as far. The Enter
+    // that is submitKey's is not a line break: it is left for EndingKeys.
+    // Answers whether the text changed.
     internal static bool ApplyEdits(BibuiRuntime runtime, BibuiStr text, TextEditState edit, uint kinds,
-        Font font, float wrapWidth, TextWrap wrap, int pageRows, out int pagedLines)
+        Font font, float wrapWidth, TextWrap wrap, int pageRows, SubmitKey submitKey, out int pagedLines)
     {
         pagedLines = 0;
         bool edited = false;
@@ -229,6 +232,7 @@ public static class TextField
         foreach (var ev in runtime.UnconsumedEvents)
         {
             if ((kinds & 1u << (int)ev.Kind) == 0) continue;
+            if (ev.Kind == BibUiEventKind.Submit && Submits(ev, submitKey)) continue;
             if (ev.Kind == BibUiEventKind.Navigate && ev.DeltaY != 0)
             {
                 if ((ev.Flags & TextActionFlags.PageScan) != 0 && pageRows == 0) continue;
@@ -248,18 +252,27 @@ public static class TextField
     }
 
     // The keys that end an edit, read after the field took its own: Escape on
-    // any field, Enter on one that submits (a single line that edits; a
-    // multi-line field took Enter as a line break). Eaten, reported, and focus
-    // given up.
-    internal static void EndingKeys(BibuiRuntime runtime, ref Interaction interaction, bool submits)
+    // any field, Enter on one that submits (a single line that edits, or a
+    // multi-line one that edits given a SubmitKey, which took every other
+    // Enter as a line break). Eaten and reported. Escape gives focus up, and
+    // so does a submit unless the field keeps focus to be typed into again.
+    internal static void EndingKeys(BibuiRuntime runtime, ref Interaction interaction, bool submits, bool keepsFocus = false)
     {
         foreach (var ev in runtime.UnconsumedEvents)
         {
             if (submits && ev.Kind == BibUiEventKind.Submit) { interaction.Submitted = true; ev.Eat(); }
             else if (ev is { IsKeyDown: true, Key: Key.Escape }) { interaction.Cancelled = true; ev.Eat(); }
         }
-        if (interaction.Submitted || interaction.Cancelled) runtime.Focus("");
+        if (interaction.Submitted && !keepsFocus || interaction.Cancelled) runtime.Focus("");
     }
+
+    // Whether an Enter is the one submitKey submits with, rather than a line break.
+    internal static bool Submits(BibUiEvent ev, SubmitKey submitKey) => submitKey switch
+    {
+        SubmitKey.Enter => !ev.Shift,
+        SubmitKey.CtrlEnter => ev.Ctrl,
+        _ => false,
+    };
 
     // Up or down a line, by the sign of ev.DeltaY, to the char nearest the
     // caret's x on that line; with PageScan, pageRows lines, or as many as
@@ -297,6 +310,21 @@ public static class TextField
         while (k + 1 < lines.Length && at >= lines[k + 1].Start) k++;
         return k;
     }
+}
+
+/// <summary>
+/// Which Enter submits a multi-line field (<c>MultilineTextField</c>), reported
+/// as <see cref="Interaction.Submitted"/> while the field keeps focus; any
+/// other Enter breaks the line.
+/// </summary>
+public enum SubmitKey
+{
+    /// <summary>Every Enter breaks the line.</summary>
+    None,
+    /// <summary>Enter submits, with or without Ctrl; Shift+Enter breaks the line. A chat box.</summary>
+    Enter,
+    /// <summary>Ctrl+Enter submits; Enter and Shift+Enter break the line. A message written at length.</summary>
+    CtrlEnter,
 }
 
 /// <summary>The TextField component, called on the runtime that builds it.</summary>
@@ -341,7 +369,7 @@ public static class TextFieldExtensions
             HandlePointer(runtime, font, interaction, text.Str, edit, pointerX, focused);
         }
 
-        bool edited = focused && ApplyEdits(runtime, text, edit, events, font, float.PositiveInfinity, TextWrap.Words, 0, out _);
+        bool edited = focused && ApplyEdits(runtime, text, edit, events, font, float.PositiveInfinity, TextWrap.Words, 0, SubmitKey.None, out _);
         if (focused) EndingKeys(runtime, ref interaction, submits: (events & 1u << (int)BibUiEventKind.Text) != 0);
 
         // An empty buffer shows the placeholder, in a quieter colour, the same way.
@@ -378,14 +406,17 @@ public static class TextFieldExtensions
     /// <summary>
     /// <paramref name="text"/> as lines, the field named <paramref name="id"/> in
     /// the box in scope, wrapped at its width and edited while it has focus;
-    /// Enter breaks the line.
+    /// Enter breaks the line. Given a <paramref name="submitKey"/>, that Enter
+    /// reports <see cref="Interaction.Submitted"/> instead, inserting nothing,
+    /// and the field keeps focus; the other Enter still breaks the line.
     /// Its height is the size pushed on the stack — <c>ChildrenSum()</c>,
     /// <see cref="Rows"/> or a share — and the wheel scrolls past it. Lines
     /// break as <paramref name="wrap"/> says: between words, or anywhere.
     /// </summary>
     public static BibuiWidget MultilineTextField(this BibuiRuntime runtime, string id, BibuiStr text,
         TextEditState edit, uint events = global::Bibui.Core.Runtime.TextField.MultiLineEvents,
-        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default, TextWrap wrap = TextWrap.Words)
+        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default, TextWrap wrap = TextWrap.Words,
+        SubmitKey submitKey = SubmitKey.None)
     {
         Font font = runtime.FontInScope();
         var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
@@ -427,10 +458,12 @@ public static class TextFieldExtensions
         // its page goes to its end. The view moves as far as the pages moved the
         // caret; its clamp keeps it in range.
         int pagedLines = 0;
-        bool edited = focused && ApplyEdits(runtime, text, edit, events, font, room, wrap, PageRows(view.Extent.Y, lineHeight, lineAdvance), out pagedLines);
+        bool edited = focused && ApplyEdits(runtime, text, edit, events, font, room, wrap, PageRows(view.Extent.Y, lineHeight, lineAdvance), submitKey, out pagedLines);
         if (pagedLines != 0)
             view.TargetViewOffset = view.TargetViewOffset with { Y = view.TargetViewOffset.Y + pagedLines * lineAdvance };
-        if (focused) EndingKeys(runtime, ref interaction, submits: false);
+        // Every Enter left after the edits is submitKey's: the field took the others as line breaks.
+        bool submits = submitKey != SubmitKey.None && (events & 1u << (int)BibUiEventKind.Submit) != 0;
+        if (focused) EndingKeys(runtime, ref interaction, submits, keepsFocus: true);
 
         // An empty buffer shows the placeholder, in a quieter colour, the same way.
         bool empty = text.Length == 0;

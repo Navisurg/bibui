@@ -40,6 +40,12 @@ All notable changes to bibui are recorded here. The format is based on
     an unknown format, a corrupt or truncated file, a missing library. It never
     throws for what is in the bytes. `Images.DecodeFile(path)` is null as well
     for a file that cannot be read. See [Pictures](docs/concepts.md#pictures).
+- **`SubmitKey`** on `MultilineTextField`: `Enter` (Shift+Enter breaks the
+  line) or `CtrlEnter` (Enter breaks the line) reports
+  `Interaction.Submitted`, inserts nothing, and the field keeps focus, so a
+  chat box is typed into again; Escape still ends the edit. `None`, the
+  default, leaves every Enter a line break, as before. A field that does not
+  edit submits nothing.
 
 ## [1.2.0] - 2026-11-11
 
