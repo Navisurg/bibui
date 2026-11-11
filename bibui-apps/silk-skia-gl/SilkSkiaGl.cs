@@ -28,6 +28,7 @@ public sealed partial class BibuiApp
         var opened = SilkWindow.Open(SilkGl.Options(window));
         runtime.WakeUp = opened.Wake;
         runtime.WindowClipboard = (opened.GetClipboardText, opened.SetClipboardText);
+        runtime.WindowCursor = opened.SetCursor;
         return opened;
     }
 
@@ -46,6 +47,7 @@ public sealed partial class BibuiApp
     {
         // The window goes next: nothing may wake it after.
         if (Runtime.WakeUp == Window.Wake) Runtime.WakeUp = null;
+        if (Runtime.WindowCursor == Window.SetCursor) Runtime.WindowCursor = null;
         Renderer.Dispose();
         _screenshots?.Dispose();
     }

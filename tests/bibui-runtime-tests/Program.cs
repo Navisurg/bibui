@@ -8578,6 +8578,9 @@ MotionTests.Register(Run);
 Console.WriteLine();
 Console.WriteLine("Scroll list");
 ScrollListTests.Register(Run);
+Console.WriteLine();
+Console.WriteLine("Cursor");
+CursorTests.Register(Run);
 
 // ── Key repeat ──────────────────────────────────────────────────────────────
 

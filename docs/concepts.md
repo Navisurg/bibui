@@ -598,6 +598,21 @@ The `Style` treatments do the same without arithmetic. `HoverBackgroundColor`
 and `DrawFlags.HotEffects` / `ActiveEffects` are blended by `HotT` and
 `ActiveT` when the box is painted.
 
+The pointer's shape is asked for the same way: while a box is under the
+pointer or held, the code that asked it sets `runtime.Cursor`, which is
+`CursorShape.Default` again as each build begins:
+
+```csharp
+Box handle = runtime.BoxFromId("divider", InteractionKinds.LeftPress);
+var drag = runtime.InteractionsFor(handle);
+if (drag.Hovering || drag.Dragging) runtime.Cursor = CursorShape.ResizeHorizontal;
+```
+
+Only the box on top of the pointer is hovered, since asking consumes, so
+that box's shape is the one shown. `EndBuild` hands the shape to the window
+when it changed (`runtime.WindowCursor`, which a `Bibui.App` package sets to
+its window's `SetCursor`; a loop of its own sets it too).
+
 For anything else that should glide, `runtime.Animate(id, property, target)`
 returns where the value has got to on its way to `target`:
 

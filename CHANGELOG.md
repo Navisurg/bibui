@@ -8,6 +8,17 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
+- `runtime.Cursor`: the pointer's shape a frame's build asks for, so a box
+  can show its own (a drag handle the resize arrows, a link the hand). It is
+  `CursorShape.Default` as each build begins; the code that asked a box sets
+  it while that box is under the pointer or held. `EndBuild` passes it to
+  `runtime.WindowCursor` when it changed, which every `Bibui.App` package
+  sets to its window's `SetCursor` (the Wayland window through
+  cursor-shape-v1 or the cursor theme, the Silk window through GLFW's
+  standard cursors); a loop of its own sets
+  `runtime.WindowCursor = window.SetCursor`, as `samples/counter-browser`
+  does. The gallery's SplitPane dividers ask for the resize shape of their
+  axis.
 - **`Bibui.Platform.Portal`**, a package of its own: the desktop's own file
   chooser through xdg-desktop-portal's `org.freedesktop.portal.FileChooser`,
   for any bibui window. `FileChooser.OpenAsync(new FileChooserOptions { Title,

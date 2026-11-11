@@ -72,6 +72,7 @@ var runtime = BibuiRuntime.Create();
 var window = await BrowserWindow.OpenAsync("app");   // <canvas id="app">
 runtime.WakeUp = window.Wake;
 runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+runtime.WindowCursor = window.SetCursor;
 var managed = new ManagedRenderer(window.Cpu);
 int count = 0;
 
@@ -171,7 +172,9 @@ when it has none).
 - **Clipboard**: copying writes through `navigator.clipboard`. Pasting takes
   the text of the paste event the browser fires for Ctrl+V and Cmd+V; the
   browser offers the clipboard only in that event.
-- **Cursor**: `window.SetCursor(CursorShape.Text)` sets the canvas's CSS cursor.
+- **Cursor**: `window.SetCursor(CursorShape.Text)` sets the canvas's CSS cursor;
+  with `runtime.WindowCursor = window.SetCursor`, a build's `runtime.Cursor` is
+  shown there.
 
 ## Several apps on one page
 

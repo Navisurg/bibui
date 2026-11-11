@@ -120,6 +120,7 @@ own:
 using var window = SilkWindow.Open(SilkGl.Options(new("Counter", 360, 160)));
 runtime.WakeUp = window.Wake;
 runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+runtime.WindowCursor = window.SetCursor;
 var gl = SilkGl.Target(window);
 using var skia = new SkiaGlRenderer(gl);
 
