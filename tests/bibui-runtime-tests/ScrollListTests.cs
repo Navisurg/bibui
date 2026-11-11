@@ -82,7 +82,7 @@ static class ScrollListTests
 
         public double Target => At(Pt.Idx, Pt.Px);
         public double Shown => At(Pt.Idx, Pt.Px + Pt.Off);   // what is shown at the top of the view
-        public double End => At(Count) - Height;   // the top of the last screenful
+        public double End => At(Count - 1);   // the top of the last row: as far as a list goes
     }
 
     public static void Register(Action<string, Action> run)
@@ -98,8 +98,8 @@ static class ScrollListTests
 
         run("RowScrollList: a list built again, not measured yet, keeps the point it is given, not clamped to a guessed height", () =>
         {
-            // Row 980 is within the last screenful of the 300 px view, but past it for the 4096 px a view not laid
-            // out yet is built for: clamped to that, a list shown again (a page gone back to) would lose its place.
+            // A list shown again (a page gone back to) is built before it is laid out. Its range is its rows', so
+            // nothing about a view not measured yet can move the point it was given.
             var list = new Lab(ScrollBy.Pixels, start: new ScrollPt { Idx = 980 });
             Eq((980, 0f), (list.Pt.Idx, list.Pt.Px), "the point kept through its first frames");
             Eq(980, list.First, "row 980 at the top");
@@ -120,12 +120,12 @@ static class ScrollListTests
             Eq((11, 16f), (rows.Pt.Idx, rows.Pt.Px), "by rows, 280 px: 11 rows, 16 px held unseen");
             rows.Wheel(1_000_000f);
             rows.Settle();
-            Eq(987, rows.Pt.Idx, "at the end, the last whole row whose screenful reaches the last row");
-            Eq(true, rows.Bottom >= Height, "the last row clipped, not a gap left");
+            Eq((Count - 1, 0f), (rows.Pt.Idx, rows.Pt.Px), "at the end, the last row at the top");
+            Near(Pitch, rows.Bottom, 0.01, "and nothing below it");
             var pixels = new Lab(ScrollBy.Pixels);
             pixels.Wheel(1_000_000f);
             pixels.Settle();
-            Near(pixels.End, pixels.Target, 0.01, "by pixels, the last row on the bottom");
+            Near(pixels.End, pixels.Target, 0.01, "by pixels, the same");
             pixels.Wheel(-2_000_000f);
             pixels.Settle();
             Eq((0, 0f), (pixels.Pt.Idx, pixels.Pt.Px), "and back, not above the first row");
@@ -145,18 +145,56 @@ static class ScrollListTests
             Near(list.Pt.Px, ((Box)list.Runtime.FindById("list")!).ViewOffset.Y, 0.01, "at rest, shown where the target is");
         });
 
-        run("ScrollList: the end, reached by the wheel or by a target on the last row, is the last row on the bottom", () =>
+        run("ScrollList: the end, reached by the wheel or by a target on the last row, is the last row at the top", () =>
         {
             var wheel = new Lab(ScrollBy.Pixels, Uneven);
             for (int k = 0; k < 3000 && wheel.Last < Count; k++) wheel.Wheel(32f);
             for (int k = 0; k < 20; k++) wheel.Wheel(32f);
             wheel.Settle();
-            Near(wheel.End, wheel.Target, 0.01, "by the wheel, the last screenful, and no further");
-            Near(Height, wheel.Bottom, 0.01, "the last row on the bottom");
+            Near(wheel.End, wheel.Target, 0.01, "by the wheel, the last row at the top, and no further");
+            Near(Uneven(Count - 1), wheel.Bottom, 0.01, "and nothing below it");
             var target = new Lab(ScrollBy.Pixels, Uneven);
             target.Pt.Target(Count - 1);
             target.Settle();
             Near(target.End, target.Target, 0.01, "by a target, the same");
+        });
+
+        run("ScrollList: rows measured by building them, handed a lower bound until then, reach the view's bottom on every frame", () =>
+        {
+            // Rows of 30 to 90 px, known only once built and laid out: until then the caller hands in 20 px, no more
+            // than any of them. However fast it scrolls, and on its first frame, the list never stops short.
+            var runtime = BibuiRuntime.Create();
+            var pt = new ScrollPt();
+            var measured = new Dictionary<int, float>();
+            var builtRows = new List<int>();
+            float bottom = 0f;
+            runtime.SetBuild(() =>
+            {
+                var panel = runtime.BoxFromId("panel").Sized(Size.Fill, Size.Fill);
+                using (runtime.Parent(panel))
+                {
+                    var rows = runtime.BeginScrollList("list", ref pt, Count);
+                    float built = 0f;
+                    builtRows.Clear();
+                    for (int i = rows.Row; rows.More; i = rows.Row)
+                    {
+                        if (!rows.Next(ref pt, measured.TryGetValue(i, out var h) ? h : 20f)) continue;
+                        float real = 30f + (i * 7 % 4) * 20f;
+                        runtime.BoxFromId("row-" + i).Sized(Size.Fill, Size.Px(real));
+                        builtRows.Add(i);
+                        built += real;
+                    }
+                    bottom = built - ((Box)runtime.ParentInScope).ViewOffset.Y;
+                    runtime.EndScrollList(ref pt, rows);
+                }
+                return panel;
+            }, ThemeRegistry.Load("bibui-dark"), TestBuild.Window(400, (int)Height, 1f));
+            for (int f = 0; f < 150; f++)
+            {
+                runtime.Step(f < 2 ? [] : [WindowEvent.Wheel(100f, 100f, 0f, -(40f + f % 5 * 60f) / 32f)]);
+                foreach (int i in builtRows) measured[i] = runtime.FindById("row-" + i)!.Extent.Y;   // laid out: known from now on
+                Eq(true, bottom >= Height - 0.01f, $"frame {f}: the rows built reach the view's bottom ({bottom} of {Height})");
+            }
         });
 
         run("ScrollList: the wheel up at the top, or past it, leaves the first row on the top and does not move what is shown down", () =>
