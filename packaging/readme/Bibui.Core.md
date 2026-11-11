@@ -18,6 +18,7 @@ that puts them together:
 | `Bibui.Platform.Silk`, `Bibui.Platform.Wayland`, `Bibui.Platform.Browser` | A window on its own |
 | `Bibui.Raster.Skia`, `Bibui.Raster.Managed.Backend` | A renderer on its own |
 | `Bibui.Platform.Portal` | The desktop's own file chooser, through xdg-desktop-portal |
+| `Bibui.Imaging` | JPEG and WebP decode, and any picture by its first bytes |
 | `Bibui.Testing` | Headless pages for testing an app |
 | `Bibui.Text` | The text layer this package lays text out with (a dependency of it): fonts, measuring, line breaking |
 

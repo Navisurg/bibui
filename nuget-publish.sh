@@ -43,6 +43,8 @@ PROJECTS=(
   "bibui-platform-wayland/bibui-platform-wayland.csproj"
   # The desktop's file chooser through xdg-desktop-portal, over D-Bus.
   "bibui-platform-portal/bibui-platform-portal.csproj"
+  # JPEG and WebP decode through the system's libjpeg-turbo and libwebp.
+  "bibui-imaging/bibui-imaging.csproj"
   # The browser host, with FreeType and HarfBuzz built for the browser
   # (bibui-platform-browser/native/build.sh; skipped below until they are).
   "bibui-platform-browser/bibui-platform-browser.csproj"

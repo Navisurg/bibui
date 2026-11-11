@@ -18,11 +18,14 @@ describes.
 
 ## Building
 
-You need the .NET 10 SDK. On Linux, bibui's text and the Wayland host load
-system libraries at run time:
+You need the .NET 10 SDK. On Linux, bibui's text, its picture decoders and
+the Wayland host load system libraries at run time:
 
 - FreeType and HarfBuzz (`libfreetype6`, `libharfbuzz0b` on Debian/Ubuntu)
   for `Bibui.Text`, the text layer `Bibui.Core` measures and shapes all text with;
+- libjpeg-turbo and libwebp (`libturbojpeg`, `libwebp7`) for JPEG and WebP
+  decode in `Bibui.Imaging`, loaded only when a picture of that kind is
+  decoded (`tests/image-tests` needs them);
 - `libwayland-client` and `libxkbcommon` for `Bibui.Platform.Wayland`.
 
 Each library is its own project: `bibui` holds the core, the runtime
@@ -56,6 +59,7 @@ console app; it prints what failed and exits non-zero:
 dotnet run --project tests/bibui-runtime-tests -c Release       # runtime, components, layout, themes
 dotnet run --project tests/text-tests -c Release
 dotnet run --project tests/png-tests -c Release
+dotnet run --project tests/image-tests -c Release               # JPEG and WebP, through the system's libraries
 dotnet run --project tests/wayland-tests -c Release             # headless; skips what needs a compositor
 dotnet run --project tests/portal-tests -c Release              # the file chooser against a fake bus; opens no dialog
 dotnet run --project tests/browser-tests -c Release             # the browser host's logic, no browser

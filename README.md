@@ -195,6 +195,7 @@ decides which other dependencies it needs. In every case the dependency tree is 
 | `Bibui.Platform.Silk` | `Silk.NET` windowing, input and OpenGL (GLFW), `Bibui.Gl`, `TextCopy` | an OpenGL driver; GLFW itself ships with Silk.NET |
 | `Bibui.Platform.Wayland` | none | `libwayland-client`, `libwayland-cursor`, `libxkbcommon` |
 | `Bibui.Platform.Portal` | none | none: it speaks D-Bus to the session bus itself; the file chooser needs `xdg-desktop-portal` and a backend |
+| `Bibui.Imaging` | none | `libturbojpeg`, `libwebp7`, loaded on the first JPEG or WebP decode; without them an app still starts and PNG still decodes |
 | `Bibui.Platform.Browser` | none | none: FreeType and HarfBuzz ship inside it, built for the browser; building an app needs the `wasm-tools` workload |
 | `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`, `Bibui.Glyphs`) | none beyond `Bibui.Core`'s |
 

@@ -37,7 +37,10 @@ references differs.
 You need the .NET 10 SDK and, for the native link step, `clang` and the zlib
 development headers (`zlib1g-dev` on Debian and Ubuntu). The app needs these
 libraries at run time: `libwayland-client`, `libxkbcommon`, FreeType and
-HarfBuzz (`libfreetype6` and `libharfbuzz0b` on Debian and Ubuntu).
+HarfBuzz (`libfreetype6` and `libharfbuzz0b` on Debian and Ubuntu). An app that
+decodes JPEG or WebP pictures (`Bibui.Imaging`) also needs libjpeg-turbo and libwebp
+(`libturbojpeg` and `libwebp7`); without them it still starts, and those
+pictures do not decode (see [Pictures](concepts.md#pictures)).
 
 ```bash
 dotnet new console -n Counter && cd Counter
