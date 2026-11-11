@@ -515,6 +515,94 @@ static class MarkdownTests
             Equal("- [x] write it\n- [x] test it", source.ToString(), "source after toggling");
         });
 
+        // A viewer of its own in a window, for selecting in: the source, the page, the widget last built.
+        (BibuiRuntime Runtime, Bibui.Testing.BibuiPage Page, Func<MarkdownWidget> Last) Selectable(string markdown, float width = 400f)
+        {
+            var source = BibuiStr.FromStrLit(markdown);
+            MarkdownWidget last = default;
+            var runtime = BibuiRuntime.Create();
+            runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () => last = runtime.Markdown("md", source, width: width)),
+                TestBuild.Window((int)width + 100, 400, 1f));
+            runtime.Step();
+            runtime.Step();
+            return (runtime, runtime.Page(), () => last);
+        }
+
+        static void Drag(BibuiRuntime runtime, Bibui.Testing.BibuiPage page, float x0, float y0, float x1, float y1, int clicks = 1)
+        {
+            runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseDown, Button = MouseButton.Left, X = x0, Y = y0, ClickCount = clicks });
+            page.Frame();
+            runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseMove, X = x1, Y = y1 });
+            page.Frame();
+            runtime.ProcessEvent(new BibUiEvent { Kind = BibUiEventKind.MouseUp, Button = MouseButton.Left, X = x1, Y = y1 });
+            page.Frame();
+            page.Frame();
+        }
+
+        static bool Highlighted(UiNode root) => Descendants(root).OfType<Box>().Any(b => Equals(b.Style.BackgroundColor, TextField.Highlight));
+
+        run("Markdown selection: Ctrl+A and Ctrl+C copy the document as plain text, blocks apart and cells by tabs", () =>
+        {
+            var (_, page, last) = Selectable(
+                "Some **bold** and `code`  \nafter a break.\n\n- one\n- two\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```\nx = 1\n\ny = 2\n```");
+            using var _ = page;
+            IsTrue(!Highlighted(last().Node), "nothing is selected before a press");
+            page.Click("md");
+            page.Press(Key.A, ctrl: true);
+            page.Press(Key.C, ctrl: true);
+            Equal("Some bold and code\nafter a break.\n\none\ntwo\n\na\tb\n1\t2\n\nx = 1\n\ny = 2", page.Clipboard, "copied");
+            IsTrue(Highlighted(last().Node), "the selection shows");
+        });
+
+        run("Markdown selection: a drag along a wrapped paragraph selects across its lines, joined by a space", () =>
+        {
+            var (runtime, page, last) = Selectable("alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu", width: 160f);
+            using var _ = page;
+            var lines = Descendants(last().Node).OfType<Box>().Where(b => b.Id is { } id && id.StartsWith("md/line")).ToList();
+            IsTrue(lines.Count >= 3, $"the paragraph wraps: {lines.Count} lines");
+            var (first, second) = (lines[0], lines[1]);
+            // From before the first line's first char to past the second line's end.
+            Drag(runtime, page, first.Rect.X + 0.5f, first.Rect.Y + first.Extent.Y / 2f,
+                second.Rect.X + 400f, second.Rect.Y + second.Extent.Y / 2f);
+            page.Press(Key.C, ctrl: true);
+            IsTrue(page.Clipboard.StartsWith("alpha beta "), $"copied from the start: '{page.Clipboard}'");
+            IsTrue(!page.Clipboard.Contains("  ") && !page.Clipboard.Contains('\n'), $"the lines joined by one space: '{page.Clipboard}'");
+            string[] all = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu".Split(' ');
+            int words = page.Clipboard.Split(' ').Length;
+            IsTrue(words < all.Length, $"the third line is not in it: '{page.Clipboard}'");
+            Equal(string.Join(' ', all[..words]), page.Clipboard, "two whole lines");
+        });
+
+        run("Markdown selection: a double click selects the word, and a click on a link still follows it", () =>
+        {
+            var (runtime, page, last) = Selectable("Read [the docs](https://example.com) twice please.");
+            using var _ = page;
+            var line = Descendants(last().Node).OfType<Box>().Single(b => b.Id == "md/line0");
+            float y = line.Rect.Y + line.Extent.Y / 2f;
+            var font = runtime.FontInScope(ComponentSize.Md);
+            float at = line.Rect.X + TextLayer.WidthFromChars(runtime.Fonts, "Read the docs twice ple", TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale), font.Scale);
+            Drag(runtime, page, at, y, at, y, clicks: 2);
+            page.Press(Key.C, ctrl: true);
+            Equal("please.", page.Clipboard, "the word double-clicked, as a text field takes it");
+
+            page.Click("md/0");
+            Equal("https://example.com", last().ClickedLink, "the link");
+        });
+
+        run("Markdown selection: a triple click selects the paragraph, across the lines it wrapped onto", () =>
+        {
+            const string Middle = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu";
+            var (runtime, page, last) = Selectable("First.\n\n" + Middle + "\n\nLast.", width: 160f);
+            using var _ = page;
+            var lines = Descendants(last().Node).OfType<Box>().Where(b => b.Id is { } id && id.StartsWith("md/line")).ToList();
+            IsTrue(lines.Count >= 5, $"the middle paragraph wraps: {lines.Count} lines");
+            var second = lines[2];   // the middle paragraph's second line
+            float x = second.Rect.X + 10f, y = second.Rect.Y + second.Extent.Y / 2f;
+            Drag(runtime, page, x, y, x, y, clicks: 3);
+            page.Press(Key.C, ctrl: true);
+            Equal(Middle, page.Clipboard, "the whole paragraph, its lines joined by a space, and nothing of the others");
+        });
+
         // The runtime's own cost per text drawn is the yardstick: a frame of the
         // viewer may allocate what the same number of plain texts does, and not
         // what parsing the source again would.
