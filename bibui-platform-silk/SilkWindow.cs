@@ -127,6 +127,36 @@ public sealed class SilkWindow : IDisposable
     // Held so the GC keeps it while GLFW holds its function pointer.
     private global::Silk.NET.GLFW.GlfwCallbacks.CharCallback? _onChar;
     private global::Silk.NET.GLFW.GlfwCallbacks.KeyCallback? _onKey;
+    private global::Silk.NET.GLFW.GlfwCallbacks.CursorEnterCallback? _onEnter;
+
+    // Where GLFW last reported the pointer over the window, for a drop's
+    // position; NaN once it has left, until GLFW reports it again.
+    private float _pointerX = float.NaN, _pointerY = float.NaN;
+
+    // A pointer event, noted for where a drop lands, then queued.
+    internal void Pointer(WindowEvent e)
+    {
+        (_pointerX, _pointerY) = (e.X, e.Y);
+        Events.Add(e);
+    }
+
+    internal void PointerLeft() => (_pointerX, _pointerY) = (float.NaN, float.NaN);
+
+    /// <summary>
+    /// Files dropped on the window, as GLFW reports them: the paths and nothing
+    /// before them, no enter, motion or leave, so the runtime is sent
+    /// <see cref="WindowEventKind.FilesDropped"/> alone. GLFW says no position
+    /// either. On Windows, macOS and X11 it moves the cursor to the drop point
+    /// just before it reports the drop, so the drop lands where the pointer was
+    /// last reported. On Wayland (GLFW 3.4) it does not, and the pointer left
+    /// the window when the drag came in, so the drop has no position (NaN) and
+    /// is the window's rather than a box's.
+    /// </summary>
+    internal void Dropped(string[] paths)
+    {
+        if (paths.Length == 0) return;
+        Events.Add(WindowEvent.FilesDropped(_pointerX, _pointerY, [.. paths]));
+    }
 
     private unsafe void WireInput()
     {
@@ -134,11 +164,21 @@ public sealed class SilkWindow : IDisposable
         var events = Events;
         foreach (var mouse in input.Mice)
         {
-            mouse.MouseDown += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseDown, m.Position.X, m.Position.Y, (Bibui.Core.MouseButton)b, HeldModifiers));
-            mouse.MouseUp   += (m, b) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseUp,   m.Position.X, m.Position.Y, (Bibui.Core.MouseButton)b, HeldModifiers));
-            mouse.MouseMove += (_, p) => events.Add(WindowEvent.Mouse(WindowEventKind.MouseMove, p.X, p.Y, Bibui.Core.MouseButton.Unknown, HeldModifiers));
-            mouse.Scroll    += (m, w) => events.Add(WindowEvent.Wheel(m.Position.X, m.Position.Y, w.X, w.Y, HeldModifiers));
+            mouse.MouseDown += (m, b) => Pointer(WindowEvent.Mouse(WindowEventKind.MouseDown, m.Position.X, m.Position.Y, (Bibui.Core.MouseButton)b, HeldModifiers));
+            mouse.MouseUp   += (m, b) => Pointer(WindowEvent.Mouse(WindowEventKind.MouseUp,   m.Position.X, m.Position.Y, (Bibui.Core.MouseButton)b, HeldModifiers));
+            mouse.MouseMove += (_, p) => Pointer(WindowEvent.Mouse(WindowEventKind.MouseMove, p.X, p.Y, Bibui.Core.MouseButton.Unknown, HeldModifiers));
+            mouse.Scroll    += (m, w) => Pointer(WindowEvent.Wheel(m.Position.X, m.Position.Y, w.X, w.Y, HeldModifiers));
         }
+        // The pointer leaving: where it was says nothing of where a drop lands.
+        // Taking GLFW's enter callback replaces Silk.NET's, so the one set before is called on.
+        global::Silk.NET.GLFW.GlfwCallbacks.CursorEnterCallback? previousEnter = null;
+        _onEnter = (handle, entered) =>
+        {
+            if (!entered) PointerLeft();
+            previousEnter?.Invoke(handle, entered);
+        };
+        previousEnter = global::Silk.NET.GLFW.GlfwProvider.GLFW.Value.SetCursorEnterCallback(
+            (global::Silk.NET.GLFW.WindowHandle*)Native.Native!.Glfw!.Value, _onEnter);
         // Text straight from GLFW, not Silk.NET's KeyChar: that casts GLFW's code
         // point to a char, which turns 😀 (U+1F600) into U+F600. Taking the window's
         // char callback replaces Silk.NET's, whose only listener was KeyChar.
@@ -330,6 +370,7 @@ public sealed class SilkWindow : IDisposable
         // Only the size: the frame for it is drawn from the refresh callback, below.
         native.FramebufferResize += size => window.Resize(size);
         native.FocusChanged += focused => { if (!focused) window.Events.Add(WindowEvent.FocusLost()); };
+        native.FileDrop += window.Dropped;
         native.Initialize();
         window.WireInput();
         // The frame is drawn from GLFW's refresh callback, which GLFW calls once it

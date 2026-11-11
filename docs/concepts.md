@@ -397,6 +397,7 @@ The claims are `InteractionKinds` flags:
 | `LeftPress`, `RightPress`, `MiddlePress` (`Press` for all three) | that button's press, its release, and the drag in between. A box that takes a press can be hovered, so `Hovering` and `HotT` come with it. There is no separate hover claim. |
 | `ViewScrollX`, `ViewScrollY` (`ViewScroll`) | the wheel, which moves the box's `TargetViewOffset` |
 | `Scroll` | the wheel, reported in `ScrollX`/`ScrollY` and moving nothing (for a zoom, say) |
+| `Drop` | files dragged in from another application and dropped on it (below) |
 | `ClampX`, `ClampY` (`Clamp`) | nothing; keeps the view offset inside the content |
 | `Clip` | nothing; children are drawn, and pressed, only inside the box |
 | `Disabled` | nothing, and swallows presses (below) |
@@ -572,6 +573,38 @@ foreach (var ev in runtime.UnconsumedEvents)
     }
 }
 ```
+
+### Files dropped
+
+Files dragged in from another application, out of a file manager say, are
+claimed and asked for like a press. A box that claims `InteractionKinds.Drop`
+is told when a drag carrying files is over it, `FileDragOver`, and gets the
+paths in the frame they are let go on it, `DroppedFiles`:
+
+```csharp
+var zone = runtime.BoxFromId("attach", InteractionKinds.Drop);
+Interaction i = runtime.InteractionsFor(zone);
+if (i.Dropped) attachments.AddRange(i.DroppedFiles!);   // local paths, as the source listed them
+zone.Style = i.FileDragOver ? highlighted : plain;      // the target lights while the drag is over it
+```
+
+It is a claim rather than a window event the app sorts out, for the same
+reason a press is: the box under the pointer is the one that should get the
+files, and only the boxes know where they were drawn. Asking consumes, so the
+first box claiming the drop to ask about the point has it, both the drop and
+the lit target, and a list's row asked before the list takes a file dropped
+on it. A box that claims only presses is not in the way: a drop lands on the
+panel behind a button. The drag's own position is `runtime.FileDragPosition`,
+null when no drag is over the window, for a look of the whole window. A drop
+no box took stays in the frame's events, a `BibUiEventKind.FilesDropped` with
+its `Paths`, for an app that takes files anywhere.
+
+A drag carrying anything but files (text, a picture from a browser) is not
+reported. What each window can tell is in [What a window
+reports](#what-a-window-reports): on Silk there is no drag before the drop, so
+`FileDragOver` is never true, and on Wayland under Silk a drop has no position
+and is the window's, in the frame's events. The browser window reports none
+yet.
 
 ## Hot, active and animation
 
@@ -900,6 +933,37 @@ owner of the loop chose draws that list. Two pieces connect it to the outside:
   memory it owns (`FramePixels`, `BibuiPage`, the test server) takes a
   `DrawToPixels`, a `void (DrawList list, RasterPixels target)` delegate, and
   a renderer's `Draw` method group converts to it.
+
+### What a window reports
+
+A window is the platform's side of a small contract that the runtime defines in
+`Bibui.Core.Runtime.Platform`, the same for every host. A new host implements
+it, and nothing in the runtime changes:
+
+- each frame, a `WindowFrame` (size, scale, refresh rate) and the
+  `WindowEvent`s since the last one, in order: pointer, wheel, keys, text,
+  focus lost, and files dragged in from another application;
+- `runtime.WakeUp`, which wakes the loop from any thread;
+- `runtime.WindowClipboard`, the clipboard's text, to read and to write.
+
+Files dragged in are three window events. `FileDragOver(x, y)` as a drag
+carrying files enters and moves, `FileDragLeave()` when it goes without
+dropping, and `FilesDropped(x, y, paths)` when it is let go: local, absolute
+paths, in the source's order. A host sends what its platform tells it: the
+drag events only if it hears of the drag before the drop, and the drop always,
+on its own if need be, with `FilesDropped(paths)` (at NaN) when it does not
+know where. The runtime turns them into one thing on every host: the drop goes
+to the first box claiming `InteractionKinds.Drop` to ask about the point, or
+stays in the frame's events when no box has the point (or there is none), and
+`FileDragOver` lights a target only on a host that reports the drag.
+
+A host reports what its platform offers and nothing more, so an app asks the
+same way on every host and gets less where the platform has less:
+
+| | Wayland | Silk (GLFW) | Browser |
+|---|---|---|---|
+| Files dropped | paths from a drag's `text/uri-list`, where they fell | paths, where the pointer was last reported (the drop point on Windows, macOS and X11; none on Wayland) | none yet |
+| A drag over the window | enter, motion and leave, with a position | none: GLFW reports only the drop | none yet |
 
 A `Bibui.App` package is one window and one renderer put together, with the
 loop's calls (`app.WaitForFrame()`, `app.Present()`): what an app normally

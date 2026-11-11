@@ -47,6 +47,21 @@ public sealed partial class BibuiRuntime
     public (Func<string?>? Get, Action<string>? Set) WindowClipboard { get; set; }
 
     /// <summary>
+    /// Where a drag carrying files from another application is over the window,
+    /// in logical pixels, or null when none is. Set as the drag enters and
+    /// moves, cleared when it leaves or drops. For a whole-window look, a
+    /// shade over everything; a box claiming <see cref="InteractionKinds.Drop"/>
+    /// is told it is the target by <see cref="Interaction.FileDragOver"/>.
+    /// </summary>
+    public System.Numerics.Vector2? FileDragPosition => _fileDrag;
+
+    private System.Numerics.Vector2? _fileDrag;
+
+    // The box that has the file drag's point this frame: the first claiming
+    // the drop to ask about it. Cleared as a frame begins.
+    private string? _fileDragOwner;
+
+    /// <summary>
     /// Queues events already translated, in order, for the frame built next: for
     /// a test or a tool that says exactly what happened (a press with a click
     /// count of 2, a press addressed to one box). What a keyboard and mouse did
@@ -57,12 +72,14 @@ public sealed partial class BibuiRuntime
         foreach (var ev in events)
         {
             NotePointer(ev);
+            NoteFileDrag(ev);
 
             // Nothing is taken: every event stays in the queue for the boxes
             // that ask. A pointer event asks for a frame, because hot state
             // follows the pointer.
             PushEvent().CopyFrom(ev);
-            if (ev.Kind is BibUiEventKind.MouseDown or BibUiEventKind.MouseUp or BibUiEventKind.MouseMove)
+            if (ev.Kind is BibUiEventKind.MouseDown or BibUiEventKind.MouseUp or BibUiEventKind.MouseMove
+                or BibUiEventKind.FileDragOver or BibUiEventKind.FileDragLeave or BibUiEventKind.FilesDropped)
                 RequestFrame();
         }
     }
@@ -88,6 +105,7 @@ public sealed partial class BibuiRuntime
     ///   Mouse moves → one MouseMove, where the pointer ended up
     ///   Wheel → Scroll, in logical px; Shift+wheel horizontal
     ///   Key → a text-edit intent (<see cref="BibUiEvent.FromKey"/>), reading the clipboard on paste
+    ///   File drag → one FileDragOver, where it ended; a leave or a drop as it came
     /// Modifiers are what each event says was held; Super reads as Ctrl as well,
     /// so Cmd on macOS is Ctrl elsewhere.
     /// </summary>
@@ -95,7 +113,7 @@ public sealed partial class BibuiRuntime
     {
         // This frame's move, held so later moves update it in place: it keeps its
         // place in the sequence and ends up carrying where the pointer finished.
-        BibUiEvent? move = null;
+        BibUiEvent? move = null, fileDrag = null;
         foreach (var e in events)
         {
             var held = (e.Modifiers & KeyModifiers.Super) != 0 ? e.Modifiers | KeyModifiers.Ctrl : e.Modifiers;
@@ -163,9 +181,40 @@ public sealed partial class BibuiRuntime
                     (ev.Kind, ev.Key) = (BibUiEventKind.Release, e.Key);
                     break;
                 }
+
+                case WindowEventKind.FileDragOver:
+                    // As a move: one a frame, carrying where the drag got to.
+                    if (fileDrag is null)
+                    {
+                        fileDrag = PushEvent();
+                        fileDrag.Kind = BibUiEventKind.FileDragOver;
+                    }
+                    (fileDrag.X, fileDrag.Y) = (e.X, e.Y);
+                    NoteFileDrag(fileDrag);
+                    RequestFrame();
+                    break;
+                case WindowEventKind.FileDragLeave:
+                case WindowEventKind.FilesDropped:
+                {
+                    var ev = PushEvent();
+                    ev.Kind = e.Kind == WindowEventKind.FileDragLeave ? BibUiEventKind.FileDragLeave : BibUiEventKind.FilesDropped;
+                    (ev.X, ev.Y, ev.Paths) = (e.X, e.Y, e.Paths);
+                    // A drag that comes back after this is another drag, with a move of its own.
+                    fileDrag = null;
+                    NoteFileDrag(ev);
+                    RequestFrame();
+                    break;
+                }
             }
         }
         events.Clear();
+    }
+
+    // Whether a drag carrying files is over the window, and where.
+    private void NoteFileDrag(BibUiEvent ev)
+    {
+        if (ev.Kind == BibUiEventKind.FileDragOver) _fileDrag = new(ev.X, ev.Y);
+        else if (ev.Kind is BibUiEventKind.FileDragLeave or BibUiEventKind.FilesDropped) _fileDrag = null;
     }
 
     // The pointer's position, and a frame for pointer input: hot state follows it.

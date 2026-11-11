@@ -227,6 +227,28 @@ public sealed partial class BibuiRuntime
                 interaction.Modifiers |= ev.Modifiers;
                 if (ev.ScrollX == 0f && ev.ScrollY == 0f) ev.Eat();
             }
+
+            // Files let go over a box that takes them. The first to ask about
+            // the point has them, as with a press.
+            if (ev.Kind == BibUiEventKind.FilesDropped && (claims & InteractionKinds.Drop) != 0 && inBounds
+                && interaction.DroppedFiles is null)
+            {
+                interaction.DroppedFiles = ev.Paths ?? [];
+                (interaction.DropX, interaction.DropY) = (ev.X, ev.Y);
+                interaction.Modifiers |= ev.Modifiers;
+                ev.Eat();
+            }
+        }
+        if (interaction.DroppedFiles is null) interaction.DropX = interaction.DropY = float.NaN;
+
+        // A drag carrying files is over it: the first box taking drops to ask
+        // about the point is the target, for the whole frame.
+        if ((claims & InteractionKinds.Drop) != 0 && _fileDrag is { } dragAt
+            && (_fileDragOwner is null || _fileDragOwner == id)
+            && Hit(dragAt, geometry, rect, size, transforms) && !IsUnderDropDown(box, dragAt))
+        {
+            _fileDragOwner = id;
+            interaction.FileDragOver = true;
         }
 
         ClampViewOffset(box, geometry);

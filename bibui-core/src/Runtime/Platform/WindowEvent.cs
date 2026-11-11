@@ -16,6 +16,30 @@ public enum WindowEventKind
 
     /// <summary>Focus left the window. Whatever was held is not held any more.</summary>
     FocusLost,
+
+    // Files dragged in from another application. A host sends what its platform
+    // tells it: FileDragOver and FileDragLeave only if it hears of the drag
+    // before the drop (Wayland does, GLFW does not), and FilesDropped always,
+    // at NaN when it does not know where.
+
+    /// <summary>
+    /// A drag carrying files is over the window, at X/Y: sent as it enters and
+    /// as it moves. Until <see cref="FileDragLeave"/> or <see cref="FilesDropped"/>,
+    /// the drag is there. A platform that does not report a drag until it is
+    /// dropped (GLFW) never sends it.
+    /// </summary>
+    FileDragOver,
+
+    /// <summary>The drag carrying files left the window, or was called off, without dropping.</summary>
+    FileDragLeave,
+
+    /// <summary>
+    /// Files were dropped on the window at X/Y; <see cref="WindowEvent.Paths"/>
+    /// holds them. The drag is over. X/Y are NaN when the platform did not say
+    /// where: then no box takes the drop, and it stays in the frame's events.
+    /// It may come with no <see cref="FileDragOver"/> before it.
+    /// </summary>
+    FilesDropped,
 }
 
 /// <summary>
@@ -59,6 +83,12 @@ public readonly struct WindowEvent
     /// </summary>
     public bool Repeat { get; private init; }
 
+    /// <summary>
+    /// What a <see cref="WindowEventKind.FilesDropped"/> carried: local paths,
+    /// absolute, in the order the source listed them. Null for every other kind.
+    /// </summary>
+    public IReadOnlyList<string>? Paths { get; private init; }
+
     public static WindowEvent Mouse(WindowEventKind kind, float x, float y, MouseButton button, KeyModifiers modifiers = KeyModifiers.None)
         => new() { Kind = kind, X = x, Y = y, Button = button, Modifiers = modifiers };
 
@@ -71,4 +101,23 @@ public readonly struct WindowEvent
     public static WindowEvent KeyRelease(Key key, KeyModifiers modifiers = KeyModifiers.None) => new() { Kind = WindowEventKind.KeyUp, Key = key, Modifiers = modifiers };
     public static WindowEvent Text(Rune codePoint) => new() { Kind = WindowEventKind.KeyChar, CodePoint = codePoint };
     public static WindowEvent FocusLost() => new() { Kind = WindowEventKind.FocusLost };
+
+    /// <summary>A drag carrying files entered the window, or moved over it, to <paramref name="x"/>, <paramref name="y"/>.</summary>
+    public static WindowEvent FileDragOver(float x, float y) => new() { Kind = WindowEventKind.FileDragOver, X = x, Y = y };
+
+    /// <summary>The drag carrying files left without dropping.</summary>
+    public static WindowEvent FileDragLeave() => new() { Kind = WindowEventKind.FileDragLeave };
+
+    /// <summary><paramref name="paths"/> were dropped at <paramref name="x"/>, <paramref name="y"/>.</summary>
+    public static WindowEvent FilesDropped(float x, float y, IReadOnlyList<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        return new() { Kind = WindowEventKind.FilesDropped, X = x, Y = y, Paths = paths };
+    }
+
+    /// <summary>
+    /// <paramref name="paths"/> were dropped on the window, the platform did not
+    /// say where: X/Y are NaN, so the drop is the window's, not a box's.
+    /// </summary>
+    public static WindowEvent FilesDropped(IReadOnlyList<string> paths) => FilesDropped(float.NaN, float.NaN, paths);
 }

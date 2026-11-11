@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Bibui.Core.Runtime.Platform;
 using Bibui.Platform.Wayland.Protocol;
 
 namespace Bibui.Platform.Wayland;
@@ -79,6 +80,30 @@ internal sealed class SelectionOffers
         return all;
     }
 
+    /// <summary>
+    /// The drag's spelling of <c>text/uri-list</c> when its offer carries files,
+    /// or null: a drag of anything else is not taken.
+    /// </summary>
+    public string? DropMime()
+    {
+        if (Drag == 0) return null;
+        foreach (var m in _mimes[Drag])
+            if (string.Equals(m, UriList.Mime, StringComparison.OrdinalIgnoreCase)) return m;
+        return null;
+    }
+
+    /// <summary>
+    /// The drag's offer, no longer tracked: it was dropped, and is read and
+    /// destroyed by whoever took it. 0 when there is no drag.
+    /// </summary>
+    public nint TakeDrag()
+    {
+        nint drag = Drag;
+        if (drag != 0 && drag != Current) _mimes.Remove(drag);
+        Drag = 0;
+        return drag;
+    }
+
     /// <summary>The selection's best text mime type, or null when it offers no text (or there is none).</summary>
     public string? PasteMime()
     {
@@ -112,6 +137,15 @@ internal interface IClipboardWire
 
     void DestroyOffer(nint offer);
 
+    /// <summary>wl_data_offer.accept: the drag may drop <paramref name="mime"/> here (null: nothing).</summary>
+    void Accept(nint offer, uint serial, string? mime);
+
+    /// <summary>wl_data_offer.set_actions: a drop here is a copy. Nothing before version 3, which has no actions.</summary>
+    void SetActions(nint offer);
+
+    /// <summary>wl_data_offer.finish: the drop has been read. Nothing before version 3.</summary>
+    void Finish(nint offer);
+
     /// <summary>Sends what is queued to the compositor.</summary>
     void Flush();
 
@@ -140,10 +174,18 @@ internal interface IClipboardWire
 /// <item><b>No serial yet</b>: copy cannot set the session's selection without
 /// one, so the text stays in-process — pasted inside the app until the
 /// session's selection next changes.</item>
+/// <item><b>Files dropped</b>: a drag whose offer carries
+/// <c>text/uri-list</c> (what a file manager drags) is accepted, as a copy
+/// only (a move would have the source delete its files), and reported as it enters and moves (<see cref="WindowEventKind.FileDragOver"/>)
+/// and leaves (<see cref="WindowEventKind.FileDragLeave"/>). On the drop the
+/// list is read through a pipe, as a paste is, by <see cref="ServeDrops"/>
+/// once dispatch has returned, and its <c>file:</c> URIs reach the window as
+/// paths (<see cref="WindowEventKind.FilesDropped"/>). A drag of anything else
+/// is refused, and nothing is reported of it.</item>
 /// </list>
 ///
 /// <para>Primary selection (middle-click) is not here; see the follow-up on
-/// the board. Drag-and-drop offers are tracked only to be destroyed.</para>
+/// the board. Nothing here starts a drag.</para>
 /// </summary>
 internal sealed unsafe class WaylandClipboard : IWaylandFeature
 {
@@ -156,6 +198,16 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
     private readonly Func<uint?> _serial;
     private readonly IClipboardWire _wire;
     private readonly SelectionOffers _offers = new();
+    private readonly Action<WindowEvent> _enqueue;
+
+    // The drag over us: whether its offer carries files (and so is accepted and
+    // reported), and where it was last, for the drop, which says nowhere.
+    private bool _dragTakesFiles;
+    private float _dragX, _dragY;
+
+    // Drops whose list is still to be read: by ServeDrops, outside dispatch,
+    // because the read waits and a wait dispatches.
+    private readonly List<(nint Offer, string Mime, float X, float Y)> _drops = [];
 
     // Ours: the text we copied, its bytes, and the source that serves it (0
     // when the text never reached the session: no serial, or no device).
@@ -168,17 +220,22 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
     private int _sending;
     public int SendsInFlight => Volatile.Read(ref _sending);
 
-    /// <summary>The host's: binds wl_data_device_manager and a wl_seat of its own.</summary>
-    public WaylandClipboard(Func<uint?> lastInputSerial, Action dispatch, Action flush)
+    /// <summary>
+    /// The host's: binds wl_data_device_manager and a wl_seat of its own, and
+    /// queues what a drag of files does through <paramref name="enqueue"/>.
+    /// </summary>
+    public WaylandClipboard(Func<uint?> lastInputSerial, Action dispatch, Action flush, Action<WindowEvent> enqueue)
     {
         _serial = lastInputSerial;
+        _enqueue = enqueue;
         _wire = new WaylandWire(this, dispatch, flush);
     }
 
     /// <summary>Tests': over a fake wire.</summary>
-    internal WaylandClipboard(IClipboardWire wire, Func<uint?> lastInputSerial)
+    internal WaylandClipboard(IClipboardWire wire, Func<uint?> lastInputSerial, Action<WindowEvent>? enqueue = null)
     {
         _serial = lastInputSerial;
+        _enqueue = enqueue ?? (_ => { });
         _wire = wire;
     }
 
@@ -230,8 +287,14 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
 
     private string? Receive()
     {
-        nint offer = _offers.Current;
         if (_offers.PasteMime() is not { } mime) return null;
+        var bytes = ReceiveBytes(_offers.Current, mime);
+        return bytes is null ? null : Encoding.UTF8.GetString(bytes);
+    }
+
+    // What the owner of offer sends as mime, read to end of file within PasteTimeout.
+    private byte[]? ReceiveBytes(nint offer, string mime)
+    {
         if (!ClipboardPipe.TryCreate(out int readFd, out int writeFd)) return null;
         try
         {
@@ -240,8 +303,7 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
             // libwayland has sent a duplicate; ours must close, or the read never sees end of file.
             ClipboardPipe.Close(writeFd);
             writeFd = -1;
-            var bytes = ClipboardPipe.ReadAll(readFd, PasteTimeout, whileWaiting: _wire.Dispatch);
-            return bytes is null ? null : Encoding.UTF8.GetString(bytes);
+            return ClipboardPipe.ReadAll(readFd, PasteTimeout, whileWaiting: _wire.Dispatch);
         }
         finally
         {
@@ -272,14 +334,84 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
         if (_ownIsLocal) DropOwn();
     }
 
-    internal void OnEnter(nint offer)
+    /// <summary>
+    /// A drag entered at <paramref name="x"/>, <paramref name="y"/> (logical px).
+    /// Its offer's types arrived before this: one carrying files is accepted, as
+    /// a copy, and reported; anything else is refused.
+    /// </summary>
+    internal void OnEnter(nint offer, uint serial, float x, float y)
     {
         foreach (var dead in _offers.Enter(offer)) _wire.DestroyOffer(dead);
+        _dragTakesFiles = false;
+        if (_offers.Drag == 0) return;
+        var mime = _offers.DropMime();
+        // Actions before accept: from version 3, a drop with no action agreed is
+        // no drop at all.
+        if (mime is not null) _wire.SetActions(_offers.Drag);
+        _wire.Accept(_offers.Drag, serial, mime);
+        if (mime is null) return;
+        _dragTakesFiles = true;
+        (_dragX, _dragY) = (x, y);
+        _enqueue(WindowEvent.FileDragOver(x, y));
     }
 
+    internal void OnMotion(float x, float y)
+    {
+        if (!_dragTakesFiles) return;
+        (_dragX, _dragY) = (x, y);
+        _enqueue(WindowEvent.FileDragOver(x, y));
+    }
+
+    /// <summary>The drag left, or was called off. A drop has already taken its offer, and says nothing more here.</summary>
     internal void OnLeave()
     {
         foreach (var dead in _offers.Leave()) _wire.DestroyOffer(dead);
+        if (_dragTakesFiles) _enqueue(WindowEvent.FileDragLeave());
+        _dragTakesFiles = false;
+    }
+
+    /// <summary>
+    /// The drag was let go here. Its offer is kept for <see cref="ServeDrops"/>
+    /// to read; the leave that follows a drop is then about nothing.
+    /// </summary>
+    internal void OnDrop()
+    {
+        if (!_dragTakesFiles || _offers.DropMime() is not { } mime) return;
+        _drops.Add((_offers.TakeDrag(), mime, _dragX, _dragY));
+        _dragTakesFiles = false;
+    }
+
+    /// <summary>Drops whose list <see cref="ServeDrops"/> has still to read.</summary>
+    internal bool DropsPending => _drops.Count > 0;
+
+    /// <summary>
+    /// Reads the file lists dropped since the last call, each through a pipe
+    /// within <see cref="PasteTimeout"/>, and reports the paths
+    /// (<see cref="WindowEventKind.FilesDropped"/>); finishes and destroys each
+    /// offer. A list that does not arrive, or names no local file, is reported
+    /// as the drag leaving, so a target lit for it goes out. The host calls it
+    /// after dispatch, never from a listener: its wait dispatches.
+    /// </summary>
+    internal void ServeDrops()
+    {
+        // A wait dispatches, and a dispatch can drop again: take one at a time.
+        while (_drops.Count > 0)
+        {
+            var (offer, mime, x, y) = _drops[0];
+            _drops.RemoveAt(0);
+            List<string> paths = [];
+            try
+            {
+                if (ReceiveBytes(offer, mime) is { } list) paths = UriList.Paths(list);
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine($"bibui: reading a drop failed: {e.Message}");
+            }
+            _enqueue(paths.Count > 0 ? WindowEvent.FilesDropped(x, y, paths) : WindowEvent.FileDragLeave());
+            _wire.Finish(offer);
+            _wire.DestroyOffer(offer);
+        }
     }
 
     /// <summary>
@@ -333,6 +465,9 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
     public void Destroy()
     {
         foreach (var o in _offers.Clear()) _wire.DestroyOffer(o);
+        foreach (var d in _drops) _wire.DestroyOffer(d.Offer);
+        _drops.Clear();
+        _dragTakesFiles = false;
         if (_ownSource != 0) _wire.DestroySource(_ownSource);
         _ownSource = 0;
         _ownText = null;
@@ -346,8 +481,8 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
     /// <summary>
     /// wl_data_device_manager, a wl_seat of the clipboard's own (a second proxy
     /// for the seat input binds is fine), and the data device on them. Its
-    /// listeners queue nothing for the runtime: they update the bookkeeping
-    /// and serve sends, which is all the protocol needs of them.
+    /// listeners update the bookkeeping, serve sends, answer a drag and queue
+    /// what it did; a drop's list is read after dispatch, never from them.
     /// </summary>
     private sealed class WaylandWire(WaylandClipboard owner, Action dispatch, Action flush) : IClipboardWire
     {
@@ -403,6 +538,21 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
 
         public void DestroyOffer(nint offer) => new WlDataOffer(offer).Destroy();
 
+        public void Accept(nint offer, uint serial, string? mime) => new WlDataOffer(offer).Accept(serial, mime);
+
+        public void SetActions(nint offer)
+        {
+            var o = new WlDataOffer(offer);
+            if (o.Version >= WlDataOffer.SetActionsSince)
+                o.SetActions(WlDataDeviceManager.DndAction.Copy, WlDataDeviceManager.DndAction.Copy);
+        }
+
+        public void Finish(nint offer)
+        {
+            var o = new WlDataOffer(offer);
+            if (o.Version >= WlDataOffer.FinishSince) o.Finish();
+        }
+
         public void Flush() => flush();
 
         public void Dispatch() => dispatch();
@@ -432,7 +582,8 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
 
     private static readonly WlDataDevice.Listener* DeviceListener = WlDataDevice.Listener.Create(new()
     {
-        DataOffer = &OnDeviceDataOffer, Enter = &OnDeviceEnter, Leave = &OnDeviceLeave, Selection = &OnDeviceSelection,
+        DataOffer = &OnDeviceDataOffer, Enter = &OnDeviceEnter, Leave = &OnDeviceLeave,
+        Motion = &OnDeviceMotion, Drop = &OnDeviceDrop, Selection = &OnDeviceSelection,
     });
     private static readonly WlDataOffer.Listener* OfferListener = WlDataOffer.Listener.Create(new() { Offer = &OnOfferOffer });
     private static readonly WlDataSource.Listener* SourceListener =
@@ -472,7 +623,22 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
     private static void OnDeviceEnter(void* data, WlDataDevice device, uint serial, WlSurface surface, WlFixed x, WlFixed y, WlDataOffer offer)
     {
         var c = Of(data);
-        Guard(() => c.OnEnter(offer.Handle));
+        // Surface-local, as the pointer's: logical pixels.
+        Guard(() => c.OnEnter(offer.Handle, serial, (float)x.ToDouble(), (float)y.ToDouble()));
+    }
+
+    [UnmanagedCallersOnly]
+    private static void OnDeviceMotion(void* data, WlDataDevice device, uint time, WlFixed x, WlFixed y)
+    {
+        var c = Of(data);
+        Guard(() => c.OnMotion((float)x.ToDouble(), (float)y.ToDouble()));
+    }
+
+    [UnmanagedCallersOnly]
+    private static void OnDeviceDrop(void* data, WlDataDevice device)
+    {
+        var c = Of(data);
+        Guard(c.OnDrop);
     }
 
     [UnmanagedCallersOnly]

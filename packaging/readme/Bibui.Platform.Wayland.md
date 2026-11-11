@@ -16,6 +16,14 @@ the Wayland window paces it: with a frame owed, `GetEvents(wait: false)` waits
 for the compositor's frame callback, as vsync would. `window.Frame` is the
 buffer's size, the scale and the output's refresh rate.
 
+Files dragged onto the window from a file manager (a drag whose offer carries
+`text/uri-list`) are accepted as a copy and reach the runtime as
+`WindowEvent.FileDragOver` while the drag is over the window,
+`FileDragLeave`, and `FilesDropped` with the local paths, percent-decoded,
+of its `file:` URIs; a box claiming `InteractionKinds.Drop` takes them. A drag
+of anything else is refused. It needs no wiring: the drag comes with the
+window's events.
+
 `window.Cpu` is this frame's `wl_shm` buffer; a renderer bound to it draws
 there, so `new SkiaCpuRenderer(window.Cpu)` works too. `WaylandWindow.IsSupported`
 says whether this session can open a window. With
