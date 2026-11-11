@@ -47,6 +47,46 @@ public sealed partial class BibuiRuntime
     public (Func<string?>? Get, Action<string>? Set) WindowClipboard { get; set; }
 
     /// <summary>
+    /// The mime types the clipboard offers now, best first as its owner listed
+    /// them: <c>image/png</c> when a screenshot tool or a browser copied a
+    /// picture, the text types when text was copied. Empty when the clipboard
+    /// is, or when there is none. By default the window's
+    /// (<see cref="WindowClipboardData"/>); a seam, as <see cref="ClipboardGet"/> is.
+    /// A paste of something other than text is the app's: on Ctrl+V it asks
+    /// for the types, and reads the one it takes with <see cref="ClipboardRead"/>.
+    /// </summary>
+    public Func<IReadOnlyList<string>> ClipboardTypes
+    {
+        get => _clipboardTypes ??= () => WindowClipboardData.Types?.Invoke() ?? [];
+        set => _clipboardTypes = value;
+    }
+
+    /// <summary>
+    /// The clipboard's content as <paramref name="mimeType"/>, as bytes (the
+    /// file a PNG would be, for <c>image/png</c>), or null when it does not offer
+    /// that type, the owner did not answer in time, or there is no clipboard.
+    /// It reads from another application, so it blocks for as long as the
+    /// window allows (half a second on Wayland). By default the window's.
+    /// </summary>
+    public Func<string, byte[]?> ClipboardRead
+    {
+        get => _clipboardRead ??= mimeType => WindowClipboardData.Read?.Invoke(mimeType);
+        set => _clipboardRead = value;
+    }
+
+    private Func<IReadOnlyList<string>>? _clipboardTypes;
+    private Func<string, byte[]?>? _clipboardRead;
+
+    /// <summary>
+    /// The clipboard of the window the runtime runs in, by mime type: what the
+    /// default <see cref="ClipboardTypes"/> and <see cref="ClipboardRead"/>
+    /// reach. Set by a platform that can read more than text when it opens
+    /// (Wayland's <c>window.GetClipboardTypes</c>, <c>window.GetClipboardData</c>);
+    /// unset, the clipboard offers no types.
+    /// </summary>
+    public (Func<IReadOnlyList<string>>? Types, Func<string, byte[]?>? Read) WindowClipboardData { get; set; }
+
+    /// <summary>
     /// Queues events already translated, in order, for the frame built next: for
     /// a test or a tool that says exactly what happened (a press with a click
     /// count of 2, a press addressed to one box). What a keyboard and mouse did

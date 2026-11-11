@@ -137,6 +137,16 @@ internal static unsafe class ClipboardTests
             Assert.Eq("6,8", string.Join(",", o.Clear().Order()), "teardown returns every live offer");
         });
 
+        t.Run("clipboard offers: what the selection offers, and its spelling of a type", () =>
+        {
+            var o = new SelectionOffers();
+            Assert.Eq(0, o.CurrentMimes.Count, "nothing selected");
+            o.Introduced(3); o.MimeOffered(3, "image/png"); o.MimeOffered(3, "text/html"); o.Selection(3);
+            Assert.Eq("image/png,text/html", string.Join(",", o.CurrentMimes), "in the owner's order");
+            Assert.Eq("image/png", o.Offered("IMAGE/PNG"), "matched without case");
+            Assert.True(o.Offered("image/jpeg") is null, "not offered");
+        });
+
         // ── The pipe ─────────────────────────────────────────────────────────
 
         t.Run("clipboard pipe: reads to end of file", () =>
@@ -377,6 +387,41 @@ internal static unsafe class ClipboardTests
             Assert.Eq("1000,1001", string.Join(",", wire.DestroyedSources.Select(s => s.ToString("x"))), "both sources");
             Assert.Eq("a0", string.Join(",", wire.DestroyedOffers.Select(s => s.ToString("x"))), "the offer");
             Assert.True(c.GetText() is null && !c.OwnsSelection, "nothing left");
+        });
+
+        t.Run("clipboard: an image is read by its type, through the pipe", () =>
+        {
+            byte[] png = [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0xFF];
+            var wire = new FakeWire
+            {
+                Remote = (mime, fd) =>
+                {
+                    fixed (byte* p = png) write(fd, p, (nuint)png.Length);
+                    close(fd);
+                },
+            };
+            var c = new WaylandClipboard(wire, () => 1u);
+            Assert.Eq(0, c.GetTypes().Count, "nothing selected, no types");
+            Offer(c, 0xb0, "image/png", "text/html");
+            c.OnSelection(0xb0);
+            Assert.Eq("image/png,text/html", string.Join(",", c.GetTypes()), "what the screenshot tool offered");
+            var got = c.GetData("image/png");
+            Assert.True(got is not null && got.AsSpan().SequenceEqual(png), "the PNG's bytes, binary intact");
+            Assert.Eq("receive b0 image/png", wire.Log[^1], "asked for that type");
+            int receives = wire.Receives;
+            Assert.True(c.GetData("image/jpeg") is null, "a type not offered is null");
+            Assert.Eq(receives, wire.Receives, "without asking the owner");
+        });
+
+        t.Run("clipboard: our own text answers for the text types, with no receive", () =>
+        {
+            var wire = new FakeWire { Remote = (_, fd) => throw new Exception("received from ourselves") };
+            var c = new WaylandClipboard(wire, () => 1u);
+            c.SetText("ünï");
+            Assert.Eq(string.Join(",", SelectionOffers.TextMimes), string.Join(",", c.GetTypes()), "our types");
+            Assert.Eq("ünï", Encoding.UTF8.GetString(c.GetData("text/plain")!), "our bytes");
+            Assert.True(c.GetData("image/png") is null, "not an image");
+            Assert.Eq(0, wire.Receives, "no receive");
         });
 
         // ── Live, with no surface and no selection ───────────────────────────

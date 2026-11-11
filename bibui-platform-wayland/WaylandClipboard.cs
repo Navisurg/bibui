@@ -79,6 +79,21 @@ internal sealed class SelectionOffers
         return all;
     }
 
+    /// <summary>The mime types the selection offers, in the order its owner listed them; empty when there is none.</summary>
+    public IReadOnlyList<string> CurrentMimes => Current == 0 ? [] : _mimes[Current];
+
+    /// <summary>
+    /// The selection's spelling of <paramref name="mime"/>, matched without
+    /// regard to case, or null when it does not offer it (or there is none).
+    /// </summary>
+    public string? Offered(string mime)
+    {
+        if (Current == 0) return null;
+        foreach (var m in _mimes[Current])
+            if (string.Equals(m, mime, StringComparison.OrdinalIgnoreCase)) return m;
+        return null;
+    }
+
     /// <summary>The selection's best text mime type, or null when it offers no text (or there is none).</summary>
     public string? PasteMime()
     {
@@ -140,6 +155,9 @@ internal interface IClipboardWire
 /// <item><b>No serial yet</b>: copy cannot set the session's selection without
 /// one, so the text stays in-process — pasted inside the app until the
 /// session's selection next changes.</item>
+/// <item><b>Other types</b>: <see cref="GetTypes"/> lists what the selection
+/// offers, and <see cref="GetData"/> reads one of them as bytes, the way paste
+/// reads text: an <c>image/png</c> a screenshot tool or a browser copied.</item>
 /// </list>
 ///
 /// <para>Primary selection (middle-click) is not here; see the follow-up on
@@ -207,6 +225,41 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
         }
     }
 
+    /// <summary>
+    /// The mime types the selection offers, as its owner listed them: the text
+    /// types while it is ours. Empty when the selection is, or there is no device.
+    /// </summary>
+    public IReadOnlyList<string> GetTypes()
+    {
+        if (_ownText is not null) return [.. SelectionOffers.TextMimes];
+        return _wire.Ready ? _offers.CurrentMimes.ToArray() : [];
+    }
+
+    /// <summary>
+    /// The selection as <paramref name="mime"/>, read through a pipe within
+    /// <see cref="PasteTimeout"/>; null when it is not offered or not sent in
+    /// time. Our own text answers for the text types without a round trip.
+    /// </summary>
+    public byte[]? GetData(string mime)
+    {
+        try
+        {
+            if (_ownText is not null)
+            {
+                foreach (var m in SelectionOffers.TextMimes)
+                    if (string.Equals(m, mime, StringComparison.OrdinalIgnoreCase)) return _ownBytes!.ToArray();
+                return null;
+            }
+            if (!_wire.Ready || _offers.Offered(mime) is not { } offered) return null;
+            return ReceiveBytes(_offers.Current, offered);
+        }
+        catch (Exception e)
+        {
+            Debug.WriteLine($"bibui: clipboard read failed: {e.Message}");
+            return null;
+        }
+    }
+
     public void SetText(string text)
     {
         try
@@ -230,8 +283,14 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
 
     private string? Receive()
     {
-        nint offer = _offers.Current;
         if (_offers.PasteMime() is not { } mime) return null;
+        var bytes = ReceiveBytes(_offers.Current, mime);
+        return bytes is null ? null : Encoding.UTF8.GetString(bytes);
+    }
+
+    // What the owner of offer sends as mime, read to end of file within PasteTimeout.
+    private byte[]? ReceiveBytes(nint offer, string mime)
+    {
         if (!ClipboardPipe.TryCreate(out int readFd, out int writeFd)) return null;
         try
         {
@@ -240,8 +299,7 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
             // libwayland has sent a duplicate; ours must close, or the read never sees end of file.
             ClipboardPipe.Close(writeFd);
             writeFd = -1;
-            var bytes = ClipboardPipe.ReadAll(readFd, PasteTimeout, whileWaiting: _wire.Dispatch);
-            return bytes is null ? null : Encoding.UTF8.GetString(bytes);
+            return ClipboardPipe.ReadAll(readFd, PasteTimeout, whileWaiting: _wire.Dispatch);
         }
         finally
         {

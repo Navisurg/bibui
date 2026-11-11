@@ -8106,6 +8106,29 @@ Run("Window clipboard: the runtime's clipboard is the window's unless the app se
     Eq("app's", app.ClipboardGet(), "a clipboard the app set survives the window");
 });
 
+Run("Window clipboard: types and bytes are the window's unless the app set its own; none without a window", () =>
+{
+    var bare = BibuiRuntime.Create();
+    Eq(0, bare.ClipboardTypes().Count, "a runtime with no window offers no types");
+    IsNull(bare.ClipboardRead("image/png"), "and reads nothing");
+
+    byte[] png = [0x89, 0x50, 0x4E, 0x47];
+    string? asked = null;
+    var rt = BibuiRuntime.Create();
+    rt.WindowClipboardData = (() => ["image/png", "text/html"], mime => { asked = mime; return mime == "image/png" ? png : null; });
+    Eq("image/png,text/html", string.Join(",", rt.ClipboardTypes()), "the window's types, in its order");
+    IsTrue(rt.ClipboardRead("image/png") is { } got && got.SequenceEqual(png), "the window's bytes");
+    Eq("image/png", asked, "for the type asked");
+    IsNull(rt.ClipboardRead("image/jpeg"), "a type not offered reads null");
+
+    var app = BibuiRuntime.Create();
+    app.ClipboardTypes = () => ["text/plain"];
+    app.ClipboardRead = _ => [1];
+    app.WindowClipboardData = (() => ["image/png"], _ => png);
+    Eq("text/plain", string.Join(",", app.ClipboardTypes()), "the app's own types survive the window");
+    Eq(1, app.ClipboardRead("image/png")!.Length, "and its own read");
+});
+
 // The system clipboard is the window's, so the key translation reaches for
 // none of its own.
 Run("Window clipboard: a paste with no clipboard given pastes nothing", () =>
