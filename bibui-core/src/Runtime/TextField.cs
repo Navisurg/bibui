@@ -48,6 +48,11 @@ public static class TextField
         return SemanticSize.Pixels(runtime.Fonts.LineHeight(font) + (Math.Max(1, rows) - 1) * runtime.Fonts.LineAdvance(font));
     }
 
+    // The height of a multi-line field that fits its lines: a row for each of
+    // the lines it draws, at least fit.Min and at most fit.Max of them.
+    internal static SemanticSize FitRows(BibuiRuntime runtime, int lines, (int Min, int Max) fit)
+        => Rows(runtime, Math.Clamp(lines, fit.Min, Math.Max(fit.Min, fit.Max)));
+
     /// <summary>
     /// The look of an input on a field's box: padded and outlined, the outline
     /// the theme's focus ring while edited, the destructive colour on an
@@ -382,10 +387,14 @@ public static class TextFieldExtensions
     /// Its height is the size pushed on the stack — <c>ChildrenSum()</c>,
     /// <see cref="Rows"/> or a share — and the wheel scrolls past it. Lines
     /// break as <paramref name="wrap"/> says: between words, or anywhere.
+    /// Given <paramref name="fitRows"/>, it is instead a row tall for each line
+    /// it draws, wrapped ones counted, from <c>Min</c> rows to <c>Max</c>, and
+    /// scrolls past that, keeping the caret in sight.
     /// </summary>
     public static BibuiWidget MultilineTextField(this BibuiRuntime runtime, string id, BibuiStr text,
         TextEditState edit, uint events = global::Bibui.Core.Runtime.TextField.MultiLineEvents,
-        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default, TextWrap wrap = TextWrap.Words)
+        TextColor textColor = TextColor.Primary, ReadOnlySpan<char> placeholder = default, TextWrap wrap = TextWrap.Words,
+        (int Min, int Max)? fitRows = null)
     {
         Font font = runtime.FontInScope();
         var style = TextLayer.StyleFromFont(runtime.Fonts, font, font.Scale);
@@ -437,6 +446,8 @@ public static class TextFieldExtensions
         ReadOnlySpan<char> shown = empty ? placeholder : text.Str;
         TextColor color = empty ? TextColor.Secondary : textColor;
         var lines = TextLayer.LinesFromText(runtime.Fonts, shown, style, font.Scale, room, wrap);
+        // Fitted to the lines as edited this frame, so it grows with the line typed.
+        if (fitRows is { } fit) view.SizeY = FitRows(runtime, lines.Length, fit);
 
         // Not focused: no caret, and the selection drawn dimmer. Empty: the
         // caret is before the placeholder, which is not text to select.

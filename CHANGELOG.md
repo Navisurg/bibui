@@ -8,6 +8,13 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
+- **A multi-line field that grows with its text, up to a limit:**
+  `MultilineTextField(..., fitRows: (min, max))` is a row tall for each line it
+  draws, wrapped lines and an empty field's placeholder counted, from `min`
+  rows to `max`; past `max` it scrolls, with the caret kept in sight.
+  The height follows the frame's own edits, so it grows in the frame a line is
+  typed. `StyledTextField` takes the same `fitRows`. Each method gains the
+  optional parameter at the end, so a caller compiled against 1.2 is rebuilt.
 - **`Bibui.Platform.Portal`**, a package of its own: the desktop's own file
   chooser through xdg-desktop-portal's `org.freedesktop.portal.FileChooser`,
   for any bibui window. `FileChooser.OpenAsync(new FileChooserOptions { Title,
