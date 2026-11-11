@@ -24,6 +24,14 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
     /// <summary>So it goes straight into <c>Row(...)</c> or <c>Column(...)</c>.</summary>
 }
 
+// A document and the source it was parsed from: parsed again only when the text changed.
+internal sealed class MarkdownParse
+{
+    // Refilled in place when the source changes: allocates only when the source outgrows it.
+    internal readonly BibuiStr Source = new(0);
+    internal MarkdownDocument? Document;
+}
+
 /// <summary>
 /// A read-only Markdown viewer, described as boxes and texts: no renderer of its
 /// own, and nothing the painter does not already draw.
@@ -104,9 +112,11 @@ public static class Markdown
     // block's index, so a block inserted or removed before it hands its boxes
     // to the block that has its index now. `pressedBlock` is the block pressed
     // this frame, or -1: a press its links and task boxes leave, at
-    // `pressedAt` from the block's top-left corner.
+    // `pressedAt` from the top-left corner of the block, `pressedSize` big as
+    // last laid out.
     internal static MarkdownWidget DrawRange(BibuiRuntime runtime, string id, MarkdownDocument document, Range blocks,
-        float? width, ComponentSize textSize, string? blockScope, out int pressedBlock, out Vector2 pressedAt)
+        float? width, ComponentSize textSize, string? blockScope, out int pressedBlock, out Vector2 pressedAt,
+        out Vector2 pressedSize)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -114,14 +124,25 @@ public static class Markdown
         var (first, count) = blocks.GetOffsetAndLength(document.Root.Children.Count);
         var cache = Caches.GetValue(runtime, static _ => new Cache());
         var entry = cache.Entry(id);
-        entry.Parsed = false;
         entry.Document = document;
         entry.BlockScope = blockScope ?? id;
         cache.Claim(entry.BlockScope, runtime.FrameCount, first, count);
         var result = Build(runtime, id, cache, entry, width, textSize, ranged: true, first, count);
         pressedBlock = cache.Writer.PressedBlock;
         pressedAt = cache.Writer.PressedAt;
+        pressedSize = cache.Writer.PressedSize;
         return result;
+    }
+
+    // The document `source` parses to, kept in `parse`.
+    internal static MarkdownDocument DocumentFor(MarkdownParse parse, BibuiStr source)
+    {
+        if (parse.Document is null || !source.Str.SequenceEqual(parse.Source.Str))
+        {
+            parse.Source.ReplaceRange((0, (int)parse.Source.Length), source.Str);
+            parse.Document = MarkdownDocument.Parse(parse.Source.Str);
+        }
+        return parse.Document;
     }
 
     // The space above blocks[i], i > 0, in a container whose text is `px` high.
@@ -225,11 +246,9 @@ public static class Markdown
         private readonly List<string> _blockIds = [];
         private readonly List<List<string>?> _idsInBlock = [];
 
-        // The source last parsed, refilled in place when it changes: an edit
-        // copies into it, and allocates only when the source outgrows it.
-        public readonly BibuiStr Source = new(0);
-        // Whether Document was parsed from Source, not handed in by the caller.
-        public bool Parsed;
+        // The source last parsed and its document; Document is what is drawn,
+        // that one or the caller's.
+        public readonly MarkdownParse Parse = new();
         public MarkdownDocument? Document;
         public long Used;
 
@@ -320,7 +339,7 @@ public static class Markdown
         public string? ClickedLink;
         public int ToggledTask = -1;
         public int PressedBlock = -1;
-        public Vector2 PressedAt;
+        public Vector2 PressedAt, PressedSize;
 
         public Look Body => new(_textSize, FontSlot.Body, false, UiColor.TextPrimary);
 
@@ -336,7 +355,7 @@ public static class Markdown
             ClickedLink = null;
             ToggledTask = -1;
             PressedBlock = -1;
-            PressedAt = default;
+            PressedAt = PressedSize = default;
             _block = -1;
         }
 
@@ -392,6 +411,7 @@ public static class Markdown
                 {
                     PressedBlock = i;
                     PressedAt = new Vector2(press.X - box.Rect.X, press.Y - box.Rect.Y);
+                    PressedSize = box.Extent;
                 }
             }
         }
@@ -1104,12 +1124,7 @@ public static class MarkdownExtensions
         ArgumentNullException.ThrowIfNull(source);
         var cache = Caches.GetValue(runtime, static _ => new Cache());
         var entry = cache.Entry(id);
-        if (!entry.Parsed || !source.Str.SequenceEqual(entry.Source.Str))
-        {
-            entry.Source.ReplaceRange((0, (int)entry.Source.Length), source.Str);
-            entry.Document = MarkdownDocument.Parse(entry.Source.Str);
-            entry.Parsed = true;
-        }
+        entry.Document = DocumentFor(entry.Parse, source);
         return Build(runtime, id, cache, entry, width, textSize);
     }
 
@@ -1125,7 +1140,6 @@ public static class MarkdownExtensions
         ArgumentNullException.ThrowIfNull(document);
         var cache = Caches.GetValue(runtime, static _ => new Cache());
         var entry = cache.Entry(id);
-        entry.Parsed = false;
         entry.Document = document;
         return Build(runtime, id, cache, entry, width, textSize);
     }
