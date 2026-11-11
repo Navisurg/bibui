@@ -224,16 +224,18 @@ public static class MarkdownEditorExtensions
 {
     /// <summary>
     /// Builds the editor named <paramref name="id"/> under the parent in scope:
-    /// <paramref name="source"/> rendered as <see cref="MarkdownExtensions.Markdown(BibuiRuntime, string, BibuiStr, float?, ComponentSize)"/>
+    /// <paramref name="source"/> rendered as <see cref="MarkdownExtensions.Markdown(BibuiRuntime, string, BibuiStr, float?, ComponentSize, MarkdownBlockDraw?)"/>
     /// renders it, with the block being edited shown as its source and edited
     /// in place. A press on a block edits it; Escape, or a press outside it,
     /// renders it again. Edits, ticked tasks and joined blocks go straight
     /// into <paramref name="source"/>. Its view is <paramref name="width"/>
     /// wide, or as wide as its parent when that is null, as tall as its
-    /// parent, and scrolls.
+    /// parent, and scrolls. A block <paramref name="drawBlock"/> draws is drawn
+    /// the app's way, as the viewer draws it, and a press on it edits its source.
     /// </summary>
     public static MarkdownEditorWidget MarkdownEditor(this BibuiRuntime runtime, string id, BibuiStr source,
-        MarkdownEditState state, float? width = null, ComponentSize textSize = ComponentSize.Md)
+        MarkdownEditState state, float? width = null, ComponentSize textSize = ComponentSize.Md,
+        MarkdownBlockDraw? drawBlock = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -305,10 +307,10 @@ public static class MarkdownEditorExtensions
         using (runtime.Parent(view))
         {
             if (!editing)
-                before = Markdown.DrawRange(runtime, state.BeforeId, document, .., width, textSize, state.BlockScope, out pressedBefore, out atBefore, out sizeBefore);
+                before = Markdown.DrawRange(runtime, state.BeforeId, document, .., width, textSize, drawBlock, state.BlockScope, out pressedBefore, out atBefore, out sizeBefore);
             else
             {
-                before = Markdown.DrawRange(runtime, state.BeforeId, document, ..region.Index, width, textSize, state.BlockScope, out pressedBefore, out atBefore, out sizeBefore);
+                before = Markdown.DrawRange(runtime, state.BeforeId, document, ..region.Index, width, textSize, drawBlock, state.BlockScope, out pressedBefore, out atBefore, out sizeBefore);
                 if (region.Index > 0) runtime.Gap(Markdown.GapAbove(runtime, document, region.Index, textSize));
 
                 Box frame = runtime.Box();
@@ -339,7 +341,7 @@ public static class MarkdownEditorExtensions
                 if (state.Reveal > 0 && laidOut) MarkdownEditing.Reveal(runtime, state, view, state.FieldBox, font, textSize);
 
                 if (count > 0)
-                    after = Markdown.DrawRange(runtime, state.AfterId, document, (region.Index + 1).., width, textSize, state.BlockScope, out pressedAfter, out atAfter, out sizeAfter);
+                    after = Markdown.DrawRange(runtime, state.AfterId, document, (region.Index + 1).., width, textSize, drawBlock, state.BlockScope, out pressedAfter, out atAfter, out sizeAfter);
             }
         }
 
