@@ -73,6 +73,7 @@ public sealed record WaylandHostOptions
 /// using var window = WaylandWindow.Open(new("My app", 960, 640));
 /// runtime.WakeUp = window.Wake;
 /// runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+/// runtime.WindowClipboardData = window.ClipboardData;
 /// window.OnRefresh = runtime.RequestFrame;
 /// using var managed = new ManagedRenderer(window.Cpu);
 /// while (!window.IsClosing)
@@ -224,6 +225,16 @@ public sealed unsafe class WaylandWindow : IDisposable
 
     public string? GetClipboardText() => _clipboard.GetText();
     public void SetClipboardText(string text) => _clipboard.SetText(text);
+
+    /// <summary>
+    /// The clipboard by mime type, for <c>runtime.WindowClipboardData</c>: the
+    /// types the selection offers, as the application that copied listed them
+    /// (<c>image/png</c> for a screenshot), and any of them read as bytes within
+    /// half a second. While the selection is the text we copied, our text
+    /// answers for the text types.
+    /// </summary>
+    public IClipboardData ClipboardData => _clipboard;
+
     public void SetCursor(CursorShape shape) => _scale.SetCursor(shape);
 
     /// <summary>Cursor → input: where the pointer's owner reports the pointer, its enter serial and its leave.</summary>

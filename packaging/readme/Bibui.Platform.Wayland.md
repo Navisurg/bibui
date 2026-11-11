@@ -16,6 +16,15 @@ the Wayland window paces it: with a frame owed, `GetEvents(wait: false)` waits
 for the compositor's frame callback, as vsync would. `window.Frame` is the
 buffer's size, the scale and the output's refresh rate.
 
+The clipboard is the session's (`wl_data_device`): wire it with
+`runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText)`
+for text, and `runtime.WindowClipboardData = window.ClipboardData`
+to read what else it offers, as bytes by mime type: on Ctrl+V an app that takes
+pictures asks `runtime.ClipboardTypes()` for `image/png`, which screenshot tools
+and browsers copy, and reads it with `runtime.ClipboardRead("image/png")`.
+A read waits at most half a second for the application that copied. The
+`Bibui.App.Wayland*` packages wire both.
+
 `window.Cpu` is this frame's `wl_shm` buffer; a renderer bound to it draws
 there, so `new SkiaCpuRenderer(window.Cpu)` works too. `WaylandWindow.IsSupported`
 says whether this session can open a window. With

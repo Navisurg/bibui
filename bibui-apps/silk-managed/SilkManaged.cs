@@ -26,6 +26,7 @@ public sealed partial class BibuiApp
         var opened = SilkWindow.Open(SilkGl.Options(window));
         runtime.WakeUp = opened.Wake;
         runtime.WindowClipboard = (opened.GetClipboardText, opened.SetClipboardText);
+        runtime.WindowClipboardData = opened.ClipboardData;
         return opened;
     }
 

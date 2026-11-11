@@ -8106,6 +8106,57 @@ Run("Window clipboard: the runtime's clipboard is the window's unless the app se
     Eq("app's", app.ClipboardGet(), "a clipboard the app set survives the window");
 });
 
+Run("Window clipboard: types and bytes are the window's unless the app set its own; none without a window", () =>
+{
+    var bare = BibuiRuntime.Create();
+    Eq(0, bare.ClipboardTypes().Count, "a runtime with no window offers no types");
+    IsNull(bare.ClipboardRead("image/png"), "and reads nothing");
+
+    byte[] png = [0x89, 0x50, 0x4E, 0x47];
+    var window = new FakeClipboardData(["image/png", "text/html"], png);
+    var rt = BibuiRuntime.Create();
+    rt.WindowClipboardData = window;
+    Eq("image/png,text/html", string.Join(",", rt.ClipboardTypes()), "the window's types, in its order");
+    IsTrue(rt.ClipboardRead("image/png") is { } got && got.SequenceEqual(png), "the window's bytes");
+    Eq("image/png", window.Asked, "for the type asked");
+    IsNull(rt.ClipboardRead("image/jpeg"), "a type not offered reads null");
+
+    var app = BibuiRuntime.Create();
+    app.ClipboardTypes = () => ["text/plain"];
+    app.ClipboardRead = _ => [1];
+    app.WindowClipboardData = new FakeClipboardData(["image/png"], png);
+    Eq("text/plain", string.Join(",", app.ClipboardTypes()), "the app's own types survive the window");
+    Eq(1, app.ClipboardRead("image/png")!.Length, "and its own read");
+});
+
+// A host whose clipboard is a string (GLFW's, through the Silk window) reports
+// it with TextClipboardData: one text type while there is text, its UTF-8 bytes.
+Run("Window clipboard: a text-only clipboard offers UTF-8 text while it has text, and nothing else", () =>
+{
+    string? text = null;
+    var data = new TextClipboardData(() => text);
+    Eq(0, data.Types().Count, "no text, no types");
+    IsNull(data.Read(TextClipboardData.Mime), "and nothing to read");
+    text = "";
+    Eq(0, data.Types().Count, "empty text is none");
+
+    text = "ünï 😀";
+    Eq("text/plain;charset=utf-8", string.Join(",", data.Types()), "UTF-8 plain text, the one type");
+    IsTrue(data.Read("text/plain;charset=utf-8") is { } bytes && bytes.SequenceEqual(System.Text.Encoding.UTF8.GetBytes("ünï 😀")),
+        "the text's UTF-8 bytes, the emoji whole");
+    IsTrue(data.Read("Text/Plain;Charset=UTF-8") is not null, "the type matched without case");
+    IsNull(data.Read("image/png"), "no picture");
+    IsNull(data.Read("text/html"), "nor any type it does not list");
+
+    text = "later";
+    Eq("later", System.Text.Encoding.UTF8.GetString(data.Read(TextClipboardData.Mime)!), "read as it is now, not as it was");
+
+    var rt = BibuiRuntime.Create();
+    rt.WindowClipboardData = data;
+    Eq(TextClipboardData.Mime, string.Join(",", rt.ClipboardTypes()), "through the runtime");
+    Eq("later", System.Text.Encoding.UTF8.GetString(rt.ClipboardRead(TextClipboardData.Mime)!), "and read through it");
+});
+
 // The system clipboard is the window's, so the key translation reaches for
 // none of its own.
 Run("Window clipboard: a paste with no clipboard given pastes nothing", () =>
@@ -8643,3 +8694,16 @@ static class ObjectExtensions
 
 // The state BuildSelect keeps for a test's select.
 sealed class SelectState { public string? Value; }
+
+// A window's clipboard by mime type, for the runtime's tests: it offers the
+// types given, reads the bytes given for the first of them, and notes what was asked.
+sealed class FakeClipboardData(string[] types, byte[] first) : IClipboardData
+{
+    public string? Asked { get; private set; }
+    public IReadOnlyList<string> Types() => types;
+    public byte[]? Read(string mimeType)
+    {
+        Asked = mimeType;
+        return string.Equals(mimeType, types[0], StringComparison.OrdinalIgnoreCase) ? first : null;
+    }
+}

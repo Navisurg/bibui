@@ -7,7 +7,9 @@ The OpenGL route is `SilkGl`: `SilkGl.Options` opens the window with a GL
 context, `SilkGl.Target` is the framebuffer a renderer draws into, between
 `SilkGl.BeginDraw` and `EndDraw` (the swap). A renderer on the CPU draws into
 memory that `Bibui.Gl`'s `GlCpuFramebuffer` shows on it. The clipboard goes
-through TextCopy.
+through TextCopy, and is text only: `window.ClipboardData`, for
+`runtime.WindowClipboardData`, offers `text/plain;charset=utf-8` while there is
+text, and no other type.
 
 ```csharp
 using var window = SilkWindow.Open(SilkGl.Options(new PlatformWindowOptions("My app", 960, 640)));
