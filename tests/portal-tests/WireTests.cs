@@ -27,6 +27,18 @@ internal static class WireTests
         CurrentFolder = "/home/a/Mød",
     };
 
+    public static readonly SaveFileOptions SaveEverything = new()
+    {
+        ParentWindow = "wayland:abc",
+        Title = "Save the notes",
+        AcceptLabel = "Export",
+        Filters = [new FileFilter("Notes ✎", "*.md") { MimeTypes = ["text/markdown"] }],
+        CurrentFilter = new FileFilter("Notes ✎", "*.md") { MimeTypes = ["text/markdown"] },
+        CurrentName = "Møde notes.md",
+        CurrentFolder = "/home/a/Mød",
+        CurrentFile = "/home/a/Mød/old.md",
+    };
+
     // The same request, built by GLib.
     private const string Script = """
         import sys, gi
@@ -48,12 +60,26 @@ internal static class WireTests
         def open_file():
             return GLib.Variant('(ssa{sv})', ('wayland:abc', 'Attach files', opts()))
 
+        def save_file():
+            notes = ('Notes ✎', [(0, '*.md'), (1, 'text/markdown')])
+            return GLib.Variant('(ssa{sv})', ('wayland:abc', 'Save the notes', {
+                'handle_token': GLib.Variant('s', 'bibui_tok'),
+                'accept_label': GLib.Variant('s', 'Export'),
+                'modal': GLib.Variant('b', True),
+                'filters': GLib.Variant('a(sa(us))', [notes]),
+                'current_filter': GLib.Variant('(sa(us))', notes),
+                'current_name': GLib.Variant('s', 'Møde notes.md'),
+                'current_folder': GLib.Variant.new_bytestring('/home/a/Mød'.encode()),
+                'current_file': GLib.Variant.new_bytestring('/home/a/Mød/old.md'.encode()),
+            }))
+
         mode = sys.argv[1]
-        if mode == 'openfile-body':
+        if mode in ('openfile-body', 'savefile-body'):
             # GVariant's own serialisation is not D-Bus's: the body is taken out of a message.
+            save = mode == 'savefile-body'
             m = Gio.DBusMessage.new_method_call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
-                                                'org.freedesktop.portal.FileChooser', 'OpenFile')
-            m.set_body(open_file())
+                                                'org.freedesktop.portal.FileChooser', 'SaveFile' if save else 'OpenFile')
+            m.set_body(save_file() if save else open_file())
             m.set_byte_order(Gio.DBusMessageByteOrder.LITTLE_ENDIAN)
             blob = m.to_blob(Gio.DBusCapabilityFlags.NONE)
             print(blob[len(blob) - int.from_bytes(blob[4:8], 'little'):].hex())
@@ -80,6 +106,12 @@ internal static class WireTests
         {
             var ours = Convert.ToHexString(FileChooser.EncodeOpenFile(Everything, "bibui_tok").Written).ToLowerInvariant();
             Assert.Eq(Python("openfile-body"), ours, "OpenFile body");
+        });
+
+        t.Run("wire: the SaveFile body is GLib's, byte for byte", () =>
+        {
+            var ours = Convert.ToHexString(FileChooser.EncodeSaveFile(SaveEverything, "bibui_tok").Written).ToLowerInvariant();
+            Assert.Eq(Python("savefile-body"), ours, "SaveFile body");
         });
 
         t.Run("wire: GLib reads our OpenFile call whole", () =>
@@ -130,6 +162,24 @@ internal static class WireTests
             Assert.Eq("/home/a/Mød\0", System.Text.Encoding.UTF8.GetString(folder.Cast<byte>().ToArray()), "folder, NUL-terminated");
         });
 
+        t.Run("wire: SaveFile's options read back as written", () =>
+        {
+            var body = FileChooser.EncodeSaveFile(SaveEverything, "bibui_tok").ToArray();
+            var v = new DBusReader(body, 0, body.Length, false).ReadAll("ssa{sv}");
+            Assert.Eq("Save the notes", (string)v[1], "title");
+            var o = (Dictionary<object, object>)v[2];
+            Assert.Eq("handle_token,accept_label,modal,filters,current_filter,current_name,current_folder,current_file",
+                string.Join(",", o.Keys), "keys, in order");
+            Assert.Eq("Møde notes.md", (string)((DBusVariant)o["current_name"]).Value, "name");
+            var file = (List<object>)((DBusVariant)o["current_file"]).Value;
+            Assert.Eq("/home/a/Mød/old.md\0", System.Text.Encoding.UTF8.GetString(file.Cast<byte>().ToArray()), "file, NUL-terminated");
+
+            body = FileChooser.EncodeSaveFile(new SaveFileOptions { Modal = false }, "bibui_t").ToArray();
+            o = (Dictionary<object, object>)new DBusReader(body, 0, body.Length, false).ReadAll("ssa{sv}")[2];
+            Assert.Eq("handle_token,modal", string.Join(",", o.Keys), "unset options left out");
+            Assert.Eq(false, (bool)((DBusVariant)o["modal"]).Value, "modal");
+        });
+
         t.Run("wire: unset options are left out", () =>
         {
             var body = FileChooser.EncodeOpenFile(new FileChooserOptions { Directory = true }, "bibui_t").ToArray();
@@ -142,6 +192,8 @@ internal static class WireTests
         {
             Assert.Throws<ArgumentException>(() => FileChooser.ChooseAsync(new FileChooserOptions { Title = "a\0b" }, null, default));
             Assert.Throws<ArgumentException>(() => FileChooser.ChooseAsync(new FileChooserOptions { CurrentFolder = "/a\0" }, null, default));
+            Assert.Throws<ArgumentException>(() => FileChooser.ChooseSaveAsync(new SaveFileOptions { CurrentName = "a\0.md" }, null, default));
+            Assert.Throws<ArgumentException>(() => FileChooser.ChooseSaveAsync(new SaveFileOptions { CurrentFile = "/a\0" }, null, default));
         });
 
         t.Run("wire: an empty array still pads to its element", () =>

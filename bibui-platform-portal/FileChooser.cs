@@ -69,6 +69,44 @@ public sealed class FileChooserOptions
     public string ParentWindow { get; init; } = "";
 }
 
+/// <summary>What the save dialog asks of the person.</summary>
+public sealed class SaveFileOptions
+{
+    /// <summary>The dialog's title, as "Save the report".</summary>
+    public string Title { get; init; } = "";
+
+    /// <summary>The label of the button that accepts, as "Export". Empty: the portal's own ("Save").</summary>
+    public string AcceptLabel { get; init; } = "";
+
+    /// <summary>Whether the dialog is modal to <see cref="ParentWindow"/>. True unless set.</summary>
+    public bool Modal { get; init; } = true;
+
+    /// <summary>The filters offered, in order; empty offers every file.</summary>
+    public IReadOnlyList<FileFilter> Filters { get; init; } = [];
+
+    /// <summary>The filter selected when the dialog opens: one of <see cref="Filters"/>, or null for the portal's choice.</summary>
+    public FileFilter? CurrentFilter { get; init; }
+
+    /// <summary>The name the dialog suggests, as "report.md". Null: none.</summary>
+    public string? CurrentName { get; init; }
+
+    /// <summary>The folder the dialog opens in, a local path. Null: the portal's choice.</summary>
+    public string? CurrentFolder { get; init; }
+
+    /// <summary>
+    /// The file being saved again, a local path, for "Save as…" on a file that
+    /// has one: the dialog opens beside it, with its name. Null: a new file.
+    /// </summary>
+    public string? CurrentFile { get; init; }
+
+    /// <summary>
+    /// The window the dialog belongs to, as the portal names one:
+    /// <c>wayland:HANDLE</c> (from xdg-foreign) or <c>x11:XID</c> in hex. Empty,
+    /// the default, opens the dialog on its own, unparented.
+    /// </summary>
+    public string ParentWindow { get; init; } = "";
+}
+
 /// <summary>How a file chooser request ended.</summary>
 public enum FileChooserOutcome
 {
@@ -98,7 +136,7 @@ public sealed class FileChooserResult
     /// <summary>How the request ended.</summary>
     public FileChooserOutcome Outcome { get; }
 
-    /// <summary>The chosen files or folders as local paths, in the order the portal gave them; empty unless <see cref="Outcome"/> is <see cref="FileChooserOutcome.Chosen"/>.</summary>
+    /// <summary>The chosen files or folders as local paths, in the order the portal gave them (one for a save); empty unless <see cref="Outcome"/> is <see cref="FileChooserOutcome.Chosen"/>.</summary>
     public IReadOnlyList<string> Paths { get; }
 
     /// <summary>Why nothing was chosen, or what of the portal's answer was left out, in words for a log; null when there is nothing to say.</summary>
@@ -110,9 +148,9 @@ public sealed class FileChooserResult
 
 /// <summary>
 /// The desktop's own file chooser, through xdg-desktop-portal's
-/// <c>org.freedesktop.portal.FileChooser</c> on the session bus: the dialog
-/// GNOME, KDE or the compositor's portal draws, in the person's language and
-/// with their bookmarks, for any bibui window.
+/// <c>org.freedesktop.portal.FileChooser</c> on the session bus: the open and
+/// save dialogs GNOME, KDE or the compositor's portal draws, in the person's
+/// language and with their bookmarks, for any bibui window.
 ///
 /// <para>Every call is asynchronous and holds no thread while the dialog is
 /// open, so the frame loop keeps running under it. The task completes on a
@@ -164,6 +202,34 @@ public static class FileChooser
         ChooseAsync(options, OperatingSystem.IsLinux() ? SessionBus.Address() : null, ct);
 
     /// <summary>
+    /// Asks the person where to save a file and returns its local path; null
+    /// when they cancelled or no chooser could be asked.
+    /// <see cref="ChooseSaveAsync(SaveFileOptions, CancellationToken)"/> says which, and why.
+    /// The file is not written: the app writes it, and the dialog has already
+    /// asked whether to replace a file of that name.
+    /// </summary>
+    /// <exception cref="ArgumentException">An option holds a NUL character, which D-Bus cannot carry.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="ct"/> was cancelled; the dialog is closed.</exception>
+    public static Task<string?> SaveAsync(SaveFileOptions options, CancellationToken ct = default) =>
+        SaveAsync(options, OperatingSystem.IsLinux() ? SessionBus.Address() : null, ct);
+
+    internal static async Task<string?> SaveAsync(SaveFileOptions options, string? address, CancellationToken ct)
+    {
+        var result = await ChooseSaveAsync(options, address, ct).ConfigureAwait(false);
+        return result.Outcome == FileChooserOutcome.Chosen ? result.Paths[0] : null;
+    }
+
+    /// <summary>
+    /// Asks the person where to save a file, and says how it ended: the local
+    /// path chosen, a cancel, or why no chooser could be asked. Cancelling
+    /// <paramref name="ct"/> closes the dialog.
+    /// </summary>
+    /// <exception cref="ArgumentException">An option holds a NUL character, which D-Bus cannot carry.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="ct"/> was cancelled; the dialog is closed.</exception>
+    public static Task<FileChooserResult> ChooseSaveAsync(SaveFileOptions options, CancellationToken ct = default) =>
+        ChooseSaveAsync(options, OperatingSystem.IsLinux() ? SessionBus.Address() : null, ct);
+
+    /// <summary>
     /// The version of the portal's FileChooser on the session bus, or null
     /// when there is none (or no bus). Opens no dialog; the bus starts the
     /// portal if it is not running.
@@ -192,16 +258,28 @@ public static class FileChooser
 
     internal static Task<FileChooserResult> ChooseAsync(FileChooserOptions options, string? address, CancellationToken ct)
     {
-        // Encoded before anything is sent, so a bad option throws here, to the caller.
-        var token = "bibui_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8)).ToLowerInvariant();
-        var body = EncodeOpenFile(options, token);
+        var token = NewToken();
+        return Ask("OpenFile", EncodeOpenFile(options, token), token, address, ct);
+    }
+
+    internal static Task<FileChooserResult> ChooseSaveAsync(SaveFileOptions options, string? address, CancellationToken ct)
+    {
+        var token = NewToken();
+        return Ask("SaveFile", EncodeSaveFile(options, token), token, address, ct);
+    }
+
+    private static string NewToken() => "bibui_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8)).ToLowerInvariant();
+
+    // The body is encoded before this is called, so a bad option throws to the caller.
+    private static Task<FileChooserResult> Ask(string method, DBusWriter body, string token, string? address, CancellationToken ct)
+    {
         if (!OperatingSystem.IsLinux()) return Task.FromResult(FileChooserResult.Unavailable("xdg-desktop-portal is only on Linux"));
         if (address is null)
             return Task.FromResult(FileChooserResult.Unavailable("no session bus: DBUS_SESSION_BUS_ADDRESS is not set and $XDG_RUNTIME_DIR/bus does not exist"));
-        return RequestAsync(body, token, address, ct);
+        return RequestAsync(method, body, token, address, ct);
     }
 
-    private static async Task<FileChooserResult> RequestAsync(DBusWriter openFile, string token, string address, CancellationToken ct)
+    private static async Task<FileChooserResult> RequestAsync(string method, DBusWriter request, string token, string address, CancellationToken ct)
     {
         DBusConnection bus;
         try { bus = await ConnectAsync(address, ct).ConfigureAwait(false); }
@@ -213,7 +291,7 @@ public static class FileChooser
         await using (bus.ConfigureAwait(false))
         {
             // Every Response that arrives is kept: the portal's reply to
-            // OpenFile and its Response can reach the read loop back to back,
+            // the call and its Response can reach the read loop back to back,
             // before this method has looked at the reply.
             var responses = new List<DBusMessage>();
             var arrived = new SemaphoreSlim(0);
@@ -232,7 +310,7 @@ public static class FileChooser
                 // Subscribed before the call, so a Response the portal sends
                 // at once cannot be missed.
                 await AddMatchAsync(bus, expected, ct).ConfigureAwait(false);
-                var reply = await CallAsync(bus, DBusMessage.Call(Desktop, DesktopPath, ChooserInterface, "OpenFile", "ssa{sv}", openFile), ct).ConfigureAwait(false);
+                var reply = await CallAsync(bus, DBusMessage.Call(Desktop, DesktopPath, ChooserInterface, method, "ssa{sv}", request), ct).ConfigureAwait(false);
                 if (reply.Type == DBusMessageType.Error)
                 {
                     var why = $"{reply.ErrorName}: {reply.ErrorText()}";
@@ -240,7 +318,7 @@ public static class FileChooser
                         ? FileChooserResult.Unavailable($"no file chooser portal on the session bus ({why})")
                         : FileChooserResult.Failed($"the portal refused the request ({why})");
                 }
-                if (reply.Signature != "o") return FileChooserResult.Failed($"the portal answered OpenFile with '{reply.Signature}', not a request handle");
+                if (reply.Signature != "o") return FileChooserResult.Failed($"the portal answered {method} with '{reply.Signature}', not a request handle");
                 handle = (string)reply.ReadBody()[0];
                 portal = reply.Sender;
                 // A portal older than 0.9 names its own handle, unsubscribed.
@@ -289,24 +367,49 @@ public static class FileChooser
         Entry(w, "modal", "b").Bool(options.Modal);
         Entry(w, "multiple", "b").Bool(options.Multiple);
         Entry(w, "directory", "b").Bool(options.Directory);
-        if (options.Filters.Count > 0)
-        {
-            Entry(w, "filters", "a(sa(us))");
-            var filters = w.BeginArray(8);
-            foreach (var f in options.Filters) Filter(w, f);
-            w.EndArray(filters);
-        }
-        if (options.CurrentFilter is { } current) Filter(Entry(w, "current_filter", "(sa(us))"), current);
-        if (options.CurrentFolder is { } folder)
-        {
-            // A byte string with its NUL, as the portal takes a file name.
-            if (folder.Contains('\0')) throw new ArgumentException("a folder path cannot hold a NUL character", nameof(options));
-            var bytes = new byte[System.Text.Encoding.UTF8.GetByteCount(folder) + 1];
-            System.Text.Encoding.UTF8.GetBytes(folder, bytes);
-            Entry(w, "current_folder", "ay").Bytes(bytes);
-        }
+        Filters(w, options.Filters, options.CurrentFilter);
+        if (options.CurrentFolder is { } folder) PathEntry(w, "current_folder", folder);
         w.EndArray(dict);
         return w;
+    }
+
+    /// <summary>The body of <c>SaveFile(parent_window, title, options)</c>, signature <c>ssa{sv}</c>.</summary>
+    internal static DBusWriter EncodeSaveFile(SaveFileOptions options, string token)
+    {
+        var w = new DBusWriter();
+        w.String(options.ParentWindow);
+        w.String(options.Title);
+        var dict = w.BeginArray(8);
+        Entry(w, "handle_token", "s").String(token);
+        if (options.AcceptLabel.Length > 0) Entry(w, "accept_label", "s").String(options.AcceptLabel);
+        Entry(w, "modal", "b").Bool(options.Modal);
+        Filters(w, options.Filters, options.CurrentFilter);
+        if (options.CurrentName is { } name) Entry(w, "current_name", "s").String(name);
+        if (options.CurrentFolder is { } folder) PathEntry(w, "current_folder", folder);
+        if (options.CurrentFile is { } file) PathEntry(w, "current_file", file);
+        w.EndArray(dict);
+        return w;
+    }
+
+    private static void Filters(DBusWriter w, IReadOnlyList<FileFilter> filters, FileFilter? current)
+    {
+        if (filters.Count > 0)
+        {
+            Entry(w, "filters", "a(sa(us))");
+            var array = w.BeginArray(8);
+            foreach (var f in filters) Filter(w, f);
+            w.EndArray(array);
+        }
+        if (current is not null) Filter(Entry(w, "current_filter", "(sa(us))"), current);
+    }
+
+    // A path as a byte string with its NUL, as the portal takes a file name.
+    private static void PathEntry(DBusWriter w, string key, string path)
+    {
+        if (path.Contains('\0')) throw new ArgumentException($"{key} cannot hold a NUL character", "options");
+        var bytes = new byte[System.Text.Encoding.UTF8.GetByteCount(path) + 1];
+        System.Text.Encoding.UTF8.GetBytes(path, bytes);
+        Entry(w, key, "ay").Bytes(bytes);
     }
 
     private static DBusWriter Entry(DBusWriter w, string key, string signature)

@@ -46,10 +46,10 @@ internal static class ChooserTests
         return FileChooser.RequestPath(FakeBus.ClientName, (string)((DBusVariant)options["handle_token"]).Value);
     }
 
-    /// <summary>A portal that answers OpenFile with the expected handle, and then <paramref name="then"/>.</summary>
+    /// <summary>A portal that answers OpenFile or SaveFile with the expected handle, and then <paramref name="then"/>.</summary>
     private static Func<DBusMessage, Task> Portal(FakeBus bus, Func<DBusMessage, string, Task>? then = null) => async m =>
     {
-        if (m.Member != "OpenFile") return;
+        if (m.Member is not ("OpenFile" or "SaveFile")) return;
         var handle = HandleOf(m);
         await bus.Reply(m, "o", w => w.String(handle));
         if (then is not null) await then(m, handle);
@@ -107,6 +107,34 @@ internal static class ChooserTests
                 Assert.Eq(null, await FileChooser.OpenAsync(Attach, bus.Address, default), "cancelled");
             }
             Assert.Eq(null, await FileChooser.OpenAsync(Attach, null, default), "no bus");
+        });
+
+        t.Run("chooser: a save asks SaveFile and comes back as one local path", async () =>
+        {
+            await using (var bus = new FakeBus())
+            {
+                bus.Portal = Portal(bus, (_, h) => bus.SendRaw(bus.ResponseBytes(h, 0, FakeBus.PortalName, "file:///home/a/M%C3%B8de%20notes.md")));
+                var r = await FileChooser.ChooseSaveAsync(new SaveFileOptions { Title = "Save the notes", CurrentName = "notes.md" }, bus.Address, default)
+                    .WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Eq(FileChooserOutcome.Chosen, r.Outcome, $"outcome ({r.Reason})");
+                Assert.Eq("/home/a/Møde notes.md", string.Join("|", r.Paths), "path");
+                var save = bus.Received.Single(m => m.Interface == "org.freedesktop.portal.FileChooser");
+                Assert.Eq("SaveFile", save.Member, "method");
+                Assert.Eq("ssa{sv}", save.Signature, "signature");
+                Assert.Eq("Save the notes", (string)save.ReadBody()[1], "title");
+                Assert.Contains(bus.Rules.Single(), $"path='{HandleOf(save)}'");
+            }
+            await using (var bus = new FakeBus())
+            {
+                bus.Portal = Portal(bus, (_, h) => bus.SendRaw(bus.ResponseBytes(h, 0, FakeBus.PortalName, "file:///tmp/out.md")));
+                Assert.Eq("/tmp/out.md", await FileChooser.SaveAsync(new SaveFileOptions(), bus.Address, default), "SaveAsync, chosen");
+            }
+            await using (var bus = new FakeBus())
+            {
+                bus.Portal = Portal(bus, (_, h) => bus.SendRaw(bus.ResponseBytes(h, 1, FakeBus.PortalName)));
+                Assert.Eq(null, await FileChooser.SaveAsync(new SaveFileOptions(), bus.Address, default), "SaveAsync, cancelled");
+            }
+            Assert.Eq(null, await FileChooser.SaveAsync(new SaveFileOptions(), null, default), "SaveAsync, no bus");
         });
 
         t.Run("chooser: closing the dialog is Cancelled", async () =>

@@ -13,7 +13,9 @@ All notable changes to bibui are recorded here. The format is based on
   for any bibui window. `FileChooser.OpenAsync(new FileChooserOptions { Title,
   Multiple, Directory, Filters, … })` returns the chosen files or folders as
   local paths, or null when the person cancelled or there is no portal;
-  `FileChooser.ChooseAsync` says which (`FileChooserOutcome`) and why
+  `FileChooser.SaveAsync(new SaveFileOptions { Title, CurrentName,
+  CurrentFolder, CurrentFile, Filters, … })` returns where to save a file.
+  `ChooseAsync` and `ChooseSaveAsync` say which (`FileChooserOutcome`) and why
   (`Reason`). It holds no thread while the dialog is open, and without a
   session bus or a portal it comes back `Unavailable` rather than throwing.
   `FileChooser.VersionAsync()` asks the portal's version without opening a

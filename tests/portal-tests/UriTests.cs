@@ -21,6 +21,7 @@ internal static class UriTests
             Assert.Eq("/run/user/1000/doc/1a2b/x.png", FileUris.ToLocalPath("file:///run/user/1000/doc/1a2b/x.png"), "a document-portal path");
             Assert.Eq("/tmp/a", FileUris.ToLocalPath("file:///tmp/a#fragment"), "a bare # ends the path");
             Assert.Eq("/tmp/aé", FileUris.ToLocalPath("file:///tmp/a%c3%a9"), "lower-case hex");
+            Assert.Eq("/tmp/✎", FileUris.ToLocalPath("file:///tmp/%e2%9c%8e"), "lower-case hex in both digits");
         });
 
         t.Run("uri: what is not a local file is refused", () =>

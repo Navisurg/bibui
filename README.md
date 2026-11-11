@@ -216,8 +216,8 @@ repository:
 - [Components](docs/components/index.md): every component, with pictures.
 - [Native AOT](docs/aot.md): publishing one native binary, and the trimming
   rules for app code.
-- [The file chooser](docs/file-chooser.md): the desktop's own dialog for
-  choosing files and folders, through xdg-desktop-portal.
+- [The file chooser](docs/file-chooser.md): the desktop's own dialogs for
+  opening files and folders and saving a file, through xdg-desktop-portal.
 - Samples: [`samples/showcase`](samples/showcase) is an observatory console
   that uses most of bibui, [`samples/bibui-app`](samples/bibui-app) is a short
   interactive app, and [`samples/component-gallery`](samples/component-gallery)

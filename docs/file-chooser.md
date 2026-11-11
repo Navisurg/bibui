@@ -1,6 +1,6 @@
 # The file chooser
 
-A bibui app asks for files the way any Linux desktop app does: through
+A bibui app asks for files, and where to save one, the way any Linux desktop app does: through
 xdg-desktop-portal's `org.freedesktop.portal.FileChooser`, which shows the
 desktop's own dialog (GNOME's, KDE's, or the one the compositor's portal
 draws), in the person's language, with their bookmarks and recent files. The
@@ -34,6 +34,26 @@ cancelled or there is no file chooser to ask. A folder is chosen with
 var folder = await FileChooser.OpenAsync(new() { Title = "Open a project", Directory = true });
 ```
 
+## Saving
+
+`SaveAsync` asks where to save a file and returns its local path, or null.
+The dialog asks whether to replace a file that is already there; the app
+writes the file itself:
+
+```csharp
+var path = await FileChooser.SaveAsync(new SaveFileOptions
+{
+    Title = "Save the notes",
+    CurrentName = "notes.md",
+    Filters = [new FileFilter("Markdown", "*.md") { MimeTypes = ["text/markdown"] }],
+});
+if (path is not null) File.WriteAllText(path, notes);
+```
+
+For "Save as…" on a file that has a path, `CurrentFile` opens the dialog
+beside it, with its name. `ChooseSaveAsync` takes the same options and says
+how the request ended, as `ChooseAsync` does.
+
 ## From a frame
 
 The dialog is the portal's, in another process: the call holds no thread
@@ -59,14 +79,15 @@ void Build()
 }
 ```
 
-Cancelling the token given to `OpenAsync` closes the dialog and throws
-`OperationCanceledException`, as cancelling any .NET call does.
+Cancelling the token given to `OpenAsync` or `SaveAsync` closes the dialog
+and throws `OperationCanceledException`, as cancelling any .NET call does.
 
 ## Why nothing came back
 
 `FileChooser.ChooseAsync` takes the same options and says how the request
-ended: `Outcome` is `Chosen` (with `Paths`), `Cancelled`, `Unavailable` or
-`Failed`, and `Reason` says why in words for a log.
+ended (`ChooseSaveAsync` for a save): `Outcome` is `Chosen` (with `Paths`),
+`Cancelled`, `Unavailable` or `Failed`, and `Reason` says why in words for a
+log.
 
 - **Unavailable**: there is no session bus (`DBUS_SESSION_BUS_ADDRESS` unset and
   no `$XDG_RUNTIME_DIR/bus`), no portal on it, or a portal with no
@@ -83,6 +104,8 @@ older portal ignores them.
 
 ## Options
 
+`FileChooserOptions`, for opening:
+
 | Option | What it does |
 |---|---|
 | `Title` | The dialog's title. |
@@ -94,6 +117,14 @@ older portal ignores them.
 | `CurrentFolder` | The folder the dialog opens in. |
 | `Modal` | Modal to `ParentWindow`; true unless set. |
 | `ParentWindow` | The window the dialog belongs to, `wayland:HANDLE` or `x11:XID`. |
+
+`SaveFileOptions` has `Title`, `AcceptLabel` ("Save" when empty), `Filters`,
+`CurrentFilter`, `CurrentFolder`, `Modal` and `ParentWindow` as above, and:
+
+| Option | What it does |
+|---|---|
+| `CurrentName` | The file name the dialog suggests. |
+| `CurrentFile` | The file being saved again: the dialog opens beside it, with its name. |
 
 The dialog is unparented unless `ParentWindow` names a window: the compositor
 places it on its own, not over the app. On Wayland a window's handle is
