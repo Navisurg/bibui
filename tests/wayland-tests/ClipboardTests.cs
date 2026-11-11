@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Bibui.Core.Runtime.Platform;
 using Bibui.Platform.Wayland;
 using Bibui.Platform.Wayland.Protocol;
 
@@ -55,6 +56,9 @@ internal static unsafe class ClipboardTests
         public void SetSelection(nint source, uint serial) => Log.Add($"set_selection {source:x} {serial}");
         public void DestroySource(nint source) => DestroyedSources.Add(source);
         public void DestroyOffer(nint offer) => DestroyedOffers.Add(offer);
+        public void Accept(nint offer, uint serial, string? mime) => Log.Add($"accept {offer:x} {serial} {mime ?? "null"}");
+        public void SetActions(nint offer) => Log.Add($"set_actions {offer:x} copy");
+        public void Finish(nint offer) => Log.Add($"finish {offer:x}");
         public void Flush() { }
         public void Dispatch() => Dispatches++;
 
@@ -81,8 +85,51 @@ internal static unsafe class ClipboardTests
         Assert.Eq(0, c.SendsInFlight, "writers finished");
     }
 
+    private static string Describe(WindowEvent e) => e.Kind switch
+    {
+        WindowEventKind.FileDragOver => $"over {e.X},{e.Y}",
+        WindowEventKind.FilesDropped => $"dropped {e.X},{e.Y} [{string.Join("|", e.Paths!)}]",
+        WindowEventKind.FileDragLeave => "leave",
+        _ => e.Kind.ToString(),
+    };
+
     public static void Register(Harness t)
     {
+        // ── URI lists ────────────────────────────────────────────────────────
+
+        t.Run("uri list: file URIs become paths, percent-decoded as UTF-8, in order, each once", () =>
+        {
+            var list = "# dragged from a file manager\r\n"
+                     + "file:///home/u/My%20Pictures/sk%C3%A6rm.png\r\n"
+                     + "file://localhost/tmp/a%25b.txt\r\n"
+                     + "file://box/srv/c.txt\r\n"            // this machine, by name
+                     + "\r\n"
+                     + "file:///home/u/My%20Pictures/sk%C3%A6rm.png\r\n" // again
+                     + "file:/opt/single-slash\n"             // a bare LF ends a line too
+                     + "file:///with%20query?x=1#frag";
+            Assert.Eq("/home/u/My Pictures/skærm.png|/tmp/a%b.txt|/srv/c.txt|/opt/single-slash|/with query",
+                      string.Join("|", UriList.Paths(Encoding.UTF8.GetBytes(list), hostName: "box")), "paths");
+        });
+
+        t.Run("uri list: what is not a local file is left out", () =>
+        {
+            var list = "https://example.org/x.png\r\n"
+                     + "file://elsewhere/home/u/x\r\n"        // another host's file
+                     + "file:///bad%00nul\r\n"                // a NUL is no path
+                     + "file:///latin1-%E6\r\n"               // not UTF-8: no string names it
+                     + "file:relative\r\n"
+                     + "FILE:///ok\r\n";                      // the scheme without regard to case
+            Assert.Eq("/ok", string.Join("|", UriList.Paths(Encoding.UTF8.GetBytes(list), hostName: "box")), "paths");
+        });
+
+        t.Run("uri list: a % without two hex digits stands for itself; a character for its UTF-8", () =>
+        {
+            Assert.Eq("/a%zz/100%", UriList.PercentDecode("/a%zz/100%"), "bare %");
+            Assert.Eq("/ø/✓/😀", UriList.PercentDecode("/%C3%B8/✓/%F0%9F%98%80"), "decoded and literal agree");
+            Assert.Eq("/plain", UriList.PercentDecode("/plain"), "nothing to decode");
+            Assert.True(UriList.PercentDecode("/%C3") is null, "half a character is not UTF-8");
+        });
+
         // ── Offers and mime types ────────────────────────────────────────────
 
         t.Run("clipboard offers: the best text mime is pasted, matched without case", () =>
@@ -135,6 +182,20 @@ internal static unsafe class ClipboardTests
             o.Introduced(8);
             Assert.Eq("7", string.Join(",", o.Enter(8)), "a second enter replaces the first drag");
             Assert.Eq("6,8", string.Join(",", o.Clear().Order()), "teardown returns every live offer");
+        });
+
+        t.Run("clipboard offers: a drag carrying files names its uri-list; the drop takes its offer", () =>
+        {
+            var o = new SelectionOffers();
+            o.Introduced(1); o.MimeOffered(1, "text/plain"); o.Enter(1);
+            Assert.True(o.DropMime() is null, "a drag of text carries no files");
+            o.Introduced(2); o.MimeOffered(2, "x-special/gnome-copied-files"); o.MimeOffered(2, "Text/URI-List");
+            Assert.Eq("1", string.Join(",", o.Enter(2)), "the earlier drag's offer goes");
+            Assert.Eq("Text/URI-List", o.DropMime(), "the offer's own spelling");
+            Assert.Eq((nint)2, o.TakeDrag(), "taken");
+            Assert.Eq((nint)0, o.Drag, "no drag after");
+            Assert.Eq(0, o.Leave().Count, "so a leave destroys nothing: the taker does");
+            Assert.Eq(0, o.Count, "and it is not tracked");
         });
 
         // ── The pipe ─────────────────────────────────────────────────────────
@@ -379,6 +440,100 @@ internal static unsafe class ClipboardTests
             Assert.True(c.GetText() is null && !c.OwnsSelection, "nothing left");
         });
 
+        // ── Files dropped, over a fake wire ──────────────────────────────────
+
+        t.Run("drop: a drag carrying files is accepted as a copy and reported as it enters, moves and leaves", () =>
+        {
+            var wire = new FakeWire();
+            var events = new List<WindowEvent>();
+            var c = new WaylandClipboard(wire, () => 1u, events.Add);
+            Offer(c, 0xc0, "text/uri-list", "text/plain");
+            c.OnEnter(0xc0, 77, 10.5f, 20f);
+            c.OnMotion(30f, 40.25f);
+            c.OnLeave();
+            Assert.Eq("set_actions c0 copy | accept c0 77 text/uri-list", string.Join(" | ", wire.Log), "requests");
+            Assert.Eq("over 10.5,20 | over 30,40.25 | leave", string.Join(" | ", events.Select(Describe)), "events");
+            Assert.Eq("c0", string.Join(",", wire.DestroyedOffers.Select(o => o.ToString("x"))), "the offer goes on leave");
+        });
+
+        t.Run("drop: a drag of anything else is refused and says nothing", () =>
+        {
+            var wire = new FakeWire();
+            var events = new List<WindowEvent>();
+            var c = new WaylandClipboard(wire, () => 1u, events.Add);
+            Offer(c, 0xc1, "text/plain");
+            c.OnEnter(0xc1, 5, 1f, 1f);
+            c.OnMotion(2f, 2f);
+            c.OnDrop();
+            c.OnLeave();
+            c.ServeDrops();
+            Assert.Eq("accept c1 5 null", string.Join(" | ", wire.Log), "refused, no actions offered");
+            Assert.Eq(0, events.Count, "no events");
+            Assert.Eq(0, wire.Receives, "nothing read");
+        });
+
+        t.Run("drop: the list is read after dispatch, its paths reported where the drag was, then finished", () =>
+        {
+            var wire = new FakeWire
+            {
+                Remote = (mime, fd) => new Thread(() =>
+                {
+                    Thread.Sleep(30);
+                    Write(fd, "file:///home/u/a%20b.png\r\nhttps://x.org/c\r\nfile:///tmp/d.txt\r\n");
+                    close(fd);
+                }).Start(),
+            };
+            var events = new List<WindowEvent>();
+            var c = new WaylandClipboard(wire, () => 1u, events.Add);
+            Offer(c, 0xd0, "text/uri-list");
+            c.OnEnter(0xd0, 9, 5f, 6f);
+            c.OnMotion(50f, 60f);
+            c.OnDrop();
+            c.OnLeave();   // a compositor follows a drop with a leave
+            Assert.Eq(0, wire.Receives, "nothing read inside dispatch");
+            Assert.True(c.DropsPending, "the drop waits for the host");
+            Assert.Eq(0, wire.DestroyedOffers.Count, "and the leave left its offer alone");
+            c.ServeDrops();
+            Assert.True(!c.DropsPending, "served");
+            Assert.Eq("over 5,6 | over 50,60 | dropped 50,60 [/home/u/a b.png|/tmp/d.txt]",
+                      string.Join(" | ", events.Select(Describe)), "events: no leave after the drop");
+            Assert.Eq("receive d0 text/uri-list | finish d0", string.Join(" | ", wire.Log.Skip(2)), "read, then finished");
+            Assert.Eq("d0", string.Join(",", wire.DestroyedOffers.Select(o => o.ToString("x"))), "and destroyed once");
+            Assert.True(wire.Dispatches > 0, "the wait dispatched");
+        });
+
+        t.Run("drop: a list that never comes, or names no file, ends the drag as a leave", () =>
+        {
+            var held = new List<int>();
+            var wire = new FakeWire { Remote = (_, fd) => held.Add(fd) };
+            var events = new List<WindowEvent>();
+            var c = new WaylandClipboard(wire, () => 1u, events.Add) { PasteTimeout = TimeSpan.FromMilliseconds(80) };
+            Offer(c, 0xe0, "text/uri-list");
+            c.OnEnter(0xe0, 1, 1f, 1f);
+            c.OnDrop();
+            c.ServeDrops();
+            foreach (var fd in held) close(fd);
+            wire.Remote = (_, fd) => { Write(fd, "https://only.example/web\r\n"); close(fd); };
+            Offer(c, 0xe1, "text/uri-list");
+            c.OnEnter(0xe1, 2, 3f, 3f);
+            c.OnDrop();
+            c.ServeDrops();
+            Assert.Eq("over 1,1 | leave | over 3,3 | leave", string.Join(" | ", events.Select(Describe)), "a target lit for it goes out");
+            Assert.Eq("e0,e1", string.Join(",", wire.DestroyedOffers.Select(o => o.ToString("x"))), "both offers destroyed");
+        });
+
+        t.Run("drop: teardown destroys a drop still waiting to be read", () =>
+        {
+            var wire = new FakeWire();
+            var c = new WaylandClipboard(wire, () => 1u);
+            Offer(c, 0xf0, "text/uri-list");
+            c.OnEnter(0xf0, 1, 0f, 0f);
+            c.OnDrop();
+            c.Destroy();
+            Assert.Eq("f0", string.Join(",", wire.DestroyedOffers.Select(o => o.ToString("x"))), "destroyed");
+            Assert.True(!c.DropsPending, "nothing left to serve");
+        });
+
         // ── Live, with no surface and no selection ───────────────────────────
 
         t.Run("clipboard live probe: bind the data device manager and a seat, make the device, tear down", () =>
@@ -412,7 +567,7 @@ internal static unsafe class ClipboardTests
             // Serial null: a copy could not reach the session's selection even
             // if this test made one, which it does not.
             _probe = new WaylandClipboard(() => null, () => WaylandNative.wl_display_dispatch_pending(display),
-                                          () => WaylandNative.wl_display_flush(display));
+                                          () => WaylandNative.wl_display_flush(display), _ => { });
             _probeBound = 0;
             var registry = new WlDisplay(display).GetRegistry();
             registry.AddListener(listener);

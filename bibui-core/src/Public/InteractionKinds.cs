@@ -81,6 +81,16 @@ public enum InteractionKinds
     /// </summary>
     Keyboard = 1 << 10,
 
+    /// <summary>
+    /// Files dragged from another application are dropped on this box: a drop
+    /// inside it is reported in <see cref="Interaction.DroppedFiles"/>, and
+    /// <see cref="Interaction.FileDragOver"/> says while a drag carrying files
+    /// is over it, to light it as a target. The first box claiming it to ask
+    /// about a point has the drag and the drop there, as with a press; a box
+    /// that does not claim it is not in the way.
+    /// </summary>
+    Drop = 1 << 11,
+
     Press = LeftPress | RightPress | MiddlePress,
     ViewScroll = ViewScrollX | ViewScrollY,
     Clamp = ClampX | ClampY,

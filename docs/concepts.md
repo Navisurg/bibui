@@ -397,6 +397,7 @@ The claims are `InteractionKinds` flags:
 | `LeftPress`, `RightPress`, `MiddlePress` (`Press` for all three) | that button's press, its release, and the drag in between. A box that takes a press can be hovered, so `Hovering` and `HotT` come with it. There is no separate hover claim. |
 | `ViewScrollX`, `ViewScrollY` (`ViewScroll`) | the wheel, which moves the box's `TargetViewOffset` |
 | `Scroll` | the wheel, reported in `ScrollX`/`ScrollY` and moving nothing (for a zoom, say) |
+| `Drop` | files dragged in from another application and dropped on it (below) |
 | `ClampX`, `ClampY` (`Clamp`) | nothing; keeps the view offset inside the content |
 | `Clip` | nothing; children are drawn, and pressed, only inside the box |
 | `Disabled` | nothing, and swallows presses (below) |
@@ -572,6 +573,35 @@ foreach (var ev in runtime.UnconsumedEvents)
     }
 }
 ```
+
+### Files dropped
+
+Files dragged in from another application, out of a file manager say, are
+claimed and asked for like a press. A box that claims `InteractionKinds.Drop`
+is told when a drag carrying files is over it, `FileDragOver`, and gets the
+paths in the frame they are let go on it, `DroppedFiles`:
+
+```csharp
+var zone = runtime.BoxFromId("attach", InteractionKinds.Drop);
+Interaction i = runtime.InteractionsFor(zone);
+if (i.Dropped) attachments.AddRange(i.DroppedFiles!);   // local paths, as the source listed them
+zone.Style = i.FileDragOver ? highlighted : plain;      // the target lights while the drag is over it
+```
+
+It is a claim rather than a window event the app sorts out, for the same
+reason a press is: the box under the pointer is the one that should get the
+files, and only the boxes know where they were drawn. Asking consumes, so the
+first box claiming the drop to ask about the point has it, both the drop and
+the lit target, and a list's row asked before the list takes a file dropped
+on it. A box that claims only presses is not in the way: a drop lands on the
+panel behind a button. The drag's own position is `runtime.FileDragPosition`,
+null when no drag is over the window, for a look of the whole window. A drop
+no box took stays in the frame's events, a `BibUiEventKind.FilesDropped` with
+its `Paths`, for an app that takes files anywhere.
+
+A drag carrying anything but files (text, a picture from a browser) is not
+reported. The Wayland window takes drops; the Silk and browser windows report
+none yet.
 
 ## Hot, active and animation
 

@@ -31,6 +31,15 @@ public enum BibUiEventKind
     // can still take it. Flags carry Copy and KeepMark. Cut, which also
     // deletes, is an Edit.
     Copy,
+
+    // Files dragged from another application. Over: a drag carrying files is
+    // at X/Y, entering or moving; at most one per frame, where it ended, as a
+    // MouseMove is. Leave: it went away without dropping. Dropped: Paths were
+    // let go at X/Y. A box that claims InteractionKinds.Drop takes a drop on
+    // it; one nobody took stays in the frame's events for the app.
+    FileDragOver,
+    FileDragLeave,
+    FilesDropped,
 }
 
 /// <summary>
@@ -168,13 +177,20 @@ public sealed class BibUiEvent
     /// </summary>
     public string? PasteData { get; set; }
 
+    /// <summary>
+    /// The files a <see cref="BibUiEventKind.FilesDropped"/> carried: local
+    /// paths, absolute, in the order the source listed them. Null for every
+    /// other kind.
+    /// </summary>
+    public IReadOnlyList<string>? Paths { get; set; }
+
     /// <summary>Back to what <c>new()</c> gives, for the pool to hand out again.</summary>
     internal void Reset()
     {
         Kind = BibUiEventKind.Null; Next = null; Consumed = false;
         Key = Key.Unknown; Modifiers = KeyModifiers.None; Char = null; Repeat = false;
         Button = MouseButton.Unknown; X = Y = ScrollX = ScrollY = 0f; ClickCount = 1; TargetId = null;
-        Flags = 0; Delta = DeltaY = 0; CodePoint = 0; PasteData = null;
+        Flags = 0; Delta = DeltaY = 0; CodePoint = 0; PasteData = null; Paths = null;
     }
 
     /// <summary>Everything but the list link and the consumed flag, from <paramref name="from"/>.</summary>
@@ -185,6 +201,7 @@ public sealed class BibUiEvent
         Button = from.Button; X = from.X; Y = from.Y; ScrollX = from.ScrollX; ScrollY = from.ScrollY;
         ClickCount = from.ClickCount; TargetId = from.TargetId;
         Flags = from.Flags; Delta = from.Delta; DeltaY = from.DeltaY; CodePoint = from.CodePoint; PasteData = from.PasteData;
+        Paths = from.Paths;
     }
 
     // ── Actions a keystroke and a menu item both ask for ─────────────────────

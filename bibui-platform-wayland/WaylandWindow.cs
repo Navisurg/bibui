@@ -162,8 +162,10 @@ public sealed unsafe class WaylandWindow : IDisposable
         // its pointer's life and enters to the cursor.
         _input = new WaylandInput(_queue.Add, serial => LastInputSerial = serial, CursorHooks);
         // The clipboard copies with LastInputSerial and dispatches while a paste waits.
+        // A drag of files queues its events as input does.
         _clipboard = new WaylandClipboard(() => LastInputSerial, () => { if (_display != 0) Pump(0); },
-                                          () => { if (_display != 0) WaylandNative.wl_display_flush(_display); });
+                                          () => { if (_display != 0) WaylandNative.wl_display_flush(_display); },
+                                          _queue.Add);
         // The clipboard comes before input: it binds a wl_seat proxy of its own
         // and passes the global on, where input binds it and claims it.
         _features = [_clipboard, _input, _scale];
@@ -346,11 +348,15 @@ public sealed unsafe class WaylandWindow : IDisposable
     public List<WindowEvent> GetEvents(bool wait)
     {
         if (_display == 0) return Events;
-        bool haveWork = !wait || _queue.Count > 0 || _configure.HasPending || _closing || ScaleChanged || _redraw;
+        // A drop a paste's wait dispatched during the build is work too.
+        bool haveWork = !wait || _queue.Count > 0 || _configure.HasPending || _closing || ScaleChanged || _redraw
+                        || _clipboard.DropsPending;
         Pump(haveWork ? 0 : -1);
         ApplyConfigure();
         if (ScaleChanged && _configure.EverConfigured) ApplySize(); // moved to an output of another scale
         if (!wait) WaitForCompositor();
+        // Files dropped in those dispatches: their lists are read now, outside them.
+        _clipboard.ServeDrops();
         Events.AddRange(_queue);
         _queue.Clear();
         if (_redraw)

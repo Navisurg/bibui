@@ -232,6 +232,7 @@ public sealed partial class BibuiRuntime
             _lastTree = null;
         Window = window;
 
+        _fileDragOwner = null;
         if (events is not null) ApplyInput(events);
         _frameTheme = PaintedTheme(_theme);
         if (!ReferenceEquals(_slotTypography, _frameTheme.Typography))

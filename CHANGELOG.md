@@ -40,6 +40,19 @@ All notable changes to bibui are recorded here. The format is based on
     an unknown format, a corrupt or truncated file, a missing library. It never
     throws for what is in the bytes. `Images.DecodeFile(path)` is null as well
     for a file that cannot be read. See [Pictures](docs/concepts.md#pictures).
+- **Files dropped on the window.** A box that claims `InteractionKinds.Drop`
+  takes files dragged in from another application: `Interaction.DroppedFiles`
+  holds their local paths in the frame they are let go on it (`DropX`, `DropY`
+  where), and `Interaction.FileDragOver` says while a drag carrying files is
+  over it, to light it as a target. The first box claiming the drop to ask
+  about the point has it, as with a press; a box that does not claim it is not
+  in the way. `runtime.FileDragPosition` is where the drag is, or null, and a
+  drop no box took stays in the frame's events
+  (`BibUiEventKind.FilesDropped`, its `Paths`) for the app. A window reports a
+  drag with `WindowEvent.FileDragOver`, `FileDragLeave` and `FilesDropped`.
+  The Wayland window takes a drag whose offer carries `text/uri-list`, as a
+  file manager's does, and reads its `file:` URIs as paths; the Silk and
+  browser windows report none yet.
 
 ## [1.2.0] - 2026-11-11
 

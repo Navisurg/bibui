@@ -125,10 +125,34 @@ public record struct Interaction
     /// </summary>
     public bool Cancelled { get; set; }
 
+    /// <summary>
+    /// A drag carrying files is over this node now, and the node claims
+    /// <see cref="InteractionKinds.Drop"/>: what a drop target lights up on.
+    /// The first box claiming the drop to ask about the point has it. Where
+    /// the drag is: <c>BibuiRuntime.FileDragPosition</c>.
+    /// </summary>
+    public bool FileDragOver { get; set; }
+
+    /// <summary>
+    /// The files dropped on this node this frame, local paths in the order the
+    /// source listed them, or null when none were. Reported to a box that
+    /// claims <see cref="InteractionKinds.Drop"/>, and taken by it: a box
+    /// asking after it does not see the same drop.
+    /// </summary>
+    public IReadOnlyList<string>? DroppedFiles { get; set; }
+
+    /// <summary>Files were dropped on this node this frame: <see cref="DroppedFiles"/> holds them.</summary>
+    public bool Dropped => DroppedFiles is not null;
+
+    /// <summary>Where <see cref="DroppedFiles"/> were let go, in logical pixels. NaN when nothing was dropped here.</summary>
+    public float DropX { get; set; }
+    public float DropY { get; set; }
+
     /// <summary>Nothing at all happened to this node.</summary>
     public bool None => !Hovering && !Pressed && !Released && !RightPressed
                      && !MiddlePressed && !RightReleased && !MiddleReleased
                      && !Dragging && !RightDragging && !MiddleDragging
                      && ScrollX == 0f && ScrollY == 0f
-                     && !FocusGained && !Submitted && !Cancelled;
+                     && !FocusGained && !Submitted && !Cancelled
+                     && !FileDragOver && DroppedFiles is null;
 }

@@ -146,7 +146,8 @@ frame owed, the runtime sleeps until it is due and `GetEvents(wait: false)`
 takes what came meanwhile. A Wayland window paces the loop itself
 (`window.PacesFrames`): its `GetEvents(wait: false)` waits for the compositor's
 frame callback, so the loop does not sleep, and it draws into `window.Cpu`
-between `WaylandWindow.BeginDraw` and `EndDraw`. `window.OnRefresh` is what the
-window calls on a resize: the frame (build and draw), or `runtime.RequestFrame`.
+between `WaylandWindow.BeginDraw` and `EndDraw`. It reports files dropped on
+it among its events. `window.OnRefresh` is what the window calls on a resize:
+the frame (build and draw), or `runtime.RequestFrame`.
 
 More at https://github.com/Navisurg/bibui.

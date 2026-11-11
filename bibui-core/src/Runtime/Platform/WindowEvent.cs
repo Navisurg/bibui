@@ -16,6 +16,19 @@ public enum WindowEventKind
 
     /// <summary>Focus left the window. Whatever was held is not held any more.</summary>
     FocusLost,
+
+    /// <summary>
+    /// A drag carrying files is over the window, at X/Y: sent as it enters and
+    /// as it moves. Until <see cref="FileDragLeave"/> or <see cref="FilesDropped"/>,
+    /// the drag is there.
+    /// </summary>
+    FileDragOver,
+
+    /// <summary>The drag carrying files left the window, or was called off, without dropping.</summary>
+    FileDragLeave,
+
+    /// <summary>Files were dropped on the window at X/Y; <see cref="WindowEvent.Paths"/> holds them. The drag is over.</summary>
+    FilesDropped,
 }
 
 /// <summary>
@@ -59,6 +72,12 @@ public readonly struct WindowEvent
     /// </summary>
     public bool Repeat { get; private init; }
 
+    /// <summary>
+    /// What a <see cref="WindowEventKind.FilesDropped"/> carried: local paths,
+    /// absolute, in the order the source listed them. Null for every other kind.
+    /// </summary>
+    public IReadOnlyList<string>? Paths { get; private init; }
+
     public static WindowEvent Mouse(WindowEventKind kind, float x, float y, MouseButton button, KeyModifiers modifiers = KeyModifiers.None)
         => new() { Kind = kind, X = x, Y = y, Button = button, Modifiers = modifiers };
 
@@ -71,4 +90,17 @@ public readonly struct WindowEvent
     public static WindowEvent KeyRelease(Key key, KeyModifiers modifiers = KeyModifiers.None) => new() { Kind = WindowEventKind.KeyUp, Key = key, Modifiers = modifiers };
     public static WindowEvent Text(Rune codePoint) => new() { Kind = WindowEventKind.KeyChar, CodePoint = codePoint };
     public static WindowEvent FocusLost() => new() { Kind = WindowEventKind.FocusLost };
+
+    /// <summary>A drag carrying files entered the window, or moved over it, to <paramref name="x"/>, <paramref name="y"/>.</summary>
+    public static WindowEvent FileDragOver(float x, float y) => new() { Kind = WindowEventKind.FileDragOver, X = x, Y = y };
+
+    /// <summary>The drag carrying files left without dropping.</summary>
+    public static WindowEvent FileDragLeave() => new() { Kind = WindowEventKind.FileDragLeave };
+
+    /// <summary><paramref name="paths"/> were dropped at <paramref name="x"/>, <paramref name="y"/>.</summary>
+    public static WindowEvent FilesDropped(float x, float y, IReadOnlyList<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        return new() { Kind = WindowEventKind.FilesDropped, X = x, Y = y, Paths = paths };
+    }
 }
