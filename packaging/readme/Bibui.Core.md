@@ -17,6 +17,7 @@ that puts them together:
 | `Bibui.App.*` | One window and one renderer, with the loop's calls (`BibuiApp`) |
 | `Bibui.Platform.Silk`, `Bibui.Platform.Wayland`, `Bibui.Platform.Browser` | A window on its own |
 | `Bibui.Raster.Skia`, `Bibui.Raster.Managed.Backend` | A renderer on its own |
+| `Bibui.Platform.Portal` | The desktop's own file chooser, through xdg-desktop-portal |
 | `Bibui.Testing` | Headless pages for testing an app |
 | `Bibui.Text` | The text layer this package lays text out with (a dependency of it): fonts, measuring, line breaking |
 

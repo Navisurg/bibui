@@ -16,7 +16,7 @@
     <!-- NU5128: a package of dependencies only has no lib/ to match them. -->
     <NoWarn>$(NoWarn);NU5128</NoWarn>
     <PackageId>Bibui</PackageId>
-    <Description>All of bibui in one reference: the core, BibuiApp on a Silk window drawn by Skia on the GPU (Bibui.App.SilkSkiaGl), and every window, renderer and the testing package. For the fewest dependencies, reference the one Bibui.App package an app runs on instead.</Description>
+    <Description>All of bibui in one reference: the core, BibuiApp on a Silk window drawn by Skia on the GPU (Bibui.App.SilkSkiaGl), every window, renderer, the file chooser portal and the testing package. For the fewest dependencies, reference the one Bibui.App package an app runs on instead.</Description>
     <PackageTags>$(PackageTags);silk;wayland;browser;skia;opengl</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <IsPackable>true</IsPackable>
@@ -35,6 +35,7 @@
     <ProjectReference Include="../bibui-gl/bibui-gl.csproj" />
     <ProjectReference Include="../bibui-platform-silk/bibui-platform-silk.csproj" />
     <ProjectReference Include="../bibui-platform-wayland/bibui-platform-wayland.csproj" />
+    <ProjectReference Include="../bibui-platform-portal/bibui-platform-portal.csproj" />
     <ProjectReference Include="../bibui-platform-browser/bibui-platform-browser.csproj" />
     <ProjectReference Include="../bibui-raster-skia/bibui-raster-skia.csproj" />
     <ProjectReference Include="../bibui-raster-managed/backend/Bibui.Raster.Managed.Backend.csproj" />

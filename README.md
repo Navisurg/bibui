@@ -194,6 +194,7 @@ decides which other dependencies it needs. In every case the dependency tree is 
 | `Bibui.Gl` | `Silk.NET.OpenGL` (the GL binding only) | an OpenGL driver |
 | `Bibui.Platform.Silk` | `Silk.NET` windowing, input and OpenGL (GLFW), `Bibui.Gl`, `TextCopy` | an OpenGL driver; GLFW itself ships with Silk.NET |
 | `Bibui.Platform.Wayland` | none | `libwayland-client`, `libwayland-cursor`, `libxkbcommon` |
+| `Bibui.Platform.Portal` | none | none: it speaks D-Bus to the session bus itself; the file chooser needs `xdg-desktop-portal` and a backend |
 | `Bibui.Platform.Browser` | none | none: FreeType and HarfBuzz ship inside it, built for the browser; building an app needs the `wasm-tools` workload |
 | `Bibui.Raster.Managed.Backend` | none (`Bibui.Raster.Managed`, `Bibui.Glyphs`) | none beyond `Bibui.Core`'s |
 
@@ -215,6 +216,8 @@ repository:
 - [Components](docs/components/index.md): every component, with pictures.
 - [Native AOT](docs/aot.md): publishing one native binary, and the trimming
   rules for app code.
+- [The file chooser](docs/file-chooser.md): the desktop's own dialogs for
+  opening files and folders and saving a file, through xdg-desktop-portal.
 - Samples: [`samples/showcase`](samples/showcase) is an observatory console
   that uses most of bibui, [`samples/bibui-app`](samples/bibui-app) is a short
   interactive app, and [`samples/component-gallery`](samples/component-gallery)
