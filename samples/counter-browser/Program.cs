@@ -14,6 +14,7 @@ var runtime = BibuiRuntime.Create();
 var window = await BrowserWindow.OpenAsync("counter");
 runtime.WakeUp = window.Wake;
 runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+runtime.WindowCursor = window.SetCursor;
 var managed = new ManagedRenderer(window.Cpu);
 int count = 0;
 

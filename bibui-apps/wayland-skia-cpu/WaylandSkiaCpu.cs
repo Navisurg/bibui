@@ -18,6 +18,7 @@ public sealed partial class BibuiApp
         var opened = WaylandWindow.Open(window, new WaylandHostOptions { AppId = options.AppId, MinWidth = options.MinWidth, MinHeight = options.MinHeight });
         runtime.WakeUp = opened.Wake;
         runtime.WindowClipboard = (opened.GetClipboardText, opened.SetClipboardText);
+        runtime.WindowCursor = opened.SetCursor;
         return opened;
     }
 
@@ -37,6 +38,7 @@ public sealed partial class BibuiApp
     {
         // The window goes next: nothing may wake it after.
         if (Runtime.WakeUp == Window.Wake) Runtime.WakeUp = null;
+        if (Runtime.WindowCursor == Window.SetCursor) Runtime.WindowCursor = null;
         Renderer.Dispose();
     }
 }

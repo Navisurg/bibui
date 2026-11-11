@@ -47,6 +47,40 @@ public sealed partial class BibuiRuntime
     public (Func<string?>? Get, Action<string>? Set) WindowClipboard { get; set; }
 
     /// <summary>
+    /// The pointer's shape this frame's build asks for: <see cref="CursorShape.Default"/>
+    /// as each build begins, and whatever the code that asked a box set it to while
+    /// that box is under the pointer or held (a drag handle asks for
+    /// <see cref="CursorShape.ResizeHorizontal"/>, a link for <see cref="CursorShape.Pointer"/>).
+    /// Ask order is z-order, so only the box on top is hovered, and the shape is
+    /// the one asked for last. <see cref="EndBuild"/> passes it to
+    /// <see cref="WindowCursor"/> when it changed.
+    /// <code>
+    /// var i = runtime.InteractionsFor(handle);
+    /// if (i.Hovering || i.Dragging) runtime.Cursor = CursorShape.ResizeHorizontal;
+    /// </code>
+    /// </summary>
+    public CursorShape Cursor { get; set; }
+
+    /// <summary>
+    /// Shows a pointer shape on the window the runtime runs in: set by a platform
+    /// when it opens (a <c>BibuiApp</c> sets it to the window's <c>SetCursor</c>),
+    /// and none (null) for a runtime with no window. <see cref="EndBuild"/> calls
+    /// it with <see cref="Cursor"/> when that differs from the shape it last
+    /// passed, so a frame that asks for the same shape calls nothing, and an app
+    /// that sets the window's cursor itself is only overridden when a build asks
+    /// for another. Setting it starts again from <see cref="CursorShape.Default"/>,
+    /// what a newly opened window shows.
+    /// </summary>
+    public Action<CursorShape>? WindowCursor
+    {
+        get => _windowCursor;
+        set => (_windowCursor, _cursorShown) = (value, CursorShape.Default);
+    }
+
+    private Action<CursorShape>? _windowCursor;
+    private CursorShape _cursorShown;   // what WindowCursor was last passed
+
+    /// <summary>
     /// Queues events already translated, in order, for the frame built next: for
     /// a test or a tool that says exactly what happened (a press with a click
     /// count of 2, a press addressed to one box). What a keyboard and mouse did

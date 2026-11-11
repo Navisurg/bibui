@@ -1,5 +1,6 @@
 using Bibui.Core;
 using Bibui.Core.Runtime;
+using Bibui.Core.Runtime.Platform;
 
 namespace ComponentGallery;
 
@@ -68,6 +69,8 @@ internal static class DemoLayout
 
         Box handle = runtime.BoxFromId(id + "-handle", InteractionKinds.LeftPress);
         var drag = runtime.InteractionsFor(handle);
+        // The resize pointer while the divider is under the pointer or held.
+        if (drag.Hovering || drag.Dragging) runtime.Cursor = vertical ? CursorShape.ResizeVertical : CursorShape.ResizeHorizontal;
         if (drag.Dragging && frame.Extent.X > 0f)
         {
             float start = vertical ? frame.Rect.Y : frame.Rect.X;

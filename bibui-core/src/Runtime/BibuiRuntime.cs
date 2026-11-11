@@ -241,6 +241,7 @@ public sealed partial class BibuiRuntime
         }
         Rates = MotionRates.From(_theme.Motion, Dt, Instant);
         _buildStarted = Stopwatch.GetTimestamp();
+        Cursor = CursorShape.Default;   // until something under the pointer asks for another
         BeginDropDowns();
         ResetForBuild(_root);
         _root.SizeX = _root.SizeY = SemanticSize.ParentPct(1f);
@@ -320,6 +321,9 @@ public sealed partial class BibuiRuntime
         // A frame that handled input built from state the input then changed:
         // what a click did shows in the frame after it, so one more is owed.
         if (_firstEvent is not null) OweOneFrame();
+
+        // The pointer's shape the build asked for, to the window when it changed.
+        if (WindowCursor is { } show && Cursor != _cursorShown) show(_cursorShown = Cursor);
 
         SweepFrame();       // sweep whatever nobody asked for this frame
         ClearFrameEvents(); // per-frame events: drop the leftovers
