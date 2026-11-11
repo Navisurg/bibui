@@ -71,6 +71,12 @@ All notable changes to bibui are recorded here. The format is based on
 - `MarkdownHighlight.RangesFromSource(text, ref ranges)`: a Markdown source's
   syntax as `StyledTextField` ranges, the editor's colouring for any field.
 
+- `runtime.Markdown` and `runtime.MarkdownEditor` take a `drawBlock`
+  (`MarkdownBlockDraw`): the app draws a block its own way, such as an image or
+  a diagram from a fenced code block, spaced as the block it stands for, and
+  answers false for the viewer to draw it. In the editor a press on it edits
+  its source.
+
 ### Changed
 
 - **Breaking:** rendering glyphs into masks is no longer the text layer's.

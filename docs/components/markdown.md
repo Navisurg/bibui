@@ -22,16 +22,21 @@ public static MarkdownWidget Markdown(
     string id,
     BibuiStr source,
     float? width = null,
-    ComponentSize textSize = ComponentSize.Md)
+    ComponentSize textSize = ComponentSize.Md,
+    MarkdownBlockDraw? drawBlock = null)
 
 public static MarkdownWidget Markdown(
     this BibuiRuntime runtime,
     string id,
     MarkdownDocument document,
     float? width = null,
-    ComponentSize textSize = ComponentSize.Md)
+    ComponentSize textSize = ComponentSize.Md,
+    MarkdownBlockDraw? drawBlock = null)
 
 public static void ToggleTask(BibuiStr source, int offset);
+
+public delegate bool MarkdownBlockDraw(
+    BibuiRuntime runtime, MarkdownDocument document, MarkdownBlock block, float width);
 
 public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int ToggledTask)
 {
@@ -47,6 +52,7 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
 | `document` | A document you parsed with `MarkdownDocument.Parse` and keep yourself. This skips the comparison. |
 | `width` | The viewer's width. With null, it is as wide as its parent, which must then have a width of its own. It is as tall as the document. |
 | `textSize` | Body text size. Headings use the steps above it. |
+| `drawBlock` | Draws the blocks the app draws its own way. With null, the viewer draws every block. See [Blocks the app draws](#blocks-the-app-draws). |
 
 Emphasis is set in the italic, strong emphasis in the semibold, and the two
 together in the semibold italic (`FontWeight.Italic`, `Bold` and
@@ -74,6 +80,38 @@ exclusive.
 - A quote or list item keeps the lines its markers are on, even when they
   hold only link reference definitions.
 - The document spans the whole source, from 0.
+
+## Blocks the app draws
+
+Some blocks an app shows its own way: an image alone on its line, a diagram
+from a fenced code block in a language it reads. Pass `drawBlock`, and the
+viewer asks it for each block before drawing the block itself:
+
+- It builds the block under the parent in scope, `width` wide, the room the
+  viewer has there, and answers true. The viewer leaves the space above and
+  below the block it would leave for the block it stands for.
+- It answers false, having built nothing, for a block it leaves to the viewer.
+  That is every block, the first frame an image is still loading, or a diagram
+  it cannot read, which then stays code.
+- It is asked for every block, those in quotes and list items too, each frame
+  the viewer draws it, so it should decide cheaply: keep what it works out per
+  block until the document changes, which is a new `MarkdownDocument`.
+- Pass a delegate you keep, such as a static method or one you made once, so a
+  frame allocates nothing.
+
+```cs
+static bool Diagrams(BibuiRuntime runtime, MarkdownDocument document, MarkdownBlock block, float width)
+{
+    if (block.Kind != MarkdownBlockKind.CodeBlock || block.Info != "dot") return false;
+    MyDiagram.Draw(runtime, document.CodeOf(block).Span, width);
+    return true;
+}
+
+runtime.Markdown("notes", source, drawBlock: Diagrams);
+```
+
+`MarkdownEditor` takes the same drawer, and a press on such a block edits its
+source.
 
 ## Claims and reports
 

@@ -16,7 +16,8 @@ public static MarkdownEditorWidget MarkdownEditor(
     BibuiStr source,
     MarkdownEditState state,
     float? width = null,
-    ComponentSize textSize = ComponentSize.Md)
+    ComponentSize textSize = ComponentSize.Md,
+    MarkdownBlockDraw? drawBlock = null)
 
 public sealed class MarkdownEditState
 {
@@ -34,6 +35,7 @@ public readonly record struct MarkdownEditorWidget(Box Node, string? ClickedLink
 | `state` | What the editor keeps between frames. You own it, one per editor. |
 | `width` | The view's width. With null, it is as wide as its parent. It is as tall as its parent and scrolls. |
 | `textSize` | Body text size, and the field's. Headings use the steps above it. |
+| `drawBlock` | Draws the blocks the app draws its own way, as for the viewer ([Blocks the app draws](markdown.md#blocks-the-app-draws)). A press on such a block edits its source, as on any other. |
 
 ## Behaviour
 
