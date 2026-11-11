@@ -8,7 +8,13 @@ caller owns.
   Everything follows from the pitch.
 - **ScrollList**: rows of their own heights, by pixels. It holds no heights:
   the loop hands each in as the list reaches the row, so a row's height must be
-  known before it is built.
+  known before it is built, or, for a row measured by building it, no more than
+  it is (a lower bound, such as one line of its text) until then.
+
+A list scrolls from the first row on the top to the last row on the bottom. The
+end is found from the view's height only once the view has been laid out: a
+list not laid out yet (built again after being hidden) keeps the point it was
+given, rather than one clamped to a height it has not been laid out at.
 
 ## Build
 
@@ -37,7 +43,9 @@ runtime.EndScrollList(ref inbox, rows);
 runtime.Scrollbar("inbox-bar", ref inbox, messages.Count, top, top + rows.Built);
 ```
 
-Build each row exactly as tall as the list was told. Lay a list and its bar out
+Build each row as tall as the list was told, or, while it is measured, at
+least that tall: a height handed in above the row's own stops the list short of
+the view's bottom. Lay a list and its bar out
 side by side in a row. Something several rows tall in a RowScrollList is the
 caller's to map onto whole rows.
 

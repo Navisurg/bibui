@@ -73,6 +73,14 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Changed
 
+- `RowScrollList`, `ScrollList`: a list not laid out yet is built as tall as
+  the window, no longer a fixed 4096 px. It decides only how many rows are
+  built, never where the list may scroll to.
+- `ScrollList` takes, for a row measured by building it, a lower bound of its
+  height until it is known (one line of its text, say), where its docs said
+  the exact height. A lower bound never stops the list short of the view's
+  bottom; a guess above the row's height does, and leaves a gap under the last
+  row while the list scrolls.
 - **Breaking:** rendering glyphs into masks is no longer the text layer's.
   `FontStrike.GetMask`, `PlaceGlyph` and `Place` are gone, and `GlyphMask`,
   `PlacedGlyph` and `MaskGamma` moved from `Bibui.Text.FreeType` to
@@ -117,6 +125,10 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Fixed
 
+- `RowScrollList`, `ScrollList`: a list built again, not laid out yet (shown
+  again after being hidden, as a page gone back to), keeps the scroll point
+  it is given. Its first frame clamped the point to a height it had not
+  measured, so a list scrolled near its end lost its place.
 - `ScrollList`: the wheel up at the top, or past it, no longer moves what is
   shown down. The first row jumped down by each notch and eased back, a
   flicker for as long as the wheel turned.
