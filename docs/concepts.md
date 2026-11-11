@@ -901,6 +901,28 @@ owner of the loop chose draws that list. Two pieces connect it to the outside:
   `DrawToPixels`, a `void (DrawList list, RasterPixels target)` delegate, and
   a renderer's `Draw` method group converts to it.
 
+### What a window reports
+
+A window is the platform's side of a small contract that the runtime defines in
+`Bibui.Core.Runtime.Platform`, the same for every host. A new host implements
+it, and nothing in the runtime changes:
+
+- each frame, a `WindowFrame` (size, scale, refresh rate) and the
+  `WindowEvent`s since the last one, in order: pointer, wheel, keys, text,
+  focus lost;
+- `runtime.WakeUp`, which wakes the loop from any thread;
+- `runtime.WindowClipboard`, the clipboard's text, to read and to write;
+- `runtime.WindowClipboardData`, an `IClipboardData`: the clipboard by mime
+  type, `Types()` and `Read(mimeType)`, which the app reaches through
+  `runtime.ClipboardTypes()` and `runtime.ClipboardRead(mimeType)`.
+
+A host reports what its platform offers and nothing more, so an app asks the
+same way on every host and gets less where the platform has less:
+
+| | Wayland | Silk (GLFW) | Browser |
+|---|---|---|---|
+| Clipboard by mime type | every type the selection offers, read as bytes | text only: `text/plain;charset=utf-8` while there is text (`TextClipboardData`) | none yet |
+
 A `Bibui.App` package is one window and one renderer put together, with the
 loop's calls (`app.WaitForFrame()`, `app.Present()`): what an app normally
 runs on. [Bibui.App packages](app-packages.md) lists them, and shows the loop

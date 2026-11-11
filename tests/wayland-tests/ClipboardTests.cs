@@ -401,15 +401,15 @@ internal static unsafe class ClipboardTests
                 },
             };
             var c = new WaylandClipboard(wire, () => 1u);
-            Assert.Eq(0, c.GetTypes().Count, "nothing selected, no types");
+            Assert.Eq(0, c.Types().Count, "nothing selected, no types");
             Offer(c, 0xb0, "image/png", "text/html");
             c.OnSelection(0xb0);
-            Assert.Eq("image/png,text/html", string.Join(",", c.GetTypes()), "what the screenshot tool offered");
-            var got = c.GetData("image/png");
+            Assert.Eq("image/png,text/html", string.Join(",", c.Types()), "what the screenshot tool offered");
+            var got = c.Read("image/png");
             Assert.True(got is not null && got.AsSpan().SequenceEqual(png), "the PNG's bytes, binary intact");
             Assert.Eq("receive b0 image/png", wire.Log[^1], "asked for that type");
             int receives = wire.Receives;
-            Assert.True(c.GetData("image/jpeg") is null, "a type not offered is null");
+            Assert.True(c.Read("image/jpeg") is null, "a type not offered is null");
             Assert.Eq(receives, wire.Receives, "without asking the owner");
         });
 
@@ -418,9 +418,9 @@ internal static unsafe class ClipboardTests
             var wire = new FakeWire { Remote = (_, fd) => throw new Exception("received from ourselves") };
             var c = new WaylandClipboard(wire, () => 1u);
             c.SetText("ünï");
-            Assert.Eq(string.Join(",", SelectionOffers.TextMimes), string.Join(",", c.GetTypes()), "our types");
-            Assert.Eq("ünï", Encoding.UTF8.GetString(c.GetData("text/plain")!), "our bytes");
-            Assert.True(c.GetData("image/png") is null, "not an image");
+            Assert.Eq(string.Join(",", SelectionOffers.TextMimes), string.Join(",", c.Types()), "our types");
+            Assert.Eq("ünï", Encoding.UTF8.GetString(c.Read("text/plain")!), "our bytes");
+            Assert.True(c.Read("image/png") is null, "not an image");
             Assert.Eq(0, wire.Receives, "no receive");
         });
 

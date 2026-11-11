@@ -18,7 +18,7 @@ buffer's size, the scale and the output's refresh rate.
 
 The clipboard is the session's (`wl_data_device`): wire it with
 `runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText)`
-for text, and `runtime.WindowClipboardData = (window.GetClipboardTypes, window.GetClipboardData)`
+for text, and `runtime.WindowClipboardData = window.ClipboardData`
 to read what else it offers, as bytes by mime type: on Ctrl+V an app that takes
 pictures asks `runtime.ClipboardTypes()` for `image/png`, which screenshot tools
 and browsers copy, and reads it with `runtime.ClipboardRead("image/png")`.

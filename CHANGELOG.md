@@ -43,9 +43,14 @@ All notable changes to bibui are recorded here. The format is based on
 - **The clipboard by mime type.** `runtime.ClipboardTypes()` lists what the
   clipboard offers (`image/png` for a screenshot) and
   `runtime.ClipboardRead(mimeType)` reads one as bytes; both seams, as
-  `ClipboardGet` is. A window wires them through `runtime.WindowClipboardData`:
-  the Wayland window's `GetClipboardTypes` and `GetClipboardData`, which the
-  `Bibui.App.Wayland*` packages set. Reading only; copying is text.
+  `ClipboardGet` is. A window wires them by setting
+  `runtime.WindowClipboardData` to its `window.ClipboardData`, an
+  `IClipboardData` (`Types()`, `Read(mimeType)`): the contract any host
+  implements, in `Bibui.Core.Runtime.Platform`. The Wayland window offers every
+  type the selection does; the Silk window, whose GLFW clipboard is text only,
+  offers `text/plain;charset=utf-8` while there is text, through
+  `TextClipboardData`. Every `Bibui.App` package wires it. Reading only;
+  copying is text. See [What a window reports](docs/concepts.md#what-a-window-reports).
 
 ## [1.2.0] - 2026-11-11
 

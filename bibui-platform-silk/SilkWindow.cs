@@ -22,6 +22,7 @@ namespace Bibui.Core.Runtime.Platform;
 /// using var window = SilkWindow.Open(SilkGl.Options(new("My app", 960, 640)));
 /// runtime.WakeUp = window.Wake;
 /// runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+/// runtime.WindowClipboardData = window.ClipboardData;
 /// var gl = SilkGl.Target(window);
 /// using var skia = new SkiaGlRenderer(gl);
 /// while (!window.IsClosing)
@@ -114,6 +115,16 @@ public sealed class SilkWindow : IDisposable
 
     /// <summary>Puts <paramref name="text"/> on the system clipboard.</summary>
     public void SetClipboardText(string text) => Clipboard.SetText(text);
+
+    /// <summary>
+    /// The clipboard by mime type, for <c>runtime.WindowClipboardData</c>. GLFW's
+    /// clipboard is text only, so this offers <c>text/plain;charset=utf-8</c>
+    /// while there is text and reads it as UTF-8 (<see cref="TextClipboardData"/>);
+    /// a picture copied in another application is not offered.
+    /// </summary>
+    public IClipboardData ClipboardData => _clipboardData ??= new TextClipboardData(GetClipboardText);
+
+    private TextClipboardData? _clipboardData;
 
     // ── Input ────────────────────────────────────────────────────────────────
 

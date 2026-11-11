@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Bibui.Core.Runtime.Platform;
 using Bibui.Platform.Wayland.Protocol;
 
 namespace Bibui.Platform.Wayland;
@@ -155,15 +156,15 @@ internal interface IClipboardWire
 /// <item><b>No serial yet</b>: copy cannot set the session's selection without
 /// one, so the text stays in-process — pasted inside the app until the
 /// session's selection next changes.</item>
-/// <item><b>Other types</b>: <see cref="GetTypes"/> lists what the selection
-/// offers, and <see cref="GetData"/> reads one of them as bytes, the way paste
+/// <item><b>Other types</b>: <see cref="Types"/> lists what the selection
+/// offers, and <see cref="Read"/> reads one of them as bytes, the way paste
 /// reads text: an <c>image/png</c> a screenshot tool or a browser copied.</item>
 /// </list>
 ///
 /// <para>Primary selection (middle-click) is not here; see the follow-up on
 /// the board. Drag-and-drop offers are tracked only to be destroyed.</para>
 /// </summary>
-internal sealed unsafe class WaylandClipboard : IWaylandFeature
+internal sealed unsafe class WaylandClipboard : IWaylandFeature, IClipboardData
 {
     /// <summary>How long a paste waits for another client's text.</summary>
     public TimeSpan PasteTimeout { get; init; } = TimeSpan.FromMilliseconds(500);
@@ -229,7 +230,7 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
     /// The mime types the selection offers, as its owner listed them: the text
     /// types while it is ours. Empty when the selection is, or there is no device.
     /// </summary>
-    public IReadOnlyList<string> GetTypes()
+    public IReadOnlyList<string> Types()
     {
         if (_ownText is not null) return [.. SelectionOffers.TextMimes];
         return _wire.Ready ? _offers.CurrentMimes.ToArray() : [];
@@ -240,7 +241,7 @@ internal sealed unsafe class WaylandClipboard : IWaylandFeature
     /// <see cref="PasteTimeout"/>; null when it is not offered or not sent in
     /// time. Our own text answers for the text types without a round trip.
     /// </summary>
-    public byte[]? GetData(string mime)
+    public byte[]? Read(string mime)
     {
         try
         {

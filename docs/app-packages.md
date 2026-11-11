@@ -120,6 +120,7 @@ own:
 using var window = SilkWindow.Open(SilkGl.Options(new("Counter", 360, 160)));
 runtime.WakeUp = window.Wake;
 runtime.WindowClipboard = (window.GetClipboardText, window.SetClipboardText);
+runtime.WindowClipboardData = window.ClipboardData;
 var gl = SilkGl.Target(window);
 using var skia = new SkiaGlRenderer(gl);
 
@@ -146,10 +147,10 @@ frame owed, the runtime sleeps until it is due and `GetEvents(wait: false)`
 takes what came meanwhile. A Wayland window paces the loop itself
 (`window.PacesFrames`): its `GetEvents(wait: false)` waits for the compositor's
 frame callback, so the loop does not sleep, and it draws into `window.Cpu`
-between `WaylandWindow.BeginDraw` and `EndDraw`. It also reads the clipboard
-by mime type, wired with `runtime.WindowClipboardData =
-(window.GetClipboardTypes, window.GetClipboardData)`. `window.OnRefresh` is
-what the window calls on a resize: the frame (build and draw), or
-`runtime.RequestFrame`.
+between `WaylandWindow.BeginDraw` and `EndDraw`. Either window reads the
+clipboard by mime type, wired with `runtime.WindowClipboardData =
+window.ClipboardData`: every type the selection offers on Wayland, text only on
+Silk. `window.OnRefresh` is what the window calls on a resize: the frame (build
+and draw), or `runtime.RequestFrame`.
 
 More at https://github.com/Navisurg/bibui.
