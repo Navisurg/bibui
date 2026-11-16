@@ -48,9 +48,31 @@ public static class Menu
         ArgumentNullException.ThrowIfNull(id);
 
         if (runtime.BeginDropDown(id) is not { } list) return null;
+        list.At(x, y);
+        return Begun(runtime, list, width);
+    }
+
+    /// <summary>
+    /// Begins the menu named <paramref name="id"/>, when it is open, as a float
+    /// under <paramref name="anchor"/>, where it was drawn last frame: left edges
+    /// aligned, <paramref name="gap"/> px below it. What a dropdown menu does
+    /// with its trigger, which opens it with
+    /// <c>runtime.OpenDropDown(id, trigger)</c>. Built where it is called, so a
+    /// menu inside a dropdown is inside it (<see cref="BibuiRuntime.BeginFloat"/>).
+    /// Null when it is not open.
+    /// </summary>
+    public static MenuScope? BeginBelow(BibuiRuntime runtime, string id, UiNode anchor, float width = 220f, float gap = 4f)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(id);
+        if (runtime.BeginFloat(id, anchor, gap) is not { } list) return null;
+        return Begun(runtime, list, width);
+    }
+
+    private static MenuScope Begun(BibuiRuntime runtime, Box list, float width)
+    {
         list.SizeX = SemanticSize.Pixels(width);
         list.SizeY = SemanticSize.ChildrenSum();
-        list.At(x, y);
         var theme = runtime.Theme;
         Style style = list.Style;
         style.Padding = EdgeInsets.All(ListPad);
@@ -61,19 +83,6 @@ public static class Menu
         style.BackgroundColor = UiColor.SurfaceRaised;
         runtime.BeginParent(list);
         return new MenuScope(runtime, list);
-    }
-
-    /// <summary>
-    /// Begins the menu named <paramref name="id"/>, when it is open, under
-    /// <paramref name="anchor"/>, where it was drawn last frame: left edges
-    /// aligned, <paramref name="gap"/> px below it. What a dropdown menu does
-    /// with its trigger, which opens it with
-    /// <c>runtime.OpenDropDown(id, trigger)</c>. Null when it is not open.
-    /// </summary>
-    public static MenuScope? BeginBelow(BibuiRuntime runtime, string id, UiNode anchor, float width = 220f, float gap = 4f)
-    {
-        ArgumentNullException.ThrowIfNull(anchor);
-        return Begin(runtime, id, anchor.Rect.X, anchor.Rect.Y + anchor.Extent.Y + gap, width);
     }
 
 
@@ -178,21 +187,13 @@ public readonly struct MenuScope
     /// <summary>
     /// Stops building into the menu and returns it and what happened to it.
     /// The list asks after its rows, so a press on its padding or a rule stops
-    /// there rather than reaching what is beneath, and dismisses nothing. An
-    /// Escape no one has eaten closes the menu, and is eaten, so it does not
-    /// also close what is under it.
+    /// there rather than reaching what is beneath, and dismisses nothing.
+    /// Escape closes it.
     /// </summary>
     public BibuiWidget End()
     {
         _runtime.EndParent(_list);
-        _list.Claims = InteractionKinds.Press;
-        var widget = new BibuiWidget(_list, _runtime.InteractionsFor(_list));
-        foreach (var ev in _runtime.UnconsumedEvents)
-            if (ev is { IsKeyDown: true, Key: Key.Escape })
-            {
-                ev.Eat();
-                _runtime.CloseDropDown(_list.Id!);
-            }
-        return widget;
+        _list.Claims = InteractionKinds.Press | InteractionKinds.Escape;
+        return new BibuiWidget(_list, _runtime.InteractionsFor(_list));
     }
 }

@@ -6886,33 +6886,74 @@ Run("Menu: an item clicked in an open menu reports it, and the caller closes it"
     IsTrue(!runtime.IsDropDownOpen("menu"), "and the caller closes it");
 });
 
-Run("Menu: Escape closes the open menu and is eaten", () =>
+// A dropdown panel holding a select, as a settings popup holds one; the app
+// eats Escape itself while eatEscape says so.
+static (BibuiRuntime Runtime, SelectState State, Action<bool> EatEscape) PanelWithSelect()
 {
     var runtime = BibuiRuntime.Create();
-    int escapesLeft = 0;
+    var state = new SelectState();
+    var eatEscape = false;
     runtime.SetBuild(() =>
     {
         var page = runtime.Column().Sized(Size.Fill, Size.Fill);
         using (runtime.Parent(page))
         {
-            if (Bibui.Core.Runtime.Menu.Begin(runtime, "menu", 10f, 10f) is { } menu)
+            if (eatEscape)
+                foreach (var ev in runtime.UnconsumedEvents)
+                    if (ev is { IsKeyDown: true, Key: Bibui.Core.Key.Escape }) ev.Eat();
+            if (runtime.BeginDropDown("panel") is { } panel)
             {
-                runtime.MenuItem("menu-copy", "Copy");
-                menu.End();
+                panel.Sized(Size.Px(200f), Size.Fit).At(10f, 10f);
+                runtime.BeginParent(panel);
+                BuildSelect(runtime, state, "inner");
+                runtime.EndParent(panel);
+                panel.Claims = InteractionKinds.Press | InteractionKinds.Escape;
+                runtime.InteractionsFor(panel);
             }
-            escapesLeft += runtime.UnconsumedEvents.Count(h => h is { IsKeyDown: true, Key: Bibui.Core.Key.Escape });
         }
         return page;
-    }, TestBuild.Window(200, 200));
-    runtime.OpenDropDown("menu");
-    runtime.Step();
+    }, TestBuild.Window(400, 300));
+    return (runtime, state, v => eatEscape = v);
+}
+
+static void PressEscape(BibuiRuntime runtime)
+{
     runtime.ProcessEvent(BibUiEvent.FromKey(Bibui.Core.Key.Escape, ctrl: false, shift: false));
     runtime.Step();
-    IsTrue(!runtime.IsDropDownOpen("menu"), "Escape closes it");
-    Eq(0, escapesLeft, "and the menu ate it");
-    runtime.ProcessEvent(BibUiEvent.FromKey(Bibui.Core.Key.Escape, ctrl: false, shift: false));
+}
+
+Run("Dropdown: a select inside one is inside it, so picking a row leaves it open", () =>
+{
+    var (runtime, state, _) = PanelWithSelect();
+    runtime.OpenDropDown("panel");
     runtime.Step();
-    Eq(1, escapesLeft, "with the menu closed, Escape is left for the app");
+    ClickCentre(runtime, "inner");
+    runtime.Step();
+    ClickCentre(runtime, "inner-option-b");
+    Eq("b", state.Value, "the row has the click");
+    IsTrue(runtime.IsDropDownOpen("panel"), "and the panel it is in stays open");
+    ClickCentre(runtime, "inner");
+    runtime.Step();
+    ClickAt(runtime, 380f, 280f);
+    runtime.Step();
+    IsTrue(!runtime.IsDropDownOpen("panel") && !runtime.IsDropDownOpen("inner-list"), "a press outside closes both");
+});
+
+Run("Dropdown: Escape the app left closes the innermost open one, then the next out", () =>
+{
+    var (runtime, _, eatEscape) = PanelWithSelect();
+    runtime.OpenDropDown("panel");
+    runtime.Step();
+    ClickCentre(runtime, "inner");
+    runtime.Step();
+    eatEscape(true);
+    PressEscape(runtime);
+    IsTrue(runtime.IsDropDownOpen("inner-list"), "an Escape the app ate closes nothing");
+    eatEscape(false);
+    PressEscape(runtime);
+    IsTrue(!runtime.IsDropDownOpen("inner-list") && runtime.IsDropDownOpen("panel"), "the select's list goes first");
+    PressEscape(runtime);
+    IsTrue(!runtime.IsDropDownOpen("panel"), "then the panel");
 });
 
 // ── Dismissing a dropdown ────────────────────────────────────────────────────

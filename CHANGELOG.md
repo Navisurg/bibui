@@ -8,6 +8,13 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
+- **`runtime.BeginFloat(id, anchor, gap)`**: a dropdown built in place, a
+  child of the parent in scope, drawn last and unclipped under where its
+  anchor was drawn last frame. What is in it is inside every dropdown it was
+  built in, so a press on it does not close them.
+- **`InteractionKinds.Escape`**: on a dropdown's root, an Escape nothing ate
+  closes it at the end of the frame, innermost focused one first, and focus
+  moves to the next one out.
 - **`Bibui.Platform.Portal`**, a package of its own: the desktop's own file
   chooser through xdg-desktop-portal's `org.freedesktop.portal.FileChooser`,
   for any bibui window. `FileChooser.OpenAsync(new FileChooserOptions { Title,
@@ -40,6 +47,15 @@ All notable changes to bibui are recorded here. The format is based on
     an unknown format, a corrupt or truncated file, a missing library. It never
     throws for what is in the bytes. `Images.DecodeFile(path)` is null as well
     for a file that cannot be read. See [Pictures](docs/concepts.md#pictures).
+
+### Changed
+
+- A select's list and `Menu.BeginBelow` are floats: a select inside a
+  dropdown no longer closes it when a row is picked.
+- Opening a dropdown focuses it, and focus nothing else holds stays in the
+  open dropdown it was in.
+- A menu no longer eats Escape while it is built: it claims
+  `InteractionKinds.Escape`, so the app sees the key first and can keep it.
 
 ## [1.2.0] - 2026-11-11
 

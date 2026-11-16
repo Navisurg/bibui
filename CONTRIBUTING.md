@@ -180,8 +180,23 @@ and push children in whatever order is convenient.
 Dropdowns (`runtime.OpenDropDown(id, anchor)`, built with
 `runtime.BeginDropDown(id)`) are the one exception: they are drawn last, over
 everything, and while open they own the rect they were drawn at, whatever
-order the rest of the frame asks in. A press that a box outside one and its
-anchor takes closes it, and so does a press nothing takes.
+order the rest of the frame asks in. Opening one focuses it.
+
+A float (`runtime.BeginFloat(id, anchor, gap)`) is a dropdown built in place:
+a child of the parent in scope while the frame is built, so what is in it is
+inside every dropdown it was built in, and lifted to the end of the tree when
+the frame ends, drawn unclipped under its anchor. A select's list and a
+`Menu.BeginBelow` are floats, which is why a select inside a dropdown can be
+picked from without closing it.
+
+What closes a dropdown is decided in one place, at the end of the frame:
+
+1. an Escape nothing ate closes the focused dropdown claiming
+   `InteractionKinds.Escape`, and focus moves to the next one out, so the
+   innermost goes first and an app that eats Escape keeps them all;
+2. a press that a box outside one and its anchor takes closes it, and so does
+   a press nothing takes;
+3. a dropdown not built this frame is closed.
 
 ### When a layout is wrong, fix the layout code
 

@@ -66,13 +66,14 @@ public static class Select
             chevron.Color = UiColor.TextSecondary;
         }
 
-        if (runtime.BeginDropDown(listId) is not { } list) return new SelectScope(runtime, trigger, listId, list: null);
+        // A float under the trigger, built beside it, so a select inside a
+        // dropdown is inside that dropdown: picking a row does not close it.
+        if (runtime.BeginFloat(listId, trigger, Gap) is not { } list) return new SelectScope(runtime, trigger, listId, list: null);
 
-        // Under the trigger, where it was drawn last frame, and as wide: a
-        // container may have stretched it past the width it asked for.
+        // As wide as the trigger was drawn last frame: a container may have
+        // stretched it past the width it asked for.
         list.SizeX = SemanticSize.Pixels(trigger.Extent.X > 0f ? trigger.Extent.X : width);
         list.SizeY = SemanticSize.ChildrenSum();
-        list.At(trigger.Rect.X, trigger.Rect.Y + trigger.Extent.Y + Gap);
         list.Style.Padding = EdgeInsets.All(ListPad);
         list.Style.CornerRadius = Radius;
         list.Style.BorderWidth = theme.Borders.Width;
@@ -143,14 +144,14 @@ public readonly struct SelectScope
     /// <summary>
     /// Stops building into the list and returns the trigger. The list asks
     /// after its rows, so a press on its padding stops there rather than
-    /// reaching what is beneath, and dismisses nothing.
+    /// reaching what is beneath, and dismisses nothing; Escape closes it.
     /// </summary>
     public Box End()
     {
         if (_list is not null)
         {
             _runtime.EndParent(_list);
-            _list.Claims = InteractionKinds.Press;
+            _list.Claims = InteractionKinds.Press | InteractionKinds.Escape;
             _runtime.InteractionsFor(_list);
         }
         return _trigger;

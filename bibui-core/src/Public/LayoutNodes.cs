@@ -179,6 +179,10 @@ public sealed class Box : UiNode
 
     /// <summary>The same for "pressed".</summary>
     public float ActiveT { get; internal set; }
+
+    // A dropdown's root, from BeginDropDown or BeginFloat: where a walk up from a
+    // box built in it stops, for which dropdown the box is in and whose clip it is under.
+    internal bool PopupRoot;
 }
 
 /// <summary>

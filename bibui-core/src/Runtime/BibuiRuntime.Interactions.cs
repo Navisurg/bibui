@@ -78,15 +78,19 @@ public sealed partial class BibuiRuntime
         // ever been given a rect.
         Box geometry = PeekBox(id) ?? box;
 
-        // Cut the rect to every ancestor that claims Clip. Links are this
-        // frame's, rects last frame's.
+        // Cut the rect to every ancestor that claims Clip, up to the dropdown
+        // the box is in: a float is drawn clipped by nothing it was built in.
+        // Links are this frame's, rects last frame's.
         Vector2 rectMin = geometry.Rect;
         Vector2 rectMax = geometry.Rect + geometry.Extent;
         for (UiNode? parent = box.Parent; parent is not null; parent = parent.Parent == parent ? null : parent.Parent)
         {
-            if (parent is not Box { Claims: var parentClaims } || (parentClaims & InteractionKinds.Clip) == 0) continue;
-            rectMin = Vector2.Max(rectMin, parent.Rect);
-            rectMax = Vector2.Min(rectMax, parent.Rect + parent.Extent);
+            if (parent is Box { Claims: var parentClaims } && (parentClaims & InteractionKinds.Clip) != 0)
+            {
+                rectMin = Vector2.Max(rectMin, parent.Rect);
+                rectMax = Vector2.Min(rectMax, parent.Rect + parent.Extent);
+            }
+            if (parent is Box { PopupRoot: true }) break;
         }
         Vector2 rect = rectMin;
         Vector2 size = Vector2.Max(Vector2.Zero, rectMax - rectMin);

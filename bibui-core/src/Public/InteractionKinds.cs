@@ -81,6 +81,14 @@ public enum InteractionKinds
     /// </summary>
     Keyboard = 1 << 10,
 
+    /// <summary>
+    /// On a dropdown's root: Escape closes it. At the end of a frame, an Escape
+    /// nothing ate closes the open dropdown that has focus, the nearest one at
+    /// or above the focused box that claims this, and focus moves to the next
+    /// one out. A dropdown that must stay up through Escape does not claim it.
+    /// </summary>
+    Escape = 1 << 11,
+
     Press = LeftPress | RightPress | MiddlePress,
     ViewScroll = ViewScrollX | ViewScrollY,
     Clamp = ClampX | ClampY,

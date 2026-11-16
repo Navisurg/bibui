@@ -45,9 +45,11 @@ public sealed partial class BibuiRuntime
     /// it takes the press, before its caller reads it, so a caller that opens
     /// the dropdown on that press opens it again; and one opened every frame it
     /// is built, as <see cref="Dialog"/> is, is never dismissed. A frame that
-    /// neither opens nor begins it closes it. Opening one that was not open,
-    /// or closing one that was, asks for a frame: the change may come after
-    /// the dropdown was begun this frame.
+    /// neither opens nor begins it closes it. Opening one that was not open
+    /// gives it focus, so Escape reaches it (<see cref="InteractionKinds.Escape"/>);
+    /// opening it again, as <see cref="Dialog"/> does every frame, does not.
+    /// Opening one that was not open, or closing one that was, asks for a
+    /// frame: the change may come after the dropdown was begun this frame.
     /// </summary>
     public void OpenDropDown(string id, UiNode? anchor = null)
     {
@@ -56,17 +58,13 @@ public sealed partial class BibuiRuntime
         opened = _openDropDowns.TryAdd(id, anchor);
         if (!opened) _openDropDowns[id] = anchor;
         _openedThisFrame.Add(id);
-        if (opened) RequestFrame();
+        if (opened)
+        {
+            RequestFrame();
+            Focus(id);
+        }
     }
 
-    /// <summary>Closes the dropdown named <paramref name="id"/>: an item in it was chosen, say.</summary>
-    public void CloseDropDown(string id)
-    {
-        ArgumentNullException.ThrowIfNull(id);
-        bool closed;
-        closed = _openDropDowns.Remove(id);
-        if (closed) RequestFrame();
-    }
 
     /// <summary>Whether the dropdown named <paramref name="id"/> is open.</summary>
     public bool IsDropDownOpen(string id)
@@ -103,7 +101,7 @@ public sealed partial class BibuiRuntime
         var dropDown = DropDownFromId(id);
         if (dropDown is null)
         {
-            dropDown = new DropDown { Root = new Box { Id = id } };
+            dropDown = new DropDown { Root = new Box { Id = id, PopupRoot = true } };
             if (_drawnDropDowns.Last is null) _drawnDropDowns.First = dropDown; else _drawnDropDowns.Last.NextDrawn = dropDown;
             _drawnDropDowns.Last = dropDown;
         }
@@ -123,23 +121,29 @@ public sealed partial class BibuiRuntime
         return root;
     }
 
-    // A box took a press: every open dropdown it is not under, by the
-    // dropdown's root or its anchor, is dismissed.
-    private void PressTaken(Box box)
+    /// <summary>
+    /// The root of the open dropdown named <paramref name="id"/> as a float, or
+    /// null when it is not open: what a select's list or a menu opened from its
+    /// trigger is. Unlike <see cref="BeginDropDown"/> it is built where it is
+    /// called, a child of the parent in scope, so what is built in it is under
+    /// the boxes around it: a press on a row of a select inside a dropdown is
+    /// inside that dropdown, and does not close it. It is drawn as a dropdown is,
+    /// lifted to the end of the tree when the build returns, so it is over
+    /// everything and clipped by nothing it was built in; and while open it
+    /// owns the rect it was drawn at. Placed <paramref name="gap"/> px under
+    /// <paramref name="anchor"/>, left edges aligned, where the anchor was
+    /// drawn last frame, so it follows a moving anchor a frame late. The caller
+    /// sizes it and builds into it, as into a dropdown.
+    /// </summary>
+    public Box? BeginFloat(string id, UiNode anchor, float gap)
     {
-        List<string>? dismissed = null;
-        foreach (var (id, anchor) in _openDropDowns)
-        {
-            Box? root = DropDownFromId(id)?.Root;
-            bool under = false;
-            for (UiNode? n = box; n is not null && !under; n = n.Parent == n ? null : n.Parent)
-                under = n == root || n == anchor;
-            if (!under) (dismissed ??= new()).Add(id);
-        }
-        if (dismissed is null) return;
-        foreach (var id in dismissed) _openDropDowns.Remove(id);
-        RequestFrame();
+        ArgumentNullException.ThrowIfNull(anchor);
+        if (BeginDropDown(id) is not { } root) return null;
+        UiNode.PushIntoParent(_parentStack[^1], root);
+        root.At(anchor.Rect.X, anchor.Rect.Y + anchor.Extent.Y + gap);
+        return root;
     }
+
 
     // The one tooltip root. Cleared as each build begins, so a build starts
     // with an empty one and the frame it built stays as it was; linked only
@@ -189,14 +193,69 @@ public sealed partial class BibuiRuntime
         return box;
     }
 
-    // After the build. A press nobody took dismisses every open dropdown but
-    // those opened since it came, and one neither begun nor opened this frame
-    // closes: its caller stopped building it. Then every dropdown built this
-    // frame goes last, in the order built, so it is drawn over everything
-    // built before it; then the tooltip, over them. The built dropdowns are
-    // the drawn ones from here on.
+    // ── What closes a dropdown ───────────────────────────────────────────────
+    //
+    // A dropdown is open until its caller closes it (CloseDropDown) or one of
+    // these does, which is all that ever closes one:
+    //   - a press a box takes, when the box is not under it or its anchor
+    //     (PressTaken, as the press is taken);
+    //   - at the end of the frame (EndDropDowns), in this order:
+    //       1. an Escape nothing ate: the dropdown that has focus, if it claims
+    //          Escape, and focus moves to the next one out;
+    //       2. a press nothing took: every dropdown not opened since it came;
+    //       3. a dropdown neither begun nor opened this frame: its caller
+    //          stopped building it.
+    // A box is under a float it was built in, and so under every dropdown the
+    // float was built in: a select's list does not close the dropdown it is in.
+
+    /// <summary>Closes the dropdown named <paramref name="id"/>: an item in it was chosen, say.</summary>
+    public void CloseDropDown(string id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        bool closed;
+        closed = _openDropDowns.Remove(id);
+        if (closed) RequestFrame();
+    }
+
+    // A box took a press: every open dropdown it is not under, by the
+    // dropdown's root or its anchor, is dismissed.
+    private void PressTaken(Box box)
+    {
+        List<string>? dismissed = null;
+        foreach (var (id, anchor) in _openDropDowns)
+        {
+            Box? root = DropDownFromId(id)?.Root;
+            bool under = false;
+            for (UiNode? n = box; n is not null && !under; n = n.Parent == n ? null : n.Parent)
+                under = n == root || n == anchor;
+            if (!under) (dismissed ??= new()).Add(id);
+        }
+        if (dismissed is null) return;
+        foreach (var id in dismissed) _openDropDowns.Remove(id);
+        RequestFrame();
+    }
+
+    // After the build: the closing rules above, then focus, then every
+    // dropdown built this frame goes last in the tree, in the order built, so
+    // it is drawn over everything built before it; floats are lifted out of
+    // where they were built. Then the tooltip, over them. The built dropdowns
+    // are the drawn ones from here on.
     private void EndDropDowns(UiNode tree)
     {
+        // 1. Escape. Floats are still where they were built, so the walk up
+        // from the focused box passes every dropdown it is in.
+        for (var ev = _firstEvent; ev is not null; ev = ev.Next)
+        {
+            if (ev.Consumed || ev is not { IsKeyDown: true, Key: Key.Escape }) continue;
+            if (FocusedDropDown(_focused) is not { } escaped) break;
+            ev.Eat();
+            _openDropDowns.Remove(escaped.Id!);
+            RequestFrame();
+            Focus(FocusedDropDown(escaped.Parent)?.Id ?? "");
+            break;
+        }
+
+        // 2 and 3.
         bool untaken = false;
         for (var ev = _firstEvent; ev is not null; ev = ev.Next)
             untaken |= !ev.Consumed && ev.Kind == BibUiEventKind.MouseDown;
@@ -210,20 +269,47 @@ public sealed partial class BibuiRuntime
             RequestFrame();
         }
 
+        // Focus nothing holds for next frame stays in the open dropdown it was
+        // in, so the next Escape still reaches it: a press inside one, or a
+        // field in it giving focus up, does not leave it without focus.
+        if (_focusedNext.Length == 0 && FocusedDropDown(_focused) is { } holding)
+            _focusedNext = holding.Id!;
+
         for (var d = _builtDropDowns.First; d is not null; d = d.NextBuilt)
         {
-            if (d.Root.Parent is null && d.Root != tree) UiNode.PushIntoParent(tree, d.Root);
+            if (d.Root != tree) UiNode.PushIntoParent(tree, d.Root);
             d.NextDrawn = d.NextBuilt;
         }
         _drawnDropDowns = _builtDropDowns;
         if (_toolTip.FirstChild is not null && _toolTip.Parent is null) UiNode.PushIntoParent(tree, _toolTip);
     }
 
+    // The open dropdown built this frame that claims Escape, nearest at or
+    // above the box named `id`; null when there is none.
+    private Box? FocusedDropDown(string id) =>
+        id.Length == 0 ? null : FocusedDropDown(PeekBox(id) ?? BuiltDropDownRoot(id));
+
+    private Box? FocusedDropDown(UiNode? node)
+    {
+        for (; node is not null; node = node.Parent)
+            if (node is Box { PopupRoot: true, Id: { } id } root && (root.Claims & InteractionKinds.Escape) != 0
+                && _openDropDowns.ContainsKey(id) && DropDownFromId(id) is { } d && d.Build == _dropDownBuild)
+                return root;
+        return null;
+    }
+
+    private Box? BuiltDropDownRoot(string id)
+    {
+        for (var d = _builtDropDowns.First; d is not null; d = d.NextBuilt)
+            if (d.Root.Id == id) return d.Root;
+        return null;
+    }
+
     /// <summary>
     /// Whether <paramref name="pos"/> lies in a rect a dropdown drawn over
     /// <paramref name="box"/> was drawn at last frame. A box is drawn with the
     /// dropdown it is built in, or under them all; boxes ask while the build
-    /// runs, when a dropdown's root has no parent, so the top of a box's tree
+    /// runs, so the first dropdown root above a box, or the top of its tree,
     /// is the dropdown it is in.
     /// </summary>
     private bool IsUnderDropDown(Box box, Vector2 pos)
@@ -242,7 +328,7 @@ public sealed partial class BibuiRuntime
             if (top is null)
             {
                 top = box;
-                while (top.Parent is not null) top = top.Parent;
+                while (top.Parent is not null && top is not Box { PopupRoot: true }) top = top.Parent;
             }
             covered = root != top;
         }
