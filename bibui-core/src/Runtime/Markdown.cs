@@ -7,7 +7,7 @@ using static Bibui.Core.Runtime.Markdown;
 namespace Bibui.Core.Runtime;
 
 /// <summary>
-/// What <see cref="BibuiRuntime.Markdown(string, BibuiStr, float?, ComponentSize)"/>
+/// What <see cref="MarkdownExtensions.Markdown(BibuiRuntime, string, BibuiStr, float?, ComponentSize, MarkdownBlockDraw?)"/>
 /// built: the column holding the document, the destination of a link clicked
 /// this frame, and the source offset of a task box clicked this frame.
 /// </summary>
@@ -23,6 +23,15 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
 
     /// <summary>So it goes straight into <c>Row(...)</c> or <c>Column(...)</c>.</summary>
 }
+
+/// <summary>
+/// Draws <paramref name="block"/> of <paramref name="document"/> the app's own
+/// way, under the parent in scope and <paramref name="width"/> wide: an image,
+/// or a diagram from a fenced code block. Answers false, having built nothing,
+/// for the viewer to draw the block itself. Called for every block, those in
+/// quotes and list items too, each frame it is drawn.
+/// </summary>
+public delegate bool MarkdownBlockDraw(BibuiRuntime runtime, MarkdownDocument document, MarkdownBlock block, float width);
 
 // A document and the source it was parsed from: parsed again only when the text changed.
 internal sealed class MarkdownParse
@@ -115,8 +124,8 @@ public static class Markdown
     // `pressedAt` from the top-left corner of the block, `pressedSize` big as
     // last laid out.
     internal static MarkdownWidget DrawRange(BibuiRuntime runtime, string id, MarkdownDocument document, Range blocks,
-        float? width, ComponentSize textSize, string? blockScope, out int pressedBlock, out Vector2 pressedAt,
-        out Vector2 pressedSize)
+        float? width, ComponentSize textSize, MarkdownBlockDraw? drawBlock, string? blockScope, out int pressedBlock,
+        out Vector2 pressedAt, out Vector2 pressedSize)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -127,7 +136,7 @@ public static class Markdown
         entry.Document = document;
         entry.BlockScope = blockScope ?? id;
         cache.Claim(entry.BlockScope, runtime.FrameCount, first, count);
-        var result = Build(runtime, id, cache, entry, width, textSize, ranged: true, first, count);
+        var result = Build(runtime, id, cache, entry, width, textSize, drawBlock, ranged: true, first, count);
         pressedBlock = cache.Writer.PressedBlock;
         pressedAt = cache.Writer.PressedAt;
         pressedSize = cache.Writer.PressedSize;
@@ -156,7 +165,7 @@ public static class Markdown
     // `count` top-level blocks from `first`, or with `ranged` false all of them,
     // drawn as they are and not each in a box of its own.
     internal static MarkdownWidget Build(BibuiRuntime runtime, string id, Cache cache, Entry entry, float? width,
-        ComponentSize textSize, bool ranged = false, int first = 0, int count = 0)
+        ComponentSize textSize, MarkdownBlockDraw? drawBlock, bool ranged = false, int first = 0, int count = 0)
     {
         Box root = runtime.BoxFromId(id);
         root.ChildLayoutAxis = LayoutAxis.Y;
@@ -167,7 +176,7 @@ public static class Markdown
         float room = width ?? (root.Extent.X > 0f ? root.Extent.X : runtime.SurfaceWidth / MathF.Max(1f, runtime.ScaleFactor));
 
         var writer = cache.Writer;
-        writer.Begin(runtime, entry, textSize);
+        writer.Begin(runtime, entry, textSize, drawBlock);
         using (runtime.Parent(root))
         using (runtime.FontFace(FontSlot.Body, FontWeight.Regular))
         using (runtime.SizeX(SemanticSize.Text()))
@@ -325,6 +334,7 @@ public static class Markdown
         private Entry _entry = null!;
         private MarkdownDocument _doc = null!;
         private ComponentSize _textSize;
+        private MarkdownBlockDraw? _drawBlock;
         private int _nextId, _listDepth;
         private int _block = -1;     // the top-level block being drawn in a range, or -1
         private float _breakSlack;   // how far a word may run into a cell's padding before it is broken
@@ -343,12 +353,13 @@ public static class Markdown
 
         public Look Body => new(_textSize, FontSlot.Body, false, UiColor.TextPrimary);
 
-        public void Begin(BibuiRuntime runtime, Entry entry, ComponentSize textSize)
+        public void Begin(BibuiRuntime runtime, Entry entry, ComponentSize textSize, MarkdownBlockDraw? drawBlock)
         {
             _runtime = runtime;
             _entry = entry;
             _doc = entry.Document!;
             _textSize = textSize;
+            _drawBlock = drawBlock;
             _nextId = 0;
             _listDepth = 0;
             _breakSlack = 0f;
@@ -364,6 +375,7 @@ public static class Markdown
             _runtime = null!;
             _entry = null!;
             _doc = null!;
+            _drawBlock = null;
         }
 
         private string NextId() => _block < 0 ? _entry.IdAt(_nextId++) : _entry.IdAt(_block, _nextId++);
@@ -418,6 +430,7 @@ public static class Markdown
 
         private void Block(MarkdownBlock block, float room, Look look, bool tight)
         {
+            if (_drawBlock is not null && _drawBlock(_runtime, _doc, block, room)) return;
             switch (block.Kind)
             {
                 case MarkdownBlockKind.Paragraph:
@@ -1114,10 +1127,12 @@ public static class MarkdownExtensions
     /// showing <paramref name="source"/>. It is <paramref name="width"/> wide, or
     /// as wide as its parent when that is null — in which case the parent must
     /// have a width of its own — and as tall as the document. Text is set in
-    /// <paramref name="textSize"/>, headings in the steps above it.
+    /// <paramref name="textSize"/>, headings in the steps above it. A block
+    /// <paramref name="drawBlock"/> draws is drawn the app's way, spaced as the
+    /// one it stands for.
     /// </summary>
     public static MarkdownWidget Markdown(this BibuiRuntime runtime, string id, BibuiStr source, float? width = null,
-        ComponentSize textSize = ComponentSize.Md)
+        ComponentSize textSize = ComponentSize.Md, MarkdownBlockDraw? drawBlock = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -1125,7 +1140,7 @@ public static class MarkdownExtensions
         var cache = Caches.GetValue(runtime, static _ => new Cache());
         var entry = cache.Entry(id);
         entry.Document = DocumentFor(entry.Parse, source);
-        return Build(runtime, id, cache, entry, width, textSize);
+        return Build(runtime, id, cache, entry, width, textSize, drawBlock);
     }
 
     /// <summary>
@@ -1133,7 +1148,7 @@ public static class MarkdownExtensions
     /// last frame's source at all.
     /// </summary>
     public static MarkdownWidget Markdown(this BibuiRuntime runtime, string id, MarkdownDocument document, float? width = null,
-        ComponentSize textSize = ComponentSize.Md)
+        ComponentSize textSize = ComponentSize.Md, MarkdownBlockDraw? drawBlock = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -1141,6 +1156,6 @@ public static class MarkdownExtensions
         var cache = Caches.GetValue(runtime, static _ => new Cache());
         var entry = cache.Entry(id);
         entry.Document = document;
-        return Build(runtime, id, cache, entry, width, textSize);
+        return Build(runtime, id, cache, entry, width, textSize, drawBlock);
     }
 }

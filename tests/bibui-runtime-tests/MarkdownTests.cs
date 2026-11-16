@@ -389,8 +389,8 @@ static class MarkdownTests
             var runtime = BibuiRuntime.Create();
             runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
             {
-                Markdown.DrawRange(runtime, "before", doc, ..active, 300f, ComponentSize.Md, "doc", out _, out _, out _);
-                Markdown.DrawRange(runtime, "after", doc, (active + 1).., 300f, ComponentSize.Md, "doc", out _, out _, out _);
+                Markdown.DrawRange(runtime, "before", doc, ..active, 300f, ComponentSize.Md, null, "doc", out _, out _, out _);
+                Markdown.DrawRange(runtime, "after", doc, (active + 1).., 300f, ComponentSize.Md, null, "doc", out _, out _, out _);
             }), new WindowFrame(400, 600, 1f, 60f));
             for (int i = 0; i < 3; i++) runtime.Step();
             var view = (Box)(runtime.FindById("doc/b1/0") ?? throw new Exception("the code view, in the range after"));
@@ -409,19 +409,64 @@ static class MarkdownTests
             var runtime = BibuiRuntime.Create();
             runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
             {
-                Markdown.DrawRange(runtime, "one", doc, ..2, 300f, ComponentSize.Md, "doc", out _, out _, out _);
-                Markdown.DrawRange(runtime, "two", doc, 1.., 300f, ComponentSize.Md, "doc", out _, out _, out _);
+                Markdown.DrawRange(runtime, "one", doc, ..2, 300f, ComponentSize.Md, null, "doc", out _, out _, out _);
+                Markdown.DrawRange(runtime, "two", doc, 1.., 300f, ComponentSize.Md, null, "doc", out _, out _, out _);
             }), new WindowFrame(400, 600, 1f, 60f));
             Throws<InvalidOperationException>(() => runtime.Step(), "block 1 in both");
 
             var apart = BibuiRuntime.Create();
             apart.SetBuild(() => apart.Into(apart.Column().Sized(Size.Fill, Size.Fill), () =>
             {
-                Markdown.DrawRange(apart, "one", doc, ..2, 300f, ComponentSize.Md, "doc", out _, out _, out _);
-                Markdown.DrawRange(apart, "two", doc, 2.., 300f, ComponentSize.Md, "doc", out _, out _, out _);
+                Markdown.DrawRange(apart, "one", doc, ..2, 300f, ComponentSize.Md, null, "doc", out _, out _, out _);
+                Markdown.DrawRange(apart, "two", doc, 2.., 300f, ComponentSize.Md, null, "doc", out _, out _, out _);
             }), new WindowFrame(400, 600, 1f, 60f));
             apart.Step();
             apart.Step();   // the next frame claims afresh
+        });
+
+        // ── Blocks the app draws ────────────────────────────────────────────
+
+        run("Markdown: a block the app draws stands where the viewer would draw it, the room its width, spaced as any other", () =>
+        {
+            var doc = MarkdownDocument.Parse("First.\n\n```diagram\nx\n```\n\nLast.");
+            float gap = -1f;
+            var runtime = BibuiRuntime.Create();
+            runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
+            {
+                runtime.Markdown("md", doc, width: 360f, drawBlock: Diagram);
+                gap = Markdown.GapAbove(runtime, doc, 2);
+            }), new WindowFrame(400, 900, 1f, 60f));
+            runtime.Step();
+            runtime.Step();
+            var drawn = runtime.FindById("diagram") ?? throw new Exception("the app's block was not built");
+            Equal(new Vector2(360f, DiagramHeight), drawn.Extent, "as wide as the room, as tall as the app made it");
+            var texts = TextsUnder(runtime.FindById("md")!).ToList();
+            IsTrue(!texts.Any(t => t.Content.SequenceEqual("x")), "the code not drawn as well");
+            var last = texts.Single(t => t.Content.SequenceEqual("Last."));
+            Equal(drawn.Rect.Y + drawn.Extent.Y + gap, last.Rect.Y, "the next block, the gap above it below");
+        });
+
+        run("Markdown: a drawer that draws nothing leaves the pixels as they were, and is asked for the blocks in quotes and lists", () =>
+        {
+            const string text = "> quoted\n\n- item\n\n```diagram\nx\n```";
+            var doc = MarkdownDocument.Parse(text);
+            var asked = new HashSet<MarkdownBlock>();
+            byte[] Pixels(MarkdownBlockDraw? drawBlock)
+            {
+                var runtime = BibuiRuntime.Create();
+                runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill),
+                    () => runtime.Markdown("md", doc, width: 360f, drawBlock: drawBlock)), new WindowFrame(400, 300, 1f, 60f));
+                runtime.Step();
+                return runtime.Frame().RawBgraBytes;
+            }
+            var none = Pixels(null);
+            var declined = Pixels((_, _, block, _) => { asked.Add(block); return false; });
+            IsTrue(none.AsSpan().SequenceEqual(declined), "the frames differ");
+            var quote = doc.Root.Children[0];
+            var item = doc.Root.Children[1].Children[0];
+            IsTrue(asked.Contains(quote.Children[0]), "the paragraph in the quote");
+            IsTrue(asked.Contains(item.Children[0]), "the paragraph in the list item");
+            IsTrue(asked.Contains(doc.Root.Children[2]), "the code block");
         });
 
         // ── Layout ──────────────────────────────────────────────────────────
@@ -599,6 +644,19 @@ static class MarkdownTests
         + "See [the site](https://example.com) for more.\n\n- [ ] write it\n- [x] test it\n\n"
         + "## Code\n\n```\nvar x = 1;\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nThe end.";
 
+    internal const float DiagramHeight = 40f;
+
+    // An app's drawer: a fenced block of language "diagram" as a box "diagram",
+    // the width given and DiagramHeight tall; any other block left to the viewer.
+    internal static bool Diagram(BibuiRuntime runtime, MarkdownDocument document, MarkdownBlock block, float width)
+    {
+        if (block.Kind != MarkdownBlockKind.CodeBlock || block.Info != "diagram") return false;
+        Box box = runtime.BoxFromId("diagram");
+        box.SizeX = SemanticSize.Pixels(width);
+        box.SizeY = SemanticSize.Pixels(DiagramHeight);
+        return true;
+    }
+
     private static void Throws<T>(Action body, string what) where T : Exception
     {
         try { body(); }
@@ -626,7 +684,7 @@ static class MarkdownTests
                 int pressed = -1;
                 Vector2 at = default, size = default;
                 var widget = range is { } r
-                    ? Markdown.DrawRange(runtime, "md", doc, r, 360f, ComponentSize.Md, null, out pressed, out at, out size)
+                    ? Markdown.DrawRange(runtime, "md", doc, r, 360f, ComponentSize.Md, null, null, out pressed, out at, out size)
                     : runtime.Markdown("md", doc, width: 360f);
                 last = (widget, pressed, at, size);
             }),

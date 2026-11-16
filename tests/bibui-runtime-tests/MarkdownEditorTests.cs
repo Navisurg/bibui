@@ -1,3 +1,4 @@
+using System.Numerics;
 using Bibui.Core;
 using Bibui.Core.Runtime;
 using Bibui.Core.Runtime.Platform;
@@ -272,6 +273,25 @@ static class MarkdownEditorTests
                 "bytes the editor's call allocated");
         });
 
+        run("MarkdownEditor: a block the app draws is drawn its way, and a press on it edits its source", () =>
+        {
+            const string text = "First.\n\n```diagram\nx\n```\n\nLast.";
+            var (runtime, _, _) = Editor(text, drawBlock: MarkdownTests.Diagram);
+            var drawn = Find(runtime, "diagram");
+            Equal(new Vector2(Width, MarkdownTests.DiagramHeight), drawn.Extent, "as the app made it, the view's width");
+            Press(runtime, drawn.Rect.X + 10f, drawn.Rect.Y + 10f);
+            Steps(runtime, 2);
+            var (plain, plainState, _) = Editor(text);
+            Open(plain, plainState, text.IndexOf("```"));
+            Equal(FieldText(plain), FieldText(runtime), "its source in the field, as the block opened without a drawer");
+        });
+
+        run("MarkdownEditor: a steady frame with blocks the app draws allocates nothing", () =>
+        {
+            Equal(0L, SteadyFrame("Some **strong** words.\n\n```diagram\nx\n```\n\nEnd.", MarkdownTests.Diagram),
+                "bytes the editor's call allocated");
+        });
+
         run("MarkdownHighlight: block markers at a line's start, and none in a word or a break", () =>
         {
             const string text = "> 1. [ ] a snake_case_name\n---\n10) x\n~~~\n> not a quote\n~~~";
@@ -301,14 +321,14 @@ static class MarkdownEditorTests
 
     // The editor "ed" alone in a window, `Width` wide, laid out twice.
     private static (BibuiRuntime Runtime, MarkdownEditState State, Func<MarkdownEditorWidget> Last) Editor(
-        string text, int windowWidth = 400, int windowHeight = 600)
+        string text, int windowWidth = 400, int windowHeight = 600, MarkdownBlockDraw? drawBlock = null)
     {
         var source = BibuiStr.FromStrLit(text);
         var state = new MarkdownEditState();
         MarkdownEditorWidget last = default;
         var runtime = BibuiRuntime.Create();
         runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill),
-            () => last = runtime.MarkdownEditor("ed", source, state, width: Width)),
+            () => last = runtime.MarkdownEditor("ed", source, state, width: Width, drawBlock: drawBlock)),
             new WindowFrame(windowWidth, windowHeight, 1f, 60f));
         s_runs.AddOrUpdate(runtime, new Run(source, state));
         Steps(runtime, 2);
@@ -366,7 +386,7 @@ static class MarkdownEditorTests
     // The bytes the editor's call allocates in a steady frame, its first block
     // open and focused: its ranges found and its field built, as the frames
     // before. The frame around it is the runtime's.
-    private static long SteadyFrame(string text)
+    private static long SteadyFrame(string text, MarkdownBlockDraw? drawBlock = null)
     {
         var source = BibuiStr.FromStrLit(text);
         var state = new MarkdownEditState { Active = 0 };
@@ -375,7 +395,7 @@ static class MarkdownEditorTests
         runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
             {
                 long before = GC.GetAllocatedBytesForCurrentThread();
-                runtime.MarkdownEditor("ed", source, state, width: Width);
+                runtime.MarkdownEditor("ed", source, state, width: Width, drawBlock: drawBlock);
                 allocated = GC.GetAllocatedBytesForCurrentThread() - before;
             }), new WindowFrame(400, 600, 1f, 60f));
         Steps(runtime, 5);
