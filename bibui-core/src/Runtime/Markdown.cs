@@ -30,6 +30,7 @@ internal sealed class MarkdownParse
     // Refilled in place when the source changes: allocates only when the source outgrows it.
     internal readonly BibuiStr Source = new(0);
     internal MarkdownDocument? Document;
+    internal bool KeepLineBreaks;
 }
 
 /// <summary>
@@ -135,12 +136,13 @@ public static class Markdown
     }
 
     // The document `source` parses to, kept in `parse`.
-    internal static MarkdownDocument DocumentFor(MarkdownParse parse, BibuiStr source)
+    internal static MarkdownDocument DocumentFor(MarkdownParse parse, BibuiStr source, bool keepLineBreaks = false)
     {
-        if (parse.Document is null || !source.Str.SequenceEqual(parse.Source.Str))
+        if (parse.Document is null || parse.KeepLineBreaks != keepLineBreaks || !source.Str.SequenceEqual(parse.Source.Str))
         {
             parse.Source.ReplaceRange((0, (int)parse.Source.Length), source.Str);
-            parse.Document = MarkdownDocument.Parse(parse.Source.Str);
+            parse.Document = MarkdownDocument.Parse(parse.Source.Str, keepLineBreaks);
+            parse.KeepLineBreaks = keepLineBreaks;
         }
         return parse.Document;
     }
@@ -1114,17 +1116,19 @@ public static class MarkdownExtensions
     /// showing <paramref name="source"/>. It is <paramref name="width"/> wide, or
     /// as wide as its parent when that is null — in which case the parent must
     /// have a width of its own — and as tall as the document. Text is set in
-    /// <paramref name="textSize"/>, headings in the steps above it.
+    /// <paramref name="textSize"/>, headings in the steps above it. With
+    /// <paramref name="keepLineBreaks"/>, every line break in a paragraph breaks
+    /// the line, as in mail and chat; without it only a hard break does.
     /// </summary>
     public static MarkdownWidget Markdown(this BibuiRuntime runtime, string id, BibuiStr source, float? width = null,
-        ComponentSize textSize = ComponentSize.Md)
+        ComponentSize textSize = ComponentSize.Md, bool keepLineBreaks = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(source);
         var cache = Caches.GetValue(runtime, static _ => new Cache());
         var entry = cache.Entry(id);
-        entry.Document = DocumentFor(entry.Parse, source);
+        entry.Document = DocumentFor(entry.Parse, source, keepLineBreaks);
         return Build(runtime, id, cache, entry, width, textSize);
     }
 

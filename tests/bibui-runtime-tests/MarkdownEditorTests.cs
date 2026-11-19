@@ -19,6 +19,31 @@ static class MarkdownEditorTests
     public static void Register(Action<string, Action> run)
     {
 
+        run("Markdown, MarkdownEditor: with keepLineBreaks every line break in a paragraph breaks the line", () =>
+        {
+            const string text = "Best,\nTommy";
+            var kept = MarkdownDocument.Parse(text, keepLineBreaks: true);
+            Equal("Best,\nTommy", kept.PlainText(kept.Root.Children[0]), "kept: a line break");
+            var joined = MarkdownDocument.Parse(text);
+            Equal("Best, Tommy", joined.PlainText(joined.Root.Children[0]), "by default: a space, as CommonMark has it");
+
+            float Height(bool keep, bool editor)
+            {
+                var source = BibuiStr.FromStrLit(text);
+                var state = new MarkdownEditState();
+                var runtime = BibuiRuntime.Create();
+                runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill), () =>
+                {
+                    if (editor) runtime.MarkdownEditor("ed", source, state, width: Width, keepLineBreaks: keep);
+                    else runtime.Into(runtime.Column().Sized(Size.Px(Width)), () => runtime.Markdown("md", source, width: Width, keepLineBreaks: keep));
+                }), new WindowFrame(400, 600, 1f, 60f));
+                Steps(runtime, 2);
+                return Find(runtime, editor ? "ed/before" : "md").Extent.Y;
+            }
+            IsTrue(Height(true, editor: false) > Height(false, editor: false) + 5f, "the viewer sets two lines, not one");
+            IsTrue(Math.Abs(Height(true, editor: true) - Height(true, editor: false)) < 0.5f, "the editor reads as the viewer does");
+        });
+
         run("MarkdownEditor: viewing draws the pixels runtime.Markdown does", () =>
         {
             var source = BibuiStr.FromStrLit(Sample);

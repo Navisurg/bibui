@@ -16,7 +16,8 @@ public static MarkdownEditorWidget MarkdownEditor(
     BibuiStr source,
     MarkdownEditState state,
     float? width = null,
-    ComponentSize textSize = ComponentSize.Md)
+    ComponentSize textSize = ComponentSize.Md,
+    bool keepLineBreaks = false)
 
 public sealed class MarkdownEditState
 {
@@ -34,6 +35,7 @@ public readonly record struct MarkdownEditorWidget(Box Node, string? ClickedLink
 | `state` | What the editor keeps between frames. You own it, one per editor. |
 | `width` | The view's width. With null, it is as wide as its parent. It is as tall as its parent and scrolls. |
 | `textSize` | Body text size, and the field's. Headings use the steps above it. |
+| `keepLineBreaks` | Every line break in a paragraph breaks the line when rendered, as [Markdown](markdown.md)'s option does. |
 
 ## Behaviour
 
