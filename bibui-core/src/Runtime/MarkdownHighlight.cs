@@ -23,8 +23,31 @@ public static class MarkdownHighlight
     private const int MinFence = 3;
     private const int MinBreak = 3;          // ---, ***, ___
     private const int MaxListNumber = 9;     // digits in an ordered list's number
-    private const int TaskBox = 3;           // [ ], [x]
+    internal const int TaskBox = 3;          // [ ], [x]
     private const int MaxNesting = 16;       // spans inside spans, past which the rest is plain
+
+    // A list item's marker at `at` in `text`, `-`, `+`, `*`, `1.` or `1)`,
+    // followed by a space or `end`: its length, or 0. The editor continues
+    // lists with it too, so the two read a marker alike.
+    internal static int ListMarker(ReadOnlySpan<char> text, int at, int end)
+    {
+        int length = text[at] is '-' or '+' or '*' ? 1 : 0;
+        if (length == 0)
+        {
+            int digits = 0;
+            while (at + digits < end && digits <= MaxListNumber && char.IsAsciiDigit(text[at + digits])) digits++;
+            if (digits == 0 || digits > MaxListNumber || at + digits == end || text[at + digits] is not ('.' or ')')) return 0;
+            length = digits + 1;
+        }
+        return at + length == end || IsSpace(text[at + length]) ? length : 0;
+    }
+
+    // A task box, `[ ]` or `[x]`, at `at`, followed by a space or `end`.
+    internal static bool Task(ReadOnlySpan<char> text, int at, int end) =>
+        at + TaskBox <= end && text[at] == '[' && text[at + 1] is ' ' or 'x' or 'X' && text[at + 2] == ']'
+        && (at + TaskBox == end || IsSpace(text[at + TaskBox]));
+
+    private static bool IsSpace(char c) => c is ' ' or '\t';
 
     /// <summary>
     /// Writes <paramref name="text"/>'s Markdown syntax into <paramref name="ranges"/> as
@@ -89,11 +112,11 @@ public static class MarkdownHighlight
                     return;
                 }
                 if (Break(at, end)) return;
-                int marker = ListMarker(at, end);
+                int marker = ListMarker(_text, at, end);
                 if (marker == 0) break;
                 Dim(at, marker);
                 at = Spaces(at + marker, end);
-                if (Task(at, end))
+                if (Task(_text, at, end))
                 {
                     Dim(at, TaskBox);
                     at += TaskBox;
@@ -309,23 +332,6 @@ public static class MarkdownHighlight
             return marks >= MinBreak;
         }
 
-        // A list item's marker, `-`, `+`, `*`, `1.` or `1)`, followed by a space or the line's end: its length, or 0.
-        private readonly int ListMarker(int at, int end)
-        {
-            int length = _text[at] is '-' or '+' or '*' ? 1 : 0;
-            if (length == 0)
-            {
-                int digits = 0;
-                while (at + digits < end && digits <= MaxListNumber && char.IsAsciiDigit(_text[at + digits])) digits++;
-                if (digits == 0 || digits > MaxListNumber || at + digits == end || _text[at + digits] is not ('.' or ')')) return 0;
-                length = digits + 1;
-            }
-            return at + length == end || IsSpace(_text[at + length]) ? length : 0;
-        }
-
-        private readonly bool Task(int at, int end) =>
-            at + TaskBox <= end && _text[at] == '[' && _text[at + 1] is ' ' or 'x' or 'X' && _text[at + 2] == ']'
-            && (at + TaskBox == end || IsSpace(_text[at + TaskBox]));
 
         private readonly int Run(int at, int end, char c)
         {
@@ -340,7 +346,6 @@ public static class MarkdownHighlight
             return at;
         }
 
-        private static bool IsSpace(char c) => c is ' ' or '\t';
 
         private static FontWeight? Weight(Look look) => look switch
         {

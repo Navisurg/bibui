@@ -41,6 +41,14 @@ All notable changes to bibui are recorded here. The format is based on
     throws for what is in the bytes. `Images.DecodeFile(path)` is null as well
     for a file that cannot be read. See [Pictures](docs/concepts.md#pictures).
 
+### Changed
+
+- **`MarkdownEditor`: Enter goes on with a list or quote.** On a list item it
+  begins the next item with the same markers (a number one up, a task box
+  empty, in the same quote and indent); on a quoted line, the next with `>`.
+  On one with nothing after its markers, it takes them away and ends the list
+  or quote. Shift+Enter is a plain line break.
+
 ## [1.2.0] - 2026-11-11
 
 Text in more than one style, and Markdown edited in place. The text layer
