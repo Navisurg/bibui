@@ -41,6 +41,15 @@ All notable changes to bibui are recorded here. The format is based on
     throws for what is in the bytes. `Images.DecodeFile(path)` is null as well
     for a file that cannot be read. See [Pictures](docs/concepts.md#pictures).
 
+### Changed
+
+- **`MarkdownEditor`: a new block opens as soon as it is begun.** The blank
+  lines between two blocks are neither's: an opened block no longer shows the
+  blank line after it, and two Enters at a block's end open an empty block on
+  the next line at once, instead of when its first char is typed. The arrows
+  cross the blank lines between blocks; Backspace and Delete at a block's edge
+  take a blank line away before they join two blocks.
+
 ## [1.2.0] - 2026-11-11
 
 Text in more than one style, and Markdown edited in place. The text layer

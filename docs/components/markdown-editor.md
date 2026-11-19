@@ -42,16 +42,22 @@ public readonly record struct MarkdownEditorWidget(Box Node, string? ClickedLink
 - **Editing.** A press on a block, not on a link or a task box, makes it active
   and focuses its field. The caret goes to the end of the source line the press
   stands for: the block's lines spread evenly over its rendered height.
-- **A block's text** is its lines, then the blank lines and link reference
-  definitions after it, up to the line break before the next block. The first
-  block also owns anything before it. So every char of the source is in exactly
-  one block's text, but the line breaks between them.
+- **A block's text** is its lines, and the link reference definitions after
+  it, up to its last line that is not blank. The first block also owns
+  anything before it. The blank lines between two blocks are neither's, so an
+  opened block shows its own lines only.
 - **Edits** go into `source`, which is parsed again. A blank line typed into a
   block splits it, and the caret stays with whichever half it is in.
+- **A new block** opens as soon as it is begun. One Enter at a block's end
+  begins a line in it. A second one leaves a blank line, and the caret, on the
+  line after it, is in an empty block of its own: the block above is rendered
+  again, and what is typed is the new block. Left without anything typed, the
+  blank lines stay in `source`, where they read as one.
 - **Between blocks.** Up from the field's first line, Down from its last, Left
   at its start and Right at its end move the caret into the block beside it,
-  at the matching end. Backspace at the very start and Delete at the very end
-  remove the line break between the two, joining them.
+  at the matching end, over any blank lines between them. Backspace at the
+  very start and Delete at the very end remove one line break between the
+  two: a blank line between them goes first, then the last break joins them.
 - **Leaving.** Escape, or a press anywhere else, ends focus and renders the
   block again. A press on another block edits that one instead.
 - **Colouring.** The field's source is coloured as it is typed: its markers
