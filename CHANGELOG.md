@@ -6,6 +6,16 @@ All notable changes to bibui are recorded here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **`MarkdownEditor`: the block being edited is marked by a rule, not an
+  outline.** It sits on a `SurfaceRaised` fill with a 3 px rule at its left
+  (`Accent` while focused), in place of the input look's outline and focus
+  ring. Its padding comes out of the space around the block, so the block's
+  text no longer moves down as it opens. A new `gutter` parameter keeps room
+  beside the text for the surface, so the text does not move sideways either;
+  with the default 0 the editor still reads exactly as `runtime.Markdown`.
+
 ### Added
 
 - **`Bibui.Platform.Portal`**, a package of its own: the desktop's own file
