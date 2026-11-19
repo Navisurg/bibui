@@ -19,6 +19,39 @@ static class MarkdownEditorTests
     public static void Register(Action<string, Action> run)
     {
 
+
+        run("MarkdownEditor: two Enters at the end of the document open an empty block there at once", () =>
+        {
+            const string text = "First\n\nLast";
+            var (runtime, state, _) = Editor(text);
+            Open(runtime, state, text.Length);
+            runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.Enter)]);
+            runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.Enter)]);
+            Steps(runtime, 2);
+            Equal("", FieldText(runtime), "an empty block after the last");
+            IsTrue(runtime.FindById($"ed/blocks/b{Block(text, "Last")}") is not null, "the last block rendered above it");
+            Type(runtime, "More");
+            Steps(runtime, 2);
+            Equal("First\n\nLast\n\nMore", Source(runtime), "what is typed is a block of its own");
+        });
+
+        run("MarkdownEditor: the arrows go from block to block over the blank lines between them", () =>
+        {
+            const string text = "One\n\n\n\nTwo";
+            var (runtime, state, _) = Editor(text);
+            Open(runtime, state, text.IndexOf("Two"));
+            runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.Left)]);
+            Steps(runtime, 2);
+            Equal(3, state.Edit.Cursor, "Left at a block's start: the end of the one before");
+            Equal("One", FieldText(runtime), "editing it");
+            runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.Right)]);
+            Steps(runtime, 2);
+            Equal(text.IndexOf("Two"), state.Edit.Cursor, "Right at its end: the start of the next");
+            runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.Up)]);
+            Steps(runtime, 2);
+            Equal("One", FieldText(runtime), "Up from the first line: the block before");
+        });
+
         run("MarkdownEditor: viewing draws the pixels runtime.Markdown does", () =>
         {
             var source = BibuiStr.FromStrLit(Sample);
@@ -41,7 +74,7 @@ static class MarkdownEditorTests
             Equal(Sample.IndexOf("- one"), state.Active, "the active block's start");
             Equal(Sample.IndexOf("- three") + "- three".Length, state.Edit.Cursor, "the caret, at the end of the last line");
             IsTrue(runtime.IsFocused("ed/field"), "the field has focus");
-            Equal("- one\n- two\n- three\n", FieldText(runtime), "the field holds the block's source and the blank line after it");
+            Equal("- one\n- two\n- three", FieldText(runtime), "the field holds the block's source, not the blank line after it");
             IsTrue(runtime.FindById($"ed/blocks/b{list}") is null, "the block is not also rendered");
 
             var top = Find(runtime, $"ed/blocks/b{list - 1}");
@@ -62,14 +95,20 @@ static class MarkdownEditorTests
 
             var source = Source(runtime);
             IsTrue(source.Contains("plain text.!\n"), "the char typed, in the caller's source");
+            int paragraph = Block(Sample, "A paragraph");
             runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.Enter)]);
+            Steps(runtime, 1);
+            Equal("A paragraph of plain text.!\n", FieldText(runtime), "one Enter: a line begun in the block");
             runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.Enter)]);
+            Steps(runtime, 2);
+            Equal("", FieldText(runtime), "two: a new block at once, empty, before anything is typed in it");
+            IsTrue(runtime.FindById($"ed/blocks/b{paragraph}") is not null, "the block above is rendered again");
             Type(runtime, "New");
             Steps(runtime, 2);
             source = Source(runtime);
             IsTrue(source.Contains("plain text.!\n\nNew\n"), $"a blank line typed splits the block: {source}");
             Equal(source.IndexOf("New"), state.Active, "the caret's half is the block edited");
-            Equal("New\n", FieldText(runtime), "the field holds the new block");
+            Equal("New", FieldText(runtime), "the field holds the new block");
         });
 
         run("MarkdownEditor: Escape and a press outside the editor render every block again", () =>
@@ -178,18 +217,26 @@ static class MarkdownEditorTests
             Equal(4, state.Edit.Cursor, "the caret where the break was");
 
             var (other, otherState, _) = Editor("One\n\n\nTwo");
-            Open(other, otherState, 5);
-            Equal("One\n\n", FieldText(other), "the first block's text runs to the break before the next");
+            Open(other, otherState, 3);
+            Equal("One", FieldText(other), "the first block's text ends with its last line");
             other.Step([WindowEvent.KeyPress(Bibui.Core.Key.Delete)]);
             Equal("One\n\nTwo", Source(other), "Delete at its end removes the break after it");
+
+            var (gap, gapState, _) = Editor("One\n\n\nTwo");
+            Open(gap, gapState, 5);
+            Equal("", FieldText(gap), "past a blank line, an empty block of its own");
+            gap.Step([WindowEvent.KeyPress(Bibui.Core.Key.Backspace)]);
+            Steps(gap, 2);
+            Equal("One\n\nTwo", Source(gap), "Backspace there takes a blank line away");
+            Equal("One\n", FieldText(gap), "and the caret is on the line begun under the block");
         });
 
-        run("MarkdownEditor: blank lines and link definitions after a block, and before the first, are in its field", () =>
+        run("MarkdownEditor: link definitions after a block, and blank lines before the first, are in its field; blank lines between blocks are neither's", () =>
         {
             const string text = "\n\nIntro\n\n[site]: https://example.com\n\n\nEnd";
             var (runtime, state, _) = Editor(text);
             Open(runtime, state, 0);
-            Equal("\n\nIntro\n\n[site]: https://example.com\n\n", FieldText(runtime), "the first block's text");
+            Equal("\n\nIntro\n\n[site]: https://example.com", FieldText(runtime), "the first block's text");
             Open(runtime, state, text.IndexOf("[site]"));
             Equal(0, state.Active, "a definition is in the block before it");
 

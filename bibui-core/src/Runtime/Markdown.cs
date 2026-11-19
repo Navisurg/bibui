@@ -102,6 +102,14 @@ public static class Markdown
             return Gap(blocks, block, runtime.FontInScope(textSize).Size, tight: false);
     }
 
+    // The space between two paragraphs at `textSize`: for an editor that opens
+    // a new block where there is none yet.
+    internal static float ParagraphGap(BibuiRuntime runtime, ComponentSize textSize = ComponentSize.Md)
+    {
+        using (runtime.FontFace(FontSlot.Body, FontWeight.Regular))
+            return ParagraphSpace(runtime.FontInScope(textSize).Size);
+    }
+
     // Part of a document: the top-level blocks in `blocks`, spaced as in the
     // whole document, gap above the first included. Each block is a retained
     // box, `{blockScope}/b{index}`, with the boxes inside it named after it, so
@@ -150,8 +158,11 @@ public static class Markdown
     {
         if (blocks[i].Kind == MarkdownBlockKind.Heading) return MathF.Round(px * 1.4f);
         if (blocks[i - 1].Kind == MarkdownBlockKind.Heading) return MathF.Round(px * 0.6f);
-        return tight ? TightGap : MathF.Round(px * 0.85f);
+        return tight ? TightGap : ParagraphSpace(px);
     }
+
+    // The space between two paragraphs whose text is `px` high.
+    private static float ParagraphSpace(float px) => MathF.Round(px * 0.85f);
 
     // `count` top-level blocks from `first`, or with `ranged` false all of them,
     // drawn as they are and not each in a box of its own.

@@ -75,25 +75,61 @@ public readonly record struct MarkdownEditorWidget(Box Node, string? ClickedLink
 /// </summary>
 internal static class MarkdownEditing
 {
-    // A block's text: [Start, End) of the source, End exclusive.
-    internal readonly record struct Region(int Index, int Start, int End);
+    // A block's text: [Start, End) of the source, End exclusive. With Gap, an
+    // empty place between blocks Index - 1 and Index (or after the last), where
+    // the caret is on a blank line: what is typed there is a new block.
+    internal readonly record struct Region(int Index, int Start, int End, bool Gap = false);
 
-    internal static Region RegionAt(MarkdownDocument document, int length, int index)
+    // The region the caret at `offset` is in. A block's region runs from its
+    // start (the first block's from the document's) to the end of its last line
+    // that is not blank, so the blank lines between two blocks are neither's.
+    // A caret on the line just after a block, with no blank line between, is
+    // still the block's: a line begun under it. A caret further on, past a
+    // blank line, is in a gap: an empty region of its own, where a new block
+    // is typed, shown at once rather than when its first char makes it one.
+    internal static Region RegionOf(MarkdownDocument document, ReadOnlySpan<char> text, int offset)
     {
         var blocks = document.Root.Children;
+        int length = text.Length;
         if (blocks.Count == 0) return new Region(0, 0, length);
-        int start = index == 0 ? 0 : blocks[index].SourceStart;
-        int end = index == blocks.Count - 1 ? length : blocks[index + 1].SourceStart - 1;
-        return new Region(index, start, end);
-    }
-
-    // The region offset is in: the last that starts at or before it.
-    internal static Region RegionOf(MarkdownDocument document, int length, int offset)
-    {
-        var blocks = document.Root.Children;
         int index = 0;
         for (int i = 1; i < blocks.Count && blocks[i].SourceStart <= offset; i++) index = i;
-        return RegionAt(document, length, index);
+        int start = index == 0 ? 0 : blocks[index].SourceStart;
+        int limit = index == blocks.Count - 1 ? length : blocks[index + 1].SourceStart;
+        int end = ContentEnd(text, start, limit);
+        if (offset <= end) return new Region(index, start, end);
+        if (text[end..Math.Min(offset, length)].Count('\n') <= 1) return new Region(index, start, Math.Min(offset, limit));
+        return new Region(index + 1, offset, offset, Gap: true);
+    }
+
+    // The end of the last line in [start, limit) of `text` that is not blank,
+    // or `start` when all of it is.
+    internal static int ContentEnd(ReadOnlySpan<char> text, int start, int limit)
+    {
+        int last = limit - 1;
+        while (last >= start && char.IsWhiteSpace(text[last])) last--;
+        if (last < start) return start;
+        int newline = text[(last + 1)..limit].IndexOf('\n');
+        return newline < 0 ? limit : last + 1 + newline;
+    }
+
+    // Where the region before `region` ends, and where the one after it
+    // starts: -1 when there is none.
+    internal static int EndBefore(MarkdownDocument document, ReadOnlySpan<char> text, Region region)
+    {
+        var blocks = document.Root.Children;
+        int before = region.Index - 1;
+        if (before < 0 || blocks.Count == 0) return -1;
+        int start = before == 0 ? 0 : blocks[before].SourceStart;
+        int limit = before + 1 < blocks.Count ? blocks[before + 1].SourceStart : text.Length;
+        return ContentEnd(text, start, Math.Min(limit, region.Start));
+    }
+
+    internal static int StartAfter(MarkdownDocument document, Region region)
+    {
+        var blocks = document.Root.Children;
+        int after = region.Gap ? region.Index : region.Index + 1;
+        return after < blocks.Count ? blocks[after].SourceStart : -1;
     }
 
     // Focus to the field from the next frame, and the caret into view.
@@ -109,10 +145,11 @@ internal static class MarkdownEditing
     // start and right at its end move the caret into the block beside it;
     // Backspace at the start and Delete at the end remove the line break
     // between the two, joining them. Answers whether the source changed.
-    internal static bool CrossEdges(BibuiRuntime runtime, MarkdownEditState state, BibuiStr source, Region region,
-        ComponentSize textSize, float wrap, out bool moved)
+    internal static bool CrossEdges(BibuiRuntime runtime, MarkdownEditState state, BibuiStr source, MarkdownDocument document,
+        Region region, ComponentSize textSize, float wrap, out bool moved)
     {
         moved = false;
+        int before = EndBefore(document, source.Str, region), after = StartAfter(document, region);
         var edit = state.Edit;
         int length = (int)source.Length;
         bool collapsed = edit.Cursor == edit.Mark;
@@ -131,20 +168,22 @@ internal static class MarkdownEditing
                 var lines = Lines(runtime, state, block, textSize, wrap);
                 int line = TextField.LineOf(lines, edit.Cursor - region.Start);
                 int column = edit.Cursor - region.Start - lines[line].Start;
-                if (ev.DeltaY < 0 && line == 0 && region.Start > 0)
-                    to = LineAt(text, LineStart(text, region.Start - 1), column);
-                else if (ev.DeltaY > 0 && line == lines.Length - 1 && region.End < length)
-                    to = LineAt(text, region.End + 1, column);
+                if (ev.DeltaY < 0 && line == 0 && before >= 0)
+                    to = LineAt(text, LineStart(text, before), column);
+                else if (ev.DeltaY > 0 && line == lines.Length - 1 && after >= 0)
+                    to = LineAt(text, after, column);
             }
             else if (ev.Kind == BibUiEventKind.Navigate && ev.DeltaY == 0 && (ev.Flags & Scans) == 0)
             {
-                if (ev.Delta < 0 && atStart && region.Start > 0) to = region.Start - 1;
-                else if (ev.Delta > 0 && atEnd && region.End < length) to = region.End + 1;
+                if (ev.Delta < 0 && atStart && before >= 0) to = before;
+                else if (ev.Delta > 0 && atEnd && after >= 0) to = after;
             }
             else if (ev.Kind == BibUiEventKind.Edit && (ev.Flags & TextActionFlags.Delete) != 0
                 && (ev.Flags & (TextActionFlags.Copy | TextActionFlags.WordScan)) == 0)
             {
-                // The line break between two blocks is neither's, so removing it is the editor's.
+                // The line breaks between two blocks are neither's, so removing one is the editor's:
+                // between a block and a blank line it takes the blank line away, and the last one
+                // joins the two.
                 int at = ev.Delta < 0 && atStart && region.Start > 0 ? region.Start - 1
                     : ev.Delta > 0 && atEnd && region.End < length ? region.End
                     : -1;
@@ -266,14 +305,14 @@ public static class MarkdownEditorExtensions
         {
             int length = (int)source.Length;
             int at = Math.Clamp(state.Active >= 0 && state.Active != state.LeftActive ? state.Active : edit.Cursor, 0, length);
-            region = MarkdownEditing.RegionOf(document, length, at);
+            region = MarkdownEditing.RegionOf(document, source.Str, at);
             if (edit.Cursor < region.Start || edit.Cursor > region.End) edit.Cursor = edit.Mark = at;
             edit.Mark = Math.Clamp(edit.Mark, region.Start, region.End);
 
             if (focused)
             {
                 float wrap = state.FieldBox is { Extent.X: > 0f } field ? field.Extent.X : float.PositiveInfinity;
-                if (MarkdownEditing.CrossEdges(runtime, state, source, region, textSize, wrap, out bool moved))
+                if (MarkdownEditing.CrossEdges(runtime, state, source, document, region, textSize, wrap, out bool moved))
                 {
                     edited = true;
                     document = Markdown.DocumentFor(state.Parse, source);
@@ -281,7 +320,7 @@ public static class MarkdownEditorExtensions
                 }
                 if (moved)
                 {
-                    region = MarkdownEditing.RegionOf(document, (int)source.Length, edit.Cursor);
+                    region = MarkdownEditing.RegionOf(document, source.Str, edit.Cursor);
                     state.Reveal = Math.Max(state.Reveal, 1);
                 }
             }
@@ -309,7 +348,11 @@ public static class MarkdownEditorExtensions
             else
             {
                 before = Markdown.DrawRange(runtime, state.BeforeId, document, ..region.Index, width, textSize, state.BlockScope, out pressedBefore, out atBefore, out sizeBefore);
-                if (region.Index > 0) runtime.Gap(Markdown.GapAbove(runtime, document, region.Index, textSize));
+                float above = region.Gap
+                    ? (region.Index < count ? Markdown.GapAbove(runtime, document, region.Index, textSize) : Markdown.ParagraphGap(runtime, textSize))
+                    : region.Index > 0 ? Markdown.GapAbove(runtime, document, region.Index, textSize) : 0f;
+                if (above > 0f) runtime.Gap(above);
+                int next = region.Gap ? region.Index : region.Index + 1;
 
                 Box frame = runtime.Box();
                 frame.ChildLayoutAxis = LayoutAxis.Y;
@@ -339,7 +382,7 @@ public static class MarkdownEditorExtensions
                 if (state.Reveal > 0 && laidOut) MarkdownEditing.Reveal(runtime, state, view, state.FieldBox, font, textSize);
 
                 if (count > 0)
-                    after = Markdown.DrawRange(runtime, state.AfterId, document, (region.Index + 1).., width, textSize, state.BlockScope, out pressedAfter, out atAfter, out sizeAfter);
+                    after = Markdown.DrawRange(runtime, state.AfterId, document, next.., width, textSize, state.BlockScope, out pressedAfter, out atAfter, out sizeAfter);
             }
         }
 
@@ -388,7 +431,7 @@ public static class MarkdownEditorExtensions
             int length = (int)source.Length;
             edit.Cursor = Math.Clamp(edit.Cursor, 0, length);
             edit.Mark = Math.Clamp(edit.Mark, 0, length);
-            state.Active = MarkdownEditing.RegionOf(document, length, edit.Cursor).Start;
+            state.Active = MarkdownEditing.RegionOf(document, source.Str, edit.Cursor).Start;
         }
         if (state.Reveal > 0) runtime.RequestFrame();
         state.LeftActive = state.Active;
