@@ -24,8 +24,11 @@ namespace Bibui.Core.Runtime;
 /// blocks and entities beyond a common handful are left as text, and link titles
 /// are parsed and dropped.</para>
 /// </summary>
-internal sealed class MarkdownParser
+internal sealed class MarkdownParser(bool keepLineBreaks = false)
 {
+    // Every line break in a paragraph breaks the line, not only a hard one.
+    internal readonly bool KeepLineBreaks = keepLineBreaks;
+
     private char[] _src = [];
     private readonly List<int> _lineStart = [], _lineEnd = [], _origStart = [], _lineDelta = [];
 
@@ -834,14 +837,15 @@ internal sealed class MarkdownParser
             or '~' or '[' or '!' or ']' or '<' or '&'
             or 'h' or 'w' or 'H' or 'W';
 
-        // Two spaces before a line end break the line; otherwise it is a space.
+        // Two spaces before a line end break the line; otherwise it is a space,
+        // unless the document keeps every line break.
         private void Newline(ReadOnlySpan<char> raw, ref int i)
         {
             int spaces = 0;
             if (_toks.Count > 0 && _toks[^1] is { Kind: Kind.Text } last && last.Start + last.Len == Out.Length)
                 for (int k = Out.Length - 1; k >= last.Start && Out[k] == ' '; k--) spaces++;
             TrimTrailingSpaces();
-            if (spaces >= 2) Add(Kind.Break);
+            if (spaces >= 2 || owner.KeepLineBreaks) Add(Kind.Break);
             else AppendText(" ");
             i++;
             SkipSpaces(raw, ref i);

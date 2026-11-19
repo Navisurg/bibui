@@ -8,6 +8,11 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
+- **`keepLineBreaks`** on `runtime.Markdown`, `MarkdownEditor` and
+  `MarkdownDocument.Parse`: every line break in a paragraph breaks the line,
+  as in mail and chat, rather than only one after two spaces or a backslash.
+  Off by default, as CommonMark has it.
+
 - **`Bibui.Platform.Portal`**, a package of its own: the desktop's own file
   chooser through xdg-desktop-portal's `org.freedesktop.portal.FileChooser`,
   for any bibui window. `FileChooser.OpenAsync(new FileChooserOptions { Title,

@@ -22,7 +22,8 @@ public static MarkdownWidget Markdown(
     string id,
     BibuiStr source,
     float? width = null,
-    ComponentSize textSize = ComponentSize.Md)
+    ComponentSize textSize = ComponentSize.Md,
+    bool keepLineBreaks = false)
 
 public static MarkdownWidget Markdown(
     this BibuiRuntime runtime,
@@ -47,6 +48,7 @@ public readonly record struct MarkdownWidget(Box Node, string? ClickedLink, int 
 | `document` | A document you parsed with `MarkdownDocument.Parse` and keep yourself. This skips the comparison. |
 | `width` | The viewer's width. With null, it is as wide as its parent, which must then have a width of its own. It is as tall as the document. |
 | `textSize` | Body text size. Headings use the steps above it. |
+| `keepLineBreaks` | Every line break in a paragraph breaks the line, as in mail and chat. Without it, as CommonMark has it, a line break is a space unless two spaces or a backslash end the line. `MarkdownDocument.Parse(text, keepLineBreaks)` parses the same way. |
 
 Emphasis is set in the italic, strong emphasis in the semibold, and the two
 together in the semibold italic (`FontWeight.Italic`, `Bold` and

@@ -231,9 +231,11 @@ public static class MarkdownEditorExtensions
     /// into <paramref name="source"/>. Its view is <paramref name="width"/>
     /// wide, or as wide as its parent when that is null, as tall as its
     /// parent, and scrolls.
+    /// <para><paramref name="keepLineBreaks"/>: every line break in a paragraph
+    /// breaks the line when rendered, as <c>runtime.Markdown</c>'s does.</para>
     /// </summary>
     public static MarkdownEditorWidget MarkdownEditor(this BibuiRuntime runtime, string id, BibuiStr source,
-        MarkdownEditState state, float? width = null, ComponentSize textSize = ComponentSize.Md)
+        MarkdownEditState state, float? width = null, ComponentSize textSize = ComponentSize.Md, bool keepLineBreaks = false)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -241,7 +243,7 @@ public static class MarkdownEditorExtensions
         ArgumentNullException.ThrowIfNull(state);
         state.Name(id);
         var edit = state.Edit;
-        var document = Markdown.DocumentFor(state.Parse, source);
+        var document = Markdown.DocumentFor(state.Parse, source, keepLineBreaks);
         int count = document.Root.Children.Count;
         bool edited = false;
 
@@ -276,7 +278,7 @@ public static class MarkdownEditorExtensions
                 if (MarkdownEditing.CrossEdges(runtime, state, source, region, textSize, wrap, out bool moved))
                 {
                     edited = true;
-                    document = Markdown.DocumentFor(state.Parse, source);
+                    document = Markdown.DocumentFor(state.Parse, source, keepLineBreaks);
                     count = document.Root.Children.Count;
                 }
                 if (moved)
@@ -380,7 +382,7 @@ public static class MarkdownEditorExtensions
 
         if (edited)
         {
-            document = Markdown.DocumentFor(state.Parse, source);
+            document = Markdown.DocumentFor(state.Parse, source, keepLineBreaks);
             runtime.RequestFrame();
         }
         if (state.Active >= 0)

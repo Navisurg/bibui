@@ -162,6 +162,14 @@ public sealed class MarkdownDocument
     /// <summary>Parses Markdown: a string, or a slice of a buffer.</summary>
     public static MarkdownDocument Parse(ReadOnlySpan<char> markdown) => new MarkdownParser().Run(markdown);
 
+    /// <summary>
+    /// Parses <paramref name="markdown"/>; with <paramref name="keepLineBreaks"/>,
+    /// every line break inside a paragraph breaks the line, as it does in mail
+    /// and chat, rather than only one after two spaces or a backslash.
+    /// </summary>
+    public static MarkdownDocument Parse(ReadOnlySpan<char> markdown, bool keepLineBreaks) =>
+        new MarkdownParser(keepLineBreaks).Run(markdown);
+
     /// <summary>The plain text of a block's runs, for tests and diagnostics.</summary>
     public string PlainText(MarkdownBlock block)
     {
