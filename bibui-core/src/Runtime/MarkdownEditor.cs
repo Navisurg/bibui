@@ -78,6 +78,28 @@ internal static class MarkdownEditing
     // A block's text: [Start, End) of the source, End exclusive.
     internal readonly record struct Region(int Index, int Start, int End);
 
+    // The surface under the block being edited: its rule at the left, its
+    // corners, and the most padding it takes from the space above and below.
+    internal const float FrameRule = 3f, FrameRadius = 4f, FramePadY = 6f;
+    internal static readonly EdgeBorder RuleFocused = new(FrameRule, UiColor.Accent), RuleUnfocused = new(FrameRule, UiColor.Border);
+
+    // Blocks drawn as the viewer draws them, set in by the gutter `g`.
+    internal static MarkdownWidget Blocks(BibuiRuntime runtime, MarkdownEditState state, MarkdownDocument document,
+        string id, Range range, float? width, float g, ComponentSize textSize, float trimLead,
+        out int pressed, out Vector2 at, out Vector2 size)
+    {
+        if (g <= 0f)
+            return Markdown.DrawRange(runtime, id, document, range, width, textSize, state.BlockScope, out pressed, out at, out size, trimLead);
+        Box inset = runtime.Box();
+        inset.ChildLayoutAxis = LayoutAxis.Y;
+        inset.SizeX = width is { } w ? SemanticSize.Pixels(w) : SemanticSize.ParentPct(1f);
+        inset.SizeY = SemanticSize.ChildrenSum();
+        inset.Style.Padding = new EdgeInsets(0f, g, 0f, g);
+        float? inner = width is { } iw ? MathF.Max(0f, iw - 2f * g) : null;
+        using (runtime.Parent(inset))
+            return Markdown.DrawRange(runtime, id, document, range, inner, textSize, state.BlockScope, out pressed, out at, out size, trimLead);
+    }
+
     internal static Region RegionAt(MarkdownDocument document, int length, int index)
     {
         var blocks = document.Root.Children;
@@ -231,9 +253,14 @@ public static class MarkdownEditorExtensions
     /// into <paramref name="source"/>. Its view is <paramref name="width"/>
     /// wide, or as wide as its parent when that is null, as tall as its
     /// parent, and scrolls.
+    /// <para>The block being edited sits on a raised surface with an accent
+    /// rule at its left. <paramref name="gutter"/> is room kept at each side of
+    /// the text (and above and below it) for that surface: with one at least
+    /// as wide as the rule, the text does not move as a block opens or closes.
+    /// With none, the editor reads exactly as <c>runtime.Markdown</c> does.</para>
     /// </summary>
     public static MarkdownEditorWidget MarkdownEditor(this BibuiRuntime runtime, string id, BibuiStr source,
-        MarkdownEditState state, float? width = null, ComponentSize textSize = ComponentSize.Md)
+        MarkdownEditState state, float? width = null, ComponentSize textSize = ComponentSize.Md, float gutter = 0f)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -302,20 +329,38 @@ public static class MarkdownEditorExtensions
         int pressedBefore, pressedAfter = -1;
         Vector2 atBefore, atAfter = default, sizeBefore, sizeAfter = default;
         int fieldStart = region.Start, fieldEnd = region.End;
+        float g = MathF.Max(0f, gutter);
+
         using (runtime.Parent(view))
         {
+            bool first = editing && region.Index == 0;
+            if (g > 0f && !first) runtime.Gap(MarkdownEditing.FramePadY);
             if (!editing)
-                before = Markdown.DrawRange(runtime, state.BeforeId, document, .., width, textSize, state.BlockScope, out pressedBefore, out atBefore, out sizeBefore);
+            {
+                before = MarkdownEditing.Blocks(runtime, state, document, state.BeforeId, .., width, g, textSize, 0f, out pressedBefore, out atBefore, out sizeBefore);
+                if (g > 0f) runtime.Gap(MarkdownEditing.FramePadY);
+            }
             else
             {
-                before = Markdown.DrawRange(runtime, state.BeforeId, document, ..region.Index, width, textSize, state.BlockScope, out pressedBefore, out atBefore, out sizeBefore);
-                if (region.Index > 0) runtime.Gap(Markdown.GapAbove(runtime, document, region.Index, textSize));
+                before = MarkdownEditing.Blocks(runtime, state, document, state.BeforeId, ..region.Index, width, g, textSize, 0f, out pressedBefore, out atBefore, out sizeBefore);
+
+                // The frame takes its padding out of the space around the
+                // block, so the text keeps its place as the block opens.
+                float above = region.Index > 0 ? Markdown.GapAbove(runtime, document, region.Index, textSize) : 0f;
+                float padTop = region.Index > 0 ? MathF.Min(MarkdownEditing.FramePadY, above) : g > 0f ? MarkdownEditing.FramePadY : 0f;
+                if (above - padTop > 0f) runtime.Gap(above - padTop);
+                bool last = region.Index + 1 >= count;
+                float below = last ? 0f : Markdown.GapAbove(runtime, document, region.Index + 1, textSize);
+                float padBottom = !last ? MathF.Min(MarkdownEditing.FramePadY, below) : g > 0f ? MarkdownEditing.FramePadY : 0f;
 
                 Box frame = runtime.Box();
                 frame.ChildLayoutAxis = LayoutAxis.Y;
                 frame.SizeX = width is { } fw ? SemanticSize.Pixels(fw) : SemanticSize.ParentPct(1f);
                 frame.SizeY = SemanticSize.ChildrenSum();
-                TextField.InputStyle(runtime, frame, focused);
+                frame.Style.Padding = new EdgeInsets(padTop, g, padBottom, g);
+                frame.Style.BackgroundColor = UiColor.SurfaceRaised;
+                frame.Style.BorderLeft = focused ? MarkdownEditing.RuleFocused : MarkdownEditing.RuleUnfocused;
+                frame.Style.CornerRadius = MarkdownEditing.FrameRadius;
 
                 var slice = source.Str[region.Start..region.End];
                 if (!state.Field.Str.SequenceEqual(slice)) state.Field.ReplaceRange((0, (int)state.Field.Length), slice);
@@ -339,7 +384,8 @@ public static class MarkdownEditorExtensions
                 if (state.Reveal > 0 && laidOut) MarkdownEditing.Reveal(runtime, state, view, state.FieldBox, font, textSize);
 
                 if (count > 0)
-                    after = Markdown.DrawRange(runtime, state.AfterId, document, (region.Index + 1).., width, textSize, state.BlockScope, out pressedAfter, out atAfter, out sizeAfter);
+                    after = MarkdownEditing.Blocks(runtime, state, document, state.AfterId, (region.Index + 1).., width, g, textSize, padBottom, out pressedAfter, out atAfter, out sizeAfter);
+                if (g > 0f && !last) runtime.Gap(MarkdownEditing.FramePadY);
             }
         }
 

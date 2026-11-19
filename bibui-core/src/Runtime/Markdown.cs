@@ -114,9 +114,11 @@ public static class Markdown
     // this frame, or -1: a press its links and task boxes leave, at
     // `pressedAt` from the top-left corner of the block, `pressedSize` big as
     // last laid out.
+    // `trimLead` is taken off the space above the first block drawn: an editor
+    // that pads the block before it into that space keeps the text in place.
     internal static MarkdownWidget DrawRange(BibuiRuntime runtime, string id, MarkdownDocument document, Range blocks,
         float? width, ComponentSize textSize, string? blockScope, out int pressedBlock, out Vector2 pressedAt,
-        out Vector2 pressedSize)
+        out Vector2 pressedSize, float trimLead = 0f)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
@@ -127,7 +129,7 @@ public static class Markdown
         entry.Document = document;
         entry.BlockScope = blockScope ?? id;
         cache.Claim(entry.BlockScope, runtime.FrameCount, first, count);
-        var result = Build(runtime, id, cache, entry, width, textSize, ranged: true, first, count);
+        var result = Build(runtime, id, cache, entry, width, textSize, ranged: true, first, count, trimLead);
         pressedBlock = cache.Writer.PressedBlock;
         pressedAt = cache.Writer.PressedAt;
         pressedSize = cache.Writer.PressedSize;
@@ -156,7 +158,7 @@ public static class Markdown
     // `count` top-level blocks from `first`, or with `ranged` false all of them,
     // drawn as they are and not each in a box of its own.
     internal static MarkdownWidget Build(BibuiRuntime runtime, string id, Cache cache, Entry entry, float? width,
-        ComponentSize textSize, bool ranged = false, int first = 0, int count = 0)
+        ComponentSize textSize, bool ranged = false, int first = 0, int count = 0, float trimLead = 0f)
     {
         Box root = runtime.BoxFromId(id);
         root.ChildLayoutAxis = LayoutAxis.Y;
@@ -173,7 +175,7 @@ public static class Markdown
         using (runtime.SizeX(SemanticSize.Text()))
         using (runtime.SizeY(SemanticSize.Text()))
         {
-            if (ranged) writer.Range(entry.Document!.Root.Children, first, count, room, writer.Body);
+            if (ranged) writer.Range(entry.Document!.Root.Children, first, count, room, writer.Body, trimLead);
             else writer.Blocks(entry.Document!.Root.Children, room, writer.Body, tight: false);
         }
         var result = new MarkdownWidget(root, writer.ClickedLink, writer.ToggledTask);
@@ -387,12 +389,12 @@ public static class Markdown
         // they leave reports which block it fell on. The range opens with the
         // gap the whole document has above its first block, so ranges drawn
         // one after another stand exactly where the whole document would.
-        public void Range(IReadOnlyList<MarkdownBlock> blocks, int first, int count, float room, Look look)
+        public void Range(IReadOnlyList<MarkdownBlock> blocks, int first, int count, float room, Look look, float trimLead = 0f)
         {
             float px = Px(look);
             for (int i = first; i < first + count; i++)
             {
-                if (i > 0) _runtime.Gap(Gap(blocks, i, px, tight: false));
+                if (i > 0) _runtime.Gap(MathF.Max(0f, Gap(blocks, i, px, tight: false) - (i == first ? trimLead : 0f)));
                 Box box = _runtime.BoxFromId(_entry.BlockId(i), InteractionKinds.LeftPress);
                 box.ChildLayoutAxis = LayoutAxis.Y;
                 box.SizeX = SemanticSize.ParentPct(1f);

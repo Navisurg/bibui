@@ -16,7 +16,8 @@ public static MarkdownEditorWidget MarkdownEditor(
     BibuiStr source,
     MarkdownEditState state,
     float? width = null,
-    ComponentSize textSize = ComponentSize.Md)
+    ComponentSize textSize = ComponentSize.Md,
+    float gutter = 0f)
 
 public sealed class MarkdownEditState
 {
@@ -34,6 +35,7 @@ public readonly record struct MarkdownEditorWidget(Box Node, string? ClickedLink
 | `state` | What the editor keeps between frames. You own it, one per editor. |
 | `width` | The view's width. With null, it is as wide as its parent. It is as tall as its parent and scrolls. |
 | `textSize` | Body text size, and the field's. Headings use the steps above it. |
+| `gutter` | Room kept at each side of the text, and above the first block and below the last, for the surface under the block being edited. With one at least as wide as its rule (3 px), the text stays where it is as a block opens and closes. With 0, the default, the editor reads exactly as `runtime.Markdown` does, and the rule takes the text's first 3 px. |
 
 ## Behaviour
 
@@ -69,7 +71,9 @@ public readonly record struct MarkdownEditorWidget(Box Node, string? ClickedLink
 - The view claims `ViewScrollY | ClampY | Clip`. It asks before its content, so
   the wheel scrolls the document wherever the pointer is, the field included.
 - The field is a `StyledTextField` named `{id}/field`, as tall as its lines,
-  on the input look (`TextField.InputStyle`).
+  on a raised surface with a rule at its left. The surface takes its padding
+  from the space the viewer leaves around the block (6 px at most above and
+  below), so the block's text does not move down as it opens.
 - Links and task boxes claim `InteractionKinds.LeftPress`, as in the viewer;
   so does each rendered block.
 - It returns a `MarkdownEditorWidget`. `ClickedLink` is the destination of a
@@ -101,8 +105,8 @@ Undo is yours: `Edited` once a frame is the moment to take a snapshot of
 ## Theme tokens
 
 - The rendered blocks: as [Markdown](markdown.md).
-- The field: the input look, a `Surface` fill and `Border` edge, the theme's
-  focus ring while focused, and body text in `TextPrimary`.
+- The field: a `SurfaceRaised` fill, a 3 px rule at its left in `Accent` while
+  focused and `Border` otherwise, and body text in `TextPrimary`.
 - The field's syntax:
   - `TextSecondary`: heading `#`s, the `*`, `_`, `**` and `__` around
     emphasis, code backticks and fences, list markers and task boxes, `>`, and

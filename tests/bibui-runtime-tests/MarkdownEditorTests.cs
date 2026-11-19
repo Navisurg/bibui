@@ -19,6 +19,32 @@ static class MarkdownEditorTests
     public static void Register(Action<string, Action> run)
     {
 
+        run("MarkdownEditor: with a gutter, a block opened to edit keeps its text where it was", () =>
+        {
+            foreach (var start in new[] { "# Notes", "A paragraph", "See [the site]", "The end." })
+            {
+                var (runtime, _, _) = Editor(Sample, gutter: 12f);
+                int block = Block(Sample, start);
+                var rendered = Find(runtime, $"ed/blocks/b{block}").Rect;
+                Press(runtime, rendered.X + 4f, rendered.Y + 4f);
+                Steps(runtime, 2);
+                var field = Find(runtime, "ed/field").Rect;
+                IsTrue(Math.Abs(field.X - rendered.X) < 0.5f && Math.Abs(field.Y - rendered.Y) < 0.5f,
+                    $"{start}: the text moved from ({rendered.X}, {rendered.Y}) to ({field.X}, {field.Y})");
+            }
+        });
+
+        run("MarkdownEditor: the block being edited has a rule at its left, not an outline", () =>
+        {
+            var (runtime, state, _) = Editor(Sample, gutter: 12f);
+            var box = Find(runtime, $"ed/blocks/b{Block(Sample, "A paragraph")}");
+            Press(runtime, box.Rect.X + 4f, box.Rect.Y + 4f);
+            Steps(runtime, 2);
+            var frame = Find(runtime, "ed/field").Parent!;
+            IsTrue(frame.Style.BorderLeft is { Width: 3f } && frame.Style.BorderColor is null, "a rule at the left only");
+            IsTrue(frame.Style.Padding.Left == 12f && frame.Style.Padding.Right == 12f, "the text set in by the gutter");
+        });
+
         run("MarkdownEditor: viewing draws the pixels runtime.Markdown does", () =>
         {
             var source = BibuiStr.FromStrLit(Sample);
@@ -301,14 +327,14 @@ static class MarkdownEditorTests
 
     // The editor "ed" alone in a window, `Width` wide, laid out twice.
     private static (BibuiRuntime Runtime, MarkdownEditState State, Func<MarkdownEditorWidget> Last) Editor(
-        string text, int windowWidth = 400, int windowHeight = 600)
+        string text, int windowWidth = 400, int windowHeight = 600, float gutter = 0f)
     {
         var source = BibuiStr.FromStrLit(text);
         var state = new MarkdownEditState();
         MarkdownEditorWidget last = default;
         var runtime = BibuiRuntime.Create();
         runtime.SetBuild(() => runtime.Into(runtime.Column().Sized(Size.Fill, Size.Fill),
-            () => last = runtime.MarkdownEditor("ed", source, state, width: Width)),
+            () => last = runtime.MarkdownEditor("ed", source, state, width: Width, gutter: gutter)),
             new WindowFrame(windowWidth, windowHeight, 1f, 60f));
         s_runs.AddOrUpdate(runtime, new Run(source, state));
         Steps(runtime, 2);
