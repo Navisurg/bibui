@@ -211,6 +211,75 @@ internal static class MarkdownEditing
 
     internal static int LineStart(ReadOnlySpan<char> text, int offset) => text[..offset].LastIndexOf('\n') + 1;
 
+    // The longest line start ContinueMarker copies: quote markers, indent, a list marker and a task box.
+    private const int MaxMarkers = 128;
+
+    // Enter in a list or a quote, eaten before the field reads it. On a line
+    // with something after its markers, the next line begins with the same
+    // markers (read as MarkdownHighlight reads them): a number one up, a task
+    // box empty. On a line with nothing after them, the markers go, which
+    // ends the list or quote. Shift+Enter, a selection, and every other block
+    // keep the plain line break. Answers whether the source changed.
+    internal static bool ContinueMarker(BibuiRuntime runtime, MarkdownEditState state, BibuiStr source,
+        MarkdownDocument document, Region region)
+    {
+        var edit = state.Edit;
+        var blocks = document.Root.Children;
+        if (edit.Cursor != edit.Mark || region.Index >= blocks.Count
+            || blocks[region.Index].Kind is not (MarkdownBlockKind.List or MarkdownBlockKind.Quote)) return false;
+        foreach (var ev in runtime.UnconsumedEvents)
+        {
+            if (ev.Kind != BibUiEventKind.Submit || ev.Shift || ev.Ctrl) continue;
+            var text = source.Str;
+            int caret = edit.Cursor, start = LineStart(text, caret);
+            int eol = text[start..].IndexOf('\n');
+            int end = eol < 0 ? text.Length : start + eol;
+
+            // The line's markers: quotes, then a list marker and its task box, as often as they nest.
+            int at = start, numberAt = -1, numberEnd = -1, task = -1;
+            while (true)
+            {
+                while (at < end && text[at] is ' ' or '\t') at++;
+                if (at < end && text[at] == '>') { at++; continue; }
+                int marker = at < end ? MarkdownHighlight.ListMarker(text, at, end) : 0;
+                if (marker == 0) break;
+                if (char.IsAsciiDigit(text[at])) (numberAt, numberEnd) = (at, at + marker - 1);
+                at += marker;
+                while (at < end && text[at] is ' ' or '\t') at++;
+                if (MarkdownHighlight.Task(text, at, end)) { task = at; at += MarkdownHighlight.TaskBox; }
+            }
+            if (at == start || caret < at || at - start > MaxMarkers) return false;
+            ev.Eat();
+            if (text[at..end].Trim().Length == 0)
+            {
+                source.ReplaceRange((start, end), "");
+                edit.Cursor = edit.Mark = start;
+                return true;
+            }
+
+            // "\n", the markers as they are, with the number one up and the task box empty.
+            Span<char> next = stackalloc char[MaxMarkers + 12];
+            next[0] = '\n';
+            int n = 1, from = start;
+            if (numberAt >= 0)
+            {
+                text[start..numberAt].CopyTo(next[n..]);
+                n += numberAt - start;
+                int number = int.Parse(text[numberAt..numberEnd], provider: System.Globalization.CultureInfo.InvariantCulture);
+                (number + 1).TryFormat(next[n..], out int written, provider: System.Globalization.CultureInfo.InvariantCulture);
+                n += written;
+                from = numberEnd;
+            }
+            text[from..at].CopyTo(next[n..]);
+            if (task >= 0) next[n + (task - from) + 1] = ' ';
+            n += at - from;
+            source.ReplaceRange((caret, caret), next[..n]);
+            edit.Cursor = edit.Mark = caret + n;
+            return true;
+        }
+        return false;
+    }
+
     // `column` chars into the line starting at `start`, or its end if it is shorter.
     internal static int LineAt(ReadOnlySpan<char> text, int start, int column)
     {
@@ -273,7 +342,8 @@ public static class MarkdownEditorExtensions
             if (focused)
             {
                 float wrap = state.FieldBox is { Extent.X: > 0f } field ? field.Extent.X : float.PositiveInfinity;
-                if (MarkdownEditing.CrossEdges(runtime, state, source, region, textSize, wrap, out bool moved))
+                bool moved = MarkdownEditing.ContinueMarker(runtime, state, source, document, region);
+                if (moved || MarkdownEditing.CrossEdges(runtime, state, source, region, textSize, wrap, out moved))
                 {
                     edited = true;
                     document = Markdown.DocumentFor(state.Parse, source);

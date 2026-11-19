@@ -19,6 +19,68 @@ static class MarkdownEditorTests
     public static void Register(Action<string, Action> run)
     {
 
+        run("MarkdownEditor: Enter in a list or quote begins the next item, and Enter on an empty one ends it", () =>
+        {
+            foreach (var (text, typed, expected) in new[]
+            {
+                ("- one", "two", "- one\n- two"),
+                ("* one", "two", "* one\n* two"),
+                ("1. one", "two", "1. one\n2. two"),
+                ("9) one", "two", "9) one\n10) two"),
+                ("- [x] done", "next", "- [x] done\n- [ ] next"),
+                ("> quoted", "more", "> quoted\n> more"),
+                ("> - in a quote", "more", "> - in a quote\n> - more"),
+                ("  - nested", "more", "  - nested\n  - more"),
+            })
+            {
+                var (runtime, state, _) = Editor(text);
+                Open(runtime, state, text.Length);
+                runtime.Step([WindowEvent.KeyPress(Bibui.Core.Key.Enter)]);
+                Steps(runtime, 1);
+                Type(runtime, typed);
+                Steps(runtime, 2);
+                Equal(expected, Source(runtime), $"after {text}");
+            }
+
+            var (list, listState, _) = Editor("- one");
+            Open(list, listState, 5);
+            list.Step([WindowEvent.KeyPress(Bibui.Core.Key.Enter)]);
+            Steps(list, 1);
+            list.Step([WindowEvent.KeyPress(Bibui.Core.Key.Enter)]);
+            Steps(list, 2);
+            Equal("- one\n", Source(list), "Enter on an empty item takes its marker away: the list ends");
+
+            var (plain, plainState, _) = Editor("Just text");
+            Open(plain, plainState, 9);
+            plain.Step([WindowEvent.KeyPress(Bibui.Core.Key.Enter)]);
+            Steps(plain, 1);
+            Equal("Just text\n", Source(plain), "a paragraph gets a plain line break");
+
+            var (code, codeState, _) = Editor("```\n- not a list\n```");
+            Open(code, codeState, 16);
+            code.Step([WindowEvent.KeyPress(Bibui.Core.Key.Enter)]);
+            Steps(code, 1);
+            Equal("```\n- not a list\n\n```", Source(code), "nor does a line in code");
+        });
+
+        run("MarkdownEditor: continuing a list allocates nothing", () =>
+        {
+            var (runtime, state, _) = Editor("- one");
+            Open(runtime, state, 5);
+            var source = s_runs.TryGetValue(runtime, out var r) ? r.Source : throw new Exception("no run");
+            source.Grow();   // room for the new line, so only the continuation is measured
+            var doc = MarkdownDocument.Parse(source.Str);
+            var region = MarkdownEditing.RegionOf(doc, (int)source.Length, state.Edit.Cursor);
+            runtime.BeginBuild(new WindowFrame(400, 600, 1f, 60f), [WindowEvent.KeyPress(Bibui.Core.Key.Enter)]);
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            bool continued = MarkdownEditing.ContinueMarker(runtime, state, source, doc, region);
+            long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+            runtime.EndBuild();
+            IsTrue(continued, "Enter on the item continued the list");
+            Equal("- one\n- ", source.ToString(), "the next item begun");
+            Equal(0L, bytes, "bytes the continuation allocated");
+        });
+
         run("MarkdownEditor: viewing draws the pixels runtime.Markdown does", () =>
         {
             var source = BibuiStr.FromStrLit(Sample);

@@ -48,6 +48,12 @@ public readonly record struct MarkdownEditorWidget(Box Node, string? ClickedLink
   one block's text, but the line breaks between them.
 - **Edits** go into `source`, which is parsed again. A blank line typed into a
   block splits it, and the caret stays with whichever half it is in.
+- **Lists and quotes go on.** Enter on a list item begins the next one with
+  the same markers, read as the colouring reads them: a number one up, a task
+  box empty, in the same quote and indent. Enter on a quoted line begins the
+  next with `>`. Enter on an item or quoted line with nothing after its
+  markers takes them away, ending the list or quote. Shift+Enter is a plain
+  line break, as is Enter in any other block.
 - **Between blocks.** Up from the field's first line, Down from its last, Left
   at its start and Right at its end move the caret into the block beside it,
   at the matching end. Backspace at the very start and Delete at the very end
