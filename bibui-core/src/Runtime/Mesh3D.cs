@@ -42,7 +42,7 @@ internal sealed class Mesh3DView
     private uint _drawnVersion;
     private OrbitCamera _drawnCamera;
     private int _drawnW, _drawnH;
-    private (bool, Rgba, float, Rgba?, bool) _drawnLook;
+    private (bool, Rgba, float, Rgba?, bool, int) _drawnLook;
 
     public Mesh3DView() => Draw = (_, ctx) => Paint(ctx);
 
@@ -53,7 +53,7 @@ internal sealed class Mesh3DView
         if (Mesh is null) return;
         int w = (int)MathF.Round(ctx.Rect.Width), h = (int)MathF.Round(ctx.Rect.Height);
         if (w <= 0 || h <= 0) return;
-        var look = (Options.Wireframe, Options.WireframeColor, Options.Ambient, Options.Background, Options.ShowMesh);
+        var look = (Options.Wireframe, Options.WireframeColor, Options.Ambient, Options.Background, Options.ShowMesh, Options.Supersample);
         if (!ReferenceEquals(_drawnMesh, Mesh) || _drawnVersion != Mesh.Version || _drawnCamera != Camera
             || _drawnW != w || _drawnH != h || _drawnLook != look)
         {

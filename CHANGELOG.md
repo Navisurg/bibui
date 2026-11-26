@@ -16,7 +16,7 @@ All notable changes to bibui are recorded here. The format is based on
   set from code (`SetMesh3DCamera`) with any up vector, y-down included;
   `MeshOverlay` draws points and line strips over it. Lit by a headlight with
   normals from the current positions, both sides drawn, an optional
-  wireframe. The core rasterises it on the CPU, so it draws the same on every
+  wireframe and supersampling. The core rasterises it on the CPU, so it draws the same on every
   renderer and headless. See [Mesh3D](docs/components/mesh-3d.md).
 - **`DrawOpKind.Pixels`** and `DrawContext.DrawPixels(PixelImage, …)`: CPU
   pixels the core made, drawn as an image by every renderer, with no texture

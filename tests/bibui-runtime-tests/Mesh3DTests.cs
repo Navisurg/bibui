@@ -346,6 +346,33 @@ static class Mesh3DTests
             True(At(bare, W / 2, H / 2) == At(bare, 0, 0), "and no mesh is drawn");
         });
 
+        run("Mesh3D: supersampled, the outline is partly covered pixels; one sample a pixel, none are", () =>
+        {
+            static (int Partial, int Covered) Coverage(Bibui.Core.Draw.PixelImage image)
+            {
+                int partial = 0, covered = 0;
+                foreach (uint p in image.Pixels)
+                {
+                    uint a = p >> 24;
+                    if (a > 0 && a < 255) partial++;
+                    if (a > 0) covered++;
+                }
+                return (partial, covered);
+            }
+            var options = new Mesh3DOptions();
+            var lab = new Lab(SphereMesh(), options);
+            lab.Runtime.Frame();
+            True(lab.Runtime.TryMeshView("view", out var view), "the view is kept");
+            var one = Coverage(view.Image);
+            options.Supersample = 2;
+            var smooth = lab.Runtime.Frame();
+            Save(smooth, "sphere-supersampled");
+            var two = Coverage(view.Image);
+            True(one.Partial == 0, $"one sample a pixel covers each pixel whole, but {one.Partial} are partial");
+            True(two.Partial > 100, $"the outline is partly covered: {two.Partial} pixels");
+            Near(one.Covered, two.Covered, one.Covered * 0.03, "the disc is as large either way");
+        });
+
         run("Mesh3D: a texture is drawn through the texture coordinates", () =>
         {
             // A quad facing the eye (counter-clockwise from it), its left half red and its right half blue in the texture.

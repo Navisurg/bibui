@@ -80,6 +80,13 @@ public sealed class Mesh3DOptions
     /// </summary>
     public bool OverlayHiddenByMesh { get; set; }
 
+    /// <summary>
+    /// Samples a pixel across, 1 to 4: 2 draws the mesh at twice the size each way
+    /// and averages, smoothing its outline and the wireframe for four times the
+    /// rasterising. 1, the default, takes one sample a pixel.
+    /// </summary>
+    public int Supersample { get; set; } = 1;
+
     /// <summary>False: the mesh is not drawn, only the overlay (and the background).</summary>
     public bool ShowMesh { get; set; } = true;
 }

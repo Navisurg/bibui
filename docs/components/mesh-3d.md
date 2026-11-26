@@ -117,6 +117,7 @@ public sealed class Mesh3DOptions
     public MeshOverlay? Overlay { get; set; }         // points and lines drawn over the mesh
     public bool OverlayHiddenByMesh { get; set; }     // overlay points behind the mesh are not drawn
     public bool ShowMesh { get; set; } = true;        // false: only the overlay
+    public int Supersample { get; set; } = 1;         // 2: a smooth outline and wireframe, for 4× the rasterising
 }
 
 public sealed class MeshOverlay
@@ -175,6 +176,9 @@ frame, at 1280 × 800:
 |---|---|
 | Build, normals and rasterising (`tests/bibui-runtime-tests`, "Mesh3D: 100k") | 8–13 ms |
 | The same on `SkiaGlRenderer`, GPU upload and draw included (`samples/mesh3d-gl-bench`) | 9.8 ms: 8.7 CPU + 1.1 GL |
+
+`Supersample = 2` rasterises four times the pixels: use it for meshes of a
+few tens of thousands of vertices, or a smaller box.
 
 `samples/mesh3d-gl-bench` opens a GLFW window that is never shown and draws
 into a framebuffer of its own, so it runs without putting anything on screen:

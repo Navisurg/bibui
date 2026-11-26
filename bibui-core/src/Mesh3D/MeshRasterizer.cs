@@ -52,7 +52,12 @@ internal sealed class MeshRasterizer
     public void Render(TriangleMesh mesh, in OrbitCamera cam, Mesh3DOptions options, PixelImage image, int width, int height)
     {
         image.Resize(width, height);
-        int w = image.Width, h = image.Height;
+        // Supersampled: drawn at ss × ss the pixels, then each block averaged into one.
+        int ss = Math.Clamp(options.Supersample, 1, 4);
+        _ss = ss;
+        int w = image.Width * ss, h = image.Height * ss;
+        if (ss > 1) Grow(ref _fine, w * h);
+        uint[] px = ss > 1 ? _fine : image.Argb;
         mesh.Update();
         int nv = mesh.VertexCount, nf = mesh.FaceCount;
         Grow(ref _sx, nv); Grow(ref _sy, nv); Grow(ref _iz, nv);
@@ -63,11 +68,12 @@ internal sealed class MeshRasterizer
         Grow(ref _depth, w * h);
 
         uint background = options.Background is { } bg ? Premul(bg) : 0u;
-        image.Pixels.Fill(background);
+        px.AsSpan(0, w * h).Fill(background);
         _depth.AsSpan(0, w * h).Clear();
         (_depthW, _depthH) = (w, h);
         if (!options.ShowMesh)
         {
+            image.Pixels.Fill(background);
             image.Touch();
             return;
         }
@@ -131,7 +137,6 @@ internal sealed class MeshRasterizer
         });
 
         // Bands of rows, each filled by one worker from every face that reaches it.
-        var px = image.Argb;
         var depthBuf = _depth;
         bool wire = options.Wireframe;
         var wc = options.WireframeColor;
@@ -197,7 +202,7 @@ internal sealed class MeshRasterizer
                         if (wire)
                         {
                             float dist = MathF.Min(w0 * l0, MathF.Min(w1 * l1, w2 * l2));
-                            float cov = Math.Clamp(1f - dist, 0f, 1f) * wa;
+                            float cov = Math.Clamp(1f - dist / ss, 0f, 1f) * wa;   // a pixel of the image wide, whatever the sampling
                             r += (wr - r) * cov; g += (wg - g) * cov; bl += (wb - bl) * cov;
                         }
                         px[row + x] = 0xFF000000u | (uint)(Math.Clamp(r, 0f, 1f) * 255f + 0.5f) << 16
@@ -206,10 +211,38 @@ internal sealed class MeshRasterizer
                 }
             }
         });
+        if (ss > 1) Downsample(px, w, image, ss);
         image.Touch();
     }
 
-    private int _depthW, _depthH;
+    // Each ss × ss block of the fine pixels averaged, premultiplied, into one of the image's.
+    private static void Downsample(uint[] fine, int fineWidth, PixelImage image, int ss)
+    {
+        var dst = image.Argb;
+        int w = image.Width;
+        int n = ss * ss, half = n / 2;
+        Chunks(image.Height, 16, (lo, hi) =>
+        {
+            for (int y = lo; y < hi; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    uint a = 0, r = 0, g = 0, b = 0;
+                    for (int j = 0; j < ss; j++)
+                    {
+                        int row = (y * ss + j) * fineWidth + x * ss;
+                        for (int i = 0; i < ss; i++)
+                        {
+                            uint p = fine[row + i];
+                            a += p >> 24; r += (p >> 16) & 255; g += (p >> 8) & 255; b += p & 255;
+                        }
+                    }
+                    dst[y * w + x] = (uint)((a + half) / n) << 24 | (uint)((r + half) / n) << 16 | (uint)((g + half) / n) << 8 | (uint)((b + half) / n);
+                }
+        });
+    }
+
+    private int _depthW, _depthH, _ss = 1;
+    private uint[] _fine = [];
 
     /// <summary>
     /// Whether a point <paramref name="depth"/> from the eye at <paramref name="screen"/>
@@ -218,7 +251,7 @@ internal sealed class MeshRasterizer
     /// </summary>
     public bool InFront(Vector2 screen, float depth, float tolerance)
     {
-        int x = (int)MathF.Floor(screen.X), y = (int)MathF.Floor(screen.Y);
+        int x = (int)MathF.Floor(screen.X * _ss), y = (int)MathF.Floor(screen.Y * _ss);
         if (x < 0 || y < 0 || x >= _depthW || y >= _depthH) return true;
         float surface = _depth[y * _depthW + x];   // 1/depth, 0 for none
         return surface == 0f || depth * surface <= 1f + tolerance;
