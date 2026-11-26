@@ -79,6 +79,7 @@ internal static class DemoDisplay
             case "Alert": AlertPage(runtime); break;
             case "Separator": SeparatorPage(runtime); break;
             case "Texture": DemoTexture.Build(runtime); break;
+            case "Mesh3D": DemoMesh3D.Build(runtime); break;
             case "Label": LabelPage(runtime); break;
             case "Progress": ProgressPage(runtime, state, set); break;
             case "Skeleton": SkeletonPage(runtime); break;

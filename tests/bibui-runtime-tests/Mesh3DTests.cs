@@ -221,6 +221,14 @@ static class Mesh3DTests
             var lab = new Lab(mesh, options);
             var first = lab.Runtime.Frame();
             Save(first, "wave-t0");
+            // No cracks: every pixel well inside the surface is the surface, none the background
+            // showing through between two faces that share an edge.
+            var bg = At(first, 0, 0);
+            int holes = 0;
+            for (int y = H / 2 - 20; y < H / 2 + 50; y++)
+                for (int x = W / 2 - 90; x < W / 2 + 90; x++)
+                    if (At(first, x, y) == bg) holes++;
+            True(holes == 0, $"{holes} pixels inside the surface show the background through cracks");
             uint drawn = ImageVersion(lab);
             lab.Runtime.Frame();
             True(ImageVersion(lab) == drawn, "an unchanged frame draws the mesh again");

@@ -113,7 +113,7 @@ static (string Group, string[] Routes)[] NavGroups() => new[]
             "Select", "Slider", "Toggle",
             "ToggleGroup", "DatePicker", "Calendar", "TimePicker", "ColorPicker" }),
         ("Display", new[] { "Text", "Badge", "Avatar", "Card", "Alert", "Separator", "Label",
-            "Progress", "Skeleton", "Spinner", "RatioBox", "KeyboardShortcut", "Table", "Markdown", "Texture",
+            "Progress", "Skeleton", "Spinner", "RatioBox", "KeyboardShortcut", "Table", "Markdown", "Texture", "Mesh3D",
             "PagedTable", "FormField", "ListItem", "EmptyState", "Toast" }),
         ("Overlays", new[] { "Dialog", "AlertDialog", "Popover", "HoverPreview", "Tooltip",
             "Drawer", "DropdownMenu", "ContextMenu", "CommandPalette" }),
@@ -301,7 +301,7 @@ static void BuildDemo(BibuiRuntime runtime, GalleryState state, Gallery gallery)
             DemoInputs.Build(runtime, state.Route, state.Inputs, s => gallery.State = state with { Inputs = s }); break;
         case "Text" or "Badge" or "Avatar" or "Card" or "Alert" or "Separator" or "Label"
             or "Progress" or "Skeleton" or "Spinner" or "RatioBox"
-            or "KeyboardShortcut" or "Table" or "Markdown" or "Texture" or "PagedTable" or "FormField" or "ListItem" or "EmptyState"
+            or "KeyboardShortcut" or "Table" or "Markdown" or "Texture" or "Mesh3D" or "PagedTable" or "FormField" or "ListItem" or "EmptyState"
             or "Toast":
             DemoDisplay.Build(runtime, state.Route, state.Display, s => gallery.State = state with { Display = s }); break;
         case "Dialog" or "AlertDialog" or "Popover" or "HoverPreview" or "Tooltip"
