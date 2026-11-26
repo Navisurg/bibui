@@ -594,6 +594,7 @@ internal static class DamageOracle
             int frame = 0;
             TextureHandle image = default, video = default;
             var pixels = new byte[32 * 32 * 4];
+            var cpu = new PixelImage();
             UiNode Build()
             {
                 var canvas = new Box
@@ -620,6 +621,18 @@ internal static class DamageOracle
                         if (video.IsNone) video = renderer.CreateTexture(TextureFormat.RGBA8, TextureKind.Stream, 32, 32, pixels);
                         else renderer.UpdateTexture(video, pixels);
                         ctx.DrawTexture(video, new RectF(260, 20, 324, 84), white);
+
+                        // CPU pixels the core holds (DrawOpKind.Pixels), rewritten in place every
+                        // third frame and held still between: damage must follow their version.
+                        if (frame % 3 == 0 || cpu.Width == 0)
+                        {
+                            cpu.Resize(24, 24);
+                            var px = cpu.Pixels;
+                            for (int i = 0; i < px.Length; i++)
+                                px[i] = 0xFF000000u | (uint)((i * 13 + frame * 29) & 255) << 16 | (uint)((i * 5) & 255) << 8 | (uint)(frame * 17 & 255);
+                            cpu.Touch();
+                        }
+                        ctx.DrawPixels(cpu, new RectF(340, 20, 388, 68), white);
 
                         Span<Vector2> pts = stackalloc Vector2[8];
                         for (int i = 0; i < 8; i++) pts[i] = new(30 + i * 20, 120 + (i == frame % 8 ? 6 : 0));
