@@ -11,7 +11,9 @@ line strips can be drawn over it, and its edges as a wireframe.
 > **Status.** On the branch `bib/add-a-3d-mesh-view-to-bibui-an-o` until it is
 > merged. Every renderer draws it the same way: the core rasterises the mesh on
 > the CPU, z-buffered and spread over the cores, into pixels the renderer draws
-> as an image (`DrawOpKind.Pixels`). There is no GPU path yet.
+> as an image (`DrawOpKind.Pixels`): Skia on the CPU, Skia on GL (which uploads
+> them each frame the mesh changes) and the managed rasteriser. There is no
+> GPU rasteriser for the mesh itself yet; see [Speed](#speed).
 
 ## Build
 
@@ -113,6 +115,8 @@ public sealed class Mesh3DOptions
     public Rgba? Background { get; set; }             // null: the box shows through where there is no mesh
     public bool Interactive { get; set; } = true;     // false: the view takes no input
     public MeshOverlay? Overlay { get; set; }         // points and lines drawn over the mesh
+    public bool OverlayHiddenByMesh { get; set; }     // overlay points behind the mesh are not drawn
+    public bool ShowMesh { get; set; } = true;        // false: only the overlay
 }
 
 public sealed class MeshOverlay
@@ -124,9 +128,16 @@ public sealed class MeshOverlay
 }
 ```
 
-Overlay points and lines are drawn after the mesh, antialiased, and not hidden
-by it: a track behind the surface still shows. Fill the overlay again whenever
+Overlay points and lines are drawn after the mesh, antialiased. By default
+the mesh does not hide them: a track behind the surface still shows. With
+`OverlayHiddenByMesh`, each overlay point is tested against the mesh's depth
+where it lands, with a tolerance of 1 % of its depth so a track drawn on the
+surface stays; a hidden point is not drawn and a line breaks there (a segment
+between two visible points is drawn whole). Fill the overlay again whenever
 what it shows changes (`Clear`, then add), and keep the instance.
+
+Lines and points behind the eye (closer than 0.1 % of the camera's distance)
+are left out, and so is a face with a vertex there.
 
 ## Claims and reports
 
@@ -149,10 +160,28 @@ it with `SetMesh3DCamera`.
 
 ## Speed
 
-The mesh is drawn at the box's size in physical pixels. Normals and the
-vertex transform are recomputed only when the positions, the camera or the size
-change; triangles are rasterised in horizontal bands on every core. See the
-measurements in the pull request that added it.
+The mesh is drawn at the box's size in physical pixels. It is drawn again
+only when something it depends on changed: the mesh (any `Set…` call), the
+camera, the size or the look; a frame that changes none of them reuses the
+pixels. Normals are recomputed once per change of positions. Vertices are
+transformed in parallel chunks, and faces filled in horizontal bands, one
+worker each.
+
+Measured on a 20-core laptop (Ryzen AI, Radeon 880M), a 317 × 317 grid
+(100,489 vertices, 199,712 triangles) with every position replaced each
+frame, at 1280 × 800:
+
+| Path | Frame |
+|---|---|
+| Build, normals and rasterising (`tests/bibui-runtime-tests`, "Mesh3D: 100k") | 8–13 ms |
+| The same on `SkiaGlRenderer`, GPU upload and draw included (`samples/mesh3d-gl-bench`) | 9.8 ms: 8.7 CPU + 1.1 GL |
+
+`samples/mesh3d-gl-bench` opens a GLFW window that is never shown and draws
+into a framebuffer of its own, so it runs without putting anything on screen:
+
+```bash
+dotnet run --project samples/mesh3d-gl-bench -c Release -- 120 /tmp/mesh3d-gl.png
+```
 
 ## Example
 
@@ -170,8 +199,8 @@ sealed class SurfaceView
         // OpenCV camera axes: y down, z forward. Look from the camera at the surface.
         Home = new OrbitCamera(Eye: Vector3.Zero, Target: new Vector3(0f, 0f, 110f), Up: -Vector3.UnitY),
     };
-    int _frame;
-    bool _wire;
+    int _frame;                                    // the frame shown: a time slider sets it
+    bool _wire;                                    // a switch sets it
 
     public SurfaceView(uint[] faces, float[][] frames)
     {
@@ -186,6 +215,10 @@ sealed class SurfaceView
         _options.Wireframe = _wire;
         var view = runtime.Mesh3D("surface", _mesh, _options);
         view.Node.Sized(Size.Fill, Size.Px(480f));
+
+        var slider = runtime.Slider("frame", _frame, min: 0f, max: _frames.Length - 1, step: 1f);
+        _frame = (int)slider.Value;
+        if (runtime.Switch("wire", _wire, "Wireframe").Clicked) _wire = !_wire;
     }
 }
 ```

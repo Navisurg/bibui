@@ -65,6 +65,12 @@ internal sealed class MeshRasterizer
         uint background = options.Background is { } bg ? Premul(bg) : 0u;
         image.Pixels.Fill(background);
         _depth.AsSpan(0, w * h).Clear();
+        (_depthW, _depthH) = (w, h);
+        if (!options.ShowMesh)
+        {
+            image.Touch();
+            return;
+        }
 
         Basis(cam, h, out var eye, out var right, out var up, out var fwd, out float fpx);
         float near = NearShare * MathF.Max(cam.Distance, 1e-6f);
@@ -201,6 +207,21 @@ internal sealed class MeshRasterizer
             }
         });
         image.Touch();
+    }
+
+    private int _depthW, _depthH;
+
+    /// <summary>
+    /// Whether a point <paramref name="depth"/> from the eye at <paramref name="screen"/>
+    /// is in front of the mesh last drawn there, within <paramref name="tolerance"/>
+    /// of its depth. Off the image, or where no face was drawn, it is.
+    /// </summary>
+    public bool InFront(Vector2 screen, float depth, float tolerance)
+    {
+        int x = (int)MathF.Floor(screen.X), y = (int)MathF.Floor(screen.Y);
+        if (x < 0 || y < 0 || x >= _depthW || y >= _depthH) return true;
+        float surface = _depth[y * _depthW + x];   // 1/depth, 0 for none
+        return surface == 0f || depth * surface <= 1f + tolerance;
     }
 
     // Bilinear, clamped at the edges; (0, 0) is the top-left corner of the picture.

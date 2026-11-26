@@ -72,4 +72,14 @@ public sealed class Mesh3DOptions
 
     /// <summary>Points and lines over the mesh.</summary>
     public MeshOverlay? Overlay { get; set; }
+
+    /// <summary>
+    /// Overlay points behind the mesh are not drawn, and a line breaks at them.
+    /// Tested at the points, with a tolerance of 1 % of their depth so a track on
+    /// the surface stays; a segment between two visible points is drawn whole.
+    /// </summary>
+    public bool OverlayHiddenByMesh { get; set; }
+
+    /// <summary>False: the mesh is not drawn, only the overlay (and the background).</summary>
+    public bool ShowMesh { get; set; } = true;
 }

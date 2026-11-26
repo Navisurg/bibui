@@ -322,6 +322,30 @@ static class Mesh3DTests
             True(runtime.Mesh3DCamera("v") == cam, "and reads back");
         });
 
+        run("Mesh3D: overlay points behind the mesh hide when asked, and show without the mesh", () =>
+        {
+            var front = new Vector3(0.5f, 0f, 0.87f) * 1.01f;
+            var back = new Vector3(-0.5f, 0f, -0.87f) * 1.01f;
+            var overlay = new MeshOverlay();
+            overlay.Points([front, back], new Rgba(40, 255, 40), 10f);
+            var options = new Mesh3DOptions { Home = new OrbitCamera(new Vector3(0f, 0f, 4f), Vector3.Zero, Vector3.UnitY), Overlay = overlay };
+            var lab = new Lab(SphereMesh(), options);
+            True(MeshRasterizer.Project(options.Home.Value, front, W, H, out var f, out _), "the front point projects");
+            True(MeshRasterizer.Project(options.Home.Value, back, W, H, out var b, out _), "the back point projects");
+            static bool Green((byte B, byte G, byte R, byte A) c) => c.G > 200 && c.R < 120;
+            var all = lab.Runtime.Frame();
+            True(Green(At(all, (int)f.X, (int)f.Y)) && Green(At(all, (int)b.X, (int)b.Y)), "without the depth test both show");
+            options.OverlayHiddenByMesh = true;
+            var tested = lab.Runtime.Frame();
+            Save(tested, "overlay-depth-tested");
+            True(Green(At(tested, (int)f.X, (int)f.Y)), "the point on the near side shows");
+            True(!Green(At(tested, (int)b.X, (int)b.Y)), "the point behind the sphere is hidden");
+            options.ShowMesh = false;
+            var bare = lab.Runtime.Frame();
+            True(Green(At(bare, (int)b.X, (int)b.Y)), "without the mesh nothing hides it");
+            True(At(bare, W / 2, H / 2) == At(bare, 0, 0), "and no mesh is drawn");
+        });
+
         run("Mesh3D: a texture is drawn through the texture coordinates", () =>
         {
             // A quad facing the eye (counter-clockwise from it), its left half red and its right half blue in the texture.

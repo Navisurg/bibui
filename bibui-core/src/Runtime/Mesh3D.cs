@@ -42,7 +42,7 @@ internal sealed class Mesh3DView
     private uint _drawnVersion;
     private OrbitCamera _drawnCamera;
     private int _drawnW, _drawnH;
-    private (bool, Rgba, float, Rgba?) _drawnLook;
+    private (bool, Rgba, float, Rgba?, bool) _drawnLook;
 
     public Mesh3DView() => Draw = (_, ctx) => Paint(ctx);
 
@@ -53,7 +53,7 @@ internal sealed class Mesh3DView
         if (Mesh is null) return;
         int w = (int)MathF.Round(ctx.Rect.Width), h = (int)MathF.Round(ctx.Rect.Height);
         if (w <= 0 || h <= 0) return;
-        var look = (Options.Wireframe, Options.WireframeColor, Options.Ambient, Options.Background);
+        var look = (Options.Wireframe, Options.WireframeColor, Options.Ambient, Options.Background, Options.ShowMesh);
         if (!ReferenceEquals(_drawnMesh, Mesh) || _drawnVersion != Mesh.Version || _drawnCamera != Camera
             || _drawnW != w || _drawnH != h || _drawnLook != look)
         {
@@ -65,6 +65,14 @@ internal sealed class Mesh3DView
     }
 
     private Vector2[] _points = new Vector2[64];
+
+    /// <summary>A share of a point's depth it may be behind the surface and still show: a track drawn on it.</summary>
+    private const float OverlayTolerance = 0.01f;
+
+    // Projected, and in sight: in front of the eye and, when the options ask, of the mesh.
+    private bool Visible(Vector3 p, int w, int h, out Vector2 s) =>
+        MeshRasterizer.Project(Camera, p, w, h, out s, out float depth)
+        && (!Options.OverlayHiddenByMesh || Raster.InFront(s, depth, OverlayTolerance));
 
     private void DrawOverlay(DrawContext ctx, MeshOverlay overlay, int w, int h)
     {
@@ -79,7 +87,7 @@ internal sealed class Mesh3DView
                 {
                     int n = 0;
                     for (int i = 0; i < item.Count; i++)
-                        if (MeshRasterizer.Project(Camera, verts[item.Start + i], w, h, out var s, out _)) _points[n++] = s;
+                        if (Visible(verts[item.Start + i], w, h, out var s)) _points[n++] = s;
                     if (n > 0)
                         ctx.DrawPoints(PointMode.Points, _points.AsSpan(0, n),
                             new Paint { Stroke = item.Color, StrokeWidth = size, Cap = StrokeCap.Round });
@@ -87,12 +95,12 @@ internal sealed class Mesh3DView
                 }
                 case MeshOverlay.Kind.Strip:
                 {
-                    // A run of points in front of the eye is one polyline; a point behind it breaks the line.
+                    // A run of points in sight is one polyline; a point out of sight breaks the line.
                     var paint = new Paint { Stroke = item.Color, StrokeWidth = size, Cap = StrokeCap.Round, Join = StrokeJoin.Round };
                     int n = 0;
                     for (int i = 0; i < item.Count; i++)
                     {
-                        if (MeshRasterizer.Project(Camera, verts[item.Start + i], w, h, out var s, out _)) { _points[n++] = s; continue; }
+                        if (Visible(verts[item.Start + i], w, h, out var s)) { _points[n++] = s; continue; }
                         if (n > 1) ctx.DrawPoints(PointMode.Polygon, _points.AsSpan(0, n), paint);
                         n = 0;
                     }
@@ -104,8 +112,7 @@ internal sealed class Mesh3DView
                     int n = 0;
                     for (int i = 0; i + 1 < item.Count; i += 2)
                     {
-                        if (MeshRasterizer.Project(Camera, verts[item.Start + i], w, h, out var s0, out _)
-                            && MeshRasterizer.Project(Camera, verts[item.Start + i + 1], w, h, out var s1, out _))
+                        if (Visible(verts[item.Start + i], w, h, out var s0) && Visible(verts[item.Start + i + 1], w, h, out var s1))
                         {
                             _points[n++] = s0;
                             _points[n++] = s1;
