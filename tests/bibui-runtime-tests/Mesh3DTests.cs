@@ -362,6 +362,15 @@ static class Mesh3DTests
                 mesh.SetPositions(xyz);
                 lab.Frame();   // builds, lays out and paints: the mesh is rasterised in the paint
             }
+            // Faces of a few pixels each, many of them meeting on a pixel centre: no cracks either.
+            var last = lab.Runtime.LastFrame();
+            Save(last, "wave-100k");
+            var bg = At(last, 0, 0);
+            int holes = 0;
+            for (int y = 300; y < 600; y++)
+                for (int x = 400; x < 880; x++)
+                    if (At(last, x, y) == bg) holes++;
+            True(holes == 0, $"{holes} pixels inside the 100k surface show the background through cracks");
             Console.WriteLine($"         100,489 vertices, 199,712 triangles at 1280×800: {sw.Elapsed.TotalMilliseconds / frames:F1} ms a frame (build + normals + raster), {Environment.ProcessorCount} cores");
         });
     }

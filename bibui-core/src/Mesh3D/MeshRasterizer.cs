@@ -113,8 +113,9 @@ internal sealed class MeshRasterizer
                 float x0 = MathF.Min(sx[a], MathF.Min(sx[b], sx[c])), x1 = MathF.Max(sx[a], MathF.Max(sx[b], sx[c]));
                 float y0 = MathF.Min(sy[a], MathF.Min(sy[b], sy[c])), y1 = MathF.Max(sy[a], MathF.Max(sy[b], sy[c]));
                 // Pixel centres at +0.5 inside the box; clamped to the image.
-                int minY = (int)MathF.Max(MathF.Ceiling(y0 - 0.5f), 0f), maxY = (int)MathF.Min(MathF.Floor(y1 - 0.5f), h - 1);
-                int minX = (int)MathF.Max(MathF.Ceiling(x0 - 0.5f), 0f), maxX = (int)MathF.Min(MathF.Floor(x1 - 0.5f), w - 1);
+                // As far out as the edge slack reaches, or a centre on a vertex's row is lost.
+                int minY = (int)MathF.Max(MathF.Ceiling(y0 - 0.5f - EdgeSlack), 0f), maxY = (int)MathF.Min(MathF.Floor(y1 - 0.5f + EdgeSlack), h - 1);
+                int minX = (int)MathF.Max(MathF.Ceiling(x0 - 0.5f - EdgeSlack), 0f), maxX = (int)MathF.Min(MathF.Floor(x1 - 0.5f + EdgeSlack), w - 1);
                 if (minX > maxX || !(x1 >= 0f) || x0 > w) { b0 = 1; box[4 * f + 1] = 0; continue; }
                 b0 = minY;
                 box[4 * f + 1] = maxY;
@@ -143,33 +144,35 @@ internal sealed class MeshRasterizer
                 int x0 = box[4 * f + 2], x1 = box[4 * f + 3];
                 int a = faces[3 * f], b = faces[3 * f + 1], c = faces[3 * f + 2];
                 float ax = sx[a], ay = sy[a], bx = sx[b], by = sy[b], qx = sx[c], qy = sy[c];
-                float area = (bx - ax) * (qy - ay) - (qx - ax) * (by - ay);
+                // Relative to a: products of screen coordinates (a thousand pixels
+                // squared) would lose the hundredths of a pixel an edge is decided by.
+                float ux = bx - ax, uy = by - ay, vx = qx - ax, vy = qy - ay;
+                float area = ux * vy - vx * uy;
                 if (area == 0f || !float.IsFinite(area)) continue;
                 // Facing away: the winding reads the other way on screen (y down). Darker.
                 float side = area > 0f ? 0.72f : 1f;
                 float inv = 1f / area;
-                // Edge functions, each 0 on an edge and positive inside once signed by the area:
-                // e0 opposite a, e1 opposite b, e2 opposite c.
-                float e0x = (by - qy) * inv, e0y = (qx - bx) * inv, e0c = (bx * qy - qx * by) * inv;
-                float e1x = (qy - ay) * inv, e1y = (ax - qx) * inv, e1c = (qx * ay - ax * qy) * inv;
-                float e2x = (ay - by) * inv, e2y = (bx - ax) * inv, e2c = (ax * by - bx * ay) * inv;
+                // The weights of b and c are linear in the offset from a; a's is what is left.
+                float e1x = vy * inv, e1y = -vx * inv;
+                float e2x = -uy * inv, e2y = ux * inv;
                 // Pixels from an edge per unit of its weight: a pixel centre a hair
                 // outside both faces of a shared edge (rounding) is still drawn, so
                 // a surface shows no cracks; the wireframe reads the same distance.
-                float l0 = 1f / MathF.Sqrt(e0x * e0x + e0y * e0y);
-                float l1 = 1f / MathF.Sqrt(e1x * e1x + e1y * e1y);
-                float l2 = 1f / MathF.Sqrt(e2x * e2x + e2y * e2y);
+                float aa = MathF.Abs(area);
+                float l0 = aa / MathF.Sqrt((qx - bx) * (qx - bx) + (qy - by) * (qy - by));
+                float l1 = aa / MathF.Sqrt(vx * vx + vy * vy);
+                float l2 = aa / MathF.Sqrt(ux * ux + uy * uy);
                 float iza = iz[a], izb = iz[b], izc = iz[c];
                 for (int y = y0; y <= y1; y++)
                 {
-                    float fy = y + 0.5f;
+                    float dy = y + 0.5f - ay;
                     int row = y * w;
                     for (int x = x0; x <= x1; x++)
                     {
-                        float fx = x + 0.5f;
-                        float w0 = e0x * fx + e0y * fy + e0c;
-                        float w1 = e1x * fx + e1y * fy + e1c;
-                        float w2 = 1f - w0 - w1;
+                        float dx = x + 0.5f - ax;
+                        float w1 = e1x * dx + e1y * dy;
+                        float w2 = e2x * dx + e2y * dy;
+                        float w0 = 1f - w1 - w2;
                         if (w0 * l0 < -EdgeSlack || w1 * l1 < -EdgeSlack || w2 * l2 < -EdgeSlack) continue;
                         float z = w0 * iza + w1 * izb + w2 * izc;
                         if (z <= depthBuf[row + x]) continue;
