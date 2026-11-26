@@ -203,6 +203,14 @@ internal sealed class DamageFrame
                     Draw(ref d, h, Bounds(Inflate(op.Rect, 1f), op));
                     break;
                 }
+                case DrawOpKind.Pixels:
+                {
+                    var image = list.ImageAt(op.Resource);
+                    ulong h = Hash64.Mix(Hash64.Mix(Hash64.Mix(0x2AUL, (ulong)image.Id), image.Version), op.Rect);
+                    h = Hash64.Mix(h, PaintHash(op, list));
+                    Draw(ref d, h, Bounds(Inflate(op.Rect, 1f), op));
+                    break;
+                }
                 case DrawOpKind.BackdropBlur:
                 {
                     // It writes inside its clip and reads all of its region: its

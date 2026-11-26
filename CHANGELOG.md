@@ -8,6 +8,20 @@ All notable changes to bibui are recorded here. The format is based on
 
 ### Added
 
+- **`runtime.Mesh3D(id, mesh, options)`**, a triangle mesh in a box seen
+  through an orbit camera (left-drag orbits, right- or middle-drag pans, the
+  wheel zooms, a double-click goes home). `TriangleMesh` holds fixed faces and
+  positions the app replaces every frame, with a colour, a scalar through a
+  colormap or a texture a vertex; `OrbitCamera` is the camera, kept by id and
+  set from code (`SetMesh3DCamera`) with any up vector, y-down included;
+  `MeshOverlay` draws points and line strips over it. Lit by a headlight with
+  normals from the current positions, both sides drawn, an optional
+  wireframe and supersampling. The core rasterises it on the CPU, so it draws the same on every
+  renderer and headless. See [Mesh3D](docs/components/mesh-3d.md).
+- **`DrawOpKind.Pixels`** and `DrawContext.DrawPixels(PixelImage, …)`: CPU
+  pixels the core made, drawn as an image by every renderer, with no texture
+  to create first.
+
 - **`Bibui.Platform.Portal`**, a package of its own: the desktop's own file
   chooser through xdg-desktop-portal's `org.freedesktop.portal.FileChooser`,
   for any bibui window. `FileChooser.OpenAsync(new FileChooserOptions { Title,

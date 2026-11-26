@@ -194,6 +194,21 @@ public readonly ref partial struct DrawContext
         List.SetPaint(ref op, paint.FillPaint());
     }
 
+    /// <summary>
+    /// CPU pixels the caller made (<see cref="PixelImage"/>) scaled into
+    /// <paramref name="dest"/>, on every renderer alike. The fill colour's alpha
+    /// modulates them; the filter says how they are sampled when scaled. The
+    /// image is read when the frame is drawn, so it must not change before then.
+    /// </summary>
+    public void DrawPixels(PixelImage image, RectF dest, in Paint paint)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        ref var op = ref List.Push(DrawOpKind.Pixels);
+        op.Rect = dest;
+        op.Resource = List.AddImage(image);
+        List.SetPaint(ref op, paint.FillPaint());
+    }
+
     // ── State ────────────────────────────────────────────────────────────────
     // Each push is undone by its pop, in order. Clips, transforms and opacity
     // share one stack, counted so a callback's are its own (see StateFloor).

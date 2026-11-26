@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Mesh3D's frame time on Skia's GL renderer, in a window that is never shown. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>mesh3d-gl-bench</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../bibui-platform-silk/bibui-platform-silk.csproj" />
+    <ProjectReference Include="../../bibui-raster-skia/bibui-raster-skia.csproj" />
+  </ItemGroup>
+</Project>

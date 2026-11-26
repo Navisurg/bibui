@@ -48,6 +48,11 @@ public enum DrawOpKind : byte
     BackdropBlur,
     /// <summary>Glyphs of <see cref="DrawList.FaceAt"/>(Resource) at size C, at their positions from origin (A, B), in <see cref="DrawOp.Color"/>.</summary>
     Glyphs,
+    /// <summary>
+    /// <see cref="DrawList.ImageAt"/>(Resource), CPU pixels the core made, scaled
+    /// into <see cref="DrawOp.Rect"/>; the paint's alpha modulates them, as a texture's.
+    /// </summary>
+    Pixels,
 }
 
 /// <summary>
@@ -172,6 +177,7 @@ public sealed class DrawList
     // Empty until a frame draws through a table: most frames never do.
     private TextureLookup[] _lookups = [];
     private int _lookupCount;
+    private readonly List<PixelImage> _images = [];
 
     public ReadOnlySpan<DrawOp> Ops => _ops.AsSpan(0, _opCount);
     public ReadOnlySpan<Vector2> Points => _points.AsSpan(0, _pointCount);
@@ -197,12 +203,16 @@ public sealed class DrawList
     public TextureLookup LookupAt(int index) =>
         index >= 0 && index < _lookupCount ? _lookups[index] : TextureLookup.None;
 
+    /// <summary>The CPU pixels a <see cref="DrawOpKind.Pixels"/> op draws.</summary>
+    public PixelImage ImageAt(int index) => _images[index];
+
     // ── Recording, the core's side ───────────────────────────────────────────
 
     internal void Reset()
     {
         _opCount = _pointCount = _verbCount = _floatCount = _colorCount = _glyphCount = _lookupCount = 0;
         _paths.Clear();
+        _images.Clear();
         _faces.Clear();
         _faceIndex.Clear();
     }
@@ -244,6 +254,12 @@ public sealed class DrawList
     {
         _paths.Add(path);
         return _paths.Count - 1;
+    }
+
+    internal int AddImage(PixelImage image)
+    {
+        _images.Add(image);
+        return _images.Count - 1;
     }
 
     internal int AddFace(FontFace face)

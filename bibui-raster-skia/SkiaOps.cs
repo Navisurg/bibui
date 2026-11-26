@@ -93,6 +93,7 @@ internal sealed class SkiaOps : IDisposable
                     break;
                 case DrawOpKind.BackdropBlur: BackdropBlur(surface, op.Region, op.Rect, op.A); break;
                 case DrawOpKind.Glyphs: Glyphs(canvas, in op, list); break;
+                case DrawOpKind.Pixels: Pixels(canvas, list.ImageAt(op.Resource), op, list); break;
             }
         }
 
@@ -134,6 +135,17 @@ internal sealed class SkiaOps : IDisposable
             ? Paint(op.Paint with { Color = new Rgba(255, 255, 255, op.Paint.Color.A) }, op.MaskBlurSigma, op.ImageBlurSigma)
             : Paint(op, list);
         canvas.DrawImage(texture.Image, op.Rect.ToSk(), op.Paint.FilterQuality.ToSk(), paint);
+    }
+
+    // CPU pixels the core made: wrapped where they lie (the array is pinned),
+    // not copied. On a GPU canvas Skia uploads them for the draw.
+    private void Pixels(SKCanvas canvas, PixelImage image, in DrawOp op, DrawList list)
+    {
+        if (image.Width * image.Height == 0) return;
+        var info = new SKImageInfo(image.Width, image.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using var sk = SKImage.FromPixels(info, Marshal.UnsafeAddrOfPinnedArrayElement(image.Argb, 0), image.Width * 4);
+        if (sk is null) return;
+        canvas.DrawImage(sk, op.Rect.ToSk(), op.Paint.FilterQuality.ToSk(), Paint(op, list));
     }
 
     // ── Groups ───────────────────────────────────────────────────────────────

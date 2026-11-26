@@ -323,7 +323,17 @@ public sealed class ManagedRenderer : IDisposable
                 break;
             case DrawOpKind.BackdropBlur: BackdropBlur(c, op.Region, op.Rect, op.A); break;
             case DrawOpKind.Glyphs: Glyphs(c, in op, list); break;
+            case DrawOpKind.Pixels: Pixels(c, list.ImageAt(op.Resource), op); break;
         }
+    }
+
+    // CPU pixels the core made, premultiplied ARGB as a texture's are held here.
+    private void Pixels(Canvas c, PixelImage image, in DrawOp op)
+    {
+        var d = ToRect(op.Rect);
+        if (d.IsEmpty || image.Width * image.Height == 0) return;
+        _imageShader.Set(image.Argb, image.Width, image.Height, d, op.Paint.FilterQuality != FilterQuality.None);
+        c.DrawRect(d, new Paint { Color = op.Paint.Color.Argb | 0x00FFFFFFu, Shader = _imageShader });
     }
 
     // A translation as a translation, a uniform scale after it as a scale, and

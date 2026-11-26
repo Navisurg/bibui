@@ -1,0 +1,294 @@
+using System.Numerics;
+using Bibui.Core.Draw;
+
+namespace Bibui.Core;
+
+/// <summary>
+/// Draws a <see cref="TriangleMesh"/> into a <see cref="PixelImage"/> on the
+/// CPU: vertices projected through an <see cref="OrbitCamera"/> and lit by a
+/// headlight, then triangles filled with a z-buffer (1/depth), colours and
+/// texture coordinates interpolated perspective-correct. Rows are split into
+/// bands drawn in parallel; each band owns its pixels, so nothing is shared
+/// while they run. Scratch is kept between frames: after the first frame at a
+/// size, a frame allocates nothing but the parallel loop's own bookkeeping.
+/// </summary>
+internal sealed class MeshRasterizer
+{
+    // Per vertex: screen position (physical px), 1/depth (0 when behind the
+    // eye), and lit colour premultiplied by 1/depth for perspective-correct
+    // interpolation; texture coordinates likewise.
+    private float[] _sx = [], _sy = [], _iz = [], _r = [], _g = [], _b = [], _u = [], _v = [];
+    // Per face: its pixel box, rows minY..maxY (minY > maxY when it draws nothing).
+    private int[] _box = [];
+    private float[] _depth = [];
+
+    /// <summary>The near plane, as a share of the camera distance: what is closer to the eye is not drawn.</summary>
+    private const float NearShare = 1e-3f;
+
+    /// <summary>How far outside a face, in pixels, a pixel centre may be and still be drawn by it.</summary>
+    private const float EdgeSlack = 0.01f;
+
+    /// <summary>A pixel's centre to screen point, and whether it lies in front of the eye.</summary>
+    internal static bool Project(in OrbitCamera cam, Vector3 p, int width, int height, out Vector2 screen, out float depth)
+    {
+        Basis(cam, height, out var eye, out var right, out var up, out var fwd, out float fpx);
+        var d = p - eye;
+        depth = Vector3.Dot(d, fwd);
+        float near = NearShare * MathF.Max(cam.Distance, 1e-6f);
+        if (depth < near) { screen = default; return false; }
+        screen = new Vector2(width * 0.5f + Vector3.Dot(d, right) / depth * fpx, height * 0.5f - Vector3.Dot(d, up) / depth * fpx);
+        return true;
+    }
+
+    private static void Basis(in OrbitCamera cam, int height, out Vector3 eye, out Vector3 right, out Vector3 up, out Vector3 fwd, out float fpx)
+    {
+        eye = cam.Eye;
+        fwd = cam.Forward;
+        right = cam.Right;
+        up = Vector3.Cross(right, fwd);
+        fpx = height * 0.5f / MathF.Tan(Math.Clamp(cam.FovY, 1f, 170f) * 0.5f * MathF.PI / 180f);
+    }
+
+    public void Render(TriangleMesh mesh, in OrbitCamera cam, Mesh3DOptions options, PixelImage image, int width, int height)
+    {
+        image.Resize(width, height);
+        // Supersampled: drawn at ss × ss the pixels, then each block averaged into one.
+        int ss = Math.Clamp(options.Supersample, 1, 4);
+        _ss = ss;
+        int w = image.Width * ss, h = image.Height * ss;
+        if (ss > 1) Grow(ref _fine, w * h);
+        uint[] px = ss > 1 ? _fine : image.Argb;
+        mesh.Update();
+        int nv = mesh.VertexCount, nf = mesh.FaceCount;
+        Grow(ref _sx, nv); Grow(ref _sy, nv); Grow(ref _iz, nv);
+        Grow(ref _r, nv); Grow(ref _g, nv); Grow(ref _b, nv);
+        bool textured = mesh.Textured;
+        if (textured) { Grow(ref _u, nv); Grow(ref _v, nv); }
+        Grow(ref _box, nf * 4);
+        Grow(ref _depth, w * h);
+
+        uint background = options.Background is { } bg ? Premul(bg) : 0u;
+        px.AsSpan(0, w * h).Fill(background);
+        _depth.AsSpan(0, w * h).Clear();
+        (_depthW, _depthH) = (w, h);
+        if (!options.ShowMesh)
+        {
+            image.Pixels.Fill(background);
+            image.Touch();
+            return;
+        }
+
+        Basis(cam, h, out var eye, out var right, out var up, out var fwd, out float fpx);
+        float near = NearShare * MathF.Max(cam.Distance, 1e-6f);
+        float ambient = Math.Clamp(options.Ambient, 0f, 1f);
+        float cx = w * 0.5f, cy = h * 0.5f;
+        var colors = mesh.ScalarColors ?? mesh.Colors;
+        var pos = mesh.Positions;
+        var nrm = mesh.Normals;
+        var uv = mesh.Uv;
+        float[] sx = _sx, sy = _sy, iz = _iz, rr = _r, gg = _g, bb = _b, uu = _u, vv = _v;
+
+        // Vertices: project, light, and premultiply the attributes by 1/depth.
+        Chunks(nv, 4096, (lo, hi) =>
+        {
+            for (int i = lo; i < hi; i++)
+            {
+                var p = new Vector3(pos[3 * i], pos[3 * i + 1], pos[3 * i + 2]);
+                var d = p - eye;
+                float depth = Vector3.Dot(d, fwd);
+                if (!(depth >= near)) { iz[i] = 0f; continue; }   // behind the near plane, or NaN
+                float inv = 1f / depth;
+                iz[i] = inv;
+                sx[i] = cx + Vector3.Dot(d, right) * inv * fpx;
+                sy[i] = cy - Vector3.Dot(d, up) * inv * fpx;
+                // The headlight: from the eye toward the vertex, both sides lit alike.
+                var n = new Vector3(nrm[3 * i], nrm[3 * i + 1], nrm[3 * i + 2]);
+                float lambert = MathF.Abs(Vector3.Dot(n, d)) / MathF.Max(d.Length(), 1e-12f);
+                float shade = (ambient + (1f - ambient) * lambert) * inv;
+                rr[i] = colors[3 * i] * shade;
+                gg[i] = colors[3 * i + 1] * shade;
+                bb[i] = colors[3 * i + 2] * shade;
+                if (textured) { uu[i] = uv![2 * i] * inv; vv[i] = uv[2 * i + 1] * inv; }
+            }
+        });
+
+        // Faces: the pixel box each covers, or none.
+        var faces = mesh.Faces;
+        int[] box = _box;
+        Chunks(nf, 8192, (lo, hi) =>
+        {
+            for (int f = lo; f < hi; f++)
+            {
+                int a = faces[3 * f], b = faces[3 * f + 1], c = faces[3 * f + 2];
+                ref int b0 = ref box[4 * f];
+                if (iz[a] == 0f || iz[b] == 0f || iz[c] == 0f) { b0 = 1; box[4 * f + 1] = 0; continue; }
+                float x0 = MathF.Min(sx[a], MathF.Min(sx[b], sx[c])), x1 = MathF.Max(sx[a], MathF.Max(sx[b], sx[c]));
+                float y0 = MathF.Min(sy[a], MathF.Min(sy[b], sy[c])), y1 = MathF.Max(sy[a], MathF.Max(sy[b], sy[c]));
+                // Pixel centres at +0.5 inside the box; clamped to the image.
+                // As far out as the edge slack reaches, or a centre on a vertex's row is lost.
+                int minY = (int)MathF.Max(MathF.Ceiling(y0 - 0.5f - EdgeSlack), 0f), maxY = (int)MathF.Min(MathF.Floor(y1 - 0.5f + EdgeSlack), h - 1);
+                int minX = (int)MathF.Max(MathF.Ceiling(x0 - 0.5f - EdgeSlack), 0f), maxX = (int)MathF.Min(MathF.Floor(x1 - 0.5f + EdgeSlack), w - 1);
+                if (minX > maxX || !(x1 >= 0f) || x0 > w) { b0 = 1; box[4 * f + 1] = 0; continue; }
+                b0 = minY;
+                box[4 * f + 1] = maxY;
+                box[4 * f + 2] = minX;
+                box[4 * f + 3] = maxX;
+            }
+        });
+
+        // Bands of rows, each filled by one worker from every face that reaches it.
+        var depthBuf = _depth;
+        bool wire = options.Wireframe;
+        var wc = options.WireframeColor;
+        float wa = wc.A / 255f, wr = wc.R / 255f, wg = wc.G / 255f, wb = wc.B / 255f;
+        var tex = mesh.Texture;
+        int tw = mesh.TextureWidth, th = mesh.TextureHeight;
+        int bands = Math.Clamp(h / 8, 1, Environment.ProcessorCount * 4);
+        Parallel.For(0, bands, band =>
+        {
+            int rowLo = (int)((long)h * band / bands), rowHi = (int)((long)h * (band + 1) / bands) - 1;
+            for (int f = 0; f < nf; f++)
+            {
+                int minY = box[4 * f], maxY = box[4 * f + 1];
+                if (maxY < rowLo || minY > rowHi || minY > maxY) continue;
+                int y0 = Math.Max(minY, rowLo), y1 = Math.Min(maxY, rowHi);
+                int x0 = box[4 * f + 2], x1 = box[4 * f + 3];
+                int a = faces[3 * f], b = faces[3 * f + 1], c = faces[3 * f + 2];
+                float ax = sx[a], ay = sy[a], bx = sx[b], by = sy[b], qx = sx[c], qy = sy[c];
+                // Relative to a: products of screen coordinates (a thousand pixels
+                // squared) would lose the hundredths of a pixel an edge is decided by.
+                float ux = bx - ax, uy = by - ay, vx = qx - ax, vy = qy - ay;
+                float area = ux * vy - vx * uy;
+                if (area == 0f || !float.IsFinite(area)) continue;
+                // Facing away: the winding reads the other way on screen (y down). Darker.
+                float side = area > 0f ? 0.72f : 1f;
+                float inv = 1f / area;
+                // The weights of b and c are linear in the offset from a; a's is what is left.
+                float e1x = vy * inv, e1y = -vx * inv;
+                float e2x = -uy * inv, e2y = ux * inv;
+                // Pixels from an edge per unit of its weight: a pixel centre a hair
+                // outside both faces of a shared edge (rounding) is still drawn, so
+                // a surface shows no cracks; the wireframe reads the same distance.
+                float aa = MathF.Abs(area);
+                float l0 = aa / MathF.Sqrt((qx - bx) * (qx - bx) + (qy - by) * (qy - by));
+                float l1 = aa / MathF.Sqrt(vx * vx + vy * vy);
+                float l2 = aa / MathF.Sqrt(ux * ux + uy * uy);
+                float iza = iz[a], izb = iz[b], izc = iz[c];
+                for (int y = y0; y <= y1; y++)
+                {
+                    float dy = y + 0.5f - ay;
+                    int row = y * w;
+                    for (int x = x0; x <= x1; x++)
+                    {
+                        float dx = x + 0.5f - ax;
+                        float w1 = e1x * dx + e1y * dy;
+                        float w2 = e2x * dx + e2y * dy;
+                        float w0 = 1f - w1 - w2;
+                        if (w0 * l0 < -EdgeSlack || w1 * l1 < -EdgeSlack || w2 * l2 < -EdgeSlack) continue;
+                        float z = w0 * iza + w1 * izb + w2 * izc;
+                        if (z <= depthBuf[row + x]) continue;
+                        depthBuf[row + x] = z;
+                        float iw = side / z;
+                        float r = (w0 * rr[a] + w1 * rr[b] + w2 * rr[c]) * iw;
+                        float g = (w0 * gg[a] + w1 * gg[b] + w2 * gg[c]) * iw;
+                        float bl = (w0 * bb[a] + w1 * bb[b] + w2 * bb[c]) * iw;
+                        if (textured)
+                        {
+                            float tu = (w0 * uu[a] + w1 * uu[b] + w2 * uu[c]) / z;
+                            float tv = (w0 * vv[a] + w1 * vv[b] + w2 * vv[c]) / z;
+                            Sample(tex!, tw, th, tu, tv, out float sr, out float sg, out float sb);
+                            r *= sr; g *= sg; bl *= sb;
+                        }
+                        if (wire)
+                        {
+                            float dist = MathF.Min(w0 * l0, MathF.Min(w1 * l1, w2 * l2));
+                            float cov = Math.Clamp(1f - dist / ss, 0f, 1f) * wa;   // a pixel of the image wide, whatever the sampling
+                            r += (wr - r) * cov; g += (wg - g) * cov; bl += (wb - bl) * cov;
+                        }
+                        px[row + x] = 0xFF000000u | (uint)(Math.Clamp(r, 0f, 1f) * 255f + 0.5f) << 16
+                            | (uint)(Math.Clamp(g, 0f, 1f) * 255f + 0.5f) << 8 | (uint)(Math.Clamp(bl, 0f, 1f) * 255f + 0.5f);
+                    }
+                }
+            }
+        });
+        if (ss > 1) Downsample(px, w, image, ss);
+        image.Touch();
+    }
+
+    // Each ss × ss block of the fine pixels averaged, premultiplied, into one of the image's.
+    private static void Downsample(uint[] fine, int fineWidth, PixelImage image, int ss)
+    {
+        var dst = image.Argb;
+        int w = image.Width;
+        int n = ss * ss, half = n / 2;
+        Chunks(image.Height, 16, (lo, hi) =>
+        {
+            for (int y = lo; y < hi; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    uint a = 0, r = 0, g = 0, b = 0;
+                    for (int j = 0; j < ss; j++)
+                    {
+                        int row = (y * ss + j) * fineWidth + x * ss;
+                        for (int i = 0; i < ss; i++)
+                        {
+                            uint p = fine[row + i];
+                            a += p >> 24; r += (p >> 16) & 255; g += (p >> 8) & 255; b += p & 255;
+                        }
+                    }
+                    dst[y * w + x] = (uint)((a + half) / n) << 24 | (uint)((r + half) / n) << 16 | (uint)((g + half) / n) << 8 | (uint)((b + half) / n);
+                }
+        });
+    }
+
+    private int _depthW, _depthH, _ss = 1;
+    private uint[] _fine = [];
+
+    /// <summary>
+    /// Whether a point <paramref name="depth"/> from the eye at <paramref name="screen"/>
+    /// is in front of the mesh last drawn there, within <paramref name="tolerance"/>
+    /// of its depth. Off the image, or where no face was drawn, it is.
+    /// </summary>
+    public bool InFront(Vector2 screen, float depth, float tolerance)
+    {
+        int x = (int)MathF.Floor(screen.X * _ss), y = (int)MathF.Floor(screen.Y * _ss);
+        if (x < 0 || y < 0 || x >= _depthW || y >= _depthH) return true;
+        float surface = _depth[y * _depthW + x];   // 1/depth, 0 for none
+        return surface == 0f || depth * surface <= 1f + tolerance;
+    }
+
+    // Bilinear, clamped at the edges; (0, 0) is the top-left corner of the picture.
+    private static void Sample(uint[] tex, int tw, int th, float u, float v, out float r, out float g, out float b)
+    {
+        float fx = Math.Clamp(u, 0f, 1f) * tw - 0.5f, fy = Math.Clamp(v, 0f, 1f) * th - 0.5f;
+        int x0 = (int)MathF.Floor(fx), y0 = (int)MathF.Floor(fy);
+        float tx = fx - x0, ty = fy - y0;
+        int xa = Math.Clamp(x0, 0, tw - 1), xb = Math.Clamp(x0 + 1, 0, tw - 1);
+        int ya = Math.Clamp(y0, 0, th - 1) * tw, yb = Math.Clamp(y0 + 1, 0, th - 1) * tw;
+        uint p00 = tex[ya + xa], p10 = tex[ya + xb], p01 = tex[yb + xa], p11 = tex[yb + xb];
+        float w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
+        const float k = 1f / 255f;
+        r = (((p00 >> 16) & 255) * w00 + ((p10 >> 16) & 255) * w10 + ((p01 >> 16) & 255) * w01 + ((p11 >> 16) & 255) * w11) * k;
+        g = (((p00 >> 8) & 255) * w00 + ((p10 >> 8) & 255) * w10 + ((p01 >> 8) & 255) * w01 + ((p11 >> 8) & 255) * w11) * k;
+        b = ((p00 & 255) * w00 + (p10 & 255) * w10 + (p01 & 255) * w01 + (p11 & 255) * w11) * k;
+    }
+
+    private static uint Premul(Rgba c)
+    {
+        uint a = c.A;
+        return a << 24 | (uint)(c.R * a / 255) << 16 | (uint)(c.G * a / 255) << 8 | (uint)(c.B * a / 255);
+    }
+
+    private static void Grow<T>(ref T[] array, int n)
+    {
+        if (array.Length < n) array = new T[n];
+    }
+
+    // A loop over [0, n) in chunks, in parallel when there is enough of it.
+    private static void Chunks(int n, int chunk, Action<int, int> body)
+    {
+        if (n <= chunk) { body(0, n); return; }
+        int count = (n + chunk - 1) / chunk;
+        Parallel.For(0, count, k => body(k * chunk, Math.Min(n, (k + 1) * chunk)));
+    }
+}
