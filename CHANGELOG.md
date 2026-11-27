@@ -18,6 +18,19 @@ All notable changes to bibui are recorded here. The format is based on
   normals from the current positions, both sides drawn, an optional
   wireframe and supersampling. The core rasterises it on the CPU, so it draws the same on every
   renderer and headless. See [Mesh3D](docs/components/mesh-3d.md).
+- **Mesh3D scenes, for a simulator's viewer.** `runtime.Mesh3D(id, scene,
+  options)` draws a `MeshScene`: several meshes, each placed by a transform,
+  shown or hidden, with its own colours, scalars or texture. A camera from a
+  pose, `OrbitCamera.FromPose(position, orientation, fovY, targetDistance)`
+  in OpenCV axes, with `Near` and `Orientation`; faces crossing the near plane
+  are clipped to it rather than left out. `Mesh3DOptions.Light =
+  new CameraLight(intensity, spotExponent)` lights the view from a point at
+  the eye that falls off as 1/r², per pixel. `runtime.Mesh3DPick(id, point)`
+  and `MeshBuffers.Pick` answer a `MeshHit`: mesh, face, barycentric weights
+  and the 3D point. `MeshBuffers` draws without a window into colour (RGBA8),
+  depth (z along the camera's axis), mesh and face ids and normals. Normals
+  are made in parallel. A view of one mesh draws the same pixels as before.
+  A gallery page, Mesh3DScene. See [Mesh3D](docs/components/mesh-3d.md).
 - **`DrawOpKind.Pixels`** and `DrawContext.DrawPixels(PixelImage, …)`: CPU
   pixels the core made, drawn as an image by every renderer, with no texture
   to create first.

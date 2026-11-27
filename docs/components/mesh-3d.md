@@ -342,11 +342,15 @@ it with `SetMesh3DCamera`.
 ## Speed
 
 The mesh is drawn at the box's size in physical pixels. It is drawn again
-only when something it depends on changed: the mesh (any `Set…` call), the
-camera, the size or the look; a frame that changes none of them reuses the
-pixels. Normals are recomputed once per change of positions. Vertices are
-transformed in parallel chunks, and faces filled in horizontal bands, one
-worker each.
+only when something it depends on changed: a mesh (any `Set…` call), the
+scene (a mesh added, placed, shown or hidden), the camera, the size or the
+look; a frame that changes none of them reuses the pixels. Normals are
+recomputed once per change of positions, in parallel. Vertices are
+transformed in parallel chunks; triangles are sorted into horizontal bands
+of rows, and each band filled by one worker from its own triangles. Under a
+point light, what each pixel's ray alone decides of its light is a table
+made again only when the size, the field of view or the spot exponent
+changes.
 
 Measured on a 20-core laptop (Ryzen AI, Radeon 880M), a 317 × 317 grid
 (100,489 vertices, 199,712 triangles) with every position replaced each
@@ -356,6 +360,54 @@ frame, at 1280 × 800:
 |---|---|
 | Build, normals and rasterising (`tests/bibui-runtime-tests`, "Mesh3D: 100k") | 8–13 ms |
 | The same on `SkiaGlRenderer`, GPU upload and draw included (`samples/mesh3d-gl-bench`) | 9.8 ms: 8.7 CPU + 1.1 GL |
+
+A scene of an organ-sized ellipsoid and 40 tubes over it (41 meshes;
+`tests/bibui-runtime-tests`, "Mesh3D scene: 1M and 2M"), drawn into
+`MeshBuffers`, the median of nine frames with the camera turning. *Orbit*
+sees the whole scene from outside; *endoscope* is a 100° pose camera close
+to the surface under the point light, with faces clipped to the near plane;
+*positions* is the orbit view with every mesh's positions replaced each
+frame, so its normals are made again. On a 10-core, 20-thread Ryzen AI 9 365
+shared with other work (load about 12), so these are upper bounds:
+
+| Triangles | Size | Orbit | Endoscope | Positions |
+|---|---|---|---|---|
+| 1.0 M | 640 × 480 | 14 ms | 20 ms | 18–21 ms |
+| 1.0 M | 1280 × 800 | 16–18 ms | 31–36 ms | 16–17 ms |
+| 1.0 M | 1920 × 1080 | 12–15 ms | 38–41 ms | 17–18 ms |
+| 2.0 M | 640 × 480 | 11–14 ms | 19–22 ms | 20–21 ms |
+| 2.0 M | 1280 × 800 | 16 ms | 30–32 ms | 24–29 ms |
+| 2.0 M | 1920 × 1080 | 19 ms | 43–47 ms | 26–28 ms |
+
+At two million triangles the orbit view's frame is mostly per-vertex and
+per-face work (projecting 1.2 M vertices, boxing and sorting 2 M faces), so
+it hardly grows with the size. The endoscope view's is mostly filling: a
+face close to the eye covers much of the picture, every pixel of its box is
+tested, and the light is worked out at each pixel a face draws, hidden ones
+included.
+
+### A GPU path
+
+The CPU path is the default and the one every renderer has. A view drawn by
+the GPU instead would need:
+
+- a draw op that asks the renderer to draw the scene in place, beside
+  `DrawOpKind.Pixels`, which renderers without a GPU (Skia on the CPU, the
+  managed rasteriser) answer with today's pixels;
+- in `SkiaGlRenderer`, a vertex and index buffer for each mesh, uploaded
+  when the mesh's `Version` changes (indices once), the transform and the
+  camera as uniforms, and one shader pair that projects as `Project` does
+  and lights as the headlight or `CameraLight` do, per pixel;
+- for `MeshBuffers` and picking, a framebuffer with several colour
+  attachments (colour, mesh and face id as integers, normal) and depth,
+  read back with `glReadPixels`, all of it for buffers and one pixel for a
+  pick; a GL context without a window (EGL with a pbuffer) for headless use;
+- tests that hold the GPU's pictures to the CPU's within a tolerance, not
+  byte for byte: GPUs rasterise edges and round depth their own way.
+
+It would draw two million triangles in a few milliseconds. It is not built:
+at the sizes above the CPU path keeps a viewer interactive, and the
+simulator's offscreen frames need no window.
 
 `Supersample = 2` rasterises four times the pixels: use it for meshes of a
 few tens of thousands of vertices, or a smaller box.
