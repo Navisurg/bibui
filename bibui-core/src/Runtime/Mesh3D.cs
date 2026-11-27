@@ -31,34 +31,53 @@ internal sealed class Mesh3DView
     public OrbitCamera Camera;
     public bool HasCamera;
     public Vector2 Last;
-    public TriangleMesh? Mesh;
+    public MeshScene? Scene;
     public Mesh3DOptions Options = new();
+    public UiNode? Node;
+    public float Scale = 1f;
     public readonly PixelImage Image = new();
     public readonly MeshRasterizer Raster = new();
     public readonly DrawCallback Draw;
 
+    // A view of one mesh: a scene of it alone, kept so that the mesh's own changes are what count.
+    private readonly MeshScene _single = new();
+
     // What the pixels were drawn from: unchanged, they are not drawn again.
-    private TriangleMesh? _drawnMesh;
+    private MeshScene? _drawnScene;
     private uint _drawnVersion;
+    private ulong _drawnContent;
     private OrbitCamera _drawnCamera;
     private int _drawnW, _drawnH;
-    private (bool, Rgba, float, Rgba?, bool, int) _drawnLook;
+    private (bool, Rgba, float, Rgba?, bool, int, CameraLight?) _drawnLook;
 
     public Mesh3DView() => Draw = (_, ctx) => Paint(ctx);
+
+    /// <summary>The scene of <paramref name="mesh"/> alone, the same scene while the mesh is.</summary>
+    public MeshScene Single(TriangleMesh mesh)
+    {
+        if (_single.Count != 1 || !ReferenceEquals(_single[0], mesh))
+        {
+            _single.Clear();
+            _single.Add(mesh);
+        }
+        return _single;
+    }
 
     private static readonly Paint Plain = new() { Fill = Rgba.White, Filter = FilterQuality.None, Antialias = false };
 
     private void Paint(DrawContext ctx)
     {
-        if (Mesh is null) return;
+        if (Scene is null) return;
         int w = (int)MathF.Round(ctx.Rect.Width), h = (int)MathF.Round(ctx.Rect.Height);
         if (w <= 0 || h <= 0) return;
-        var look = (Options.Wireframe, Options.WireframeColor, Options.Ambient, Options.Background, Options.ShowMesh, Options.Supersample);
-        if (!ReferenceEquals(_drawnMesh, Mesh) || _drawnVersion != Mesh.Version || _drawnCamera != Camera
+        Scale = ctx.Scale;
+        var look = (Options.Wireframe, Options.WireframeColor, Options.Ambient, Options.Background, Options.ShowMesh, Options.Supersample, Options.Light);
+        ulong content = Scene.ContentStamp;
+        if (!ReferenceEquals(_drawnScene, Scene) || _drawnVersion != Scene.Version || _drawnContent != content || _drawnCamera != Camera
             || _drawnW != w || _drawnH != h || _drawnLook != look)
         {
-            Raster.Render(Mesh, Camera, Options, Image, w, h);
-            (_drawnMesh, _drawnVersion, _drawnCamera, _drawnW, _drawnH, _drawnLook) = (Mesh, Mesh.Version, Camera, w, h, look);
+            Raster.Render(Scene, Camera, Options, Image, w, h, Options.Supersample, normals: false);
+            (_drawnScene, _drawnVersion, _drawnContent, _drawnCamera, _drawnW, _drawnH, _drawnLook) = (Scene, Scene.Version, content, Camera, w, h, look);
         }
         ctx.DrawPixels(Image, new RectF(0f, 0f, w, h), Plain);
         if (Options.Overlay is { } overlay) DrawOverlay(ctx, overlay, w, h);
@@ -152,14 +171,28 @@ public static class Mesh3DExtensions
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(mesh);
+        return runtime.Mesh3D(id, runtime.MeshView(id).Single(mesh), options);
+    }
+
+    /// <summary>
+    /// Builds the view named <paramref name="id"/> of every visible mesh in
+    /// <paramref name="scene"/>, each placed by its transform, under the parent in
+    /// scope, filling it unless the caller sizes the node. The scene and the
+    /// options are read when the frame is painted.
+    /// </summary>
+    public static Mesh3DWidget Mesh3D(this BibuiRuntime runtime, string id, MeshScene scene, Mesh3DOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(scene);
         options ??= new Mesh3DOptions();
 
         var view = runtime.MeshView(id);
-        view.Mesh = mesh;
+        view.Scene = scene;
         view.Options = options;
         if (!view.HasCamera)
         {
-            view.Camera = Home(mesh, options);
+            view.Camera = Home(scene, options);
             view.HasCamera = true;
         }
 
@@ -173,7 +206,7 @@ public static class Mesh3DExtensions
         if (options.Interactive)
         {
             var at = new Vector2(i.X, i.Y);
-            if (i.Pressed && i.PressCount >= 2) view.Camera = Home(mesh, options);
+            if (i.Pressed && i.PressCount >= 2) view.Camera = Home(scene, options);
             else if (i.Pressed || i.RightPressed || i.MiddlePressed) view.Last = at;
             else if (i.Dragging || i.RightDragging || i.MiddleDragging || i.Released || i.RightReleased || i.MiddleReleased)
             {
@@ -197,7 +230,23 @@ public static class Mesh3DExtensions
         }
 
         box.Draw = view.Draw;
+        view.Node = box;
         return new Mesh3DWidget(box, view.Camera, i);
+    }
+
+    /// <summary>
+    /// What the view named <paramref name="id"/> showed under <paramref name="point"/>
+    /// (logical pixels in the window, as <see cref="Interaction.X"/> and
+    /// <see cref="Interaction.Y"/> are) when it was last drawn, or null where it
+    /// showed no mesh.
+    /// </summary>
+    public static MeshHit? Mesh3DPick(this BibuiRuntime runtime, string id, Vector2 point)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        if (!runtime.TryMeshView(id, out var view) || view.Node is null) return null;
+        // The view's pixels start at its top-left corner, in physical pixels, sampled Supersampling times each way.
+        var drawn = (point - view.Node.Rect) * view.Scale * view.Raster.Supersampling;
+        return view.Raster.Pick(drawn);
     }
 
     /// <summary>The camera of the view named <paramref name="id"/>, or null when it has none yet.</summary>
@@ -216,10 +265,10 @@ public static class Mesh3DExtensions
         view.HasCamera = true;
     }
 
-    private static OrbitCamera Home(TriangleMesh mesh, Mesh3DOptions options)
+    private static OrbitCamera Home(MeshScene scene, Mesh3DOptions options)
     {
         if (options.Home is { } home) return home;
-        var (min, max) = mesh.Bounds;
+        var (min, max) = scene.Bounds;
         return OrbitCamera.Fit(min, max, options.ViewDirection, options.Up);
     }
 }

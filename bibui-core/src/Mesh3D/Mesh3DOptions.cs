@@ -22,6 +22,13 @@ public sealed class Mesh3DOptions
     /// <summary>Light everywhere, 0..1; the headlight gives the rest.</summary>
     public float Ambient { get; set; } = 0.25f;
 
+    /// <summary>
+    /// Null: a headlight from the eye that does not weaken with distance, the
+    /// default. Set: a point light at the eye that falls off with the square of
+    /// the distance; see <see cref="CameraLight"/>.
+    /// </summary>
+    public CameraLight? Light { get; set; }
+
     /// <summary>Behind the mesh. Null: the box shows through.</summary>
     public Rgba? Background { get; set; }
 

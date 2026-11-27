@@ -162,43 +162,86 @@ public sealed class TriangleMesh
 
     internal bool Textured => Texture is not null && Uv is not null;
 
-    /// <summary>Normals and bounds for the current positions, once a change.</summary>
+    // Each vertex's faces, in face order, a vertex's run after the one before it
+    // (a face twice where it names the vertex twice): made once, faces being fixed.
+    private int[]? _vertexFaces, _vertexFaceStart;
+    private float[] _faceNormals = [];
+
+    /// <summary>
+    /// Normals and bounds for the current positions, once a change. Each face's
+    /// normal is made in parallel, then each vertex adds those of its faces up in
+    /// face order, in parallel too: the sums one loop over the faces would make.
+    /// </summary>
     internal void Update()
     {
         if (_normalsFor == Version) return;
         _normalsFor = Version;
         var p = Positions;
         var n = Normals;
-        Array.Clear(n);
-        // Each face adds its unnormalised normal (twice its area) to its three
-        // vertices: big faces weigh more, and a sliver does not tip a vertex.
         var f = Faces;
-        for (int i = 0; i < f.Length; i += 3)
+        int nf = FaceCount, nv = VertexCount;
+        if (_vertexFaces is null) Adjacency();
+        if (_faceNormals.Length < 3 * nf) _faceNormals = new float[3 * nf];
+        float[] fn = _faceNormals;
+        int[] vertexFaces = _vertexFaces!, start = _vertexFaceStart!;
+        // Each face's unnormalised normal (twice its area): big faces weigh more, and a sliver does not tip a vertex.
+        Parallel.For(0, (nf + UpdateChunk - 1) / UpdateChunk, k =>
         {
-            int a = f[i] * 3, b = f[i + 1] * 3, c = f[i + 2] * 3;
-            float ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2];
-            float vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
-            float nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-            n[a] += nx; n[a + 1] += ny; n[a + 2] += nz;
-            n[b] += nx; n[b + 1] += ny; n[b + 2] += nz;
-            n[c] += nx; n[c + 1] += ny; n[c + 2] += nz;
-        }
-        for (int i = 0; i < n.Length; i += 3)
-        {
-            float len = MathF.Sqrt(n[i] * n[i] + n[i + 1] * n[i + 1] + n[i + 2] * n[i + 2]);
-            if (len > 0f) { n[i] /= len; n[i + 1] /= len; n[i + 2] /= len; }
-        }
+            for (int t = k * UpdateChunk, end = Math.Min(nf, t + UpdateChunk); t < end; t++)
+            {
+                int a = f[3 * t] * 3, b = f[3 * t + 1] * 3, c = f[3 * t + 2] * 3;
+                float ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2];
+                float vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
+                fn[3 * t] = uy * vz - uz * vy;
+                fn[3 * t + 1] = uz * vx - ux * vz;
+                fn[3 * t + 2] = ux * vy - uy * vx;
+            }
+        });
         var min = new Vector3(float.PositiveInfinity);
         var max = new Vector3(float.NegativeInfinity);
-        for (int i = 0; i < p.Length; i += 3)
+        var gate = new object();
+        Parallel.For(0, (nv + UpdateChunk - 1) / UpdateChunk, k =>
         {
-            var v = new Vector3(p[i], p[i + 1], p[i + 2]);
-            if (!float.IsFinite(v.X) || !float.IsFinite(v.Y) || !float.IsFinite(v.Z)) continue;
-            min = Vector3.Min(min, v);
-            max = Vector3.Max(max, v);
-        }
+            var lo = new Vector3(float.PositiveInfinity);
+            var hi = new Vector3(float.NegativeInfinity);
+            for (int v = k * UpdateChunk, end = Math.Min(nv, v + UpdateChunk); v < end; v++)
+            {
+                float x = 0f, y = 0f, z = 0f;
+                for (int j = start[v]; j < start[v + 1]; j++)
+                {
+                    int t = 3 * vertexFaces[j];
+                    x += fn[t]; y += fn[t + 1]; z += fn[t + 2];
+                }
+                float len = MathF.Sqrt(x * x + y * y + z * z);
+                if (len > 0f) { x /= len; y /= len; z /= len; }
+                (n[3 * v], n[3 * v + 1], n[3 * v + 2]) = (x, y, z);
+                var q = new Vector3(p[3 * v], p[3 * v + 1], p[3 * v + 2]);
+                if (!float.IsFinite(q.X) || !float.IsFinite(q.Y) || !float.IsFinite(q.Z)) continue;
+                lo = Vector3.Min(lo, q);
+                hi = Vector3.Max(hi, q);
+            }
+            lock (gate)
+            {
+                min = Vector3.Min(min, lo);
+                max = Vector3.Max(max, hi);
+            }
+        });
         if (min.X > max.X) (min, max) = (Vector3.Zero, Vector3.Zero);
         (_min, _max) = (min, max);
+    }
+
+    /// <summary>Faces or vertices a worker takes at a time while normals are made.</summary>
+    private const int UpdateChunk = 8192;
+
+    private void Adjacency()
+    {
+        var count = new int[VertexCount + 1];
+        foreach (int v in Faces) count[v + 1]++;
+        for (int v = 0; v < VertexCount; v++) count[v + 1] += count[v];
+        var faces = new int[Faces.Length];
+        var next = count.AsSpan(0, VertexCount).ToArray();
+        for (int i = 0; i < Faces.Length; i++) faces[next[Faces[i]]++] = i / 3;
+        (_vertexFaces, _vertexFaceStart) = (faces, count);
     }
 
     private void Check(int length, int per, string what)

@@ -8579,6 +8579,7 @@ Console.WriteLine();
 Console.WriteLine("Scroll list");
 ScrollListTests.Register(Run);
 Mesh3DTests.Register(Run);
+Mesh3DSceneTests.Register(Run);
 
 // ── Key repeat ──────────────────────────────────────────────────────────────
 
