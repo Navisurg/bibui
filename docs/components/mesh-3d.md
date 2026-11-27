@@ -235,7 +235,7 @@ Ambient + Intensity · cos θ · cosⁿ α / r²        (n = SpotExponent)
 ```
 
 times its colour (and texture), each channel clamped at 1; nothing maps it
-through a gamma. `Intensity` is the light a surface square to the axis gets
+through a gamma. Both sides of a face are lit alike. `Intensity` is the light a surface square to the axis gets
 at distance 1, in the scene's units: `2500` lights a surface 50 mm off fully
 when the scene is in millimetres. `SpotExponent` 0 lights every direction
 alike; larger narrows the beam (cos¹⁰ α is half at 21°). Leave `Ambient` at 0

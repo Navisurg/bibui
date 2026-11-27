@@ -12,6 +12,19 @@ namespace Bibui.Core;
 /// </summary>
 public readonly record struct OrbitCamera(Vector3 Eye, Vector3 Target, Vector3 Up, float FovY = 45f)
 {
+    /// <summary>The share of <see cref="Distance"/> the near plane is at when <see cref="Near"/> is 0.</summary>
+    public const float DefaultNearShare = 1e-3f;
+
+    /// <summary>
+    /// How far ahead of the eye, along the view's axis, the near plane is:
+    /// what is closer is cut away. 0, the default, is
+    /// <see cref="DefaultNearShare"/> of <see cref="Distance"/>.
+    /// </summary>
+    public float Near { get; init; }
+
+    /// <summary>The near plane's distance in effect: <see cref="Near"/>, or its default.</summary>
+    internal float NearPlane => Near > 0f ? Near : DefaultNearShare * MathF.Max(Distance, 1e-6f);
+
     /// <summary>How far the eye is from the target.</summary>
     public float Distance => Vector3.Distance(Eye, Target);
 
@@ -79,6 +92,40 @@ public readonly record struct OrbitCamera(Vector3 Eye, Vector3 Target, Vector3 U
         var dir = viewDirection.LengthSquared() > 0f ? Vector3.Normalize(viewDirection) : -Vector3.UnitZ;
         float dist = radius / MathF.Sin(fovY * 0.5f * MathF.PI / 180f) * 1.05f;
         return new OrbitCamera(centre - dir * dist, centre, up, fovY);
+    }
+
+    /// <summary>
+    /// The camera's axes in the world, OpenCV's: x to the right of the picture,
+    /// y down it, z ahead. <c>Vector3.Transform(Vector3.UnitZ, Orientation)</c>
+    /// is <see cref="Forward"/>.
+    /// </summary>
+    public Quaternion Orientation
+    {
+        get
+        {
+            Vector3 x = Right, y = -ViewUp, z = Forward;
+            // A row vector times this matrix takes camera axes to the world's: its rows are their images.
+            return Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(new Matrix4x4(
+                x.X, x.Y, x.Z, 0f,
+                y.X, y.Y, y.Z, 0f,
+                z.X, z.Y, z.Z, 0f,
+                0f, 0f, 0f, 1f)));
+        }
+    }
+
+    /// <summary>
+    /// The camera at <paramref name="position"/> turned by <paramref name="orientation"/>
+    /// (its OpenCV axes, x right, y down, z ahead, to the world's), seeing
+    /// <paramref name="fovY"/> degrees top to bottom. The target, what an orbit
+    /// turns about, is <paramref name="targetDistance"/> ahead; the camera's own
+    /// up is the axis it orbits about.
+    /// </summary>
+    public static OrbitCamera FromPose(Vector3 position, Quaternion orientation, float fovY, float targetDistance)
+    {
+        var q = Quaternion.Normalize(orientation);
+        var forward = Vector3.Transform(Vector3.UnitZ, q);
+        var down = Vector3.Transform(Vector3.UnitY, q);
+        return new OrbitCamera(position, position + forward * MathF.Max(targetDistance, 1e-6f), -down, fovY);
     }
 
     private static Vector3 Perpendicular(Vector3 v) =>
